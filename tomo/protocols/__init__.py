@@ -24,3 +24,4 @@
 # *
 # **************************************************************************
 
+from .protocol_import_tiltseries import ProtImportTiltSeries
