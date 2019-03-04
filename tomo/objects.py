@@ -29,33 +29,105 @@ import pyworkflow.object as pwobj
 import pyworkflow.em.data as data
 
 
-class TiltImage(data.Micrograph):
+class TiltImageBase:
+    """ Base class for TiltImageM and TiltImage. """
+    def __init__(self, **kwargs):
+        self._tiltAngle = pwobj.Float(kwargs.get('tiltAngle', None))
+        self._acquisitionOrder = pwobj.Integer(kwargs.get('acquisitionOrder',
+                                                          None))
+
+    def getTiltAngle(self):
+        return self._tiltAngle.get()
+
+    def setTiltAngle(self, value):
+        self._tiltAngle.set(value)
+
+    def getAcquisitionOrder(self):
+        return self._acquisitionOrder.get()
+
+    def setAcquisitionOrder(self, value):
+        self._acquisitionOrder.set(value)
+
+
+class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
     def __init__(self, location=None, **kwargs):
-        data.Micrograph.__init__(self, location, **kwargs)
-        self._tiltAngle = pwobj.Float()
+        data.Image.__init__(self, location, **kwargs)
+        TiltImageBase.__init__(self, **kwargs)
 
 
-class TiltSeries(data.SetOfMicrographs):
+class TiltSeriesBase(data.SetOfImages):
+    pass
+
+
+class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
 
-class SetOfTiltSeries(data.EMSet):
+class SetOfTiltSeriesBase(data.EMSet):
+    """ Base class for SetOfTiltImages and SetOfTiltImagesM.
+    """
+    def iterClassItems(self, iterDisabled=False):
+        """ Iterate over the images of a class.
+        Params:
+            iterDisabled: If True, also include the disabled items. """
+        for cls in self.iterItems():
+            if iterDisabled or cls.isEnabled():
+                for img in cls:
+                    if iterDisabled or img.isEnabled():
+                        yield img
+
+    def _setItemMapperPath(self, item):
+        """ Set the mapper path of this class according to the mapper
+        path of the SetOfClasses and also the prefix according to class id
+        """
+        classPrefix = 'TS%03d' % item.getObjId()
+        item._mapperPath.set('%s,%s' % (self.getFileName(), classPrefix))
+        item._mapperPath.setStore(False)
+        item.load()
+
+    def _insertItem(self, item):
+        """ Create the SetOfImages assigned to a class.
+        If the file exists, it will load the Set.
+        """
+        self._setItemMapperPath(item)
+        data.EMSet._insertItem(self, item)
+        item.write(properties=False)  # Set.write(self)
+
+    def __getitem__(self, itemId):
+        """ Setup the mapper classes before returning the item. """
+        classItem = data.EMSet.__getitem__(self, itemId)
+        self._setItemMapperPath(classItem)
+        return classItem
+
+    def getFirstItem(self):
+        classItem = data.EMSet.getFirstItem(self)
+        self._setItemMapperPath(classItem)
+        return classItem
+
+    def iterItems(self, orderBy='id', direction='ASC'):
+        for item in data.EMSet.iterItems(self, orderBy=orderBy,
+                                         direction=direction):
+            self._setItemMapperPath(item)
+            yield item
+
+
+class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
 
 
-class TiltImageM(data.Movie):
+class TiltImageM(data.Movie, TiltImageBase):
     """ Tilt movie. """
     def __init__(self, location=None, **kwargs):
         data.Movie.__init__(self, location, **kwargs)
-        self._tiltAngle = pwobj.Float()
+        TiltImageBase.__init__(self, **kwargs)
 
 
-class TiltSeriesM(data.SetOfMovies):
+class TiltSeriesM(TiltSeriesBase):
     ITEM_TYPE = TiltImageM
 
 
-class SetOfTiltSeriesM(data.EMSet):
+class SetOfTiltSeriesM(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeriesM
 
 

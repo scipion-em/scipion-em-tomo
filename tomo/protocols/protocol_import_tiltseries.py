@@ -28,10 +28,14 @@ import os
 import re
 from glob import glob
 from datetime import datetime
+from collections import OrderedDict
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
+from pyworkflow.utils.properties import Message
+
+from tomo.objects import TiltSeriesM, TiltImageM
 
 
 class ProtImportTiltSeries(pwem.ProtImport):
@@ -45,6 +49,12 @@ class ProtImportTiltSeries(pwem.ProtImport):
         (_importFile(fileName, fileId))
     """
     IMPORT_FROM_FILES = 0
+
+    # How to handle the input files into the project
+    IMPORT_COPY_FILES = 0
+    IMPORT_LINK_ABS = 1
+    IMPORT_LINK_REL = 2
+
     _label = 'import tilt-series'
 
     # -------------------------- DEFINE param functions -----------------------
@@ -53,37 +63,29 @@ class ProtImportTiltSeries(pwem.ProtImport):
 
         form.addParam('filesPath', params.PathParam,
                       label="Files directory",
-                      help="Directory with the files you want to import.\n\n"
-                           "The path can also contain wildcards to select"
-                           "from several folders. \n\n"
-                           "Examples:\n"
-                           "  ~/Particles/data/day??_micrographs/\n"
-                           "Each '?' represents one unknown character\n\n"
-                           "  ~/Particles/data/day*_micrographs/\n"
-                           "'*' represents any number of unknown characters\n\n"
-                           "  ~/Particles/data/day#_micrographs/\n"
-                           "'#' represents one digit that will be used as "
-                           "micrograph ID\n\n"
-                           "NOTE: wildcard characters ('*', '?', '#') "
-                           "cannot appear in the actual path.)")
+                      help="Root directory of the tilt-series (or movies).")
         form.addParam('filesPattern', params.StringParam,
                       label='Pattern',
-                      help="Pattern of the files to be imported.\n\n"
+                      help="Pattern of the tilt series\n\n"
                            "The pattern can contain standard wildcards such as\n"
-                           "*, ?, etc, or special ones like ### to mark some\n"
-                           "digits in the filename as ID.\n\n"
-                           "NOTE: wildcards and special characters "
-                           "('*', '?', '#', ':', '%') cannot appear in the "
-                           "actual path.")
-        form.addParam('copyFiles', params.BooleanParam, default=False,
+                           "*, ?, etc.\n\n"
+                           "It should also contains the following special tags:"
+                           "   {TS}: tilt series identifier "
+                           "         (can be any UNIQUE part of the path).\n"
+                           "   {TO}: acquisition order"
+                           "         (an integer value, important for dose).\n"
+                           "   {TA}: tilt angle"
+                           "         (positive or negative float value).\n\n"
+                           "Examples:\n"
+                           "")
+        form.addParam('importAction', params.EnumParam,
+                      choices=['Copy files',
+                               'Absolute symlink',
+                               'Relative symlink'],
+                      default=self.IMPORT_LINK_REL,
                       expertLevel=params.LEVEL_ADVANCED,
-                      label="Copy files?",
-                      help="By default the files are not copied into the "
-                           "project to avoid data duplication and to save "
-                           "disk space. Instead of copying, symbolic links are "
-                           "created pointing to original files. This approach "
-                           "has the drawback that if the project is moved to "
-                           "another computer, the links need to be restored.")
+                      label="Import action on files",
+                      help="By default ...")
 
         self._defineImportParams(form)
 
@@ -144,17 +146,17 @@ class ProtImportTiltSeries(pwem.ProtImport):
                             'will try to import the acquisition values.\n'
                             'If not found, required ones should be provided.')
         group.addParam('voltage', params.FloatParam, default=300,
-                       label=pw.utils.Message.LABEL_VOLTAGE,
-                       help=pw.utils.Message.TEXT_VOLTAGE)
+                       label=Message.LABEL_VOLTAGE,
+                       help=Message.TEXT_VOLTAGE)
         group.addParam('sphericalAberration', params.FloatParam, default=2.7,
-                       label=pw.utils.Message.LABEL_SPH_ABERRATION,
-                       help=pw.utils.Message.TEXT_SPH_ABERRATION)
+                       label=Message.LABEL_SPH_ABERRATION,
+                       help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
-                       label=pw.utils.Message.LABEL_AMPLITUDE,
-                       help=pw.utils.Message.TEXT_AMPLITUDE)
+                       label=Message.LABEL_AMPLITUDE,
+                       help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam, default=50000,
-                       label=pw.utils.Message.LABEL_MAGNI_RATE,
-                       help=pw.utils.Message.TEXT_MAGNI_RATE)
+                       label=Message.LABEL_MAGNI_RATE,
+                       help=Message.TEXT_MAGNI_RATE)
         return group
 
     def _defineBlacklistParams(self, form):
@@ -167,29 +169,62 @@ class ProtImportTiltSeries(pwem.ProtImport):
 
         # Only the import movies has property 'inputIndividualFrames'
         # so let's query in a non-intrusive manner
-        inputIndividualFrames = getattr(self, 'inputIndividualFrames', False)
+        # inputIndividualFrames = getattr(self, 'inputIndividualFrames', False)
 
-        if self.dataStreaming or inputIndividualFrames:
-            funcName = 'importImagesStreamStep'
-        else:
-            funcName = 'importImagesStep'
+        # if self.dataStreaming or inputIndividualFrames:
+        #     funcName = 'importImagesStreamStep'
+        # else:
+        #     funcName = 'importStep'
 
-        self._insertFunctionStep(funcName, self.getPattern(),
+        self._insertFunctionStep('importStep', self.getPattern(),
                                  self.voltage.get(),
                                  self.sphericalAberration.get(),
                                  self.amplitudeContrast.get(),
                                  self.magnification.get())
 
     # -------------------------- STEPS functions -------------------------------
+
+    def __createSet(self, SetClass, template, suffix, **kwargs):
+        """ Create a set and set the filename using the suffix.
+        If the file exists, it will be delete. """
+        setFn = self._getPath(template % suffix)
+        # Close the connection to the database if
+        # it is open before deleting the file
+        pw.utils.cleanPath(setFn)
+        from pyworkflow.mapper.sqlite_db import SqliteDb
+        SqliteDb.closeConnection(setFn)
+        setObj = SetClass(filename=setFn, **kwargs)
+        return setObj
+
+    def _createSetOfTiltSeries(self, suffix=''):
+        return self.__createSet(SetOfTiltSeriesM,
+                                'tiltseries_set%s.sqlite', suffix)
+
     def importStep(self, pattern, voltage, sphericalAberration,
                          amplitudeContrast, magnification):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self.info("Using pattern: '%s'" % pattern)
+        self.getPattern()
+        self.info("Using glob pattern: '%s'" % self._globPattern)
+        self.info("Using regex pattern: '%s'" % self._regexPattern)
+
         self.info("Files: ")
-        for f in self.getMatchFiles():
-            self.info("  %s" % f)
+        tiltSeriesDict = OrderedDict()
+        for f, ts, to, ta in self.getMatchingFiles():
+            if ts not in tiltSeriesDict:
+                tiltSeriesDict[ts] = TiltSeriesM(filename=':memory:')
+
+            tiltSeriesM = tiltSeriesDict[ts]
+            tiltSeriesM.append(TiltImageM(location=f,
+                                          acquisitionOrder=to,
+                                          tiltAngle=ta))
+
+        for ts, tiltSeriesM in tiltSeriesDict.iteritems():
+            self.info("Tilt series: %s" % ts)
+            for tim in tiltSeriesM.iterItems():#orderBy='_tiltAngle', direction='DESC'):
+                self.info("   acq order: %02d, tilt angle: %0.2f"
+                          % (tim.getAcquisitionOrder(), tim.getTiltAngle()))
 
         return
 
@@ -261,15 +296,12 @@ class ProtImportTiltSeries(pwem.ProtImport):
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
-        if self.importFrom == self.IMPORT_FROM_FILES:
-            if not self.getPattern():
-                errors.append("The path and pattern can not be both empty!!!")
-            else:
-                # Just check the number of files matching the pattern
-                n = len(self.getMatchFiles())
-                if n == 0:
-                    errors.append("There are no files matching the pattern %s"
-                                  % self.getPattern())
+        self.getPattern()
+        matching = self.getMatchingFiles()
+
+        if not matching:
+            errors.append("There are no files matching the pattern %s"
+                          % self._globPattern)
 
         return errors
 
@@ -286,18 +318,18 @@ class ProtImportTiltSeries(pwem.ProtImport):
         """ Expand the pattern using environ vars or username
         and also replacing special character # by digit matching.
         """
-        self._idRegex = None
         pattern = os.path.join(self.filesPath.get('').strip(),
                                self.filesPattern.get('').strip())
 
-        def _replace(pattern, ts, to, ta):
-            pattern = pattern.replace('{TS}', '(.*)')
-            pattern = pattern.replace('{TO}', '(\d+)')
-            pattern = pattern.replace('{TA}', '([+-]?\d+(\.\d+)?)')
-            return pattern
+        def _replace(p, ts, to, ta):
+            p = p.replace('{TS}', ts)
+            p = p.replace('{TO}', to)
+            p = p.replace('{TA}', ta)
+            return p
 
-        self._regexPattern = _replace(pattern,
-                                      '(.*)', '(\d+)', '([+-]?\d+(\.\d+)?)')
+        self._regexPattern = _replace(pattern.replace('*', '(.*)'),
+                                      '(?P<TS>.*)', '(?P<TO>\d+)',
+                                      '(?P<TA>[+-]?\d+(\.\d+)?)')
         self._regex = re.compile(self._regexPattern)
         self._globPattern = _replace(pattern,
                                      '*', '*', '*')
@@ -313,10 +345,12 @@ class ProtImportTiltSeries(pwem.ProtImport):
 
         matchingFiles = []
         for f in filePaths:
-            match = self._idRegex.match(f)
-            if match is not None:
+            m = self._regex.match(f)
+            if m is not None:
                 f += ' (matched)'
-            matchingFiles.append(f)
+                matchingFiles.append((f, m.group('TS'),
+                                      int(m.group('TO')),
+                                      float(m.group('TA'))))
 
         return matchingFiles
 

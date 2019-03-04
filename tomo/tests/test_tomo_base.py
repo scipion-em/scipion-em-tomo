@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from pyworkflow.tests import BaseTest
+from pyworkflow.tests import BaseTest, setupTestOutput, DataSet
 from pyworkflow.em import Domain
 
 
@@ -37,6 +37,29 @@ class TestTomoBase(BaseTest):
         #cls.getFile = cls.dataset.getFile
 
     def test_plugin(self):
+        # Really stupid test to check that tomo plugin is defined
+        tomo = Domain.getPlugin('tomo')
+
+        self.assertFalse(tomo is None)
+        self.assertTrue(hasattr(tomo, 'Plugin'))
+
+        # Check that defined objects here are found
+        objects = Domain.getObjects()
+
+        expected = ['TiltImage', 'TiltSeries', 'SetOfTiltSeries',
+                    'TiltImageM', 'TiltSeriesM', 'SetOfTiltSeriesM']
+        for e in expected:
+            self.assertTrue(e in objects, "%s should be in Domain.getObjects" % e)
+
+
+class TestTomoImport(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        setupTestOutput(cls)
+        cls.dataset = DataSet.getDataSet('relion_tutorial')
+        cls.getFile = cls.dataset.getFile
+
+    def test_import_tiltseries(self):
         # Really stupid test to check that tomo plugin is defined
         tomo = Domain.getPlugin('tomo')
 
