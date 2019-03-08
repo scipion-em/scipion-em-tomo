@@ -24,11 +24,14 @@
 # *
 # **************************************************************************
 
+import os
+
 import pyworkflow as pw
-from pyworkflow.tests import BaseTest, setupTestOutput, DataSet
+from pyworkflow.tests import BaseTest, setupTestOutput, DataSet, setupTestProject
 from pyworkflow.em import Domain
 
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
+from tomo.protocols import ProtImportTiltSeries
 
 
 class TestTomoBase(BaseTest):
@@ -89,24 +92,42 @@ class TestTomoBase(BaseTest):
 class TestTomoImport(BaseTest):
     @classmethod
     def setUpClass(cls):
-        setupTestOutput(cls)
-        cls.dataset = DataSet.getDataSet('relion_tutorial')
-        cls.getFile = cls.dataset.getFile
+        setupTestProject(cls)
+
+    def _runImportTiltSeries(self, filesPath, filesPattern,
+                             voltage, magnification, samplingRate,
+                             importType, dosePerFrame, gainFile=None, darkFile=None,
+                             sphericalAberration=2.7, amplitudeContrast=0.1, doseInitial=0):
+        return self.newProtocol(ProtImportTiltSeries,
+                                importType=importType,
+                                filesPath=filesPath,
+                                filesPattern=filesPattern,
+                                voltage=voltage,
+                                magnification=magnification,
+                                sphericalAberration=sphericalAberration,
+                                amplitudeContrast=amplitudeContrast,
+                                samplingRate=samplingRate,
+                                doseInitial=doseInitial,
+                                dosePerFrame=dosePerFrame,
+                                gainFile=gainFile,
+                                darkFile=darkFile)
 
     def test_import_tiltseries(self):
-        # Really stupid test to check that tomo plugin is defined
-        tomo = Domain.getPlugin('tomo')
+        dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
 
-        self.assertFalse(tomo is None)
-        self.assertTrue(hasattr(tomo, 'Plugin'))
+        if not os.path.exists(dataPath):
+            raise Exception("Can not run tomo tests, "
+                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
 
-        # Check that defined objects here are found
-        objects = Domain.getObjects()
-
-        expected = ['TiltImage', 'TiltSeries', 'SetOfTiltSeries',
-                    'TiltImageM', 'TiltSeriesM', 'SetOfTiltSeriesM']
-        for e in expected:
-            self.assertTrue(e in objects, "%s should be in Domain.getObjects" % e)
+        filesPath = os.path.join(dataPath, 'data', 'frames')
+        protImport = self._runImportTiltSeries(filesPath,
+                                               '{TS}_{TO}_{TA}.mrc',
+                                               300, 105000, 1.35,
+                                               ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+                                               0.3)
+        self.launchProtocol(protImport)
+        output = getattr(protImport, 'outputTiltSeriesM', None)
+        self.assertFalse(output is None)
 
 
 if __name__ == 'main':

@@ -98,8 +98,6 @@ class ProtImportTiltSeries(pwem.ProtImport):
                       label="Import action on files",
                       help="By default ...")
 
-        self._defineImportParams(form)
-
         self._defineAcquisitionParams(form)
 
         form.addSection('Streaming')
@@ -135,22 +133,11 @@ class ProtImportTiltSeries(pwem.ProtImport):
 
         self._defineBlacklistParams(form)
 
-    def _defineImportParams(self, form):
-        """ Override to add options related to the different types
-        of import that are allowed by each protocol.
-        """
-        pass
-
     def _defineAcquisitionParams(self, form):
         """ Define acquisition parameters, it can be overriden
         by subclasses to change what parameters to include.
         """
         group = form.addGroup('Acquisition info')
-        # group.addParam('acquisitionWizard', params.LabelParam, important=True,
-        #                label='Use the wizard button to import acquisition.',
-        #                help='Depending on the import Format, the wizard\n'
-        #                     'will try to import the acquisition values.\n'
-        #                     'If not found, required ones should be provided.')
         group.addParam('voltage', params.FloatParam, default=300,
                        label=Message.LABEL_VOLTAGE,
                        help=Message.TEXT_VOLTAGE)
@@ -196,16 +183,6 @@ class ProtImportTiltSeries(pwem.ProtImport):
 
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
-
-        # Only the import movies has property 'inputIndividualFrames'
-        # so let's query in a non-intrusive manner
-        # inputIndividualFrames = getattr(self, 'inputIndividualFrames', False)
-
-        # if self.dataStreaming or inputIndividualFrames:
-        #     funcName = 'importImagesStreamStep'
-        # else:
-        #     funcName = 'importStep'
-
         self._insertFunctionStep('importStep', self.getPattern(),
                                  self.voltage.get(),
                                  self.sphericalAberration.get(),
@@ -228,9 +205,11 @@ class ProtImportTiltSeries(pwem.ProtImport):
 
     def _createSetOfTiltSeries(self, suffix=''):
         if self.importType == self.IMPORT_TYPE_MOVS:
+            self._outputSuffix = 'M'
             return self.__createSet(SetOfTiltSeriesM,
                                     'tiltseriesM%s.sqlite', suffix)
         else:
+            self._ouputSuffix = ''
             return self.__createSet(SetOfTiltSeries,
                                     'tiltseries%s.sqlite', suffix)
 
@@ -262,79 +241,12 @@ class ProtImportTiltSeries(pwem.ProtImport):
             tsObj = tiltSeriesClass(tsId=ts)
             # we need this to set mapper before adding any item
             outputSet.append(tsObj)
-            # Add tilt images to the tiltSerie
-            for tim in tiltSeriesList:#orderBy='_tiltAngle', direction='DESC'):
+            # Add tilt images to the tiltSeries
+            for tim in tiltSeriesList:
                 tsObj.append(tim)
-                #self.info("   acq order: %02d, tilt angle: %0.2f"
-                #          % (tim.getAcquisitionOrder(), tim.getTiltAngle()))
 
-        self._defineOutputs(outputTiltSeries=outputSet)
-
-        return
-
-        createSetFunc = getattr(self, '_create' + self._outputClassName)
-        imgSet = createSetFunc()
-        acquisition = imgSet.getAcquisition()
-
-        self.fillAcquisition(acquisition)
-
-        # Call a function that should be implemented by each subclass
-        self.setSamplingRate(imgSet)
-
-        outFiles = [imgSet.getFileName()]
-        imgh = ImageHandler()
-        img = imgSet.ITEM_TYPE()
-        img.setAcquisition(acquisition)
-        n = 1
-        copyOrLink = self.getCopyOrLink()
-        alreadyWarned = False  # Use this flag to warn only once
-
-        for i, (fileName, fileId) in enumerate(self.iterFiles()):
-            if self.isBlacklisted(fileName):
-                continue
-            uniqueFn = self._getUniqueFileName(fileName)
-            dst = self._getExtraPath(uniqueFn)
-            if ' ' in dst:
-                if not alreadyWarned:
-                    self.warning('Warning: your file names have white spaces!')
-                    self.warning('Removing white spaces from copies/symlinks.')
-                    alreadyWarned = True
-                dst = dst.replace(' ', '')
-            copyOrLink(fileName, dst)
-            # Handle special case of Imagic images, copying also .img or .hed
-            self.handleImgHed(copyOrLink, fileName, dst)
-
-            if self._checkStacks:
-                _, _, _, n = imgh.getDimensions(dst)
-
-            if n > 1:
-                for index in range(1, n + 1):
-                    img.cleanObjId()
-                    img.setMicId(fileId)
-                    img.setFileName(dst)
-                    img.setIndex(index)
-                    self._addImageToSet(img, imgSet)
-            else:
-                img.setObjId(fileId)
-                img.setFileName(dst)
-                # Fill the micName if img is either Micrograph or Movie
-                uniqueFn = uniqueFn.replace(' ', '')
-                self._fillMicName(img, uniqueFn)
-                self._addImageToSet(img, imgSet)
-
-            outFiles.append(dst)
-
-            sys.stdout.write("\rImported %d/%d\n" % (i + 1, self.numberOfFiles))
-            sys.stdout.flush()
-
-        print("\n")
-
-        args = {}
-        outputSet = self._getOutputName()
-        args[outputSet] = imgSet
-        self._defineOutputs(**args)
-
-        return outFiles
+        outputName = 'outputTiltSeries%s' % self._outputSuffix
+        self._defineOutputs(**{outputName: outputSet})
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
