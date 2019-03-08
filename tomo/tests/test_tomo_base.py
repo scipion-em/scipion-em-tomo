@@ -24,15 +24,17 @@
 # *
 # **************************************************************************
 
+import pyworkflow as pw
 from pyworkflow.tests import BaseTest, setupTestOutput, DataSet
 from pyworkflow.em import Domain
+
+from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 
 
 class TestTomoBase(BaseTest):
     @classmethod
     def setUpClass(cls):
-        pass
-        #setupTestOutput(cls)
+        setupTestOutput(cls)
         #cls.dataset = DataSet.getDataSet('relion_tutorial')
         #cls.getFile = cls.dataset.getFile
 
@@ -50,6 +52,38 @@ class TestTomoBase(BaseTest):
                     'TiltImageM', 'TiltSeriesM', 'SetOfTiltSeriesM']
         for e in expected:
             self.assertTrue(e in objects, "%s should be in Domain.getObjects" % e)
+
+    def _create_tiltseries(self, tiltSeriesClass):
+        setFn = self.getOutputPath('%s.sqlite' % tiltSeriesClass.__name__)
+        pw.utils.cleanPath(setFn)
+
+        testSet = tiltSeriesClass(filename=setFn)
+
+        for tsId in ['TS01', 'TS02', 'TS03']:
+            tsObj = testSet.ITEM_TYPE(tsId=tsId)
+            testSet.append(tsObj)
+            for i, a in enumerate(range(-60, 60, 5)):
+                tsFn = '%s_%02d_%s.mrc' % (tsId, i, a)
+                tim = tsObj.ITEM_TYPE(location=tsFn,
+                                      acquisitionOrder=i,
+                                      tiltAngle=a)
+                tsObj.append(tim)
+
+        testSet.write()
+        testSet.close()
+
+        testSet2 = SetOfTiltSeriesM(filename=setFn)
+        self.assertEqual(testSet2.getSize(), 3)
+        for tsObj in testSet2:
+            self.assertEqual(tsObj.getSize(), 24)
+
+        testSet2.close()
+
+    def test_create_tiltseries(self):
+        self._create_tiltseries(SetOfTiltSeries)
+
+    def test_create_tiltseriesM(self):
+        self._create_tiltseries(SetOfTiltSeriesM)
 
 
 class TestTomoImport(BaseTest):

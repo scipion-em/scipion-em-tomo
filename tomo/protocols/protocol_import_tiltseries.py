@@ -35,7 +35,7 @@ import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
 
-from tomo.objects import TiltSeriesM, TiltImageM
+from tomo.objects import SetOfTiltSeries, SetOfTiltSeriesM
 
 
 class ProtImportTiltSeries(pwem.ProtImport):
@@ -55,12 +55,22 @@ class ProtImportTiltSeries(pwem.ProtImport):
     IMPORT_LINK_ABS = 1
     IMPORT_LINK_REL = 2
 
+    IMPORT_TYPE_MICS = 0
+    IMPORT_TYPE_MOVS = 1
+
     _label = 'import tilt-series'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
 
+        form.addParam('importType', params.EnumParam, default=1,
+                      choices=['Tilt series', 'Tilt series Movies'],
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label='Select type of input images',
+                      help='If you import tilt-series movies, then'
+                           'you need to provide also dose information'
+                           'and maybe gain/dark images.')
         form.addParam('filesPath', params.PathParam,
                       label="Files directory",
                       help="Root directory of the tilt-series (or movies).")
@@ -79,10 +89,11 @@ class ProtImportTiltSeries(pwem.ProtImport):
                            "Examples:\n"
                            "")
         form.addParam('importAction', params.EnumParam,
+                      default=self.IMPORT_LINK_REL,
                       choices=['Copy files',
                                'Absolute symlink',
                                'Relative symlink'],
-                      default=self.IMPORT_LINK_REL,
+                      display=params.EnumParam.DISPLAY_HLIST,
                       expertLevel=params.LEVEL_ADVANCED,
                       label="Import action on files",
                       help="By default ...")
@@ -135,16 +146,11 @@ class ProtImportTiltSeries(pwem.ProtImport):
         by subclasses to change what parameters to include.
         """
         group = form.addGroup('Acquisition info')
-        group.addParam('haveDataBeenPhaseFlipped', params.BooleanParam,
-                       default=False,
-                       label='Have data been phase-flipped?',
-                       help='Set this to Yes if the images have been ctf-phase '
-                            'corrected.')
-        group.addParam('acquisitionWizard', params.LabelParam, important=True,
-                       label='Use the wizard button to import acquisition.',
-                       help='Depending on the import Format, the wizard\n'
-                            'will try to import the acquisition values.\n'
-                            'If not found, required ones should be provided.')
+        # group.addParam('acquisitionWizard', params.LabelParam, important=True,
+        #                label='Use the wizard button to import acquisition.',
+        #                help='Depending on the import Format, the wizard\n'
+        #                     'will try to import the acquisition values.\n'
+        #                     'If not found, required ones should be provided.')
         group.addParam('voltage', params.FloatParam, default=300,
                        label=Message.LABEL_VOLTAGE,
                        help=Message.TEXT_VOLTAGE)
@@ -157,6 +163,30 @@ class ProtImportTiltSeries(pwem.ProtImport):
         group.addParam('magnification', params.IntParam, default=50000,
                        label=Message.LABEL_MAGNI_RATE,
                        help=Message.TEXT_MAGNI_RATE)
+        group.addParam('samplingRate', params.FloatParam,  default=1.0,
+                       important=True,
+                       label=Message.LABEL_SAMP_RATE,
+                       help=Message.TEXT_SAMP_RATE)
+
+        moviesCond = 'importType==%d' % self.IMPORT_TYPE_MOVS
+        line = group.addLine('Dose (e/A^2)',
+                             condition=moviesCond,
+                             help="Initial accumulated dose (usually 0) and "
+                                  "dose per frame. ")
+        line.addParam('doseInitial', params.FloatParam, default=0,
+                      label='Initial')
+        line.addParam('dosePerFrame', params.FloatParam, default=None,
+                      allowsNull=True,
+                      label='Per frame')
+        group.addParam('gainFile', params.FileParam,
+                       condition=moviesCond,
+                       label='Gain image',
+                       help='A gain reference related to a set of movies '
+                            'for gain correction')
+        group.addParam('darkFile', params.FileParam,
+                       condition=moviesCond,
+                       label='Dark image',
+                       help='A dark image related to a set of movies')
         return group
 
     def _defineBlacklistParams(self, form):
@@ -197,8 +227,12 @@ class ProtImportTiltSeries(pwem.ProtImport):
         return setObj
 
     def _createSetOfTiltSeries(self, suffix=''):
-        return self.__createSet(SetOfTiltSeriesM,
-                                'tiltseries_set%s.sqlite', suffix)
+        if self.importType == self.IMPORT_TYPE_MOVS:
+            return self.__createSet(SetOfTiltSeriesM,
+                                    'tiltseriesM%s.sqlite', suffix)
+        else:
+            return self.__createSet(SetOfTiltSeries,
+                                    'tiltseries%s.sqlite', suffix)
 
     def importStep(self, pattern, voltage, sphericalAberration,
                          amplitudeContrast, magnification):
@@ -209,28 +243,37 @@ class ProtImportTiltSeries(pwem.ProtImport):
         self.info("Using glob pattern: '%s'" % self._globPattern)
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
+        outputSet = self._createSetOfTiltSeries()
+        tiltSeriesClass = outputSet.ITEM_TYPE
+        tiltImageClass = tiltSeriesClass.ITEM_TYPE
+
         self.info("Files: ")
         tiltSeriesDict = OrderedDict()
         for f, ts, to, ta in self.getMatchingFiles():
             if ts not in tiltSeriesDict:
-                tiltSeriesDict[ts] = TiltSeriesM(filename=':memory:')
+                tiltSeriesDict[ts] = []
 
-            tiltSeriesM = tiltSeriesDict[ts]
-            tiltSeriesM.append(TiltImageM(location=f,
-                                          acquisitionOrder=to,
-                                          tiltAngle=ta))
+            tiltSeriesList = tiltSeriesDict[ts]
+            tiltSeriesList.append(tiltImageClass(location=f,
+                                                 acquisitionOrder=to,
+                                                 tiltAngle=ta))
 
-        for ts, tiltSeriesM in tiltSeriesDict.iteritems():
-            self.info("Tilt series: %s" % ts)
-            for tim in tiltSeriesM.iterItems():#orderBy='_tiltAngle', direction='DESC'):
-                self.info("   acq order: %02d, tilt angle: %0.2f"
-                          % (tim.getAcquisitionOrder(), tim.getTiltAngle()))
+        for ts, tiltSeriesList in tiltSeriesDict.iteritems():
+            tsObj = tiltSeriesClass(tsId=ts)
+            # we need this to set mapper before adding any item
+            outputSet.append(tsObj)
+            # Add tilt images to the tiltSerie
+            for tim in tiltSeriesList:#orderBy='_tiltAngle', direction='DESC'):
+                tsObj.append(tim)
+                #self.info("   acq order: %02d, tilt angle: %0.2f"
+                #          % (tim.getAcquisitionOrder(), tim.getTiltAngle()))
+
+        self._defineOutputs(outputTiltSeries=outputSet)
 
         return
 
         createSetFunc = getattr(self, '_create' + self._outputClassName)
         imgSet = createSetFunc()
-        imgSet.setIsPhaseFlipped(self.haveDataBeenPhaseFlipped.get())
         acquisition = imgSet.getAcquisition()
 
         self.fillAcquisition(acquisition)

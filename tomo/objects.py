@@ -57,7 +57,24 @@ class TiltImage(data.Image, TiltImageBase):
 
 
 class TiltSeriesBase(data.SetOfImages):
-    pass
+    def __init__(self, **kwargs):
+        data.SetOfImages.__init__(self, **kwargs)
+        self._tsId = pwobj.String(kwargs.get('tsId', None))
+
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but
+        not _mapperPath or _size from other set of micrographs to current one.
+        """
+        self.copy(other, copyId=False, ignoreAttrs=['_mapperPath', '_size'])
+
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=['_mapperPath', '_size'])
+        return clone
+
+    def close(self):
+        # Do nothing on close, since the db will be closed by SetOfTiltSeries
+        pass
 
 
 class TiltSeries(TiltSeriesBase):
@@ -67,6 +84,9 @@ class TiltSeries(TiltSeriesBase):
 class SetOfTiltSeriesBase(data.EMSet):
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
         Params:
