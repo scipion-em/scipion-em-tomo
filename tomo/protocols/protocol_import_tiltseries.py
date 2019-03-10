@@ -35,10 +35,10 @@ import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
 
-from tomo.objects import SetOfTiltSeries, SetOfTiltSeriesM
+from .protocol_base import ProtTomoBase
 
 
-class ProtImportTiltSeries(pwem.ProtImport):
+class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     """ Base class for other Import protocols.
     All imports protocols will have:
     1) Several options to import from (_getImportOptions function)
@@ -82,7 +82,7 @@ class ProtImportTiltSeries(pwem.ProtImport):
                            "It should also contains the following special tags:"
                            "   {TS}: tilt series identifier "
                            "         (can be any UNIQUE part of the path).\n"
-                           "   {TO}: acquisition order"
+                           "   {TO}: acq order"
                            "         (an integer value, important for dose).\n"
                            "   {TA}: tilt angle"
                            "         (positive or negative float value).\n\n"
@@ -118,7 +118,7 @@ class ProtImportTiltSeries(pwem.ProtImport):
                            "the output Set will be closed and no more data will be "
                            "added to it. \n"
                            "Note 1:  The default value is  high (12 hours) to avoid "
-                           "the protocol finishes during the acquisition of the "
+                           "the protocol finishes during the acq of the "
                            "microscope. You can also stop it from right click and press "
                            "STOP_STREAMING.\n"
                            "Note 2: If you're using individual frames when importing "
@@ -134,7 +134,7 @@ class ProtImportTiltSeries(pwem.ProtImport):
         self._defineBlacklistParams(form)
 
     def _defineAcquisitionParams(self, form):
-        """ Define acquisition parameters, it can be overriden
+        """ Define acq parameters, it can be overriden
         by subclasses to change what parameters to include.
         """
         group = form.addGroup('Acquisition info')
@@ -190,28 +190,17 @@ class ProtImportTiltSeries(pwem.ProtImport):
                                  self.magnification.get())
 
     # -------------------------- STEPS functions -------------------------------
-
-    def __createSet(self, SetClass, template, suffix, **kwargs):
-        """ Create a set and set the filename using the suffix.
-        If the file exists, it will be delete. """
-        setFn = self._getPath(template % suffix)
-        # Close the connection to the database if
-        # it is open before deleting the file
-        pw.utils.cleanPath(setFn)
-        from pyworkflow.mapper.sqlite_db import SqliteDb
-        SqliteDb.closeConnection(setFn)
-        setObj = SetClass(filename=setFn, **kwargs)
-        return setObj
+    def doImportMovies(self):
+        """ Return True if we are importing TiltSeries movies. """
+        return self.importType == self.IMPORT_TYPE_MOVS
 
     def _createSetOfTiltSeries(self, suffix=''):
-        if self.importType == self.IMPORT_TYPE_MOVS:
+        if self.doImportMovies():
             self._outputSuffix = 'M'
-            return self.__createSet(SetOfTiltSeriesM,
-                                    'tiltseriesM%s.sqlite', suffix)
+            return self._createSetOfTiltSeriesM()
         else:
             self._ouputSuffix = ''
-            return self.__createSet(SetOfTiltSeries,
-                                    'tiltseries%s.sqlite', suffix)
+            return self._createSetOfTiltSeries()
 
     def importStep(self, pattern, voltage, sphericalAberration,
                          amplitudeContrast, magnification):
@@ -223,6 +212,7 @@ class ProtImportTiltSeries(pwem.ProtImport):
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
         outputSet = self._createSetOfTiltSeries()
+        self._fillAcquisitionInfo(outputSet)
         tiltSeriesClass = outputSet.ITEM_TYPE
         tiltImageClass = tiltSeriesClass.ITEM_TYPE
 
@@ -233,8 +223,9 @@ class ProtImportTiltSeries(pwem.ProtImport):
                 tiltSeriesDict[ts] = []
 
             tiltSeriesList = tiltSeriesDict[ts]
+            order = len(tiltSeriesList) + 1
             tiltSeriesList.append(tiltImageClass(location=f,
-                                                 acquisitionOrder=to,
+                                                 acqOrder=order,
                                                  tiltAngle=ta))
 
         for ts, tiltSeriesList in tiltSeriesDict.iteritems():
@@ -302,7 +293,6 @@ class ProtImportTiltSeries(pwem.ProtImport):
         for f in filePaths:
             m = self._regex.match(f)
             if m is not None:
-                f += ' (matched)'
                 matchingFiles.append((f, m.group('TS'),
                                       int(m.group('TO')),
                                       float(m.group('TA'))))
@@ -360,3 +350,17 @@ class ProtImportTiltSeries(pwem.ProtImport):
     def worksInStreaming(self):
         # Import protocols always work in streaming
         return True
+
+    def _fillAcquisitionInfo(self, inputTs):
+        inputTs.setSamplingRate(self.samplingRate.get())
+        acq = inputTs.getAcquisition()
+        acq.setVoltage(self.voltage.get())
+        acq.setSphericalAberration(self.sphericalAberration.get())
+        acq.setAmplitudeContrast(self.amplitudeContrast.get())
+        acq.setMagnification(self.magnification.get())
+
+        if self.doImportMovies():
+            inputTs.setGain(self.gainFile.get())
+            inputTs.setDark(self.darkFile.get())
+            acq.setDoseInitial(self.doseInitial.get())
+            acq.setDosePerFrame(self.dosePerFrame.get())
