@@ -24,4 +24,9 @@
 # *
 # **************************************************************************
 
+
 from .protocol_import_tiltseries import ProtImportTiltSeries
+from .protocol_motion_correct_tiltseries import ProtAverageTiltSeries
+
+# TODO: Move the following protocol to motioncor plugin
+from .protocol_motioncor_tiltseries import ProtMotionCorrTiltSeries
