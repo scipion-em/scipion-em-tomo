@@ -89,42 +89,33 @@ class TestTomoBase(BaseTest):
         self._create_tiltseries(SetOfTiltSeriesM)
 
 
-class TestTomoImport(BaseTest):
+class TestTomoBaseProtocols(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
+        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
 
-    def _runImportTiltSeries(self, filesPath, filesPattern,
-                             voltage, magnification, samplingRate,
-                             importType, dosePerFrame, gainFile=None, darkFile=None,
-                             sphericalAberration=2.7, amplitudeContrast=0.1, doseInitial=0):
-        return self.newProtocol(ProtImportTiltSeries,
-                                importType=importType,
-                                filesPath=filesPath,
-                                filesPattern=filesPattern,
-                                voltage=voltage,
-                                magnification=magnification,
-                                sphericalAberration=sphericalAberration,
-                                amplitudeContrast=amplitudeContrast,
-                                samplingRate=samplingRate,
-                                doseInitial=doseInitial,
-                                dosePerFrame=dosePerFrame,
-                                gainFile=gainFile,
-                                darkFile=darkFile)
-
-    def test_import_tiltseries(self):
-        dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-
-        if not os.path.exists(dataPath):
+        if not os.path.exists(cls.dataPath):
             raise Exception("Can not run tomo tests, "
                             "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
 
-        filesPath = os.path.join(dataPath, 'data', 'frames')
-        protImport = self._runImportTiltSeries(filesPath,
-                                               '{TS}_{TO}_{TA}.mrc',
-                                               300, 105000, 1.35,
-                                               ProtImportTiltSeries.IMPORT_TYPE_MOVS,
-                                               0.3)
+    def _runImportTiltSeriesM(self):
+        return self.newProtocol(
+            ProtImportTiltSeries,
+            importType=ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPattern='{TS}_{TO}_{TA}.mrc',
+            voltage=300,
+            magnification=105000,
+            sphericalAberration=2.7,
+            amplitudeContrast=0.1,
+            samplingRate=1.35,
+            doseInitial=0,
+            dosePerFrame=0.3)
+
+    def test_importTiltSeriesM(self):
+        protImport = self._runImportTiltSeriesM()
+
         self.launchProtocol(protImport)
         output = getattr(protImport, 'outputTiltSeriesM', None)
         self.assertFalse(output is None)
