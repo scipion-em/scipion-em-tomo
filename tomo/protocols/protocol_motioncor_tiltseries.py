@@ -261,8 +261,7 @@ class ProtMotionCorrTiltSeries(ProtMotionCorrectTiltSeries):
                                                           self.angDist)
 
         tiFn = tiltImageM.getFileName()
-        inputFn = os.path.abspath(tiFn)  #_getPath(tiFn)
-        inputBase = pwutils.removeExt(inputFn)
+        inputFn = os.path.abspath(tiFn)
 
         self.info("inputFn: %s" % tiFn)
         self.info("inputFn (rel): %s" % _getPath(inputFn))
@@ -280,12 +279,12 @@ class ProtMotionCorrTiltSeries(ProtMotionCorrectTiltSeries):
                           for k, v in argsDict.iteritems()])
 
         if gain:
-            args += ' -Gain "%s" ' % inputMovies.getGain()
+            args += ' -Gain "%s" ' % gain
             args += ' -RotGain %d' % self.gainRot.get()
             args += ' -FlipGain %d' % self.gainFlip.get()
 
         if dark:
-            args += ' -Dark "%s"' % inputMovies.getDark()
+            args += ' -Dark "%s"' % dark
 
         args += ' -Gpu %(GPU)s'
         args += ' ' + self.extraParams2.get()

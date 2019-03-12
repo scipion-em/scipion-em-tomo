@@ -236,6 +236,8 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             for tim in tiltSeriesList:
                 tsObj.append(tim)
 
+            outputSet.update(tsObj)  # update items and size info
+
         outputName = 'outputTiltSeries%s' % self._outputSuffix
         self._defineOutputs(**{outputName: outputSet})
 

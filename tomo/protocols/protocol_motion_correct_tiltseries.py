@@ -160,7 +160,7 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
 
         tiFn, tiFnDW = self._getOutputTiltImagePaths(tiltImageM)
         if not os.path.exists(tiFn):
-            raise Exception("Expeced output file '%' not produced!" % tiFn)
+            raise Exception("Expected output file '%' not produced!" % tiFn)
 
         pw.utils.cleanPath(workingFolder)
 
@@ -174,11 +174,15 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         ih = pwem.ImageHandler()
 
         tsFn = self._getOutputTiltSeriesPath(ts)
+        tsFnDW = self._getOutputTiltSeriesPath(ts, '_DW')
 
         for i, ti in enumerate(tiList):
             tiFn, tiFnDW = self._getOutputTiltImagePaths(ti)
             ih.convert(tiFn, (i+1, tsFn))
             pw.utils.cleanPath(tiFn)
+            if os.path.exists(tiFnDW):
+                ih.convert(tiFnDW, (i+1, tsFnDW))
+                pw.utils.cleanPath(tiFnDW)
 
     def createOutputStep(self):
         inputTs = self.inputTiltSeriesM.get()
@@ -188,13 +192,17 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         for ts in inputTs:
             tsOut = outputTs.ITEM_TYPE()
             tsOut.copyInfo(ts)
+            tsOut.copyObjId(ts)
             outputTs.append(tsOut)
-
-            for ti in ts:
+            tsFn = self._getOutputTiltSeriesPath(ts)
+            for i, ti in enumerate(ts.iterItems(orderBy='_tiltAngle')):
                 tiOut = tsOut.ITEM_TYPE()
                 tiOut.copyInfo(ti)
-                tiOut.setLocation(self._getOutputTiltImagePaths(ti)[0])
+                tiOut.copyObjId(ti)
+                tiOut.setLocation((i+1, tsFn))
                 tsOut.append(tiOut)
+
+            outputTs.update(tsOut)
 
         self._defineOutputs(outputTiltSeries=outputTs)
         self._defineSourceRelation(self.inputTiltSeriesM, outputTs)
@@ -329,10 +337,11 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
 
     # ----- Some internal functions ---------
     def _getTiltImageMRoot(self, tim):
-        return '%s_%s' % (tim.getTsId(), tim.getAcquisitionOrder())
+        return '%s_%02d' % (tim.getTsId(), tim.getObjId())
 
     def __getTiltImageMWorkingFolder(self, tiltImageM):
-        return self._getTmpPath(self._getTiltImageMRoot(tiltImageM))
+        #return self._getTmpPath(self._getTiltImageMRoot(tiltImageM))
+        return os.path.join('/home/scratch', self._getTiltImageMRoot(tiltImageM))
 
     def _getOutputTiltImagePaths(self, tiltImageM):
         """ Return expected output path for correct movie and DW one.

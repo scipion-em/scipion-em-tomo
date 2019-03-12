@@ -31,7 +31,7 @@ from pyworkflow.tests import BaseTest, setupTestOutput, DataSet, setupTestProjec
 from pyworkflow.em import Domain
 
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
-from tomo.protocols import ProtImportTiltSeries
+import tomo.protocols
 
 
 class TestTomoBase(BaseTest):
@@ -100,9 +100,9 @@ class TestTomoBaseProtocols(BaseTest):
                             "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
 
     def _runImportTiltSeriesM(self):
-        return self.newProtocol(
-            ProtImportTiltSeries,
-            importType=ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTiltSeries,
+            importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
             filesPath=os.path.join(self.dataPath, 'data', 'frames'),
             filesPattern='{TS}_{TO}_{TA}.mrc',
             voltage=300,
@@ -112,13 +112,26 @@ class TestTomoBaseProtocols(BaseTest):
             samplingRate=1.35,
             doseInitial=0,
             dosePerFrame=0.3)
+        self.launchProtocol(protImport)
+        return protImport
 
     def test_importTiltSeriesM(self):
         protImport = self._runImportTiltSeriesM()
-
-        self.launchProtocol(protImport)
         output = getattr(protImport, 'outputTiltSeriesM', None)
         self.assertFalse(output is None)
+
+        return protImport
+
+    def test_motioncorTiltSeriesM(self):
+        protImport = self.test_importTiltSeriesM()
+
+        protMc = self.newProtocol(
+            tomo.protocols.ProtMotionCorrTiltSeries,
+            binFactor=2.0
+        )
+
+        protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
+        self.launchProtocol(protMc)
 
 
 if __name__ == 'main':
