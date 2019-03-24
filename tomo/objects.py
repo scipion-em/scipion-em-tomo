@@ -158,6 +158,34 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             self._setItemMapperPath(item)
             yield item
 
+    def copyItems(self, inputTs,
+                  orderByTs='id', updateTsCallback=None,
+                  orderByTi='id', updateTiCallback=None):
+        """ Copy items (TiltSeries and TiltImages) from the input Set.
+         Params:
+            inputTs: input TiltSeries (or movies) from where to copy elements.
+            orderByTs: optional orderBy value for iterating over TiltSeries
+            updateTsCallback: optional callback after TiltSeries is created
+            orderByTi: optional orderBy value for iterating over TiltImages
+            updateTiCallback: optional callback after TiltImage is created
+        """
+        for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
+            tsOut = self.ITEM_TYPE()
+            tsOut.copyInfo(ts)
+            tsOut.copyObjId(ts)
+            if updateTsCallback:
+                updateTsCallback(i, tsOut)
+            self.append(tsOut)
+            for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
+                tiOut = tsOut.ITEM_TYPE()
+                tiOut.copyInfo(ti)
+                tiOut.copyObjId(ti)
+                if updateTiCallback:
+                    updateTiCallback(tsOut, j, tiOut)
+                tsOut.append(tiOut)
+
+            self.update(tsOut)
+
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
