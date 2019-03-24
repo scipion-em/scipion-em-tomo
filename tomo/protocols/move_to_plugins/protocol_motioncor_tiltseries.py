@@ -33,7 +33,7 @@ from pyworkflow.em.data import MovieAlignment
 
 # TODO: Change the import when moved to motioncor plugin
 #from tomo.protocols import ProtMotionCorrectTiltSeries
-from .protocol_motion_correct_tiltseries import ProtMotionCorrectTiltSeries
+from tomo.protocols.protocol_motion_correct_tiltseries import ProtMotionCorrectTiltSeries
 
 import motioncorr
 from motioncorr.convert import *

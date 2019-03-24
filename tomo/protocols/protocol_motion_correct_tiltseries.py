@@ -162,7 +162,10 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         if not os.path.exists(tiFn):
             raise Exception("Expected output file '%' not produced!" % tiFn)
 
-        pw.utils.cleanPath(workingFolder)
+        print("os.environ: ", os.environ.get('SCIPION_DEBUG_NOCLEAN', 'None-none'))
+        print("envVarOn: ", pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'))
+        if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
+            pw.utils.cleanPath(workingFolder)
 
     def composeTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
@@ -189,21 +192,12 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         outputTs = self._createSetOfTiltSeries()
         outputTs.copyInfo(inputTs)
 
-        for ts in inputTs:
-            tsOut = outputTs.ITEM_TYPE()
-            tsOut.copyInfo(ts)
-            tsOut.copyObjId(ts)
-            outputTs.append(tsOut)
-            tsFn = self._getOutputTiltSeriesPath(ts)
-            for i, ti in enumerate(ts.iterItems(orderBy='_tiltAngle')):
-                tiOut = tsOut.ITEM_TYPE()
-                tiOut.copyInfo(ti)
-                tiOut.copyObjId(ti)
-                tiOut.setLocation((i+1, tsFn))
-                tsOut.append(tiOut)
+        def _updateTi(ts, j, ti):
+            ti.setLocation((j + 1, self._getOutputTiltSeriesPath(ts)))
 
-            outputTs.update(tsOut)
-
+        outputTs.copyItems(inputTs,
+                           orderByTi='_tiltAngle',
+                           updateTiCallback=_updateTi)
         self._defineOutputs(outputTiltSeries=outputTs)
         self._defineSourceRelation(self.inputTiltSeriesM, outputTs)
 
