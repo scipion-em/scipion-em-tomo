@@ -174,14 +174,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             tsOut.copyInfo(ts)
             tsOut.copyObjId(ts)
             if updateTsCallback:
-                updateTsCallback(i, tsOut)
+                updateTsCallback(i, ts, tsOut)
             self.append(tsOut)
             for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
                 tiOut = tsOut.ITEM_TYPE()
                 tiOut.copyInfo(ti)
                 tiOut.copyObjId(ti)
+                tiOut.setLocation(ti.getLocation())
                 if updateTiCallback:
-                    updateTiCallback(tsOut, j, tiOut)
+                    updateTiCallback(j, ts, ti, tsOut, tiOut)
                 tsOut.append(tiOut)
 
             self.update(tsOut)
