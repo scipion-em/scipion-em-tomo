@@ -64,8 +64,9 @@ class ProtTsCtffind(ProtTsEstimateCTF):
     def _estimateCtf(self, workingDir, ti):
         try:
             downFactor = self.ctfDownFactor.get()
-            micFnMrc = os.path.join(workingDir,
-                                    '%s-ti%03d.mrc' % (ti.getTsId(), ti.getObjId()))
+            micFnMrc = os.path.join(workingDir, self.getTiPrefix(ti) + '.mrc')
+            outputLog = os.path.join(workingDir, 'output-log.txt')
+            outputPsd = os.path.join(workingDir, self.getPsdName(ti))
 
             ih = pw.em.ImageHandler()
 
@@ -83,10 +84,13 @@ class ProtTsCtffind(ProtTsEstimateCTF):
         try:
             program, args = self._ctfProgram.getCommand(
                 micFn=micFnMrc,
-                ctffindOut=self._getCtfOutPath(workingDir, ti),
-                ctffindPSD=self._getPsdPath(workingDir, ti)
+                ctffindOut=outputLog,
+                ctffindPSD=outputPsd
             )
             self.runJob(program, args)
+            # Move files we want to keep
+            pw.utils.moveFile(outputPsd, self._getExtraPath())
+            pw.utils.moveFile(outputPsd.replace('.mrc', '.txt'), self._getTmpPath())
         except Exception as ex:
             print >> sys.stderr, "ctffind has failed with micrograph %s" % micFnMrc
             import traceback
@@ -108,17 +112,16 @@ class ProtTsCtffind(ProtTsEstimateCTF):
         """
         return []
 
-    def _getPsdPath(self, wd, ti):
-        return os.path.join(wd, 'ctfEstimation.mrc')
+    def getPsdName(self, ti):
+        return '%s_PSD.mrc' % self.getTiPrefix(ti)
 
-    def _getCtfOutPath(self, wd, ti):
-        return os.path.join(wd, 'ctfEstimation.txt')
-
-    def _parseOutput(self, filename):
-        """ Try to find the output estimation parameters
-        from filename. It search for a line containing: Final Values.
+    def getCtf(self, ti):
+        """ Parse the CTF object estimated for this Tilt-Image
         """
-        return self._ctfProgram.parseOutput(filename)
+        psd = self.getPsdName(ti)
+        outCtf = self._getTmpPath(psd.replace('.mrc', '.txt'))
+        return self._ctfProgram.parseOutputAsCtf(outCtf,
+                                                 psdFile=self._getExtraPath(psd))
 
     def isNewCtffind4(self):
         # This function is needed because it is used in Form params condition

@@ -147,8 +147,6 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
         # Call the current estimation of CTF that is implemented in subclasses
         self._estimateCtf(workingFolder, tiltImage, *args)
 
-        print("os.environ: ", os.environ.get('SCIPION_DEBUG_NOCLEAN', 'None-none'))
-        print("envVarOn: ", pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'))
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
 
@@ -164,21 +162,13 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
         outputTs = self._createSetOfTiltSeries()
         outputTs.copyInfo(inputTs)
 
-        for ts in inputTs:
-            tsOut = outputTs.ITEM_TYPE()
-            tsOut.copyInfo(ts)
-            outputTs.append(tsOut)
-            tsFn = self._getOutputTiltSeriesPath(ts)
-            for i, ti in enumerate(ts.iterItems(sortBy='_tiltAngle')):
-                tiOut = tsOut.ITEM_TYPE()
-                tiOut.copyInfo(ti)
-                tiOut.setLocation((i+1, tsFn))
-                tsOut.append(tiOut)
+        def _updateCtf(j, ts, ti, tsOut, tiOut):
+            tiOut.setCTF(self.getCtf(ti))
 
-            outputTs.update(tsOut)
+        outputTs.copyItems(inputTs, updateTiCallback=_updateCtf)
 
         self._defineOutputs(outputTiltSeries=outputTs)
-        self._defineSourceRelation(self.inputTiltSeriesM, outputTs)
+        self._defineSourceRelation(self.inputTiltSeries, outputTs)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
@@ -231,7 +221,6 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
 
     def __getTiWorkingFolder(self, tiltImage):
         return self._getTmpPath(self.getTiRoot(tiltImage))
-        #return os.path.join('/home/scratch', self.getTiRoot(tiltImageM))
 
     def _getOutputTiPaths(self, tiltImageM):
         """ Return expected output path for correct movie and DW one.
@@ -244,4 +233,7 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
 
     def _useAlignToSum(self):
         return True
+
+    def getTiPrefix(self, ti):
+        return '%s_%03d' % (ti.getTsId(), ti.getObjId())
 
