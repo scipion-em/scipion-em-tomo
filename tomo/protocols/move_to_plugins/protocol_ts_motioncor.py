@@ -38,7 +38,7 @@ from motioncorr.convert import *
 from motioncorr.constants import *
 
 
-class ProtMotionCorrTiltSeries(ProtTsCorrectMotion):
+class ProtTsMotionCorr(ProtTsCorrectMotion):
     """
     This protocol wraps motioncor2 movie alignment program developed at UCSF.
 
@@ -46,7 +46,7 @@ class ProtMotionCorrTiltSeries(ProtTsCorrectMotion):
         (written by Shawn Zheng @ David Agard lab)
     """
 
-    _label = 'tiltseries (movies)'
+    _label = 'tiltseries motioncor'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):

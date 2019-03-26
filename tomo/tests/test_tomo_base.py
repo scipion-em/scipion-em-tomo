@@ -146,7 +146,7 @@ class TestTomoBaseProtocols(BaseTest):
         protImport = self.test_importTiltSeriesM()
 
         protMc = self.newProtocol(
-            tomo.protocols.ProtMotionCorrTiltSeries,
+            tomo.protocols.ProtTsMotionCorr,
             binFactor=2.0
         )
 

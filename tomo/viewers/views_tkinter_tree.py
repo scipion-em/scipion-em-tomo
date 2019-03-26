@@ -139,13 +139,12 @@ class TiltSeriesTreeProvider(TreeProvider):
             viewers = pwem.findViewers(obj.getClassName(),
                                        pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
-                viewer = viewerClass(project=self.protocol.getProject())
-
-                def visualize():
-                    print 'Opening with %s' % type(viewer).__name__,
-                    viewer.visualize(obj)
+                def createViewer(viewerClass, obj):
+                    proj = self.protocol.getProject()
+                    item = self.tiltseries[obj.getObjId()]  # to load mapper
+                    return lambda : viewerClass(project=proj).visualize(item)
                 actions.append(('Open with %s' % viewerClass.__name__,
-                                visualize))
+                                createViewer(viewerClass, obj)))
 
         return actions
 

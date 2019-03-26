@@ -187,6 +187,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
             self.update(tsOut)
 
+    def updateDim(self):
+        """ Update dimensions of this set base on the first element. """
+        self.setDim(self.getFirstItem().getDim())
+
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
