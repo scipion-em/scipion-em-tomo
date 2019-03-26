@@ -29,12 +29,8 @@ import sys
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
-import pyworkflow.protocol.params as params
 from pyworkflow.protocol import STEPS_PARALLEL
 
-from pyworkflow.utils.properties import Message
-
-from tomo.objects import TiltSeriesDict
 from tomo.protocols import ProtTsEstimateCTF
 
 from grigoriefflab.protocols.program_ctffind import ProgramCtffind

@@ -31,17 +31,16 @@ import pyworkflow.protocol.constants as cons
 import pyworkflow.utils as pwutils
 from pyworkflow.em.data import MovieAlignment
 
-# TODO: Change the import when moved to motioncor plugin
-#from tomo.protocols import ProtMotionCorrectTiltSeries
-from tomo.protocols.protocol_motion_correct_tiltseries import ProtMotionCorrectTiltSeries
+from tomo.protocols import ProtTsCorrectMotion
 
 import motioncorr
 from motioncorr.convert import *
 from motioncorr.constants import *
 
 
-class ProtMotionCorrTiltSeries(ProtMotionCorrectTiltSeries):
-    """ This protocol wraps motioncor2 movie alignment program developed at UCSF.
+class ProtMotionCorrTiltSeries(ProtTsCorrectMotion):
+    """
+    This protocol wraps motioncor2 movie alignment program developed at UCSF.
 
     Motioncor2 performs anisotropic drift correction and dose weighting
         (written by Shawn Zheng @ David Agard lab)
@@ -51,7 +50,7 @@ class ProtMotionCorrTiltSeries(ProtMotionCorrectTiltSeries):
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
-        ProtMotionCorrectTiltSeries._defineParams(self, form)
+        ProtTsCorrectMotion._defineParams(self, form)
 
         form.addSection(label="Motioncor2 params")
 
@@ -300,7 +299,7 @@ class ProtMotionCorrTiltSeries(ProtMotionCorrectTiltSeries):
 
     def _validate(self):
         # Check base validation before the specific ones
-        errors = ProtMotionCorrectTiltSeries._validate(self)
+        errors = ProtTsCorrectMotion._validate(self)
 
         inputTs = self.inputTiltSeriesM.get()
 

@@ -37,7 +37,7 @@ from tomo.objects import TiltSeriesDict
 from .protocol_base import ProtTomoBase
 
 
-class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
+class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
     """
     Base class for movie alignment protocols such as:
     motioncorr, crosscorrelation and optical flow
@@ -350,7 +350,7 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         return True
 
 
-class ProtAverageTiltSeries(ProtMotionCorrectTiltSeries):
+class ProtTsAverage(ProtTsCorrectMotion):
     """
     Simple protocol to average TiltSeries movies as basic
     motion correction. It is used mainly for testing purposes.
