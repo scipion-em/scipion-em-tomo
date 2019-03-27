@@ -57,29 +57,13 @@ class ProtTsCtffind(ProtTsEstimateCTF):
         form.addParallelSection(threads=3, mpi=1)
 
     # --------------------------- STEPS functions ----------------------------
-    def _estimateCtf(self, workingDir, ti):
+    def _estimateCtf(self, workingDir, tiFn, ti):
         try:
-            downFactor = self.ctfDownFactor.get()
-            micFnMrc = os.path.join(workingDir, self.getTiPrefix(ti) + '.mrc')
             outputLog = os.path.join(workingDir, 'output-log.txt')
             outputPsd = os.path.join(workingDir, self.getPsdName(ti))
 
-            ih = pw.em.ImageHandler()
-
-            if downFactor != 1:
-                # Replace extension by 'mrc' because there are some formats
-                # that cannot be written (such as dm3)
-                ih.scaleFourier(ti, micFnMrc, downFactor)
-            else:
-                ih.convert(ti, micFnMrc, pw.em.DT_FLOAT)
-
-        except Exception as ex:
-            print >> sys.stderr, "Some error happened: %s" % ex
-            import traceback
-            traceback.print_exc()
-        try:
             program, args = self._ctfProgram.getCommand(
-                micFn=micFnMrc,
+                micFn=tiFn,
                 ctffindOut=outputLog,
                 ctffindPSD=outputPsd
             )
@@ -88,7 +72,7 @@ class ProtTsCtffind(ProtTsEstimateCTF):
             pw.utils.moveFile(outputPsd, self._getExtraPath())
             pw.utils.moveFile(outputPsd.replace('.mrc', '.txt'), self._getTmpPath())
         except Exception as ex:
-            print >> sys.stderr, "ctffind has failed with micrograph %s" % micFnMrc
+            print >> sys.stderr, "ctffind has failed with micrograph %s" % tiFn
             import traceback
             traceback.print_exc()
 

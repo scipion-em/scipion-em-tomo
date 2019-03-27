@@ -138,19 +138,37 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
         pass
 
     def estimateCtfStep(self, tsId, tiltImageId, *args):
-        tiltImage = self._tsDict.getTi(tsId, tiltImageId)
+        ti = self._tsDict.getTi(tsId, tiltImageId)
 
         # Create working directory for a tilt-image
-        workingFolder = self.__getTiWorkingFolder(tiltImage)
-        pw.utils.makePath(workingFolder)
+        workingDir = self.__getTiworkingDir(ti)
+        tiFnMrc = os.path.join(workingDir, self.getTiPrefix(ti) + '.mrc')
+        pw.utils.makePath(workingDir)
+        self._convertInputTi(ti, tiFnMrc)
 
         # Call the current estimation of CTF that is implemented in subclasses
-        self._estimateCtf(workingFolder, tiltImage, *args)
+        self._estimateCtf(workingDir, tiFnMrc, ti, *args)
 
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
-            pw.utils.cleanPath(workingFolder)
+            pw.utils.cleanPath(workingDir)
 
-    def _estimateCtf(self, workingFolder, tiltImage):
+    def _convertInputTi(self, ti, tiFn):
+        """ This function will convert the input tilt-image
+        taking into account the downFactor.
+        It can be overriden in subclasses if another behaviour is required.
+        """
+        downFactor = self.ctfDownFactor.get()
+
+        ih = pw.em.ImageHandler()
+
+        if downFactor != 1:
+            # Replace extension by 'mrc' because there are some formats
+            # that cannot be written (such as dm3)
+            ih.scaleFourier(ti, tiFn, downFactor)
+        else:
+            ih.convert(ti, tiFn, pw.em.DT_FLOAT)
+
+    def _estimateCtf(self, workingDir, tiFn, tiltImage):
         raise Exception("_estimateCTF function should be implemented!")
 
     def processTsStep(self, tsId):
@@ -186,8 +204,8 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
         # Get pointer to input micrographs
         inputTs = self.inputTiltSeries.get()
         acq = inputTs.getAcquisition()
-        sampling = inputTs.getSamplingRate()
         downFactor = self.getAttributeValue('ctfDownFactor', 1.0)
+        sampling = inputTs.getSamplingRate()
         if downFactor != 1.0:
             sampling *= downFactor
         self._params = {'voltage': acq.getVoltage(),
@@ -195,7 +213,7 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
                         'magnification': acq.getMagnification(),
                         'ampContrast': acq.getAmplitudeContrast(),
                         'samplingRate': sampling,
-                        #'scannedPixelSize': inputTs.getScannedPixelSize(),
+                        'scannedPixelSize': inputTs.getScannedPixelSize(),
                         'windowSize': self.windowSize.get(),
                         'lowRes': self.lowRes.get(),
                         'highRes': self.highRes.get(),
@@ -219,7 +237,7 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
     def getTiRoot(self, tim):
         return '%s_%02d' % (tim.getTsId(), tim.getObjId())
 
-    def __getTiWorkingFolder(self, tiltImage):
+    def __getTiworkingDir(self, tiltImage):
         return self._getTmpPath(self.getTiRoot(tiltImage))
 
     def _getOutputTiPaths(self, tiltImageM):

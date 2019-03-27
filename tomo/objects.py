@@ -104,6 +104,10 @@ class TiltSeriesBase(data.SetOfImages):
         # Do nothing on close, since the db will be closed by SetOfTiltSeries
         pass
 
+    def getScannedPixelSize(self):
+        mag = self._acquisition.getMagnification()
+        return self._samplingRate.get() * 1e-4 * mag
+
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
@@ -190,6 +194,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
+
+    def getScannedPixelSize(self):
+        mag = self._acquisition.getMagnification()
+        return self._samplingRate.get() * 1e-4 * mag
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
