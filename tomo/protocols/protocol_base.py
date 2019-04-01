@@ -25,11 +25,13 @@
 # **************************************************************************
 
 import pyworkflow as pw
+import pyworkflow.em as pwem
 from pyworkflow.mapper.sqlite_db import SqliteDb
 from tomo.objects import SetOfTiltSeries, SetOfTiltSeriesM
 
 
 class ProtTomoBase:
+
     def __createSet(self, SetClass, template, suffix, **kwargs):
         """ Create a set and set the filename using the suffix.
         If the file exists, it will be delete. """
@@ -50,4 +52,11 @@ class ProtTomoBase:
             self._ouputSuffix = ''
             return self.__createSet(SetOfTiltSeries,
                                     'tiltseries%s.sqlite', suffix)
+
+
+class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
+    """ Base class for Tomogram reconstruction protocols. """
+    pass
+
+
 

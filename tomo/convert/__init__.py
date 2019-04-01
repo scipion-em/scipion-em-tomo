@@ -24,12 +24,30 @@
 # *
 # **************************************************************************
 
-from .protocol_base import ProtTomoBase, ProtTomoReconstruct
-from .protocol_ts_import import ProtImportTiltSeries
-from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
-from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
+import pyworkflow.em as pwem
 
-from .move_to_plugins.protocol_ts_motioncor import ProtTsMotionCorr
-from .move_to_plugins.protocol_ts_ctffind import ProtTsCtffind
-from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
-from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
+
+def writeTiStack(inputTiList, outputStackFn, outputTltFn=None):
+    """ Write a given list of tilt images as a single stack
+    Params:
+        inputTiList: input list of tilted images.
+        outputStackFn: output path where to write the stack.
+        orderBy: column to sort by, by default tilt angle (ascending)
+        excludeList: a list of images to skip (starting at 1)
+    Results:
+        A new stack file will be created and also a tlt file with tilt-angles
+    """
+    ih = pwem.ImageHandler()
+    i = 0
+    f = open(outputTltFn, 'w') if outputStackFn else None
+
+    for ti in inputTiList:
+        i += 1
+        ih.convert(ti, (i, outputStackFn))
+        if f:
+            f.write('%f\n' % ti.getTiltAngle())
+
+    if f:
+        f.close()
+
+
