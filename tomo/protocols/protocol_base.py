@@ -59,6 +59,9 @@ class ProtTomoBase:
         coord3DSet.setVolumes(volSet)
         return coord3DSet
 
+    def _createSetOfTomograms(self, suffix=''):
+        return self.__createSet(SetOfTomograms, 'tomograms%s.sqlite', suffix)
+
 class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
     pass
