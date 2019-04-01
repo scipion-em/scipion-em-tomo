@@ -1,8 +1,10 @@
 # **************************************************************************
 # *
 # * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# *              Adrian Quintana (adrian@eyeseetea.com) [2]
 # *
 # * [1] SciLifeLab, Stockholm University
+# * [2] EyeSeeTea Ltd, London, UK
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
