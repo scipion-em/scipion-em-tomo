@@ -25,14 +25,18 @@
 # *
 # **************************************************************************
 
+from os.path import basename, abspath
+
 import pyworkflow.em as pwem
-from tomo.objects import Tomogram
-from .protocol_base import ProtTomoBase
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from os.path import basename, abspath
 from pyworkflow.em.convert import Ccp4Header
 from pyworkflow.utils.path import createAbsLink
+
+from .protocol_base import ProtTomoBase
+from tomo.objects import Tomogram
+
+
 
 
 class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
