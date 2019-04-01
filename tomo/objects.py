@@ -31,7 +31,6 @@ import pyworkflow.object as pwobj
 import pyworkflow.em.data as data
 
 
-
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
     def __init__(self, **kwargs):
@@ -105,6 +104,10 @@ class TiltSeriesBase(data.SetOfImages):
         # Do nothing on close, since the db will be closed by SetOfTiltSeries
         pass
 
+    def getScannedPixelSize(self):
+        mag = self._acquisition.getMagnification()
+        return self._samplingRate.get() * 1e-4 * mag
+
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
@@ -175,17 +178,26 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             tsOut.copyInfo(ts)
             tsOut.copyObjId(ts)
             if updateTsCallback:
-                updateTsCallback(i, tsOut)
+                updateTsCallback(i, ts, tsOut)
             self.append(tsOut)
             for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
                 tiOut = tsOut.ITEM_TYPE()
                 tiOut.copyInfo(ti)
                 tiOut.copyObjId(ti)
+                tiOut.setLocation(ti.getLocation())
                 if updateTiCallback:
-                    updateTiCallback(tsOut, j, tiOut)
+                    updateTiCallback(j, ts, ti, tsOut, tiOut)
                 tsOut.append(tiOut)
 
             self.update(tsOut)
+
+    def updateDim(self):
+        """ Update dimensions of this set base on the first element. """
+        self.setDim(self.getFirstItem().getDim())
+
+    def getScannedPixelSize(self):
+        mag = self._acquisition.getMagnification()
+        return self._samplingRate.get() * 1e-4 * mag
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -254,9 +266,12 @@ class TiltSeriesDict:
     def __init__(self):
         self.__dict = OrderedDict()
 
-    def addTs(self, tiltSeries):
+    def addTs(self, tiltSeries, includeTi=False):
         """ Add a clone of the tiltseries. """
         self.__dict[tiltSeries.getTsId()] = (tiltSeries.clone(), OrderedDict())
+        if includeTi:
+            for ti in tiltSeries:
+                self.addTi(ti)
 
     def getTs(self, tsId):
         return self.__dict[tsId][0]
@@ -273,6 +288,9 @@ class TiltSeriesDict:
     def getTiList(self, tsId):
         return self.getTiDict(tsId).values()
 
+    def __iter__(self):
+        for ts, d in self.__dict.values():
+            yield ts
 
 class Coordinate3D(data.EMObject):
     """This class holds the (x,y) position and other information

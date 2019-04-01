@@ -46,12 +46,16 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI = 'Info / Path'
     COL_TI_ID = 'Acq. Order'
     COL_TI_ANGLE = 'Tilt Angle'
+    COL_TI_DEFOCUS_U = 'Defocus'
+    ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
+                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
 
     def __init__(self, protocol, tiltSeries):
-        TreeProvider.__init__(self)
-        self.tiltseries = tiltSeries
-        self.selectedDict = {}
         self.protocol = protocol
+        self.tiltseries = tiltSeries
+        self._hasCtf = tiltSeries.getFirstItem().getFirstItem().hasCTF()
+        TreeProvider.__init__(self, sortingColumnName=self.COL_TS)
+        self.selectedDict = {}
         self.mapper = protocol.mapper
         self.maxNum = 200
 
@@ -60,12 +64,15 @@ class TiltSeriesTreeProvider(TreeProvider):
         project = self.protocol.getProject()
         objects = []
 
+        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
+        direction = 'ASC' if self.isSortingAscending() else 'DESC'
+
         for ts in self.tiltseries:
             tsObj = ts.clone()
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             objects.append(tsObj)
-            for ti in ts:
+            for ti in ts.iterItems(orderBy=orderBy, direction=direction):
                 tiObj = ti.clone()
                 tiObj._allowsSelection = False
                 tiObj._parentObject = tsObj
@@ -80,12 +87,17 @@ class TiltSeriesTreeProvider(TreeProvider):
         pass
 
     def getColumns(self):
-        return [
+        cols = [
             (self.COL_TS, 100),
             (self.COL_TI_ID, 80),
             (self.COL_TI_ANGLE, 80),
             (self.COL_TI, 400),
         ]
+
+        if self._hasCtf:
+            cols.insert(3, (self.COL_TI_DEFOCUS_U, 80))
+
+        return cols
 
     def isSelected(self, obj):
         """ Check if an object is selected or not. """
@@ -102,17 +114,19 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = obj.getObjId()
             text = tsId
-            values = ('', '', str(obj))
-            opened = False
+            values = ['', '', '', str(obj)]
+            opened = True
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, obj.getObjId())
             text = ''
-            values = (objId, obj.getTiltAngle(), str(obj.getLocation()))
+            values = [objId, obj.getTiltAngle(), str(obj.getLocation())]
+            if self._hasCtf:
+                values.insert(2, "%.03f" % obj.getCTF().getDefocusU())
             opened = False
 
         return {
             'key': key, 'text': text,
-            'values': values,
+            'values': tuple(values),
             'open': opened,
             'selected': False,
             'parent': obj._parentObject
@@ -125,13 +139,12 @@ class TiltSeriesTreeProvider(TreeProvider):
             viewers = pwem.findViewers(obj.getClassName(),
                                        pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
-                viewer = viewerClass(project=self.protocol.getProject())
-
-                def visualize():
-                    print 'Opening with %s' % type(viewer).__name__,
-                    viewer.visualize(obj)
+                def createViewer(viewerClass, obj):
+                    proj = self.protocol.getProject()
+                    item = self.tiltseries[obj.getObjId()]  # to load mapper
+                    return lambda : viewerClass(project=proj).visualize(item)
                 actions.append(('Open with %s' % viewerClass.__name__,
-                                visualize))
+                                createViewer(viewerClass, obj)))
 
         return actions
 

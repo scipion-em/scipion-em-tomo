@@ -28,7 +28,7 @@ import os
 
 import pyworkflow as pw
 from pyworkflow.tests import BaseTest, setupTestOutput, DataSet, setupTestProject
-from pyworkflow.em import Domain
+from pyworkflow.em import Domain, CTFModel
 
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
@@ -82,11 +82,31 @@ class TestTomoBase(BaseTest):
 
         testSet2.close()
 
+        return testSet
+
     def test_create_tiltseries(self):
         self._create_tiltseries(SetOfTiltSeries)
 
     def test_create_tiltseriesM(self):
         self._create_tiltseries(SetOfTiltSeriesM)
+
+    def test_copyItems(self):
+        testSet = self._create_tiltseries(SetOfTiltSeries)
+
+        fn = testSet.getFileName()
+        print("Input sqlite: %s" % fn)
+
+        fn2 = fn.replace('.sqlite', '-withctf.sqlite')
+        print("Writing new set to: %s" % fn2)
+
+        def _updateCtf(j, ts, ti, tsOut, tiOut):
+            tiOut.setCTF(CTFModel(defocusU=j*1000, defocusAngle=j/2.0))
+
+        testSet2 = SetOfTiltSeries(filename=fn2)
+        testSet2.copyItems(testSet, updateTiCallback=_updateCtf)
+
+        testSet2.write()
+        testSet2.close()
 
 
 class TestTomoBaseProtocols(BaseTest):
@@ -126,7 +146,7 @@ class TestTomoBaseProtocols(BaseTest):
         protImport = self.test_importTiltSeriesM()
 
         protMc = self.newProtocol(
-            tomo.protocols.ProtMotionCorrTiltSeries,
+            tomo.protocols.ProtTsMotionCorr,
             binFactor=2.0
         )
 

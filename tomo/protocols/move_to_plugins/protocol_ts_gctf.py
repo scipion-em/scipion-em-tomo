@@ -32,15 +32,15 @@ import pyworkflow.em as pwem
 from pyworkflow.protocol import STEPS_PARALLEL
 
 from tomo.protocols import ProtTsEstimateCTF
+import gctf
+from gctf.protocols.program_gctf import ProgramGctf
 
-from grigoriefflab.protocols.program_ctffind import ProgramCtffind
 
-
-class ProtTsCtffind(ProtTsEstimateCTF):
+class ProtTsGctf(ProtTsEstimateCTF):
     """
     CTF estimation on Tilt-Series using CTFFIND4.
     """
-    _label = 'tiltseries ctffind'
+    _label = 'tiltseries gctf'
 
     def __init__(self, **kwargs):
         pwem.EMProtocol.__init__(self, **kwargs)
@@ -49,30 +49,39 @@ class ProtTsCtffind(ProtTsEstimateCTF):
     # -------------------------- DEFINE param functions -----------------------
     def _defineCtfParamsDict(self):
         ProtTsEstimateCTF._defineCtfParamsDict(self)
-        self._ctfProgram = ProgramCtffind(self)
+        self._gctfProgram = ProgramGctf(self)
 
     def _defineProcessParams(self, form):
-        ProgramCtffind.defineFormParams(form)
+        ProgramGctf.defineFormParams(form)
 
         form.addParallelSection(threads=3, mpi=1)
 
     # --------------------------- STEPS functions ----------------------------
     def _estimateCtf(self, workingDir, tiFn, ti):
         try:
-            outputLog = os.path.join(workingDir, 'output-log.txt')
-            outputPsd = os.path.join(workingDir, self.getPsdName(ti))
-
-            program, args = self._ctfProgram.getCommand(
-                micFn=tiFn,
-                ctffindOut=outputLog,
-                ctffindPSD=outputPsd
+            program, args = self._gctfProgram.getCommand(
+                scannedPixelSize=self._params['scannedPixelSize']
             )
-            self.runJob(program, args)
+            args += ' %s/*.mrc' % workingDir
+            self.runJob(program, args, env=gctf.Plugin.getEnviron())
+
+            ext = self._gctfProgram.getExt()
+
             # Move files we want to keep
-            pw.utils.moveFile(outputPsd, self._getExtraPath())
-            pw.utils.moveFile(outputPsd.replace('.mrc', '.txt'), self._getTmpPath())
+            micBase = pw.utils.removeBaseExt(tiFn)
+
+            def _getFile(suffix):
+                print("File: %s" % os.path.join(workingDir, micBase + suffix))
+                return os.path.join(workingDir, micBase + suffix)
+
+            # move output from tmp to extra
+            pw.utils.moveFile(_getFile(ext),
+                              self._getExtraPath(micBase + '_ctf.mrc'))
+            pw.utils.moveFile(_getFile('_gctf.log'), self._getTmpPath())
+            pw.utils.moveFile(_getFile('_EPA.log'), self._getTmpPath())
+
         except Exception as ex:
-            print >> sys.stderr, "ctffind has failed with micrograph %s" % tiFn
+            print >> sys.stderr, "Some error happened with micrograph %s" % tiFn
             import traceback
             traceback.print_exc()
 
@@ -92,18 +101,11 @@ class ProtTsCtffind(ProtTsEstimateCTF):
         """
         return []
 
-    def getPsdName(self, ti):
-        return '%s_PSD.mrc' % self.getTiPrefix(ti)
-
     def getCtf(self, ti):
         """ Parse the CTF object estimated for this Tilt-Image
         """
-        psd = self.getPsdName(ti)
-        outCtf = self._getTmpPath(psd.replace('.mrc', '.txt'))
-        return self._ctfProgram.parseOutputAsCtf(outCtf,
-                                                 psdFile=self._getExtraPath(psd))
-
-    def isNewCtffind4(self):
-        # This function is needed because it is used in Form params condition
-        return ProgramCtffind.isNewCtffind4()
+        prefix = self.getTiPrefix(ti)
+        psd = self._getExtraPath(prefix + '_ctf.mrc')
+        outCtf = self._getTmpPath(prefix + '_gctf.log')
+        return self._gctfProgram.parseOutputAsCtf(outCtf, psdFile=psd)
 

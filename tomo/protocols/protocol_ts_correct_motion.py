@@ -37,7 +37,7 @@ from tomo.objects import TiltSeriesDict
 from .protocol_base import ProtTomoBase
 
 
-class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
+class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
     """
     Base class for movie alignment protocols such as:
     motioncorr, crosscorrelation and optical flow
@@ -134,7 +134,7 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
                                                 prerequisites=tsAllSteps)
             allSteps.append(tsStepId)
 
-        self._insertFunctionStep('createOutputStep',
+        self._insertFunctionStep('createOutputStep', 66,
                                  prerequisites=allSteps)
 
     # --------------------------- STEPS functions ----------------------------
@@ -162,8 +162,6 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         if not os.path.exists(tiFn):
             raise Exception("Expected output file '%' not produced!" % tiFn)
 
-        print("os.environ: ", os.environ.get('SCIPION_DEBUG_NOCLEAN', 'None-none'))
-        print("envVarOn: ", pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'))
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
 
@@ -187,17 +185,22 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
                 ih.convert(tiFnDW, (i+1, tsFnDW))
                 pw.utils.cleanPath(tiFnDW)
 
-    def createOutputStep(self):
+    def createOutputStep(self, xxx):
         inputTs = self.inputTiltSeriesM.get()
         outputTs = self._createSetOfTiltSeries()
         outputTs.copyInfo(inputTs)
 
-        def _updateTi(ts, j, ti):
-            ti.setLocation((j + 1, self._getOutputTiltSeriesPath(ts)))
+        def _updateTs(i, ts, tsOut):
+            tsOut.setDim([])
+
+        def _updateTi(j, ts, ti, tsOut, tiOut):
+            tiOut.setLocation((j + 1, self._getOutputTiltSeriesPath(ts)))
 
         outputTs.copyItems(inputTs,
+                           updateTsCallback=_updateTs,
                            orderByTi='_tiltAngle',
                            updateTiCallback=_updateTi)
+        outputTs.updateDim()
         self._defineOutputs(outputTiltSeries=outputTs)
         self._defineSourceRelation(self.inputTiltSeriesM, outputTs)
 
@@ -350,7 +353,7 @@ class ProtMotionCorrectTiltSeries(pwem.EMProtocol, ProtTomoBase):
         return True
 
 
-class ProtAverageTiltSeries(ProtMotionCorrectTiltSeries):
+class ProtTsAverage(ProtTsCorrectMotion):
     """
     Simple protocol to average TiltSeries movies as basic
     motion correction. It is used mainly for testing purposes.

@@ -213,23 +213,24 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
         outputSet = self._createSetOfTiltSeries()
         self._fillAcquisitionInfo(outputSet)
-        tiltSeriesClass = outputSet.ITEM_TYPE
-        tiltImageClass = tiltSeriesClass.ITEM_TYPE
+        tsClass = outputSet.ITEM_TYPE
+        tiClass = tsClass.ITEM_TYPE
 
         self.info("Files: ")
         tiltSeriesDict = OrderedDict()
+
         for f, ts, to, ta in self.getMatchingFiles():
             if ts not in tiltSeriesDict:
                 tiltSeriesDict[ts] = []
 
             tiltSeriesList = tiltSeriesDict[ts]
             order = len(tiltSeriesList) + 1
-            tiltSeriesList.append(tiltImageClass(location=f,
-                                                 acqOrder=order,
-                                                 tiltAngle=ta))
+            tiltSeriesList.append(tiClass(location=f,
+                                          acqOrder=order,
+                                          tiltAngle=ta))
 
         for ts, tiltSeriesList in tiltSeriesDict.iteritems():
-            tsObj = tiltSeriesClass(tsId=ts)
+            tsObj = tsClass(tsId=ts)
             # we need this to set mapper before adding any item
             outputSet.append(tsObj)
             # Add tilt images to the tiltSeries
@@ -237,7 +238,9 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                 tsObj.append(tim)
 
             outputSet.update(tsObj)  # update items and size info
+            tsObj.printAll()
 
+        outputSet.updateDim()
         outputName = 'outputTiltSeries%s' % self._outputSuffix
         self._defineOutputs(**{outputName: outputSet})
 

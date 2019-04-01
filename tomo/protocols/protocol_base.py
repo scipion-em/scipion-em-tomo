@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import pyworkflow as pw
+import pyworkflow.em as pwem
 from pyworkflow.mapper.sqlite_db import SqliteDb
 from tomo.objects import SetOfTiltSeries, SetOfTiltSeriesM, SetOfTomograms, SetOfCoordinates3D
 
@@ -58,9 +59,9 @@ class ProtTomoBase:
         coord3DSet.setVolumes(volSet)
         return coord3DSet
 
-    def _createSetOfTomograms(self, suffix=''):
-        return self.__createSet(SetOfTomograms, 'tomograms%s.sqlite', suffix)
-
+class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
+    """ Base class for Tomogram reconstruction protocols. """
+    pass
 
 
 
