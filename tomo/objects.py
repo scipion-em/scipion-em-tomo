@@ -266,9 +266,12 @@ class TiltSeriesDict:
     def __init__(self):
         self.__dict = OrderedDict()
 
-    def addTs(self, tiltSeries):
+    def addTs(self, tiltSeries, includeTi=False):
         """ Add a clone of the tiltseries. """
         self.__dict[tiltSeries.getTsId()] = (tiltSeries.clone(), OrderedDict())
+        if includeTi:
+            for ti in tiltSeries:
+                self.addTi(ti)
 
     def getTs(self, tsId):
         return self.__dict[tsId][0]
@@ -284,4 +287,8 @@ class TiltSeriesDict:
 
     def getTiList(self, tsId):
         return self.getTiDict(tsId).values()
+
+    def __iter__(self):
+        for ts, d in self.__dict.values():
+            yield ts
 
