@@ -274,7 +274,7 @@ class TiltSeriesDict:
         return self.getTiDict(tsId).values()
 
 
-class Coordinate_3D(data.EMObject):
+class Coordinate3D(data.EMObject):
     """This class holds the (x,y) position and other information
     associated with a coordinate"""
     def __init__(self, **kwargs):
@@ -367,12 +367,12 @@ class Coordinate_3D(data.EMObject):
         return self._volName.get()
 
 
-class SetOf3DCoordinates(data.EMSet):
+class SetOfCoordinates3D(data.EMSet):
     """ Encapsulate the logic of a set of volumes coordinates.
     Each coordinate has a (x,y,z) position and is related to a Volume
-    The SetOf3DCoordinates can also have information about TiltPairs.
+    The SetOfCoordinates3D can also have information about TiltPairs.
     """
-    ITEM_TYPE = Coordinate_3D
+    ITEM_TYPE = Coordinate3D
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)

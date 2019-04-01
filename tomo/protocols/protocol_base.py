@@ -26,7 +26,7 @@
 
 import pyworkflow as pw
 from pyworkflow.mapper.sqlite_db import SqliteDb
-from tomo.objects import SetOfTiltSeries, SetOfTiltSeriesM, SetOfTomograms, SetOf3DCoordinates
+from tomo.objects import SetOfTiltSeries, SetOfTiltSeriesM, SetOfTomograms, SetOfCoordinates3D
 
 
 class ProtTomoBase:
@@ -51,8 +51,8 @@ class ProtTomoBase:
             return self.__createSet(SetOfTiltSeries,
                                     'tiltseries%s.sqlite', suffix)
 
-    def _createSetOf3DCoordinates(self, volSet, suffix=''):
-        coord3DSet = self.__createSet(SetOf3DCoordinates,
+    def _createSetOfCoordinates3D(self, volSet, suffix=''):
+        coord3DSet = self.__createSet(SetOfCoordinates3D,
                         'coordinates%s.sqlite', suffix,
                         indexes = ['_volId'])
         coord3DSet.setVolumes(volSet)
