@@ -133,6 +133,32 @@ class TestTomoBaseProtocols(BaseTest):
         protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
         self.launchProtocol(protMc)
 
+class TestTomoImportTomogramsProtocols(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
+
+        if not os.path.exists(cls.dataPath):
+            raise Exception("Can not run tomo tests, "
+                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+
+    def _runImportTomograms(self):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTomograms,
+            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPattern='C2_tomo02.mrc',
+            samplingRate=1.35)
+        self.launchProtocol(protImport)
+        return protImport
+
+    def test_importTomograms(self):
+        protImport = self._runImportTomograms()
+        output = getattr(protImport, 'outputTomogram', None)
+        self.assertFalse(output is None)
+
+        return protImport
+
 
 if __name__ == 'main':
     pass
