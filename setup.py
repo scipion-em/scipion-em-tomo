@@ -122,7 +122,7 @@ setup(
     # project page. What does your project relate to?
     #
     # Note that this is a string of words separated by whitespace, not a list.
-    keywords='scipion electron-microscopy cryo-em structural-biology image-processing scipion-2.0',  # Optional
+    keywords='scipion electron-microscopy cryo-em cryo-tomography subtomogram-averaging structural-biology image-processing scipion-2.0',  # Optional
 
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
