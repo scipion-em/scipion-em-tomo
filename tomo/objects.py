@@ -292,3 +292,182 @@ class TiltSeriesDict:
         for ts, d in self.__dict.values():
             yield ts
 
+class Coordinate3D(data.EMObject):
+    """This class holds the (x,y) position and other information
+    associated with a coordinate"""
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._volumePointer = pwobj.Pointer(objDoStore=False)
+        self._x = pwobj.Integer(kwargs.get('x', None))
+        self._y = pwobj.Integer(kwargs.get('y', None))
+        self._z = pwobj.Integer(kwargs.get('z', None))
+        self._volId = pwobj.Integer()
+        self._volName = pwobj.String()
+
+    def getX(self):
+        return self._x.get()
+
+    def setX(self, x):
+        self._x.set(x)
+
+    def shiftX(self, shiftX):
+        self._x.sum(shiftX)
+
+    def getY(self):
+        return self._y.get()
+
+    def setY(self, y):
+        self._y.set(y)
+
+    def shiftY(self, shiftY):
+        self._y.sum(shiftY)
+
+    def getZ(self):
+        return self._z.get()
+
+    def setZ(self, z):
+        self._z.set(z)
+
+    def scale(self, factor):
+        """ Scale x, y and z coordinates by a given factor.
+        """
+        self._x.multiply(factor)
+        self._y.multiply(factor)
+        self._z.multiply(factor)
+
+    def getPosition(self):
+        """ Return the position of the coordinate as a (x, y) tuple.
+        mode: select if the position is the center of the box
+        or in the top left corner.
+        """
+        return (self.getX(), self.getY(), self.getZ())
+
+    def setPosition(self, x, y, z):
+        self.setX(x)
+        self.setY(y)
+        self.setZ(z)
+
+    def getVolume(self):
+        """ Return the micrograph object to which
+        this coordinate is associated.
+        """
+        return self._volumePointer.get()
+
+    def setVolume(self, volume):
+        """ Set the micrograph to which this coordinate belongs. """
+        self._volumePointer.set(volume)
+        self._volId.set(volume.getObjId())
+        self._volName.set(volume.getFileName())
+
+    def copyInfo(self, coord):
+        """ Copy information from other coordinate. """
+        self.setPosition(*coord.getPosition())
+        self.setObjId(coord.getObjId())
+        self.setBoxSize(coord.getBoxSize())
+
+    def getVolId(self):
+        return self._volId.get()
+
+    def setVolId(self, volId):
+        self._volId.set(volId)
+
+    def invertY(self):
+        if not self.getVolume() is None:
+            dims = self.getVolume().getDim()
+            height = dims[1]
+            self.setY(height - self.getY())
+        # else: error TODO
+
+    def setVolName(self, volName):
+        self._volName.set(volName)
+
+    def getVolName(self):
+        return self._volName.get()
+
+
+class SetOfCoordinates3D(data.EMSet):
+    """ Encapsulate the logic of a set of volumes coordinates.
+    Each coordinate has a (x,y,z) position and is related to a Volume
+    The SetOfCoordinates3D can also have information about TiltPairs.
+    """
+    ITEM_TYPE = Coordinate3D
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._volumesPointer = pwobj.Pointer()
+        self._boxSize = pwobj.Integer()
+
+    def getBoxSize(self):
+        """ Return the box size of the particles.
+        """
+        return self._boxSize.get()
+
+    def setBoxSize(self, boxSize):
+        """ Set the box size of the particles. """
+        self._boxSize.set(boxSize)
+
+    def iterVolumes(self):
+        """ Iterate over the micrographs set associated with this
+        set of coordinates.
+        """
+        return self.getVolumes()
+
+    def iterVolumeCoordinates(self, volume):
+        """ Iterates over the set of coordinates belonging to that micrograph.
+        """
+        pass
+
+    def iterCoordinates(self, volume=None):
+        """ Iterate over the coordinates associated with a micrograph.
+        If micrograph=None, the iteration is performed over the whole
+        set of coordinates.
+        """
+        if volume is None:
+            volId = None
+        elif isinstance(volume, int):
+            volId = volume
+        elif isinstance(volume, data.Volume):
+            volId = volume.getObjId()
+        else:
+            raise Exception('Invalid input micrograph of type %s'
+                            % type(volume))
+
+        # Iterate over all coordinates if micId is None,
+        # otherwise use micId to filter the where selection
+        coordWhere = '1' if volId is None else '_volId=%d' % volId
+
+        for coord in self.iterItems(where=coordWhere):
+            yield coord
+
+    def getVolumes(self):
+        """ Returns the SetOfMicrographs associated with
+        this SetOfCoordinates"""
+        return self._volumesPointer.get()
+
+    def setVolumes(self, volumes):
+        """ Set the micrographs associated with this set of coordinates.
+        Params:
+            micrographs: Either a SetOfMicrographs object or a pointer to it.
+        """
+        if volumes.isPointer():
+            self._volumesPointer.copy(volumes)
+        else:
+            self._volumesPointer.set(volumes)
+
+    def getFiles(self):
+        filePaths = set()
+        filePaths.add(self.getFileName())
+        return filePaths
+
+    def __str__(self):
+        """ String representation of a set of coordinates. """
+        if self._boxSize.hasValue():
+            boxSize = self._boxSize.get()
+            boxStr = ' %d x %d x %d' % (boxSize, boxSize, boxSize)
+        else:
+            boxStr = 'No-Box'
+        s = "%s (%d items, %s%s)" % (self.getClassName(), self.getSize(),
+                                     boxStr, self._appendStreamState())
+
+        return s
+

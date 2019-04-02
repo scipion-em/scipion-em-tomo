@@ -28,6 +28,7 @@ from .protocol_base import ProtTomoBase, ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTiltSeries
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
 from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
+from .protocol_import_tomograms import ProtImportTomograms
 
 from .move_to_plugins.protocol_ts_motioncor import ProtTsMotionCorr
 from .move_to_plugins.protocol_ts_ctffind import ProtTsCtffind
