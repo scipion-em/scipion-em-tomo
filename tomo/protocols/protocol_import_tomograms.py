@@ -37,8 +37,6 @@ from .protocol_base import ProtTomoBase
 from tomo.objects import Tomogram
 
 
-
-
 class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfTomograms'
@@ -74,7 +72,7 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
                 fileName += ':mrc'
-                if (z == 1 and n != 1):
+                if z == 1 and n != 1:
                     zDim = n
                     n = 1
                 else:
@@ -116,8 +114,10 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
         else:
             self._defineOutputs(outputTomogram=tomo)
 
-
     # --------------------------- INFO functions ------------------------------
+    def _hasOutput(self):
+        return (self.hasAttribute('outputTomogram')
+                or self.hasAttribute('outputTomograms'))
 
     def _getTomMessage(self):
         if self.hasAttribute('outputTomogram'):
@@ -127,10 +127,9 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        if self.hasAttribute('outputTomogram') or \
-                self.hasAttribute('outputTomograms'):
-            summary.append("%s imported from:\n%s" % (self._getTomMessage(),
-                           self.getPattern()))
+        if self._hasOutput():
+            summary.append("%s imported from:\n%s"
+                           % (self._getTomMessage(), self.getPattern()))
 
             summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
                            self.samplingRate.get())
@@ -138,17 +137,16 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
 
     def _methods(self):
         methods = []
-        if self.hasAttribute('outputTomogram') or \
-                self.hasAttribute('outputTomograms'):
+        if self._hasOutput():
             methods.append(" %s imported with a sampling rate *%0.2f*" %
                            (self._getTomMessage(), self.samplingRate.get()),)
         return methods
 
     def _getTomogramFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+            baseFileName = "import_" + basename(fileName).split(".")[0] + ".%s" % extension
         else:
-            baseFileName="import_" + basename(fileName).split(":")[0]
+            baseFileName = "import_" + basename(fileName).split(":")[0]
 
         return self._getExtraPath(baseFileName)
 
