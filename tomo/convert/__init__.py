@@ -27,25 +27,28 @@
 import pyworkflow.em as pwem
 
 
-def writeTiStack(inputTiList, outputStackFn, outputTltFn=None):
+def writeTiStack(inputTiList, outputStackFn, outputTltFn=None,
+                 excludeList=None):
     """ Write a given list of tilt images as a single stack
     Params:
         inputTiList: input list of tilted images.
         outputStackFn: output path where to write the stack.
         orderBy: column to sort by, by default tilt angle (ascending)
-        excludeList: a list of images to skip (starting at 1)
+        excludeList: a list of indexes of the images to skip (starting at 1)
     Results:
         A new stack file will be created and also a tlt file with tilt-angles
     """
+    excludeList = excludeList or []
     ih = pwem.ImageHandler()
-    i = 0
+    j = 0
     f = open(outputTltFn, 'w') if outputStackFn else None
 
-    for ti in inputTiList:
-        i += 1
-        ih.convert(ti, (i, outputStackFn))
-        if f:
-            f.write('%f\n' % ti.getTiltAngle())
+    for i, ti in enumerate(inputTiList):
+        if i + 1 not in excludeList:
+            j += 1
+            ih.convert(ti, (j, outputStackFn))
+            if f:
+                f.write('%f\n' % ti.getTiltAngle())
 
     if f:
         f.close()
