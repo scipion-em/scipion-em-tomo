@@ -29,7 +29,7 @@ import os
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 
-from tomo.objects import TiltSeriesDict, TiltSeries
+from tomo.objects import TiltSeriesDict, TiltSeries, Tomogram
 from tomo.protocols import ProtTomoReconstruct
 from tomo.convert import writeTiStack
 
@@ -50,14 +50,27 @@ class ProtImodAuto3D(ProtTomoReconstruct):
                       important=True,
                       label='Input Tilt-Series',
                       help='???')
-
-        form.addParam('bin', params.BooleanParam, default=2,
-                      label='Bin the input images?',
+        form.addParam('excludeList', params.StringParam, default='',
+                      label='Exclusion list',
+                      help='Provide tilt images IDs (usually starting at 1) '
+                           'that you want to exclude from the processing. ')
+        form.addParam('bin', params.IntParam, default=2,
+                      label='Bin the input images',
                       help='Binning of the input images.')
-
         form.addParam('zWidth', params.IntParam,
                       label='Z width of the tomograph',
                       help='???')
+
+        group = form.addGroup('Fiducial markers')
+        group.addParam('useRaptor', params.BooleanParam, default=True,
+                       label='Use RAPTOR for automatic markers tracking?',
+                       help='???')
+        group.addParam('markersDiameter', params.IntParam, default=20,
+                       label='Markers diameter (nm???)',
+                       help='???')
+        group.addParam('markersNumber', params.IntParam, default=20,
+                       label='Number of markers to track',
+                       help='???')
 
     # -------------------------- INSERT steps functions ---------------------
     def _loadInputTs(self):
@@ -90,25 +103,53 @@ class ProtImodAuto3D(ProtTomoReconstruct):
         pw.utils.makePath(workingFolder)
 
         # Write new stack discarding excluded tilts
-        excludeList = [1]  # FIXME: Take this from input
+        excludeList = map(int, self.excludeList.get().split())
 
-        print("Full list:")
-        for ti in self._tsDict.getTiList(tsId):
-            print(str(ti))
-
-        tiList = [ti for ti in self._tsDict.getTiList(tsId)
-                  if ti.getObjId() not in excludeList]
+        tiList = self._tsDict.getTiList(tsId)
         tiList.sort(key=lambda ti: ti.getTiltAngle())
-        print("Used list: ")
-        for ti in tiList:
-            print(str(ti))
+        tsStack = prefix + '.st'
+
         writeTiStack(tiList,
-                     outputStackFn=prefix + '.st',
-                     outputTltFn=prefix + '.rawtlt')
+                     outputStackFn=tsStack,
+                     outputTltFn=prefix + '.rawtlt',
+                     excludeList=excludeList)
 
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
 
+        here = os.path.abspath(os.path.dirname(__file__))
+        args = os.path.join(here, 'script_imod_auto3d.py')
+        tomoName = self._getTomoName(tsId)
+        args += ' --output %s ' % tomoName
+        args += '%s --widthz %d --bin %d ' % (os.path.basename(tsStack),
+                                              self.zWidth, self.bin)
+        if self.useRaptor:
+            args += ('--raptor --markers_diameter %d --markers_number %d'
+                     % (self.markersDiameter, self.markersNumber))
+
+        self.runJob('python', args, cwd=workingFolder)
+
+        tomoPath = os.path.join(workingFolder, tomoName)
+
+        if os.path.exists(tomoPath):
+            pw.utils.moveFile(tomoPath, self._getPath(tomoName))
+        else:
+            print("ERROR: The expected tomogram for Tilt-Series %s "
+                  "was not properly generated. " % tsId)
+
     def createOutputStep(self):
-        pass
+        outTomos = self._createSetOfTomograms()
+
+        if not hasattr(self, '_tsDict'):
+            self._loadInputTs()
+
+        for ts in self._tsDict:  # Read if we input SetOfTiltSeries:
+            t = Tomograph(self._getPath(self._getTomoName(ts.getTsId())))
+            outTomos.append(t)
+
+        self._defineOutputs(outputTomograms=outTomos)
+
+    # --------------------------- UTILS functions ----------------------------
+    def _getTomoName(self, tsId):
+        return '%s_tomo.mrc' % tsId
 
