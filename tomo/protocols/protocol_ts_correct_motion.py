@@ -337,8 +337,7 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
         return '%s_%02d' % (tim.getTsId(), tim.getObjId())
 
     def __getTiltImageMWorkingFolder(self, tiltImageM):
-        #return self._getTmpPath(self._getTiltImageMRoot(tiltImageM))
-        return os.path.join('/home/scratch', self._getTiltImageMRoot(tiltImageM))
+        return self._getTmpPath(self._getTiltImageMRoot(tiltImageM))
 
     def _getOutputTiltImagePaths(self, tiltImageM):
         """ Return expected output path for correct movie and DW one.
