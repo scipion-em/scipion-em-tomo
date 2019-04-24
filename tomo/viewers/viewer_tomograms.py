@@ -28,7 +28,7 @@
 
 """
 This module implements visualization program
-for input volumes.
+for input tomograms.
 """
 
 import os
@@ -37,15 +37,16 @@ from tkMessageBox import showerror
 
 import pyworkflow.protocol.params as params
 from pyworkflow.em.convert import ImageHandler
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 from pyworkflow.em.viewers.viewer_chimera import Chimera, ChimeraView
-VOLUME_SLICES = 1
-VOLUME_CHIMERA = 0
 
 from tomo.protocols.protocol_import_tomograms import ProtImportTomograms
-from pyworkflow.em.viewers.viewer_volumes import  viewerProtImportVolumes
 
-class viewerProtImportTomograms(viewerProtImportVolumes):
+TOMOGRAM_SLICES = 1
+TOMOGRAM_CHIMERA = 0
+
+
+class viewerProtImportTomograms(ProtocolViewer):
     """ Wrapper to visualize different type of objects
     with the Xmipp program xmipp_showj. """
 
@@ -53,107 +54,104 @@ class viewerProtImportTomograms(viewerProtImportVolumes):
     _targets = [ProtImportTomograms]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
-    def __init__(self, **args):
-        viewerProtImportVolumes.__init__(self, **args)
-
     def _defineParams(self, form):
         form.addSection(label='Visualization of input tomograms')
-        form.addParam('displayVol', params.EnumParam,
+        form.addParam('displayTomo', params.EnumParam,
                       choices=['chimera', 'slices'],
-                      default=VOLUME_CHIMERA,
+                      default=TOMOGRAM_CHIMERA,
                       display=params.EnumParam.DISPLAY_HLIST,
                       label='Display tomogram with',
-                      help='*chimera*: display volumes as surface with '
-                           'Chimera.\n *slices*: display volumes as 2D slices '
-                           'along z axis.\n If number of volumes == 1, '
+                      help='*chimera*: display tomograms as surface with '
+                           'Chimera.\n *slices*: display tomograms as 2D slices '
+                           'along z axis.\n If number of tomograms == 1, '
                            'a system of coordinates is shown'
                       )
 
     def _getVisualizeDict(self):
         return {
-            'displayVol': self._showVolumes,
+            'displayTomo': self._showTomograms,
         }
 
     def _validate(self):
-        if (self.displayVol == VOLUME_CHIMERA
-            and find_executable(Chimera.getProgram()) is None):
+        if (self.displayTomo == TOMOGRAM_CHIMERA
+                and find_executable(Chimera.getProgram()) is None):
             print (Chimera.getProgram())
             return ["chimera is not available. "
                     "Either install it or choose option 'slices'. "]
         return []
 
     # =========================================================================
-    # ShowVolumes
+    # ShowTomograms
     # =========================================================================
 
-    def _showVolumes(self, paramName=None):
-        if self.displayVol == VOLUME_CHIMERA:
-            return self._showVolumesChimera()
+    def _showTomograms(self, paramName=None):
+        if self.displayTomo == TOMOGRAM_CHIMERA:
+            return self._showTomogramsChimera()
 
-        elif self.displayVol == VOLUME_SLICES:
-            return self._showVolumesSlices()
+        elif self.displayTomo == TOMOGRAM_SLICES:
+            return self._showTomogramsSlices()
 
-    def _createSetOfVolumes(self):
+    def _createSetOfTomograms(self):
         try:
-            setOfVolumes = self.protocol.outputVolumes
-            sampling = self.protocol.outputVolumes.getSamplingRate()
+            setOfTomograms = self.protocol.outputTomograms
+            sampling = self.protocol.outputTomograms.getSamplingRate()
         except:
-            setOfVolumes = self.protocol._createSetOfVolumes()
-            setOfVolumes.append(self.protocol.outputVolume)
-            sampling = self.protocol.outputVolume.getSamplingRate()
+            setOfTomograms = self.protocol._createSetOfTomograms()
+            setOfTomograms.append(self.protocol.outputTomogram)
+            sampling = self.protocol.outputTomogram.getSamplingRate()
 
-        return sampling, setOfVolumes
+        return sampling, setOfTomograms
 
-    def _showVolumesChimera(self):
-        """ Create a chimera script to visualize selected volumes. """
+    def _showTomogramsChimera(self):
+        """ Create a chimera script to visualize selected tomograms. """
         tmpFileNameCMD = self.protocol._getTmpPath("chimera.cmd")
         f = open(tmpFileNameCMD, "w")
-        sampling, _setOfVolumes = self._createSetOfVolumes()
-        count = 0  # first model in chimera is a volume
+        sampling, _setOfTomograms = self._createSetOfTomograms()
+        count = 0  # first model in chimera is a tomogram
 
-        if len(_setOfVolumes) == 1:
+        if len(_setOfTomograms) == 1:
             count = 1  # first model in chimera is the bild file
-            # if we have a single volume then create axis
+            # if we have a single tomogram then create axis
             # as bild file. Chimera must read the bild file first
             # otherwise system of coordinates will not
             # be in the center of the window
 
-            dim = self.protocol.outputVolume.getDim()[0]
+            dim = self.protocol.outputTomogram.getDim()[0]
             tmpFileNameBILD = os.path.abspath(self.protocol._getTmpPath(
                 "axis.bild"))
             Chimera.createCoordinateAxisFile(dim,
-                                     bildFileName=tmpFileNameBILD,
-                                     sampling=sampling)
+                                             bildFileName=tmpFileNameBILD,
+                                             sampling=sampling)
             f.write("open %s\n" % tmpFileNameBILD)
             f.write("cofr 0,0,0\n")  # set center of coordinates
             count = 1  # skip first model because is not a 3D map
 
-        for vol in _setOfVolumes:
-            localVol = os.path.abspath(ImageHandler.removeFileType(
-                vol.getFileName()))
-            if localVol.endswith("stk"):
+        for tomo in _setOfTomograms:
+            localTomo = os.path.abspath(ImageHandler.removeFileType(
+                tomo.getFileName()))
+            if localTomo.endswith("stk"):
                 errorWindow(None, "Extension .stk is not supported")
-            f.write("open %s\n" % localVol)
+            f.write("open %s\n" % localTomo)
             f.write("volume#%d style surface voxelSize %f\n" %
                     (count, sampling))
             count += 1
 
-        if len(_setOfVolumes) > 1:
+        if len(_setOfTomograms) > 1:
             f.write('tile\n')
         else:
-            x, y, z = vol.getShiftsFromOrigin()
+            x, y, z = tomo.getShiftsFromOrigin()
             f.write("volume#1 origin %0.2f,%0.2f,%0.2f\n" % (x, y, z))
         f.close()
         return [ChimeraView(tmpFileNameCMD)]
 
-    def _showVolumesSlices(self):
-        # Write an sqlite with all volumes selected for visualization.
-        sampling, setOfVolumes = self._createSetOfVolumes()
+    def _showTomogramsSlices(self):
+        # Write an sqlite with all tomograms selected for visualization.
+        sampling, setOfTomograms = self._createSetOfTomograms()
 
-        if len(setOfVolumes) == 1:
-            return [self.objectView(self.protocol.outputVolume)]
+        if len(setOfTomograms) == 1:
+            return [self.objectView(self.protocol.outputTomogram)]
 
-        return [self.objectView(setOfVolumes)]
+        return [self.objectView(setOfTomograms)]
 
 
 def errorWindow(tkParent, msg):
@@ -163,4 +161,3 @@ def errorWindow(tkParent, msg):
                   parent=tkParent)
     except:
         print("Error:", msg)
-
