@@ -70,7 +70,7 @@ class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
     pass
 
-class ProtTomoBoxing(pwem.EMProtocol, ProtTomoBase):
+class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
 
     OUTPUT_PREFIX = 'output3DCoordinates'
 
