@@ -1,9 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Marta Martinez (mmmtnez@cnb.csic.es)
-# *              Roberto Marabini (roberto@cnb.csic.es)
+# * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * [1] EyeSeeTea Ltd, London, UK
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
