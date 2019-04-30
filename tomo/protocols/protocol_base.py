@@ -26,6 +26,7 @@
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
+from pyworkflow.protocol.params import PointerParam
 from pyworkflow.mapper.sqlite_db import SqliteDb
 
 import tomo.objects
@@ -68,6 +69,35 @@ class ProtTomoBase:
 class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
     pass
+
+class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
+
+    OUTPUT_PREFIX = 'output3DCoordinates'
+
+    """ Base class for Tomogram boxing protocols. """
+    def _defineParams(self, form):
+
+        form.addSection(label='Input')
+        form.addParam('inputTomogram', PointerParam, label="Input Tomogram", important=True,
+                      pointerClass='Tomogram',
+                      help='Select the Tomogram to be used during picking.')
+
+    def _getOutputSuffix(self):
+        """ Get the name to be used for a new output.
+        For example: output3DCoordinates7.
+        It should take into account previous outputs
+        and number with a higher value.
+        """
+        maxCounter = -1
+        for attrName, _ in self.iterOutputAttributes(tomo.objects.SetOfCoordinates3D):
+            suffix = attrName.replace(self.OUTPUT_PREFIX, '')
+            try:
+                counter = int(suffix)
+            except:
+                counter = 1 # when there is not number assume 1
+            maxCounter = max(counter, maxCounter)
+
+        return str(maxCounter+1) if maxCounter > 0 else '' # empty if not output
 
 
 
