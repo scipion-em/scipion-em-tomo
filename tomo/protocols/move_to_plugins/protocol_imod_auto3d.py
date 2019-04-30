@@ -151,7 +151,7 @@ class ProtImodAuto3D(ProtTomoReconstruct):
             self._loadInputTs()
 
         for ts in self._tsDict:  # Read if we input SetOfTiltSeries:
-            t = Tomogram(self._getPath(self._getTomoName(ts.getTsId())))
+            t = Tomogram(location=self._getPath(self._getTomoName(ts.getTsId())))
             outTomos.append(t)
 
         self._defineOutputs(outputTomograms=outTomos)
