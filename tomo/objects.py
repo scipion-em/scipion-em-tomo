@@ -258,7 +258,6 @@ class Tomogram(data.Volume):
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
 
-
 class TiltSeriesDict:
     """ Helper class that to store TiltSeries and TiltImage but
     using dictionaries for quick access.
@@ -471,3 +470,8 @@ class SetOfCoordinates3D(data.EMSet):
 
         return s
 
+class SubTomogram(data.Volume):
+    pass
+
+class SetOfSubTomograms(data.SetOfVolumes):
+    ITEM_TYPE = SubTomogram
