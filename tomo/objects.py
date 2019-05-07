@@ -114,6 +114,8 @@ class TiltSeries(TiltSeriesBase):
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
+    EXPOSE_ITEMS = True
+
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
     def __init__(self, **kwargs):
@@ -147,7 +149,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def __getitem__(self, itemId):
         """ Setup the mapper classes before returning the item. """
-        classItem = data.EMSet.__getitem__(self, itemId)
+        classItem = data.SetOfImages.__getitem__(self, itemId)
         self._setItemMapperPath(classItem)
         return classItem
 
@@ -252,11 +254,23 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
 
 
 class Tomogram(data.Volume):
-    pass
+    def __init__(self, **kwargs):
+        data.Volume.__init__(self, **kwargs)
+        self._tsId = pwobj.String(kwargs.get('tsId', None))
+
+    def getTsId(self):
+        """ Get unique TiltSeries ID, usually retrieved from the
+        file pattern provided by the user at the import time.
+        """
+        return self._tsId.get()
+
+    def setTsId(self, value):
+        self._tsId.set(value)
 
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
+    EXPOSE_ITEMS = True
 
 class TiltSeriesDict:
     """ Helper class that to store TiltSeries and TiltImage but

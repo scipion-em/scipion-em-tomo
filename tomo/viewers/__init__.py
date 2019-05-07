@@ -25,4 +25,4 @@
 # **************************************************************************
 
 from .viewers_data import TomoDataViewer
-from .viewer_imod import ImodViewer, ImodTiltSerieView
+from .viewer_imod import ImodViewer, ImodObjectView
