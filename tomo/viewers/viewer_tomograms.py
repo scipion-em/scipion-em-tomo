@@ -32,14 +32,13 @@ for input tomograms.
 
 import os
 from distutils.spawn import find_executable
-from tkMessageBox import showerror
 
 import pyworkflow.protocol.params as params
 from pyworkflow.em.convert import ImageHandler
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer, MessageView, MSG_ERROR
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.em.viewers as viewers
 
-from tomo.protocols import protocol_import_tomograms
+from tomo.protocols import ProtImportTomograms
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
@@ -50,7 +49,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
     with the Xmipp program xmipp_showj. """
 
     _label = 'viewer input tomogram'
-    _targets = [protocol_import_tomograms.ProtImportTomograms]
+    _targets = [ProtImportTomograms]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def _defineParams(self, form):
@@ -118,8 +117,8 @@ class ViewerProtImportTomograms(ProtocolViewer):
             tmpFileNameBILD = os.path.abspath(self.protocol._getTmpPath(
                 "axis.bild"))
             viewers.viewer_chimera.Chimera.createCoordinateAxisFile(dim,
-                                             bildFileName=tmpFileNameBILD,
-                                             sampling=sampling)
+                                                                    bildFileName=tmpFileNameBILD,
+                                                                    sampling=sampling)
             f.write("open %s\n" % tmpFileNameBILD)
             f.write("cofr 0,0,0\n")  # set center of coordinates
             count = 1  # skip first model because is not a 3D map
