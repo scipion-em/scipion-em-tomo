@@ -26,3 +26,4 @@
 
 from .viewers_data import TomoDataViewer
 from .viewer_imod import ImodViewer, ImodObjectView
+from .viewer_tomograms import ViewerProtImportTomograms
