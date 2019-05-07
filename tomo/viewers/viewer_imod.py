@@ -35,7 +35,9 @@ class ImodViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        tomo.objects.TiltSeries
+        tomo.objects.TiltSeries,
+        tomo.objects.Tomogram,
+        tomo.objects.SetOfTomograms,
     ]
 
     def _visualize(self, obj, **kwargs):
@@ -43,16 +45,23 @@ class ImodViewer(pwviewer.Viewer):
         cls = type(obj)
 
         if issubclass(cls, tomo.objects.TiltSeries):
-            views.append(ImodTiltSerieView(obj))
+            views.append(ImodObjectView(obj.getFirstItem()))
+
+        elif issubclass(cls, tomo.objects.Tomogram):
+            views.append(ImodObjectView(obj))
+        elif issubclass(cls, tomo.objects.SetOfTomograms):
+            for t in obj:
+                views.append(ImodObjectView(t))
 
         return views
     
 
-class ImodTiltSerieView(pwviewer.CommandView):
+class ImodObjectView(pwviewer.CommandView):
     """ Wrapper to visualize different type of objects with the 3dmod.
     """
-    def __init__(self, tiltSerie, **kwargs):
-        # FIXME: Only will work for tiltSeries in a single stack
-        pwviewer.CommandView.__init__(
-            self, '3dmod "%s"' % tiltSerie.getFirstItem().getFileName())
+    def __init__(self, obj, **kwargs):
+        # Remove :mrc if present
+        fn = obj.getFileName().split(':')[0]
+        pwviewer.CommandView.__init__(self, '3dmod "%s"' % fn)
+
 

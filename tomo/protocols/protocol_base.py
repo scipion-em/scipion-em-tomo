@@ -65,6 +65,27 @@ class ProtTomoBase:
         return self.__createSet(tomo.objects.SetOfTomograms,
                                 'tomograms%s.sqlite', suffix)
 
+    def _createSetOfSubTomograms(self, suffix=''):
+        return self.__createSet(tomo.objects.SetOfSubTomograms,
+                                'subtomograms%s.sqlite', suffix)
+
+    def _getOutputSuffix(self, cls):
+        """ Get the name to be used for a new output.
+        For example: output3DCoordinates7.
+        It should take into account previous outputs
+        and number with a higher value.
+        """
+        maxCounter = -1
+        for attrName, _ in self.iterOutputAttributes(cls):
+            suffix = attrName.replace(self.OUTPUT_PREFIX, '')
+            try:
+                counter = int(suffix)
+            except:
+                counter = 1 # when there is not number assume 1
+            maxCounter = max(counter, maxCounter)
+
+        return str(maxCounter+1) if maxCounter > 0 else '' # empty if not output
+
 
 class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
@@ -82,22 +103,7 @@ class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
                       pointerClass='Tomogram',
                       help='Select the Tomogram to be used during picking.')
 
-    def _getOutputSuffix(self):
-        """ Get the name to be used for a new output.
-        For example: output3DCoordinates7.
-        It should take into account previous outputs
-        and number with a higher value.
-        """
-        maxCounter = -1
-        for attrName, _ in self.iterOutputAttributes(tomo.objects.SetOfCoordinates3D):
-            suffix = attrName.replace(self.OUTPUT_PREFIX, '')
-            try:
-                counter = int(suffix)
-            except:
-                counter = 1 # when there is not number assume 1
-            maxCounter = max(counter, maxCounter)
 
-        return str(maxCounter+1) if maxCounter > 0 else '' # empty if not output
 
 
 

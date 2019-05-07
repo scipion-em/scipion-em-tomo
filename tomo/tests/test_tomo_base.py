@@ -119,12 +119,12 @@ class TestTomoBaseProtocols(BaseTest):
             raise Exception("Can not run tomo tests, "
                             "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
 
-    def _runImportTiltSeriesM(self):
+    def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTiltSeries,
             importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
             filesPath=os.path.join(self.dataPath, 'data', 'frames'),
-            filesPattern='{TS}_{TO}_{TA}.mrc',
+            filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
             sphericalAberration=2.7,
@@ -180,6 +180,73 @@ class TestTomoBaseProtocols(BaseTest):
 #         self.assertFalse(output is None)
 #
 #         return protImport
+
+
+class TestTomoPreprocessing(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
+
+        if not os.path.exists(cls.dataPath):
+            raise Exception("Can not run tomo tests, "
+                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+
+    def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTiltSeries,
+            importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPattern=filesPattern,
+            voltage=300,
+            magnification=105000,
+            sphericalAberration=2.7,
+            amplitudeContrast=0.1,
+            samplingRate=1.35,
+            doseInitial=0,
+            dosePerFrame=0.3)
+        self.launchProtocol(protImport)
+        return protImport
+
+    def test_preprocess1(self):
+        """ Run the basic preprocessing pipeline for just one TS. """
+        protImport = self._runImportTiltSeriesM(
+            filesPattern='{TS}7_{TO}_{TA}.mrc')
+        output = getattr(protImport, 'outputTiltSeriesM', None)
+        self.assertFalse(output is None)
+        self.assertEqual(protImport.outputTiltSeriesM.getSize(), 1)
+
+        gpuList = os.environ.get('SCIPION_TEST_GPULIST', '0')
+        threads = len(gpuList.split()) + 1
+
+        protMc = self.newProtocol(
+            tomo.protocols.ProtTsMotionCorr,
+            inputTiltSeriesM=protImport.outputTiltSeriesM,
+            binFactor=2.0,
+            gpuList=gpuList,
+            numberOfThreads=threads
+        )
+
+        self.launchProtocol(protMc)
+
+        protGctf = self.newProtocol(
+            tomo.protocols.ProtTsGctf,
+            inputTiltSeries=protMc.outputTiltSeries,
+            gpuList=gpuList,
+            numberOfThreads=threads,
+        )
+        self.launchProtocol(protGctf)
+
+        protImodAuto = self.newProtocol(
+            tomo.protocols.ProtImodAuto3D,
+            inputTiltSeries=protGctf.outputTiltSeries,
+            excludeList=1,
+            zWidth=400,
+            useRaptor=True,
+            markersDiameter=20,
+            markersNumber=20
+        )
+        self.launchProtocol(protImodAuto)
 
 
 if __name__ == 'main':

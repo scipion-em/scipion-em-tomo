@@ -66,8 +66,8 @@ class ProtImodAuto3D(ProtTomoReconstruct):
                        label='Use RAPTOR for automatic markers tracking?',
                        help='???')
         group.addParam('markersDiameter', params.IntParam, default=20,
-                       label='Markers diameter (nm???)',
-                       help='???')
+                       label='Markers diameter (nm)',
+                       help='Size of gold beads in nanometers.')
         group.addParam('markersNumber', params.IntParam, default=20,
                        label='Number of markers to track',
                        help='???')
@@ -114,9 +114,6 @@ class ProtImodAuto3D(ProtTomoReconstruct):
                      outputTltFn=prefix + '.rawtlt',
                      excludeList=excludeList)
 
-        if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
-            pw.utils.cleanPath(workingFolder)
-
         here = os.path.abspath(os.path.dirname(__file__))
         args = os.path.join(here, 'script_imod_auto3d.py')
         tomoName = self._getTomoName(tsId)
@@ -137,14 +134,24 @@ class ProtImodAuto3D(ProtTomoReconstruct):
             print("ERROR: The expected tomogram for Tilt-Series %s "
                   "was not properly generated. " % tsId)
 
+        if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
+            pw.utils.cleanPath(workingFolder)
+
     def createOutputStep(self):
+        inputTs = self.inputTiltSeries.get()
         outTomos = self._createSetOfTomograms()
+        samplingRate = inputTs.getSamplingRate()
+
+        if self.bin > 1:
+            samplingRate *= self.bin.get()
+
+        outTomos.setSamplingRate(samplingRate)
 
         if not hasattr(self, '_tsDict'):
             self._loadInputTs()
 
         for ts in self._tsDict:  # Read if we input SetOfTiltSeries:
-            t = Tomogram(self._getPath(self._getTomoName(ts.getTsId())))
+            t = Tomogram(location=self._getPath(self._getTomoName(ts.getTsId())))
             outTomos.append(t)
 
         self._defineOutputs(outputTomograms=outTomos)
