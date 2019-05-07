@@ -36,21 +36,21 @@ from tkMessageBox import showerror
 
 import pyworkflow.protocol.params as params
 from pyworkflow.em.convert import ImageHandler
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
-from pyworkflow.em.viewers.viewer_chimera import Chimera, ChimeraView
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer, MessageView, MSG_ERROR
+import pyworkflow.em.viewers as viewers
 
-from tomo.protocols.protocol_import_tomograms import ProtImportTomograms
+from tomo.protocols import protocol_import_tomograms
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
 
 
-class viewerProtImportTomograms(ProtocolViewer):
+class ViewerProtImportTomograms(ProtocolViewer):
     """ Wrapper to visualize different type of objects
     with the Xmipp program xmipp_showj. """
 
     _label = 'viewer input tomogram'
-    _targets = [ProtImportTomograms]
+    _targets = [protocol_import_tomograms.ProtImportTomograms]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def _defineParams(self, form):
@@ -73,8 +73,7 @@ class viewerProtImportTomograms(ProtocolViewer):
 
     def _validate(self):
         if (self.displayTomo == TOMOGRAM_CHIMERA
-                and find_executable(Chimera.getProgram()) is None):
-            print (Chimera.getProgram())
+                and find_executable(viewers.viewer_chimera.Chimera.getProgram()) is None):
             return ["chimera is not available. "
                     "Either install it or choose option 'slices'. "]
         return []
@@ -118,7 +117,7 @@ class viewerProtImportTomograms(ProtocolViewer):
             dim = self.protocol.outputTomogram.getDim()[0]
             tmpFileNameBILD = os.path.abspath(self.protocol._getTmpPath(
                 "axis.bild"))
-            Chimera.createCoordinateAxisFile(dim,
+            viewers.viewer_chimera.Chimera.createCoordinateAxisFile(dim,
                                              bildFileName=tmpFileNameBILD,
                                              sampling=sampling)
             f.write("open %s\n" % tmpFileNameBILD)
@@ -129,7 +128,7 @@ class viewerProtImportTomograms(ProtocolViewer):
             localTomo = os.path.abspath(ImageHandler.removeFileType(
                 tomo.getFileName()))
             if localTomo.endswith("stk"):
-                errorWindow(None, "Extension .stk is not supported")
+                self.showError("Extension .stk is not supported")
             f.write("open %s\n" % localTomo)
             f.write("volume#%d style surface voxelSize %f\n" %
                     (count, sampling))
@@ -141,7 +140,7 @@ class viewerProtImportTomograms(ProtocolViewer):
             x, y, z = tomo.getShiftsFromOrigin()
             f.write("volume#1 origin %0.2f,%0.2f,%0.2f\n" % (x, y, z))
         f.close()
-        return [ChimeraView(tmpFileNameCMD)]
+        return [viewers.viewer_chimera.ChimeraView(tmpFileNameCMD)]
 
     def _showTomogramsSlices(self):
         # Write an sqlite with all tomograms selected for visualization.
@@ -152,11 +151,3 @@ class viewerProtImportTomograms(ProtocolViewer):
 
         return [self.objectView(setOfTomograms)]
 
-
-def errorWindow(tkParent, msg):
-    try:
-        showerror("Error",  # bar title
-                  msg,  # message
-                  parent=tkParent)
-    except:
-        print("Error:", msg)
