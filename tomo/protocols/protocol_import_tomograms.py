@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-from os.path import basename, abspath
+from os.path import abspath
 
 import pyworkflow.em as pwem
 from pyworkflow.em import ImageHandler
