@@ -142,13 +142,5 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
                            (self._getTomMessage(), self.samplingRate.get()),)
         return methods
 
-    def _getTomogramFileName(self, fileName, extension=None):
-        if extension is not None:
-            baseFileName = "import_" + basename(fileName).split(".")[0] + ".%s" % extension
-        else:
-            baseFileName = "import_" + basename(fileName).split(":")[0]
-
-        return self._getExtraPath(baseFileName)
-
     def _getOrigCoord(self):
         return -1.*self.x.get(), -1.*self.y.get(), -1.*self.z.get()

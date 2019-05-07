@@ -38,7 +38,7 @@ from pyworkflow.em.convert import ImageHandler
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.em.viewers as viewers
 
-from tomo.protocols import ProtImportTomograms
+from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
@@ -49,7 +49,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
     with the Xmipp program xmipp_showj. """
 
     _label = 'viewer input tomogram'
-    _targets = [ProtImportTomograms]
+    _targets = [ProtImportTomograms, ProtImportSubTomograms]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def _defineParams(self, form):
@@ -88,32 +88,38 @@ class ViewerProtImportTomograms(ProtocolViewer):
         elif self.displayTomo == TOMOGRAM_SLICES:
             return self._showTomogramsSlices()
 
-    def _createSetOfTomograms(self):
-        try:
-            setOfTomograms = self.protocol.outputTomograms
-            sampling = self.protocol.outputTomograms.getSamplingRate()
-        except:
-            setOfTomograms = self.protocol._createSetOfTomograms()
-            setOfTomograms.append(self.protocol.outputTomogram)
+    def _createSetOfObjects(self):
+        if hasattr(self.protocol, 'outputTomogram'):
+            setOfObjects = self.protocol._createSetOfTomograms()
+            setOfObjects.append(self.protocol.outputTomogram)
             sampling = self.protocol.outputTomogram.getSamplingRate()
-
-        return sampling, setOfTomograms
+        elif hasattr(self.protocol, 'outputTomograms'):
+            setOfObjects = self.protocol.outputTomograms
+            sampling = self.protocol.outputTomograms.getSamplingRate()
+        elif hasattr(self.protocol, 'outputSubTomogram'):
+            setOfObjects = self.protocol._createSetOfSubTomograms()
+            setOfObjects.append(self.protocol.outputSubTomogram)
+            sampling = self.protocol.outputSubTomogram.getSamplingRate()
+        elif hasattr(self.protocol, 'outputSubTomograms'):
+            setOfObjects = self.protocol.outputSubTomograms
+            sampling = self.protocol.outputSubTomograms.getSamplingRate()
+        return sampling, setOfObjects
 
     def _showTomogramsChimera(self):
         """ Create a chimera script to visualize selected tomograms. """
         tmpFileNameCMD = self.protocol._getTmpPath("chimera.cmd")
         f = open(tmpFileNameCMD, "w")
-        sampling, _setOfTomograms = self._createSetOfTomograms()
+        sampling, _setOfObjects = self._createSetOfObjects()
         count = 0  # first model in chimera is a tomogram
 
-        if len(_setOfTomograms) == 1:
+        if len(_setOfObjects) == 1:
             count = 1  # first model in chimera is the bild file
             # if we have a single tomogram then create axis
             # as bild file. Chimera must read the bild file first
             # otherwise system of coordinates will not
             # be in the center of the window
 
-            dim = self.protocol.outputTomogram.getDim()[0]
+            dim = _setOfObjects.getDim()[0]
             tmpFileNameBILD = os.path.abspath(self.protocol._getTmpPath(
                 "axis.bild"))
             viewers.viewer_chimera.Chimera.createCoordinateAxisFile(dim,
@@ -123,7 +129,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
             f.write("cofr 0,0,0\n")  # set center of coordinates
             count = 1  # skip first model because is not a 3D map
 
-        for tomo in _setOfTomograms:
+        for tomo in _setOfObjects:
             localTomo = os.path.abspath(ImageHandler.removeFileType(
                 tomo.getFileName()))
             if localTomo.endswith("stk"):
@@ -133,7 +139,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
                     (count, sampling))
             count += 1
 
-        if len(_setOfTomograms) > 1:
+        if len(_setOfObjects) > 1:
             f.write('tile\n')
         else:
             x, y, z = tomo.getShiftsFromOrigin()
@@ -143,10 +149,10 @@ class ViewerProtImportTomograms(ProtocolViewer):
 
     def _showTomogramsSlices(self):
         # Write an sqlite with all tomograms selected for visualization.
-        sampling, setOfTomograms = self._createSetOfTomograms()
+        sampling, setOfObjects = self._createSetOfObjects()
 
-        if len(setOfTomograms) == 1:
-            return [self.objectView(self.protocol.outputTomogram)]
+        if len(setOfObjects) == 1:
+            return [self.objectView(setOfObjects)]
 
-        return [self.objectView(setOfTomograms)]
+        return [self.objectView(setOfObjects)]
 
