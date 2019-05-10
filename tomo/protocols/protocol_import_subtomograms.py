@@ -34,39 +34,39 @@ from pyworkflow.em.convert import Ccp4Header
 from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoBase
-from tomo.objects import Tomogram
+from tomo.objects import SubTomogram
 
 
-class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
+class ProtImportSubTomograms(pwem.ProtImportVolumes, ProtTomoBase):
     """Protocol to import a set of tomograms to the project"""
-    _outputClassName = 'SetOfTomograms'
-    _label = 'import tomograms'
+    _outputClassName = 'SetOfSubTomograms'
+    _label = 'import subtomograms'
 
     def __init__(self, **args):
         pwem.ProtImportVolumes.__init__(self, **args)
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('importTomogramsStep',
+        self._insertFunctionStep('importSubTomogramsStep',
                                  self.getPattern(),
                                  self.samplingRate.get(),
                                  self.setOrigCoord.get())
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importTomogramsStep(self, pattern, samplingRate, setOrigCoord=False):
+    def importSubTomogramsStep(self, pattern, samplingRate, setOrigCoord=False):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
         self.info("Using pattern: '%s'" % pattern)
 
         # Create a Volume template object
-        tomo = Tomogram()
-        tomo.setSamplingRate(samplingRate)
+        subtomo = SubTomogram()
+        subtomo.setSamplingRate(samplingRate)
 
         imgh = ImageHandler()
 
-        tomoSet = self._createSetOfTomograms()
-        tomoSet.setSamplingRate(samplingRate)
+        subtomoSet = self._createSetOfSubTomograms()
+        subtomoSet.setSamplingRate(samplingRate)
 
         for fileName, fileId in self.iterFiles():
             x, y, z, n = imgh.getDimensions(fileName)
@@ -87,7 +87,7 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
                             y/-2. * samplingRate,
                             zDim/-2. * samplingRate)
 
-            tomo.setOrigin(origin)  # read origin from form
+            subtomo.setOrigin(origin)  # read origin from form
 
             if self.copyFiles or setOrigCoord:
                 newFileName = abspath(self._getVolumeFileName(fileName, "mrc"))
@@ -100,36 +100,36 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
                     fileName = fileName[:-4]
                 createAbsLink(fileName, newFileName)
             if n == 1:
-                tomo.cleanObjId()
-                tomo.setFileName(newFileName)
-                tomoSet.append(tomo)
+                subtomo.cleanObjId()
+                subtomo.setFileName(newFileName)
+                subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
-                    tomo.cleanObjId()
-                    tomo.setLocation(index, newFileName)
-                    tomoSet.append(tomo)
+                    subtomo.cleanObjId()
+                    subtomo.setLocation(index, newFileName)
+                    subtomoSet.append(subtomo)
 
-        if tomoSet.getSize() > 1:
-            self._defineOutputs(outputTomograms=tomoSet)
+        if subtomoSet.getSize() > 1:
+            self._defineOutputs(outputSubTomograms=subtomoSet)
         else:
-            self._defineOutputs(outputTomogram=tomo)
+            self._defineOutputs(outputSubTomogram=subtomo)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return (self.hasAttribute('outputTomogram')
-                or self.hasAttribute('outputTomograms'))
+        return (self.hasAttribute('outputSubTomogram')
+                or self.hasAttribute('outputSubTomograms'))
 
-    def _getTomMessage(self):
-        if self.hasAttribute('outputTomogram'):
-            return "Tomogram %s" % self.getObjectTag('outputTomogram')
+    def _getSubTomMessage(self):
+        if self.hasAttribute('outputSubTomogram'):
+            return "SubTomogram %s" % self.getObjectTag('outputSubTomogram')
         else:
-            return "Tomograms %s" % self.getObjectTag('outputTomograms')
+            return "SubTomograms %s" % self.getObjectTag('outputSubTomograms')
 
     def _summary(self):
         summary = []
         if self._hasOutput():
             summary.append("%s imported from:\n%s"
-                           % (self._getTomMessage(), self.getPattern()))
+                           % (self._getSubTomMessage(), self.getPattern()))
 
             summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
                            self.samplingRate.get())
@@ -139,7 +139,7 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
         methods = []
         if self._hasOutput():
             methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getTomMessage(), self.samplingRate.get()),)
+                           (self._getSubTomMessage(), self.samplingRate.get()),)
         return methods
 
     def _getOrigCoord(self):

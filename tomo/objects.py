@@ -489,3 +489,21 @@ class SubTomogram(data.Volume):
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
+
+    def __init__(self, **kwargs):
+        data.SetOfVolumes.__init__(self, **kwargs)
+        self._coordsPointer = pwobj.Pointer()
+
+    def hasCoordinates3D(self):
+        return self._coordsPointer.hasValue()
+
+    def getCoordinates3D(self):
+        """ Returns the SetOfCoordinates associated with
+        this SetOfParticles"""
+        return self._coordsPointer.get()
+
+    def setCoordinates3D(self, coordinates):
+        """ Set the SetOfCoordinates associates with
+        this set of particles.
+         """
+        self._coordsPointer.set(coordinates)
