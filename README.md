@@ -54,4 +54,14 @@ There is a test that will launch automatically the pre-processing following pipe
 
 `scipion test tomo.tests.test_tomo_base.TestTomoPreprocessing` 
 
+### Import Tilt-Series from IMOD tutorial
+There is a test that will import tilt-series from the IMOD etomo tutorial (BBa.st and BBb.st).
+To launch the test, first export the variable pointing to the test data (use you own location):
+
+`export SCIPION_TOMO_ETOMO_TUTORIAL=/data/work_software/IMOD/tutorialData`
+
+and then launch the test
+
+`scipion test tomo.tests.test_tomo_base.TestTomoImportTs`
+
 
