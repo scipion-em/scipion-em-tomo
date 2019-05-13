@@ -153,6 +153,68 @@ class TestTomoBaseProtocols(BaseTest):
         protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
         self.launchProtocol(protMc)
 
+
+class TestTomoImportTs(BaseTest):
+        @classmethod
+        def setUpClass(cls):
+            setupTestProject(cls)
+            cls.empiar10164 = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
+            cls.etomoTutorial = os.environ.get('SCIPION_TOMO_ETOMO_TUTORIAL', '')
+
+        def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
+            if not os.path.exists(self.empiar10164):
+                raise Exception("Can not run tomo tests, "
+                                "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+
+            protImport = self.newProtocol(
+                tomo.protocols.ProtImportTiltSeries,
+                importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+                filesPath=os.path.join(self.empiar10164, 'data', 'frames'),
+                filesPattern=filesPattern,
+                voltage=300,
+                magnification=105000,
+                sphericalAberration=2.7,
+                amplitudeContrast=0.1,
+                samplingRate=1.35,
+                doseInitial=0,
+                dosePerFrame=0.3)
+            self.launchProtocol(protImport)
+            return protImport
+
+        def _runImportTiltSeries(self):
+            if not os.path.exists(self.etomoTutorial):
+                raise Exception("Can not run tomo tests, "
+                                "SCIPION_TOMO_ETOMO_TUTORIAL variable not defined. ")
+
+            protImport = self.newProtocol(
+                tomo.protocols.ProtImportTiltSeries,
+                importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MICS,
+                filesPath=os.path.join(self.etomoTutorial),
+                filesPattern='BB{TS}.st',
+                voltage=300,
+                magnification=105000,
+                sphericalAberration=2.7,
+                amplitudeContrast=0.1,
+                samplingRate=1.35,
+                doseInitial=0,
+                dosePerFrame=0.3)
+            self.launchProtocol(protImport)
+            return protImport
+
+        def test_importTiltSeriesM(self):
+            protImport = self._runImportTiltSeriesM()
+            output = getattr(protImport, 'outputTiltSeriesM', None)
+            self.assertFalse(output is None)
+            self.assertEqual(output.getSize(), 3)
+
+            return protImport
+
+        def test_importTiltSeries(self):
+            protImport = self._runImportTiltSeries()
+            output = getattr(protImport, 'outputTiltSeries', None)
+            self.assertFalse(output is None)
+            self.assertEqual(output.getSize(), 2)
+
 # TODO: This test is based on https://www.ebi.ac.uk/pdbe/emdb/empiar/entry/10087/
 #  We need to refactor once we decide the final test infrastructures and the data sets to use
 # class TestTomoImportTomogramsProtocols(BaseTest):

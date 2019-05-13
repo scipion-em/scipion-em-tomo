@@ -305,6 +305,7 @@ class TiltSeriesDict:
         for ts, d in self.__dict.values():
             yield ts
 
+
 class Coordinate3D(data.EMObject):
     """This class holds the (x,y) position and other information
     associated with a coordinate"""

@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+import pyworkflow.utils as pwutils
 import pyworkflow.em as pwem
 
 
@@ -53,4 +54,16 @@ def writeTiStack(inputTiList, outputStackFn, outputTltFn=None,
     if f:
         f.close()
 
+
+def getAnglesFromHeader(tsImage):
+    """ Extract the tilt angles from the tilt-series stack using the
+    IMOD program: extracttilts.
+    """
+    anglesFn = '/tmp/angles.txt'
+    args = '--input %s --output %s' % (tsImage, anglesFn)
+    pwutils.runJob(None, 'extracttilts', args)
+    angles = []
+    with open(anglesFn) as f:
+        angles = [float(line) for line in f]
+    return angles
 

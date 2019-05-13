@@ -35,6 +35,7 @@ import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
 
+import tomo.convert
 from .protocol_base import ProtTomoBase
 
 
@@ -57,6 +58,10 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
     IMPORT_TYPE_MICS = 0
     IMPORT_TYPE_MOVS = 1
+
+    ANGLES_FROM_FILES = 0
+    ANGLES_FROM_HEADER = 1
+    ANGLES_FROM_MDOC = 2
 
     _label = 'import tilt-series'
 
@@ -88,6 +93,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                            "         (positive or negative float value).\n\n"
                            "Examples:\n"
                            "")
+        form.addParam('anglesFrom', params.EnumParam,
+                      default=self.ANGLES_FROM_FILES,
+                      choices=['Files', 'Header', 'Mdoc'],
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label='Import angles from',
+                      help='By default, the angles should be provided as part '
+                           'of the files pattern, using the {TA} token. '
+                           'Additionally, in the case of importing tilt-series,'
+                           'angles can be read from the header or from mdoc '
+                           'files.')
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
                       choices=['Copy files',
@@ -183,7 +198,8 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('importStep', self.getPattern(),
+        self.loadPatterns()
+        self._insertFunctionStep('importStep', self._pattern,
                                  self.voltage.get(),
                                  self.sphericalAberration.get(),
                                  self.amplitudeContrast.get(),
@@ -194,12 +210,12 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         """ Return True if we are importing TiltSeries movies. """
         return self.importType == self.IMPORT_TYPE_MOVS
 
-    def _createSetOfTiltSeries(self, suffix=''):
+    def _createOutputSet(self, suffix=''):
         if self.doImportMovies():
             self._outputSuffix = 'M'
             return self._createSetOfTiltSeriesM()
         else:
-            self._ouputSuffix = ''
+            self._outputSuffix = ''
             return self._createSetOfTiltSeries()
 
     def importStep(self, pattern, voltage, sphericalAberration,
@@ -207,11 +223,11 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self.getPattern()
+        self.loadPatterns()
         self.info("Using glob pattern: '%s'" % self._globPattern)
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
-        outputSet = self._createSetOfTiltSeries()
+        outputSet = self._createOutputSet()
         self._fillAcquisitionInfo(outputSet)
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
@@ -247,8 +263,19 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
-        self.getPattern()
         matching = self.getMatchingFiles()
+
+        if self.importType == self.IMPORT_TYPE_MOVS:
+            if self.anglesFrom != self.ANGLES_FROM_FILES:
+                errors.append('Angle information could only be taken from '
+                              'the files pattern when importing tilt-series'
+                              'movies.')
+            elif not self._anglesInPattern():
+                errors.append('When importing movies, {TA} and {TO} should be '
+                              'in the files pattern.')
+        else:
+            if self.anglesFrom == self.ANGLES_FROM_MDOC:
+                errors.append('Importing angles from mdoc is not yet implemented.')
 
         if not matching:
             errors.append("There are no files matching the pattern %s"
@@ -265,12 +292,12 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         return ['files']
 
     # -------------------------- UTILS functions ------------------------------
-    def getPattern(self):
+    def loadPatterns(self):
         """ Expand the pattern using environ vars or username
         and also replacing special character # by digit matching.
         """
-        pattern = os.path.join(self.filesPath.get('').strip(),
-                               self.filesPattern.get('').strip())
+        self._pattern = os.path.join(self.filesPath.get('').strip(),
+                                     self.filesPattern.get('').strip())
 
         def _replace(p, ts, to, ta):
             p = p.replace('{TS}', ts)
@@ -278,29 +305,45 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             p = p.replace('{TA}', ta)
             return p
 
-        self._regexPattern = _replace(pattern.replace('*', '(.*)'),
+        self._regexPattern = _replace(self._pattern.replace('*', '(.*)'),
                                       '(?P<TS>.*)', '(?P<TO>\d+)',
                                       '(?P<TA>[+-]?\d+(\.\d+)?)')
         self._regex = re.compile(self._regexPattern)
-        self._globPattern = _replace(pattern,
-                                     '*', '*', '*')
+        self._globPattern = _replace(self._pattern, '*', '*', '*')
+
+    def _anglesInPattern(self):
+        """ This function should be called after a call to loadPatterns"""
+        return '{TA}' in self._pattern and '{TO}' in self._pattern
 
     def getMatchingFiles(self):
         """ Return a sorted list with the paths of files that
         matched the pattern.
         """
-        self.getPattern()
+        self.loadPatterns()
 
         filePaths = glob(self._globPattern)
         filePaths.sort()
+
+        def _addOne(fileList, f, m):
+            """ Return one file matching. """
+            fileList.append(
+                (f, m.group('TS'), int(m.group('TO')), float(m.group('TA'))))
+
+        def _addMany(fileList, f, m):
+            """ Return many 'files' (when angles in header or mdoc). """
+            _, _, _, n = pwem.ImageHandler().getDimensions(f)
+            # FIXME, read proper angles
+            angles = tomo.convert.getAnglesFromHeader(f)
+            for i, a in enumerate(angles):
+                fileList.append(((i+1, f), m.group('TS'), i+1, a))
+
+        addFunc = _addOne if self._anglesInPattern() else _addMany
 
         matchingFiles = []
         for f in filePaths:
             m = self._regex.match(f)
             if m is not None:
-                matchingFiles.append((f, m.group('TS'),
-                                      int(m.group('TO')),
-                                      float(m.group('TA'))))
+                addFunc(matchingFiles, f, m)
 
         return matchingFiles
 
@@ -343,7 +386,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                 match = self._idRegex.match(fileName)
                 if match is None:
                     raise Exception("File '%s' doesn't match the pattern '%s'"
-                                    % (fileName, self.getPattern()))
+                                    % (fileName, self._pattern))
 
                 fileId = int(match.group(1))
 
