@@ -25,35 +25,34 @@
 # *
 # **************************************************************************
 
-from os.path import abspath
+from os.path import abspath, basename
 
-import pyworkflow.em as pwem
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from pyworkflow.em.convert import Ccp4Header
 from pyworkflow.utils.path import createAbsLink
 
-from .protocol_base import ProtTomoBase
+
+from .protocol_base import ProtTomoImportFiles
 from tomo.objects import Tomogram
 
 
-class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
+class ProtImportTomograms(ProtTomoImportFiles):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfTomograms'
     _label = 'import tomograms'
 
     def __init__(self, **args):
-        pwem.ProtImportVolumes.__init__(self, **args)
+        ProtTomoImportFiles.__init__(self, **args)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importTomogramsStep',
                                  self.getPattern(),
-                                 self.samplingRate.get(),
-                                 self.setOrigCoord.get())
+                                 self.samplingRate.get())
+
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importTomogramsStep(self, pattern, samplingRate, setOrigCoord=False):
+    def importTomogramsStep(self, pattern, samplingRate):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
@@ -80,25 +79,18 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
             else:
                 zDim = z
             origin = Transform()
-            if setOrigCoord:
-                origin.setShiftsTuple(self._getOrigCoord())
-            else:
-                origin.setShifts(x/-2. * samplingRate,
-                            y/-2. * samplingRate,
-                            zDim/-2. * samplingRate)
+
+            origin.setShifts(x/-2. * samplingRate,
+                        y/-2. * samplingRate,
+                        zDim/-2. * samplingRate)
 
             tomo.setOrigin(origin)  # read origin from form
 
-            if self.copyFiles or setOrigCoord:
-                newFileName = abspath(self._getVolumeFileName(fileName, "mrc"))
-                Ccp4Header.fixFile(fileName, newFileName, origin.getShifts(),
-                                   samplingRate, Ccp4Header.ORIGIN)
-            else:
-                newFileName = abspath(self._getVolumeFileName(fileName))
+            newFileName = abspath(self._getVolumeFileName(fileName))
 
-                if fileName.endswith(':mrc'):
-                    fileName = fileName[:-4]
-                createAbsLink(fileName, newFileName)
+            if fileName.endswith(':mrc'):
+                fileName = fileName[:-4]
+            createAbsLink(fileName, newFileName)
             if n == 1:
                 tomo.cleanObjId()
                 tomo.setFileName(newFileName)
@@ -142,5 +134,11 @@ class ProtImportTomograms(pwem.ProtImportVolumes, ProtTomoBase):
                            (self._getTomMessage(), self.samplingRate.get()),)
         return methods
 
-    def _getOrigCoord(self):
-        return -1.*self.x.get(), -1.*self.y.get(), -1.*self.z.get()
+    def _getVolumeFileName(self, fileName, extension=None):
+        if extension is not None:
+            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+        else:
+            baseFileName="import_" + basename(fileName).split(":")[0]
+
+        return self._getExtraPath(baseFileName)
+

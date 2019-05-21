@@ -56,7 +56,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
         form.addSection(label='Visualization of input tomograms')
         form.addParam('displayTomo', params.EnumParam,
                       choices=['chimera', 'slices'],
-                      default=TOMOGRAM_CHIMERA,
+                      default=TOMOGRAM_SLICES,
                       display=params.EnumParam.DISPLAY_HLIST,
                       label='Display tomogram with',
                       help='*chimera*: display tomograms as surface with '
@@ -64,6 +64,19 @@ class ViewerProtImportTomograms(ProtocolViewer):
                            'along z axis.\n If number of tomograms == 1, '
                            'a system of coordinates is shown'
                       )
+
+    def visualize(self, obj, **args):
+        if hasattr(self.protocol, 'outputTomogram'):
+            ProtocolViewer.visualize(self, obj, **args)
+        else:
+            views = self._showTomogramsSlices()
+            if views:
+                for v in views:
+                    v.show()
+
+    # def _visualize(self, obj, **kwargs):
+    #     if not hasattr(self.protocol, 'outputTomogram'):
+    #         return self._showTomogramsSlices()
 
     def _getVisualizeDict(self):
         return {
@@ -151,8 +164,8 @@ class ViewerProtImportTomograms(ProtocolViewer):
         # Write an sqlite with all tomograms selected for visualization.
         sampling, setOfObjects = self._createSetOfObjects()
 
-        if len(setOfObjects) == 1:
-            return [self.objectView(setOfObjects)]
+        view = self.objectView(setOfObjects)
+        view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
         return [self.objectView(setOfObjects)]
 

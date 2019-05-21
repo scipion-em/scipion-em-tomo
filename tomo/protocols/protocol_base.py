@@ -24,10 +24,16 @@
 # *
 # **************************************************************************
 
+
+import re
+from os.path import join
+
 import pyworkflow as pw
 import pyworkflow.em as pwem
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.mapper.sqlite_db import SqliteDb
+from pyworkflow.utils.properties import Message
+from pyworkflow.utils.path import expandPattern
 
 import tomo.objects
 
@@ -91,7 +97,7 @@ class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
     pass
 
-class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
+class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
 
     OUTPUT_PREFIX = 'output3DCoordinates'
 
@@ -102,6 +108,53 @@ class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
         form.addParam('inputTomogram', PointerParam, label="Input Tomogram", important=True,
                       pointerClass='Tomogram',
                       help='Select the Tomogram to be used during picking.')
+
+
+class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
+
+    def _defineParams(self, form):
+        self._defineImportParams(form)
+
+        self._defineAcquisitionParams(form)
+
+    def _defineImportParams(self, form):
+        """ Override to add options related to the different types
+        of import that are allowed by each protocol.
+        """
+        form.addSection(label='Import')
+        form.addParam('filesPath', pwem.params.PathParam,
+                      label="Files directory",
+                      help="Directory with the files you want to import.\n\n"
+                           "The path can also contain wildcards to select"
+                           "from several folders. \n\n"
+                           "Examples:\n"
+                           "  ~/Particles/data/day??_micrographs/\n"
+                           "Each '?' represents one unknown character\n\n"
+                           "  ~/Particles/data/day*_micrographs/\n"
+                           "'*' represents any number of unknown characters\n\n"
+                           "  ~/Particles/data/day#_micrographs/\n"
+                           "'#' represents one digit that will be used as "
+                           "micrograph ID\n\n"
+                           "NOTE: wildcard characters ('*', '?', '#') "
+                           "cannot appear in the actual path.)")
+        form.addParam('filesPattern', pwem.params.StringParam,
+                      label='Pattern',
+                      help="Pattern of the files to be imported.\n\n"
+                           "The pattern can contain standard wildcards such as\n"
+                           "*, ?, etc, or special ones like ### to mark some\n"
+                           "digits in the filename as ID.\n\n"
+                           "NOTE: wildcards and special characters "
+                           "('*', '?', '#', ':', '%') cannot appear in the "
+                           "actual path.")
+
+    def _defineAcquisitionParams(self, form):
+        """ Override to add options related to acquisition info.
+        """
+        form.addParam('samplingRate', pwem.params.FloatParam,
+                      label=Message.LABEL_SAMP_RATE)
+
+    def _validate(self):
+        pass
 
 
 
