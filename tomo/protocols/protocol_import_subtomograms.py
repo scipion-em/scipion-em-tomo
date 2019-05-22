@@ -29,6 +29,7 @@ from os.path import abspath, basename
 
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
+import pyworkflow.protocols.params as params
 from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles
@@ -42,6 +43,22 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
+
+    def _defineParams(self, form):
+        ProtTomoImportFiles._defineParams(self, form)
+
+        form.addParam('importCoordinates', params.PointerParam,
+                      pointerClass='SetOfCoordinates3D',
+                      label='Input coordinates 3D',
+                      help='Select the coordinates for which the '
+                            'subtomograms were extracted.')
+
+    def _getImportChoices(self):
+        """ Return a list of possible choices
+        from which the import can be done.
+        (usually packages formats such as: xmipp3, eman2, relion...etc.
+        """
+        return ['eman2']
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
@@ -98,6 +115,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
                     subtomoSet.append(subtomo)
+                subtomoSet.setCoordinates3D(self.importCoordinates)
 
         if subtomoSet.getSize() > 1:
             self._defineOutputs(outputSubTomograms=subtomoSet)

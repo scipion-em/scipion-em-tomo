@@ -56,7 +56,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
         form.addSection(label='Visualization of input tomograms')
         form.addParam('displayTomo', params.EnumParam,
                       choices=['chimera', 'slices'],
-                      default=TOMOGRAM_SLICES,
+                      default=TOMOGRAM_CHIMERA,
                       display=params.EnumParam.DISPLAY_HLIST,
                       label='Display tomogram with',
                       help='*chimera*: display tomograms as surface with '
@@ -73,10 +73,6 @@ class ViewerProtImportTomograms(ProtocolViewer):
             if views:
                 for v in views:
                     v.show()
-
-    # def _visualize(self, obj, **kwargs):
-    #     if not hasattr(self.protocol, 'outputTomogram'):
-    #         return self._showTomogramsSlices()
 
     def _getVisualizeDict(self):
         return {

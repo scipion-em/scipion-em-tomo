@@ -24,16 +24,11 @@
 # *
 # **************************************************************************
 
-
-import re
-from os.path import join
-
 import pyworkflow as pw
 import pyworkflow.em as pwem
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.mapper.sqlite_db import SqliteDb
 from pyworkflow.utils.properties import Message
-from pyworkflow.utils.path import expandPattern
 
 import tomo.objects
 
@@ -121,7 +116,20 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
         """ Override to add options related to the different types
         of import that are allowed by each protocol.
         """
+        importChoices = self._getImportChoices()
+
         form.addSection(label='Import')
+        if len(importChoices) > 1: # not only from files
+            form.addParam('importFrom', pwem.params.EnumParam,
+                          choices=importChoices, default=self._getDefaultChoice(),
+                          label='Import from',
+                          help='Select the type of import.')
+        else:
+            form.addHidden('importFrom', pwem.params.EnumParam,
+                          choices=importChoices, default=self.IMPORT_FROM_FILES,
+                          label='Import from',
+                          help='Select the type of import.')
+
         form.addParam('filesPath', pwem.params.PathParam,
                       label="Files directory",
                       help="Directory with the files you want to import.\n\n"
@@ -146,6 +154,15 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
                            "NOTE: wildcards and special characters "
                            "('*', '?', '#', ':', '%') cannot appear in the "
                            "actual path.")
+        form.addParam('copyFiles', pwem.params.BooleanParam, default=False,
+                      expertLevel=pwem.params.LEVEL_ADVANCED,
+                      label="Copy files?",
+                      help="By default the files are not copied into the "
+                           "project to avoid data duplication and to save "
+                           "disk space. Instead of copying, symbolic links are "
+                           "created pointing to original files. This approach "
+                           "has the drawback that if the project is moved to "
+                           "another computer, the links need to be restored.")
 
     def _defineAcquisitionParams(self, form):
         """ Override to add options related to acquisition info.

@@ -44,6 +44,13 @@ class ProtImportTomograms(ProtTomoImportFiles):
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
+    def _getImportChoices(self):
+        """ Return a list of possible choices
+        from which the import can be done.
+        (usually packages formats such as: xmipp3, eman2, relion...etc.
+        """
+        return ['eman2']
+
     def _insertAllSteps(self):
         self._insertFunctionStep('importTomogramsStep',
                                  self.getPattern(),
