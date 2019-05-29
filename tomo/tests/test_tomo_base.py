@@ -38,8 +38,8 @@ class TestTomoBase(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestOutput(cls)
-        #cls.dataset = DataSet.getDataSet('relion_tutorial')
-        #cls.getFile = cls.dataset.getFile
+        cls.dataset = DataSet.getDataSet('tomo')
+        cls.getFile = cls.dataset.getFile
 
     def test_plugin(self):
         # Really stupid test to check that tomo plugin is defined
@@ -215,33 +215,30 @@ class TestTomoImportTs(BaseTest):
             self.assertFalse(output is None)
             self.assertEqual(output.getSize(), 2)
 
-# TODO: This test is based on https://www.ebi.ac.uk/pdbe/emdb/empiar/entry/10087/
-#  We need to refactor once we decide the final test infrastructures and the data sets to use
-# class TestTomoImportTomogramsProtocols(BaseTest):
-#     @classmethod
-#     def setUpClass(cls):
-#         setupTestProject(cls)
-#         cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-#
-#         if not os.path.exists(cls.dataPath):
-#             raise Exception("Can not run tomo tests, "
-#                             "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
-#
-#     def _runImportTomograms(self):
-#         protImport = self.newProtocol(
-#             tomo.protocols.ProtImportTomograms,
-#             filesPath=os.path.join(self.dataPath, 'data', 'frames'),
-#             filesPattern='C2_tomo02.mrc',
-#             samplingRate=1.35)
-#         self.launchProtocol(protImport)
-#         return protImport
-#
-#     def test_importTomograms(self):
-#         protImport = self._runImportTomograms()
-#         output = getattr(protImport, 'outputTomogram', None)
-#         self.assertFalse(output is None)
-#
-#         return protImport
+#TODO: This test is based on https://www.ebi.ac.uk/pdbe/emdb/empiar/entry/10087/
+# We need to refactor once we decide the final test infrastructures and the data sets to use
+class TestTomoImportTomogramsProtocols(BaseTest):
+     @classmethod
+     def setUpClass(cls):
+         setupTestProject(cls)
+         cls.dataset = DataSet.getDataSet('tomo')
+         cls.dataPath = cls.dataset.getFile('overview_wbp.em')
+
+     def _runImportTomograms(self):
+         protImport = self.newProtocol(
+             tomo.protocols.ProtImportTomograms,
+             filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+             filesPattern='C2_tomo02.mrc',
+             samplingRate=1.35)
+         self.launchProtocol(protImport)
+         return protImport
+
+     def test_importTomograms(self):
+         protImport = self._runImportTomograms()
+         output = getattr(protImport, 'outputTomogram', None)
+         self.assertFalse(output is None)
+
+         return protImport
 
 
 class TestTomoPreprocessing(BaseTest):
