@@ -29,7 +29,7 @@ from os.path import abspath, basename
 
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-import pyworkflow.protocols.params as params
+import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles
