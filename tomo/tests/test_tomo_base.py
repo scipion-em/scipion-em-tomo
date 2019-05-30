@@ -27,9 +27,10 @@
 import os
 
 import pyworkflow as pw
-from pyworkflow.tests import BaseTest, setupTestOutput, DataSet, setupTestProject
+from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pyworkflow.em import Domain, CTFModel
 
+from tomo.data import DataSet
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
 
