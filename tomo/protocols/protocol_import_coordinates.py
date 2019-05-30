@@ -128,7 +128,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     def getImportFrom(self):
         importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_AUTO:
-            importFrom = self.getFormat()
+            importFrom = self.IMPORT_FROM_EMAN
         return importFrom
 
     def getImportClass(self):
