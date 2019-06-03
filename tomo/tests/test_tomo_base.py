@@ -221,10 +221,9 @@ class TestTomoImportTomogramsProtocols(BaseTest):
      def setUpClass(cls):
          setupTestProject(cls)
          cls.dataset = DataSet.getDataSet('tomo-em')
-         cls.dataPath = cls.dataset.getFile('tomo1')
+         cls.dataPath = cls.dataset.getFile('overview_wbp.em')
 
      def _runImportTomograms(self):
-         print self.dataPath
          protImport = self.newProtocol(
              tomo.protocols.ProtImportTomograms,
              filesPath=self.dataPath,
@@ -238,6 +237,7 @@ class TestTomoImportTomogramsProtocols(BaseTest):
          output = getattr(protImport, 'outputTomogram', None)
          self.assertIsNotNone(output,
                              "There was a problem with Import Tomograms protocol")
+
          self.assertTrue(protImport.outputTomogram.getXDim() == 1024,
                              "There was a problem with Import Tomograms protocol")
          self.assertIsNotNone(protImport.outputTomogram.getYDim() == 1024,
