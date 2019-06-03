@@ -49,6 +49,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
         form.addParam('importCoordinates', params.PointerParam,
                       pointerClass='SetOfCoordinates3D',
+                      allowsNull=True,
                       label='Input coordinates 3D',
                       help='Select the coordinates for which the '
                             'subtomograms were extracted.')
