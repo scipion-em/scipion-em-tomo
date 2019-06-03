@@ -216,15 +216,12 @@ class TestTomoImportTs(BaseTest):
             self.assertFalse(output is None)
             self.assertEqual(output.getSize(), 2)
 
-#TODO: This test is based on https://www.ebi.ac.uk/pdbe/emdb/empiar/entry/10087/
-# We need to refactor once we decide the final test infrastructures and the data sets to use
 class TestTomoImportTomogramsProtocols(BaseTest):
      @classmethod
      def setUpClass(cls):
          setupTestProject(cls)
          cls.dataset = DataSet.getDataSet('tomo-em')
-         cls.dataPath = cls.dataset.getFile('overview_wbp')
-         print cls.dataPath
+         cls.dataPath = cls.dataset.getFile('tomo1')
 
      def _runImportTomograms(self):
          print self.dataPath
@@ -239,7 +236,6 @@ class TestTomoImportTomogramsProtocols(BaseTest):
      def test_importTomograms(self):
          protImport = self._runImportTomograms()
          output = getattr(protImport, 'outputTomogram', None)
-         print(protImport.outputTomogram.__dict__)
          self.assertIsNotNone(output,
                              "There was a problem with Import Tomograms protocol")
          self.assertTrue(protImport.outputTomogram.getXDim() == 1024,
