@@ -31,7 +31,7 @@ from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject, DataSe
 from pyworkflow.em import Domain, CTFModel
 
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
-import tomo.protocols
+from tomo.protocols import *
 
 
 class TestTomoBase(BaseTest):
@@ -215,17 +215,19 @@ class TestTomoImportTs(BaseTest):
             self.assertFalse(output is None)
             self.assertEqual(output.getSize(), 2)
 
+
 class TestTomoImportTomogramsProtocols(BaseTest):
+     """This class check if the protocol to import tomograms works properly."""
      @classmethod
      def setUpClass(cls):
          setupTestProject(cls)
          cls.dataset = DataSet.getDataSet('tomo-em')
-         cls.dataPath = cls.dataset.getFile('tomo1')
+         cls.tomogram = cls.dataset.getFile('tomo2')
 
      def _runImportTomograms(self):
          protImport = self.newProtocol(
-             tomo.protocols.ProtImportTomograms,
-             filesPath=self.dataPath,
+             ProtImportTomograms,
+             filesPath=self.tomogram,
              filesPattern='',
              samplingRate=1.35)
          self.launchProtocol(protImport)
@@ -244,6 +246,89 @@ class TestTomoImportTomogramsProtocols(BaseTest):
 
 
          return protImport
+
+
+class TestTomoImportSubTomogramsProtocols(BaseTest):
+     """This class check if the protocol to import sub tomograms works properly."""
+     @classmethod
+     def setUpClass(cls):
+         setupTestProject(cls)
+         cls.dataset = DataSet.getDataSet('tomo-em')
+         cls.tomogram = cls.dataset.getFile('tomo1')
+         cls.coords3D = cls.dataset.getFile('eman_coordinates')
+
+     def _runImportTomograms(self):
+
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+
+        self.launchProtocol(protImportTomogram)
+
+        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
+                                 auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 filesPath= self.coords3D,
+                                 importTomogram=protImportTomogram.outputTomogram,
+                                 filesPattern='', boxSize=32,
+                                 samplingRate=5)
+
+        protImport = self.newProtocol(ProtImportSubTomograms,
+                                      filesPath=self.tomogram,
+                                      filesPattern='',
+                                      samplingRate=1.35,
+                                      importCoordinates=protImportCoordinates3d)
+        self.launchProtocol(protImport)
+        return protImport
+
+     def test_import_sub_tomograms(self):
+         protImport = self._runImportTomograms()
+         output = getattr(protImport, 'outputSubTomogram', None)
+         self.assertIsNotNone(output,
+                             "There was a problem with Import SubTomograms protocol")
+         return output
+
+
+class TestTomoImportSetOfCoordinates3D(BaseTest):
+    """This class check if the protocol to import set of coordinates 3d works properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.tomogram = cls.dataset.getFile('tomo1')
+        cls.coords3D = cls.dataset.getFile('eman_coordinates')
+
+    def _runTomoExtraction(self):
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                 filesPath=self.tomogram,
+                                 samplingRate=5)
+
+        self.launchProtocol(protImportTomogram)
+
+        output = getattr(protImportTomogram, 'outputTomogram', None)
+
+        self.assertIsNotNone(output,
+                             "There was a problem with tomogram output")
+
+        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
+                                 auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 filesPath= self.coords3D,
+                                 importTomogram=protImportTomogram.outputTomogram,
+                                 filesPattern='', boxSize=32,
+                                 samplingRate=5)
+
+        self.launchProtocol(protImportCoordinates3d)
+
+        return protImportCoordinates3d
+
+    def test_import_set_of_coordinates_3D(self):
+        protCoordinates = self._runTomoExtraction()
+        output = getattr(protCoordinates, 'outputCoordinates', None)
+        self.assertTrue(output,
+                             "There was a problem with coordinates 3d output")
+        self.assertTrue(output.getSize() == 5)
+        self.assertTrue(output.getBoxSize() == 32)
+        return output
 
 
 class TestTomoPreprocessing(BaseTest):
