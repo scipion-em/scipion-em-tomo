@@ -30,7 +30,7 @@ import pyworkflow as pw
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pyworkflow.em import Domain, CTFModel
 
-from tomo.data import DataSet
+from tomo.tests import DataSet
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
 
@@ -221,7 +221,7 @@ class TestTomoImportTomogramsProtocols(BaseTest):
      def setUpClass(cls):
          setupTestProject(cls)
          cls.dataset = DataSet.getDataSet('tomo-em')
-         cls.dataPath = cls.dataset.getFile('overview_wbp.em')
+         cls.dataPath = cls.dataset.getFile('tomo1')
 
      def _runImportTomograms(self):
          protImport = self.newProtocol(
