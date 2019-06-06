@@ -71,12 +71,14 @@ class ProtImportTomograms(ProtTomoImportFiles):
     def _insertAllSteps(self):
         self._insertFunctionStep('importTomogramsStep',
                                  self.getPattern(),
-                                 self.samplingRate.get())
+                                 self.samplingRate.get(),
+                                 self.acquisitionAngleMax.get(),
+                                 self.acquisitionAngleMin.get())
 
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importTomogramsStep(self, pattern, samplingRate):
+    def importTomogramsStep(self, pattern, samplingRate, acquistionAngleMax, acquistionAngleMin):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
@@ -85,6 +87,8 @@ class ProtImportTomograms(ProtTomoImportFiles):
         # Create a Volume template object
         tomo = Tomogram()
         tomo.setSamplingRate(samplingRate)
+        tomo.setAcquisitionAngleMax(acquistionAngleMax)
+        tomo.setAcquisitionAngleMin(acquistionAngleMin)
 
         imgh = ImageHandler()
 
