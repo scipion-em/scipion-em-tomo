@@ -216,7 +216,7 @@ class TestTomoImportTs(BaseTest):
             self.assertEqual(output.getSize(), 2)
 
 
-class TestTomoImportTomogramsProtocols(BaseTest):
+class TestTomoImportTomograms(BaseTest):
      """This class check if the protocol to import tomograms works properly."""
      @classmethod
      def setUpClass(cls):
@@ -248,7 +248,7 @@ class TestTomoImportTomogramsProtocols(BaseTest):
          return protImport
 
 
-class TestTomoImportSubTomogramsProtocols(BaseTest):
+class TestTomoImportSubTomograms(BaseTest):
      """This class check if the protocol to import sub tomograms works properly."""
      @classmethod
      def setUpClass(cls):
@@ -271,6 +271,8 @@ class TestTomoImportSubTomogramsProtocols(BaseTest):
                                  importTomogram=protImportTomogram.outputTomogram,
                                  filesPattern='', boxSize=32,
                                  samplingRate=5)
+
+        self.launchProtocol(protImportCoordinates3d)
 
         protImport = self.newProtocol(ProtImportSubTomograms,
                                       filesPath=self.tomogram,
