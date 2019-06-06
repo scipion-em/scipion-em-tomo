@@ -27,9 +27,10 @@
 import os
 
 import pyworkflow as pw
-from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject, DataSet
+from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pyworkflow.em import Domain, CTFModel
 
+from tomo.tests import DataSet
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 from tomo.protocols import *
 
@@ -257,7 +258,7 @@ class TestTomoImportSubTomograms(BaseTest):
          cls.tomogram = cls.dataset.getFile('tomo1')
          cls.coords3D = cls.dataset.getFile('eman_coordinates')
 
-     def _runImportTomograms(self):
+     def _runImportSubTomograms(self):
 
         protImportTomogram = self.newProtocol(ProtImportTomograms,
                                               filesPath=self.tomogram,
@@ -283,8 +284,12 @@ class TestTomoImportSubTomograms(BaseTest):
         return protImport
 
      def test_import_sub_tomograms(self):
-         protImport = self._runImportTomograms()
+         protImport = self._runImportSubTomograms()
          output = getattr(protImport, 'outputSubTomogram', None)
+         self.assertTrue(output.getSamplingRate() == 1.35)
+         self.assertTrue(output.getDim()[0] == 1024)
+         self.assertTrue(output.getDim()[1] == 1024)
+         self.assertTrue(output.getDim()[2] == 512)
          self.assertIsNotNone(output,
                              "There was a problem with Import SubTomograms protocol")
          return output
@@ -300,7 +305,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         cls.tomogram = cls.dataset.getFile('tomo1')
         cls.coords3D = cls.dataset.getFile('eman_coordinates')
 
-    def _runTomoExtraction(self):
+    def _runTomoImportSetOfCoordinates(self):
         protImportTomogram = self.newProtocol(ProtImportTomograms,
                                  filesPath=self.tomogram,
                                  samplingRate=5)
@@ -324,7 +329,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         return protImportCoordinates3d
 
     def test_import_set_of_coordinates_3D(self):
-        protCoordinates = self._runTomoExtraction()
+        protCoordinates = self._runTomoImportSetOfCoordinates()
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertTrue(output,
                              "There was a problem with coordinates 3d output")
