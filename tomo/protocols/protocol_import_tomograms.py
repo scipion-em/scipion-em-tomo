@@ -30,6 +30,7 @@ from os.path import abspath, basename
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
 from pyworkflow.utils.path import createAbsLink
+from pyworkflow.protocol.params import FloatParam
 
 
 from .protocol_base import ProtTomoImportFiles
@@ -43,6 +44,22 @@ class ProtImportTomograms(ProtTomoImportFiles):
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
+
+    def _defineParams(self, form):
+        ProtTomoImportFiles._defineParams(self, form)
+
+        form.addParam('acquisitionAngleMax', FloatParam,
+                      allowsNull=True,
+                      default=90,
+                      label='Acquisition angle max',
+                      help='Enter the positive limit of the acquisition angle')
+
+        form.addParam('acquisitionAngleMin', FloatParam,
+                      allowsNull=True,
+                      default=-90,
+                      label='Acquisition angle min',
+                      help='Enter the negative limit of the acquisition angle')
+
 
     def _getImportChoices(self):
         """ Return a list of possible choices

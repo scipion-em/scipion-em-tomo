@@ -53,6 +53,19 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
                       label='Input coordinates 3D',
                       help='Select the coordinates for which the '
                             'subtomograms were extracted.')
+        
+        form.addParam('acquisitionAngleMax', params.FloatParam,
+                      allowsNull=True,
+                      default=90,
+                      label='Acquisition angle max',
+                      help='Enter the positive limit of the acquisition angle')
+
+        form.addParam('acquisitionAngleMin', params.FloatParam,
+                      allowsNull=True,
+                      default=-90,
+                      label='Acquisition angle min',
+                      help='Enter the negative limit of the acquisition angle')
+
 
     def _getImportChoices(self):
         """ Return a list of possible choices

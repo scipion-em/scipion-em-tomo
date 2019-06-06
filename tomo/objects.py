@@ -257,6 +257,8 @@ class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
+        self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -266,6 +268,18 @@ class Tomogram(data.Volume):
 
     def setTsId(self, value):
         self._tsId.set(value)
+
+    def getAcquisitionAngleMax(self):
+        return self._acquisitionAngleMax.get()
+
+    def getAcquisitionAngleMin(self):
+        return self._acquisitionAngleMin.get()
+
+    def setAcquisitionAngleMax(self, value):
+        self._acquisitionAngleMax.set(value)
+    
+    def setAcquisitionAngleMin(self, value):
+        self._acquisitionAngleMin.set(value)
 
 
 class SetOfTomograms(data.SetOfVolumes):
@@ -486,7 +500,22 @@ class SetOfCoordinates3D(data.EMSet):
         return s
 
 class SubTomogram(data.Volume):
-    pass
+    def __init__(self, **kwargs):
+        data.Volume.__init__(self, **kwargs)
+        self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
+        self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
+
+    def getAcquisitionAngleMax(self):
+        return self._acquisitionAngleMax.get()
+
+    def getAcquisitionAngleMin(self):
+        return self._acquisitionAngleMin.get()
+
+    def setAcquisitionAngleMax(self, value):
+        self._acquisitionAngleMax.set(value)
+    
+    def setAcquisitionAngleMin(self, value):
+        self._acquisitionAngleMin.set(value)
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram

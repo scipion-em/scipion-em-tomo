@@ -228,6 +228,8 @@ class TestTomoImportTomogramsProtocols(BaseTest):
              tomo.protocols.ProtImportTomograms,
              filesPath=self.dataPath,
              filesPattern='',
+             acquisitionAngleMax=40,
+             acquisitionAngleMin=-40
              samplingRate=1.35)
          self.launchProtocol(protImport)
          return protImport
@@ -243,8 +245,8 @@ class TestTomoImportTomogramsProtocols(BaseTest):
          self.assertIsNotNone(protImport.outputTomogram.getYDim() == 1024,
                              "There was a problem with Import Tomograms protocol")
 
+        self.assertTrue(protImport.outputTomogram.g)
 
-         return protImport
 
 
 class TestTomoPreprocessing(BaseTest):
