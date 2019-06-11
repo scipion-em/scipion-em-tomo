@@ -30,7 +30,7 @@ from os.path import abspath, basename
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
 from pyworkflow.utils.path import createAbsLink
-from pyworkflow.protocol.params import FloatParam
+from pyworkflow.protocol.params import FloatParam, EnumParam, PathParam
 
 
 from .protocol_base import ProtTomoImportFiles
@@ -48,25 +48,55 @@ class ProtImportTomograms(ProtTomoImportFiles):
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
 
+        form.addSection(label='Acquisition Info')
+
+        form.addParam('acquisitionData', PathParam,
+                      label="Acquisition parameters file",
+                      help="File with the acquisition paramenters for every \n"
+                            "tomogram to import.",
+                      condition="importFrom == 1")
+
         form.addParam('acquisitionAngleMax', FloatParam,
-                      allowsNull=True,
-                      default=90,
-                      label='Acquisition angle max',
-                      help='Enter the positive limit of the acquisition angle')
+                        allowsNull=True,
+                        default=90,
+                        label='Acquisition angle max',
+                        condition="importFrom == 0",
+                        help='Enter the positive limit of the acquisition angle')
 
         form.addParam('acquisitionAngleMin', FloatParam,
+                        allowsNull=True,
+                        default=-90,
+                        condition="importFrom == 0",
+                        label='Acquisition angle min',
+                        help='Enter the negative limit of the acquisition angle')
+
+        form.addParam('angleAxis1', FloatParam,
                       allowsNull=True,
                       default=-90,
-                      label='Acquisition angle min',
+                      condition="importFrom == 0",
+                      label='Angle axis 1',
+                      help='Enter the negative limit of the acquisition angle')
+
+        form.addParam('angleAxis2', FloatParam,
+                      allowsNull=True,
+                      default=-90,
+                      condition="importFrom == 0",
+                      label='Angle Axis 2',
+                      help='Enter the negative limit of the acquisition angle')
+
+        form.addParam('step', FloatParam,
+                      allowsNull=True,
+                      default=-90,
+                      condition="importFrom == 0",
+                      label='Step',
                       help='Enter the negative limit of the acquisition angle')
 
 
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
-        (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        return ['eman2']
+        return ['Manual', 'From file']
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importTomogramsStep',
