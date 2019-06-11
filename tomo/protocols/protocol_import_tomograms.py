@@ -70,26 +70,23 @@ class ProtImportTomograms(ProtTomoImportFiles):
                         label='Acquisition angle min',
                         help='Enter the negative limit of the acquisition angle')
 
+        form.addParam('step', FloatParam,
+                      allowsNull=True,
+                      condition="importFrom == 0",
+                      label='Step',
+                      help='Enter the step size for the import')
+
         form.addParam('angleAxis1', FloatParam,
                       allowsNull=True,
-                      default=-90,
                       condition="importFrom == 0",
                       label='Angle axis 1',
-                      help='Enter the negative limit of the acquisition angle')
+                      help='Enter the angle axis angle 1')
 
         form.addParam('angleAxis2', FloatParam,
                       allowsNull=True,
-                      default=-90,
                       condition="importFrom == 0",
                       label='Angle Axis 2',
-                      help='Enter the negative limit of the acquisition angle')
-
-        form.addParam('step', FloatParam,
-                      allowsNull=True,
-                      default=-90,
-                      condition="importFrom == 0",
-                      label='Step',
-                      help='Enter the negative limit of the acquisition angle')
+                      help='Enter the angle axis 2')
 
 
     def _getImportChoices(self):
@@ -103,29 +100,54 @@ class ProtImportTomograms(ProtTomoImportFiles):
                                  self.getPattern(),
                                  self.samplingRate.get(),
                                  self.acquisitionAngleMax.get(),
-                                 self.acquisitionAngleMin.get())
+                                 self.acquisitionAngleMin.get(),
+                                 self.step.get(),
+                                 self.axisAngle1.get(),
+                                 self.axisAngle2.get(),
+                                 self.acquisitionData.get())
 
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importTomogramsStep(self, pattern, samplingRate, acquistionAngleMax, acquistionAngleMin):
+    def importTomogramsStep(
+            self,
+            pattern,
+            samplingRate,
+            acquistionAngleMax,
+            acquistionAngleMin,
+            step,
+            axisAngle1,
+            axisAngle2,
+            acquistionDataPath,
+    ):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
         self.info("Using pattern: '%s'" % pattern)
-
+        acquisitionParams = {}
         # Create a Volume template object
         tomo = Tomogram()
         tomo.setSamplingRate(samplingRate)
-        tomo.setAcquisitionAngleMax(acquistionAngleMax)
-        tomo.setAcquisitionAngleMin(acquistionAngleMin)
 
         imgh = ImageHandler()
 
         tomoSet = self._createSetOfTomograms()
         tomoSet.setSamplingRate(samplingRate)
-
+        if ProtTomoImportFiles.importFrom.get() == 1:
+            acquisitionParams = self._parseAcquisitionData(acquistionDataPath)
         for fileName, fileId in self.iterFiles():
+            if ProtTomoImportFiles.importFrom.get() == 1:
+                tomo.setAcquisitionAngleMax(acquistionAngleMax)
+                tomo.setAcquisitionAngleMin(acquistionAngleMin)
+                tomo.setStep(step)
+                tomo.setAxisAngle1(axisAngle1)
+                tomo.setAxisAngles2(axisAngle2)
+            else:
+                tomo.setAcquisitionAngleMin(acquisitionParams[fileName]['acquisitionAngleMin'])
+                tomo.setAcquisitionAngleMax(acquisitionParams[fileName]['acquisitionAngleMax'])
+                tomo.setStep(acquisitionParams[fileName]['step'])
+                tomo.setAngleAxis1(acquisitionParams[fileName]['angleAxis1'])
+                tomo.setAngleAxis2(acquisitionParams[fileName]['angleAxis2'])
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
                 fileName += ':mrc'
@@ -200,3 +222,13 @@ class ProtImportTomograms(ProtTomoImportFiles):
 
         return self._getExtraPath(baseFileName)
 
+    def _parseAcquisitionData(self, pathToData):
+        params = open(pathToData, "r")
+        lines = params.readlines()
+        parameters = {}
+        for l in lines:
+            words = l.split()
+            d = {words[0]: {'acquisitionAngleMin': words[1], 'acquisitionAngleMax': words[2], 'step': words[3],
+                            'angleAxis1': words[4], 'angleAxis2': words[5]}}
+            parameters.update(d)
+        return params

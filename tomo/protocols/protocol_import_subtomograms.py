@@ -76,26 +76,23 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
                       label='Acquisition angle min',
                       help='Enter the negative limit of the acquisition angle')
 
+        form.addParam('step', FloatParam,
+                      allowsNull=True,
+                      condition="importFrom == 0",
+                      label='Step',
+                      help='Enter the step size for the import')
+
         form.addParam('angleAxis1', FloatParam,
                       allowsNull=True,
-                      default=-90,
                       condition="importFrom == 0",
                       label='Angle axis 1',
-                      help='Enter the negative limit of the acquisition angle')
+                      help='Enter the angle axis 1')
 
         form.addParam('angleAxis2', FloatParam,
                       allowsNull=True,
-                      default=-90,
                       condition="importFrom == 0",
                       label='Angle Axis 2',
-                      help='Enter the negative limit of the acquisition angle')
-
-        form.addParam('step', FloatParam,
-                      allowsNull=True,
-                      default=-90,
-                      condition="importFrom == 0",
-                      label='Step',
-                      help='Enter the negative limit of the acquisition angle')
+                      help='Enter the angle axis 2')
 
 
     def _getImportChoices(self):
@@ -114,7 +111,17 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importSubTomogramsStep(self, pattern, samplingRate, acquisitionAngleMax, acquisitionAngleMin):
+    def importSubTomogramsStep(
+            self,
+            pattern,
+            samplingRate,
+            acquisitionAngleMax,
+            acquisitionAngleMin,
+            step,
+            axisAngle1,
+            axisAngle2,
+            acquisitionDataPath,
+    ):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
@@ -123,15 +130,28 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         # Create a Volume template object
         subtomo = SubTomogram()
         subtomo.setSamplingRate(samplingRate)
-        subtomo.setAcquisitionAngleMax(acquisitionAngleMax)
-        subtomo.setAcquisitionAngleMin(acquisitionAngleMin)
 
         imgh = ImageHandler()
-
+        acquisitionParams = {}
         subtomoSet = self._createSetOfSubTomograms()
         subtomoSet.setSamplingRate(samplingRate)
+        if ProtTomoImportFiles.importFrom.get() == 1:
+            acquisitionParams = self._parseAcquisitionData(acquisitionDataPath)
 
         for fileName, fileId in self.iterFiles():
+            if ProtTomoImportFiles.importFrom.get() == 1:
+                subtomo.setAcquisitionAngleMax(acquisitionAngleMax)
+                subtomo.setAcquisitionAngleMin(acquisitionAngleMin)
+                subtomo.setStep(step)
+                subtomo.setAxisAngle1(axisAngle1)
+                subtomo.setAxisAngles2(axisAngle2)
+            else:
+                subtomo.setAcquisitionAngleMin(acquisitionParams[fileName]['acquisitionAngleMin'])
+                subtomo.setAcquisitionAngleMax(acquisitionParams[fileName]['acquisitionAngleMax'])
+                subtomo.setStep(acquisitionParams[fileName]['step'])
+                subtomo.setAngleAxis1(acquisitionParams[fileName]['angleAxis1'])
+                subtomo.setAngleAxis2(acquisitionParams[fileName]['angleAxis2'])
+
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
                 fileName += ':mrc'
@@ -149,6 +169,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
                         zDim/-2. * samplingRate)
 
             subtomo.setOrigin(origin)  # read origin from form
+
 
             newFileName = abspath(self._getVolumeFileName(fileName))
 
@@ -207,3 +228,13 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
         return self._getExtraPath(baseFileName)
 
+    def _parseAcquisitionData(self, pathToData):
+        params = open(pathToData, "r")
+        lines = params.readlines()
+        parameters = {}
+        for l in lines:
+            words = l.split()
+            d = {words[0]: {'acquisitionAngleMin': words[1], 'acquisitionAngleMax': words[2], 'step': words[3],
+                            'angleAxis1': words[4], 'angleAxis2': words[5]}}
+            parameters.update(d)
+        return params
