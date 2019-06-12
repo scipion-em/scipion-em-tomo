@@ -291,8 +291,6 @@ class TestTomoImportSubTomograms(BaseTest):
          self.assertTrue(output.getDim()[2] == 512)
          self.assertIsNotNone(output,
                              "There was a problem with Import SubTomograms protocol")
-
-
          return output
 
 
