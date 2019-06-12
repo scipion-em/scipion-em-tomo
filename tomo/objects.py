@@ -259,9 +259,9 @@ class Tomogram(data.Volume):
         self._tsId = pwobj.String(kwargs.get('tsId', None))
         self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
         self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
-        self._step = pwobj.Integer(kwargs.get('step'), None)
-        self._axisAngle1 = pwobj.Float(kwargs.get('angleAxis1', None))
-        self._axisAngle2 = pwobj.Float(kwargs.get('angleAxis2', None))
+        self._step = pwobj.Integer(None)
+        self._angleAxis1 = pwobj.Float(None)
+        self._angleAxis2 = pwobj.Float(None)
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -290,17 +290,17 @@ class Tomogram(data.Volume):
     def setStep(self, value):
         return self._step.set(value)
 
-    def getAxisAngle1 (self):
-        return self._axisAngle1.get()
+    def getAngleAxis1 (self):
+        return self._angleAxis1.get()
 
-    def setAxisAngle1 (self, value):
-        self._axisAngle1.set(value)
+    def setAngleAxis1 (self, value):
+        self._angleAxis1.set(value)
 
-    def getAxisAngle2 (self):
-        return self._axisAngle2.get()
+    def getAngleAxis2 (self):
+        return self._angleAxis2.get()
 
-    def setAxisAngles2(self, value):
-        self._axisAngle2.set(value)
+    def setAngleAxis2(self, value):
+        self._angleAxis2.set(value)
 
 
 class SetOfTomograms(data.SetOfVolumes):
@@ -525,9 +525,9 @@ class SubTomogram(data.Volume):
         data.Volume.__init__(self, **kwargs)
         self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
         self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
-        self._step = pwobj.Integer(kwargs.get('step'), None)
-        self._axisAngle1 = pwobj.Float(kwargs.get('angleAxis1', None))
-        self._axisAngle2 = pwobj.Float(kwargs.get('angleAxis2', None))
+        self._step = pwobj.Integer(None)
+        self._angleAxis1 = pwobj.Float(None)
+        self._angleAxis2 = pwobj.Float(None)
 
     def getAcquisitionAngleMax(self):
         return self._acquisitionAngleMax.get()
@@ -547,17 +547,17 @@ class SubTomogram(data.Volume):
     def setStep(self, value):
         return self._step.set(value)
 
-    def getAxisAngle1 (self):
-        return self._axisAngle1.get()
+    def getAngleAxis1 (self):
+        return self._angleAxis1.get()
 
-    def setAxisAngle1 (self, value):
-        self._axisAngle1.set(value)
+    def setAngleAxis1 (self, value):
+        self._angleAxis1.set(value)
 
-    def getAxisAngle2 (self):
-        return self._axisAngle2.get()
+    def getAngleAxis2 (self):
+        return self._angleAxis2.get()
 
-    def setAxisAngles2(self, value):
-        self._axisAngle2.set(value)
+    def setAngleAxis2(self, value):
+        self._angleAxis2.set(value)
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram

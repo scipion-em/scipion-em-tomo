@@ -29,7 +29,7 @@ from os.path import abspath, basename
 
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from pyworkflow.protocol.params import PointerParam, FloatParam, PathParam
+from pyworkflow.protocol.params import PointerParam, FloatParam, PathParam, EnumParam
 from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles
@@ -46,6 +46,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
+        importAcquisitionChoices = self._getAcquisitionImportChoices()
 
         form.addParam('importCoordinates', PointerParam,
                       pointerClass='SetOfCoordinates3D',
@@ -56,41 +57,46 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
         form.addSection(label='Acquisition Info')
 
+        form.addParam('importAcquisitionFrom', EnumParam,
+                      choices=importAcquisitionChoices, default=self._getDefaultChoice(),
+                      label='Import from',
+                      help='Select the type of import.')
+
         form.addParam('acquisitionData', PathParam,
                       label="Acquisition parameters file",
                       help="File with the acquisition paramenters for every \n"
                            "subtomogram to import.",
-                      condition="importFrom == 1")
+                      condition="importAcquisitionFrom == 1")
 
         form.addParam('acquisitionAngleMax', FloatParam,
                       allowsNull=True,
                       default=90,
                       label='Acquisition angle max',
-                      condition="importFrom == 0",
+                      condition="importAcquisitionFrom == 0",
                       help='Enter the positive limit of the acquisition angle')
 
         form.addParam('acquisitionAngleMin', FloatParam,
                       allowsNull=True,
                       default=-90,
-                      condition="importFrom == 0",
+                      condition="importAcquisitionFrom == 0",
                       label='Acquisition angle min',
                       help='Enter the negative limit of the acquisition angle')
 
         form.addParam('step', FloatParam,
                       allowsNull=True,
-                      condition="importFrom == 0",
+                      condition="importAcquisitionFrom == 0",
                       label='Step',
                       help='Enter the step size for the import')
 
         form.addParam('angleAxis1', FloatParam,
                       allowsNull=True,
-                      condition="importFrom == 0",
+                      condition="importAcquisitionFrom == 0",
                       label='Angle axis 1',
                       help='Enter the angle axis 1')
 
         form.addParam('angleAxis2', FloatParam,
                       allowsNull=True,
-                      condition="importFrom == 0",
+                      condition="importAcquisitionFrom == 0",
                       label='Angle Axis 2',
                       help='Enter the angle axis 2')
 
@@ -100,14 +106,22 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
+        return ['ema2']
+
+    def _getAcquisitionImportChoices(self):
         return ['Manual', 'From file']
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
                                  self.getPattern(),
                                  self.samplingRate.get(),
+                                 self.importAcquisitionFrom.get(),
                                  self.acquisitionAngleMax.get(),
-                                 self.acquistionAngleMin.get())
+                                 self.acquisitionAngleMin.get(),
+                                 self.step.get(),
+                                 self.angleAxis1.get(),
+                                 self.angleAxis2.get(),
+                                 self.acquisitionData.get())
 
     # --------------------------- STEPS functions -----------------------------
 
@@ -115,11 +129,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
             self,
             pattern,
             samplingRate,
+            importAcquisitionFrom,
             acquisitionAngleMax,
             acquisitionAngleMin,
             step,
-            axisAngle1,
-            axisAngle2,
+            angleAxis1,
+            angleAxis2,
             acquisitionDataPath,
     ):
         """ Copy images matching the filename pattern
@@ -132,25 +147,27 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         subtomo.setSamplingRate(samplingRate)
 
         imgh = ImageHandler()
-        acquisitionParams = {}
+
         subtomoSet = self._createSetOfSubTomograms()
         subtomoSet.setSamplingRate(samplingRate)
-        if ProtTomoImportFiles.importFrom.get() == 1:
+
+        if importAcquisitionFrom == 1:
             acquisitionParams = self._parseAcquisitionData(acquisitionDataPath)
 
         for fileName, fileId in self.iterFiles():
-            if ProtTomoImportFiles.importFrom.get() == 1:
+            onlyName = fileName.split('/')[-1]
+            if importAcquisitionFrom == 0:
                 subtomo.setAcquisitionAngleMax(acquisitionAngleMax)
                 subtomo.setAcquisitionAngleMin(acquisitionAngleMin)
                 subtomo.setStep(step)
-                subtomo.setAxisAngle1(axisAngle1)
-                subtomo.setAxisAngles2(axisAngle2)
+                subtomo.setAngleAxis1(angleAxis1)
+                subtomo.setAngleAxis2(angleAxis2)
             else:
-                subtomo.setAcquisitionAngleMin(acquisitionParams[fileName]['acquisitionAngleMin'])
-                subtomo.setAcquisitionAngleMax(acquisitionParams[fileName]['acquisitionAngleMax'])
-                subtomo.setStep(acquisitionParams[fileName]['step'])
-                subtomo.setAngleAxis1(acquisitionParams[fileName]['angleAxis1'])
-                subtomo.setAngleAxis2(acquisitionParams[fileName]['angleAxis2'])
+                subtomo.setAcquisitionAngleMin(acquisitionParams[onlyName]['acquisitionAngleMin'])
+                subtomo.setAcquisitionAngleMax(acquisitionParams[onlyName]['acquisitionAngleMax'])
+                subtomo.setStep(acquisitionParams[onlyName]['step'])
+                subtomo.setAngleAxis1(acquisitionParams[onlyName]['angleAxis1'])
+                subtomo.setAngleAxis2(acquisitionParams[onlyName]['angleAxis2'])
 
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
@@ -211,6 +228,11 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
             summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
                            self.samplingRate.get())
+            summary.append(u"Acquisition angle max: *%0.2f" % self.acquisitionAngleMax.get())
+            summary.append(u"Acquisition angle min: *%0.2f" % self.acquisitionAngleMin.get())
+            # summary.append(u"Step: *%0.2d" % self.step.get())
+            summary.append(u"Angle axis 1: *%0.2f" % self.angleAxis1.get())
+            summary.append(u"Angle axis 2: *%0.2f" % self.angleAxis2.get())
         return summary
 
     def _methods(self):
@@ -234,7 +256,11 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         parameters = {}
         for l in lines:
             words = l.split()
-            d = {words[0]: {'acquisitionAngleMin': words[1], 'acquisitionAngleMax': words[2], 'step': words[3],
-                            'angleAxis1': words[4], 'angleAxis2': words[5]}}
-            parameters.update(d)
-        return params
+            parameters.update({words[0]: {
+                'acquisitionAngleMin': float(words[1]),
+                'acquisitionAngleMax': float(words[2]),
+                'step': int(words[3]),
+                'angleAxis1': float(words[4]),
+                'angleAxis2': float(words[5])
+            }})
+        return parameters
