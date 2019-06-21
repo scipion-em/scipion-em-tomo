@@ -70,6 +70,13 @@ class ProtTomoBase:
         return self.__createSet(tomo.objects.SetOfSubTomograms,
                                 'subtomograms%s.sqlite', suffix)
 
+    def _createSetOfClassesSubTomograms(self, subTomograms, suffix=''):
+        classes = self.__createSet(pwem.SetOfClasses3D,
+                                   'classes3D%s.sqlite', suffix)
+        classes.setImages(subTomograms)
+
+        return classes
+
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
         For example: output3DCoordinates7.
