@@ -173,7 +173,6 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
     def _validate(self):
         pass
 
-
-
-
-
+class ProtTomoSubtomogramAveraging(pwem.EMProtocol, ProtTomoBase):
+    """ Base class for subtomogram averaging protocols. """
+    pass
