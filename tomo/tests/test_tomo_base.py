@@ -33,6 +33,7 @@ from pyworkflow.em import Domain, CTFModel
 from tomo.tests import DataSet
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
+import inspect
 
 
 class TestTomoBase(BaseTest):
@@ -231,6 +232,8 @@ class TestTomoImportTomograms(BaseTest):
                  ProtImportTomograms,
              filesPath=self.tomogram,
              filesPattern='',
+             acquisitionAngleMax=40,
+             acquisitionAngleMin=-40,
              samplingRate=1.35)
          self.launchProtocol(protImport)
          return protImport
@@ -246,8 +249,9 @@ class TestTomoImportTomograms(BaseTest):
          self.assertIsNotNone(protImport.outputTomogram.getYDim() == 1024,
                              "There was a problem with Import Tomograms protocol")
 
+         self.assertTrue(protImport.outputTomogram.getAcquisitionAngleMax() == 40, "There was a problem with the aquisition angle max")
+         self.assertTrue(protImport.outputTomogram.getAcquisitionAngleMin() == -40, "There was a problem with the aquisition angle min")
 
-         return protImport
 
 
 class TestTomoImportSubTomograms(BaseTest):
