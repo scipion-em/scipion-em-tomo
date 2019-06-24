@@ -224,8 +224,9 @@ class ProtImportTomograms(ProtTomoImportFiles):
         if self._hasOutput():
             summary.append("%s imported from:\n%s"
                            % (self._getTomMessage(), self.getPattern()))
-            summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-                           self.samplingRate.get())
+
+            if self.samplingRate.get():
+                summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
 
             if self.hasAttribute('outputTomogram'):
                 outputTomograms = [getattr(self, 'outputTomogram')]
@@ -236,9 +237,12 @@ class ProtImportTomograms(ProtTomoImportFiles):
                 summary.append(u"File %d" % i)
                 summary.append(u"Acquisition angle max: *%0.2f*" % outputTomogram.getAcquisitionAngleMax())
                 summary.append(u"Acquisition angle min: *%0.2f*" % outputTomogram.getAcquisitionAngleMin())
-                summary.append(u"Step: *%d*" % outputTomogram.getStep())
-                summary.append(u"Angle axis 1: *%0.2f*" % outputTomogram.getAngleAxis1())
-                summary.append(u"Angle axis 2: *%0.2f*" % outputTomogram.getAngleAxis2())
+                if outputTomogram.getStep():
+                    summary.append(u"Step: *%d*" % outputTomogram.getStep())
+                if outputTomogram.getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % outputTomogram.getAngleAxis1())
+                if outputTomogram.getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % outputTomogram.getAngleAxis2())
                 i += 1
 
         return summary

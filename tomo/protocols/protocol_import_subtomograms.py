@@ -232,8 +232,9 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
             summary.append("%s imported from:\n%s"
                            % (self._getSubTomMessage(), self.getPattern()))
 
-            summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-                           self.samplingRate.get())
+            if self.samplingRate.get():
+                summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
+                               self.samplingRate.get())
             if self.hasAttribute('outputSubTomogram'):
                 outputSubTomograms = [getattr(self, 'outputSubTomogram')]
             else:
@@ -243,9 +244,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
                 summary.append(u"File %d" % i)
                 summary.append(u"Acquisition angle max: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMax())
                 summary.append(u"Acquisition angle min: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMin())
-                summary.append(u"Step: *%d*" % outputSubTomogram.getStep())
-                summary.append(u"Angle axis 1: *%0.2f*" % outputSubTomogram.getAngleAxis1())
-                summary.append(u"Angle axis 2: *%0.2f*" % outputSubTomogram.getAngleAxis2())
+                if outputSubTomogram.getStep():
+                    summary.append(u"Step: *%d*" % outputSubTomogram.getStep())
+                if outputSubTomogram.getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % outputSubTomogram.getAngleAxis1())
+                if outputSubTomogram.getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % outputSubTomogram.getAngleAxis2())
                 i += 1
 
         return summary
@@ -254,7 +258,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         methods = []
         if self._hasOutput():
             methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getSubTomMessage(), self.samplingRate.get()),)
+                           (self._getSubTomMessage(), self.samplingRate.get()))
         return methods
 
     def _getVolumeFileName(self, fileName, extension=None):
