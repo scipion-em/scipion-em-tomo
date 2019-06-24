@@ -232,18 +232,28 @@ class ProtImportTomograms(ProtTomoImportFiles):
                 outputTomograms = [getattr(self, 'outputTomogram')]
             else:
                 outputTomograms = getattr(self, 'outputTomograms')
-            i = 1
-            for outputTomogram in outputTomograms:
-                summary.append(u"File %d" % i)
-                summary.append(u"Acquisition angle max: *%0.2f*" % outputTomogram.getAcquisitionAngleMax())
-                summary.append(u"Acquisition angle min: *%0.2f*" % outputTomogram.getAcquisitionAngleMin())
-                if outputTomogram.getStep():
-                    summary.append(u"Step: *%d*" % outputTomogram.getStep())
-                if outputTomogram.getAngleAxis1():
-                    summary.append(u"Angle axis 1: *%0.2f*" % outputTomogram.getAngleAxis1())
-                if outputTomogram.getAngleAxis2():
-                    summary.append(u"Angle axis 2: *%0.2f*" % outputTomogram.getAngleAxis2())
-                i += 1
+            if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
+                summary.append(u"Acquisition angle max: *%0.2f*" % self.acquisitionAngleMax.get())
+                summary.append(u"Acquisition angle min: *%0.2f*" % self.acquisitionAngleMin.get())
+                if self.step.get():
+                    summary.append(u"Step: *%d*" % self.step.get())
+                if self.angleAxis1.get():
+                    summary.append(u"Angle axis 1: *%0.2f*" % self.angleAxis1.get())
+                if self.angleAxis2.get():
+                    summary.append(u"Angle axis 2: *%0.2f*" % self.angleAxis2.get())
+            else:
+                i = 1
+                for outputTomogram in outputTomograms:
+                    summary.append(u"File %d" % i)
+                    summary.append(u"Acquisition angle max: *%0.2f*" % outputTomogram.getAcquisitionAngleMax())
+                    summary.append(u"Acquisition angle min: *%0.2f*" % outputTomogram.getAcquisitionAngleMin())
+                    if outputTomogram.getStep():
+                        summary.append(u"Step: *%d*" % outputTomogram.getStep())
+                    if outputTomogram.getAngleAxis1():
+                        summary.append(u"Angle axis 1: *%0.2f*" % outputTomogram.getAngleAxis1())
+                    if outputTomogram.getAngleAxis2():
+                        summary.append(u"Angle axis 2: *%0.2f*" % outputTomogram.getAngleAxis2())
+                    i += 1
 
         return summary
 
