@@ -242,9 +242,8 @@ class ProtImportTomograms(ProtTomoImportFiles):
                 if self.angleAxis2.get():
                     summary.append(u"Angle axis 2: *%0.2f*" % self.angleAxis2.get())
             else:
-                i = 1
-                for outputTomogram in outputTomograms:
-                    summary.append(u"File %d" % i)
+                for key, outputTomogram in enumerate(outputTomograms, 1):
+                    summary.append(u"File %d" % key)
                     summary.append(u"Acquisition angle max: *%0.2f*" % outputTomogram.getAcquisitionAngleMax())
                     summary.append(u"Acquisition angle min: *%0.2f*" % outputTomogram.getAcquisitionAngleMin())
                     if outputTomogram.getStep():
@@ -253,7 +252,6 @@ class ProtImportTomograms(ProtTomoImportFiles):
                         summary.append(u"Angle axis 1: *%0.2f*" % outputTomogram.getAngleAxis1())
                     if outputTomogram.getAngleAxis2():
                         summary.append(u"Angle axis 2: *%0.2f*" % outputTomogram.getAngleAxis2())
-                    i += 1
 
         return summary
 
