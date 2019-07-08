@@ -252,25 +252,13 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         self._darkFile.set(other.getDark())
         #self._firstFramesRange.set(other.getFramesRange())
 
-
-class Tomogram(data.Volume):
+class TomoAcquisition:
     def __init__(self, **kwargs):
-        data.Volume.__init__(self, **kwargs)
-        self._tsId = pwobj.String(kwargs.get('tsId', None))
         self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
         self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
         self._step = pwobj.Integer(None)
         self._angleAxis1 = pwobj.Float(None)
         self._angleAxis2 = pwobj.Float(None)
-
-    def getTsId(self):
-        """ Get unique TiltSeries ID, usually retrieved from the
-        file pattern provided by the user at the import time.
-        """
-        return self._tsId.get()
-
-    def setTsId(self, value):
-        self._tsId.set(value)
 
     def getAcquisitionAngleMax(self):
         return self._acquisitionAngleMax.get()
@@ -280,7 +268,7 @@ class Tomogram(data.Volume):
 
     def setAcquisitionAngleMax(self, value):
         self._acquisitionAngleMax.set(value)
-    
+
     def setAcquisitionAngleMin(self, value):
         self._acquisitionAngleMin.set(value)
 
@@ -290,18 +278,32 @@ class Tomogram(data.Volume):
     def setStep(self, value):
         return self._step.set(value)
 
-    def getAngleAxis1 (self):
+    def getAngleAxis1(self):
         return self._angleAxis1.get()
 
-    def setAngleAxis1 (self, value):
+    def setAngleAxis1(self, value):
         self._angleAxis1.set(value)
 
-    def getAngleAxis2 (self):
+    def getAngleAxis2(self):
         return self._angleAxis2.get()
 
     def setAngleAxis2(self, value):
         self._angleAxis2.set(value)
 
+class Tomogram(data.Volume, TomoAcquisition):
+    def __init__(self, **kwargs):
+        data.Volume.__init__(self, **kwargs)
+        TomoAcquisition.__init__(self, **kwargs)
+        self._tsId = pwobj.String(kwargs.get('tsId', None))
+
+    def getTsId(self):
+        """ Get unique TiltSeries ID, usually retrieved from the
+        file pattern provided by the user at the import time.
+        """
+        return self._tsId.get()
+
+    def setTsId(self, value):
+        self._tsId.set(value)
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
@@ -520,44 +522,10 @@ class SetOfCoordinates3D(data.EMSet):
 
         return s
 
-class SubTomogram(data.Volume):
+class SubTomogram(data.Volume, TomoAcquisition):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
-        self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
-        self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
-        self._step = pwobj.Integer(None)
-        self._angleAxis1 = pwobj.Float(None)
-        self._angleAxis2 = pwobj.Float(None)
-
-    def getAcquisitionAngleMax(self):
-        return self._acquisitionAngleMax.get()
-
-    def getAcquisitionAngleMin(self):
-        return self._acquisitionAngleMin.get()
-
-    def setAcquisitionAngleMax(self, value):
-        self._acquisitionAngleMax.set(value)
-    
-    def setAcquisitionAngleMin(self, value):
-        self._acquisitionAngleMin.set(value)
-
-    def getStep(self):
-        return self._step.get()
-
-    def setStep(self, value):
-        return self._step.set(value)
-
-    def getAngleAxis1 (self):
-        return self._angleAxis1.get()
-
-    def setAngleAxis1 (self, value):
-        self._angleAxis1.set(value)
-
-    def getAngleAxis2 (self):
-        return self._angleAxis2.get()
-
-    def setAngleAxis2(self, value):
-        self._angleAxis2.set(value)
+        TomoAcquisition.__init__(self, **kwargs)
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
@@ -579,3 +547,4 @@ class SetOfSubTomograms(data.SetOfVolumes):
         this set of particles.
          """
         self._coordsPointer.set(coordinates)
+
