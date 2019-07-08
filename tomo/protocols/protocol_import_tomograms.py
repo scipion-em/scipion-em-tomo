@@ -62,8 +62,15 @@ class ProtImportTomograms(ProtTomoImportFiles):
 
         form.addParam('acquisitionData', PathParam,
                       label="Acquisition parameters file",
-                      help="File with the acquisition paramenters for every \n"
-                            "tomogram to import.",
+                      help="File with the acquisition paramenters for every "
+                            "tomogram to import. File must be in .txt format. The file must contain a row per file to be imported "
+                           "and have the following parameters in order: \n"
+                           "\n"
+                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step AngleAxis1 AngleAxis2' \n"
+                           "\n"
+                           "An example would be: \n"
+                           "tomo1.em -40 40 3 25 30 \n"
+                           "tomo2.em -45 50 2 15 15 \n",
                       condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
 
         form.addParam('acquisitionAngleMax', FloatParam,
