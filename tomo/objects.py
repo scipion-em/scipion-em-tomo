@@ -469,8 +469,8 @@ class SetOfCoordinates3D(data.EMSet):
         pass
 
     def iterCoordinates(self, volume=None):
-        """ Iterate over the coordinates associated with a micrograph.
-        If micrograph=None, the iteration is performed over the whole
+        """ Iterate over the coordinates associated with a tomogram.
+        If tomogram=None, the iteration is performed over the whole
         set of coordinates.
         """
         if volume is None:
@@ -526,6 +526,16 @@ class SubTomogram(data.Volume, TomoAcquisition):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         TomoAcquisition.__init__(self, **kwargs)
+        self._coordinate = None
+
+    def hasCoordinate3D(self):
+        return self._coordinate is not None
+
+    def setCoordinate3D(self, coordinate):
+        self._coordinate = coordinate
+
+    def getCoordinate3D(self):
+        return self._coordinate
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
