@@ -32,8 +32,8 @@ from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 
-# from .move_to_plugins.protocol_ts_motioncor import ProtTsMotionCorr
-# from .move_to_plugins.protocol_ts_ctffind import ProtTsCtffind
-# from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
-# from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
-# from .move_to_plugins.protocol_imod_etomo import ProtImodEtomo
+from .move_to_plugins.protocol_ts_motioncor import ProtTsMotionCorr
+from .move_to_plugins.protocol_ts_ctffind import ProtTsCtffind
+from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
+from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
+from .move_to_plugins.protocol_imod_etomo import ProtImodEtomo

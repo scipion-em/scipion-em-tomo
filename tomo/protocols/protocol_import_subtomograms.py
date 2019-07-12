@@ -29,26 +29,23 @@ from os.path import abspath, basename
 
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from pyworkflow.protocol.params import PointerParam, FloatParam, PathParam, EnumParam
+from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils.path import createAbsLink
 
-from .protocol_base import ProtTomoImportFiles
+from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from tomo.objects import SubTomogram
 
 
-class ProtImportSubTomograms(ProtTomoImportFiles):
+class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfSubTomograms'
     _label = 'import subtomograms'
-    MANUAL_IMPORT = 0
-    FROM_FILE_IMPORT = 1
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
-        importAcquisitionChoices = self._getAcquisitionImportChoices()
 
         form.addParam('importCoordinates', PointerParam,
                       pointerClass='SetOfCoordinates3D',
@@ -57,50 +54,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
                       help='Select the coordinates for which the '
                             'subtomograms were extracted.')
 
-        form.addSection(label='Acquisition Info')
-
-        form.addParam('importAcquisitionFrom', EnumParam,
-                      choices=importAcquisitionChoices, default=self._getDefaultChoice(),
-                      label='Import from',
-                      help='Select the type of import.')
-
-        form.addParam('acquisitionData', PathParam,
-                      label="Acquisition parameters file",
-                      help="File with the acquisition paramenters for every \n"
-                           "subtomogram to import.",
-                      condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
-
-        form.addParam('acquisitionAngleMax', FloatParam,
-                      allowsNull=True,
-                      default=90,
-                      label='Acquisition angle max',
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      help='Enter the positive limit of the acquisition angle')
-
-        form.addParam('acquisitionAngleMin', FloatParam,
-                      allowsNull=True,
-                      default=-90,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Acquisition angle min',
-                      help='Enter the negative limit of the acquisition angle')
-
-        form.addParam('step', FloatParam,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Step',
-                      help='Enter the step size for the import')
-
-        form.addParam('angleAxis1', FloatParam,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Angle axis 1',
-                      help='Enter the angle axis 1')
-
-        form.addParam('angleAxis2', FloatParam,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Angle Axis 2',
-                      help='Enter the angle axis 2')
+        ProtTomoImportAcquisition._defineParams(self, form)
 
 
     def _getImportChoices(self):
@@ -110,34 +64,18 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         """
         return ['eman2']
 
-    def _getAcquisitionImportChoices(self):
-        return ['Manual', 'From file']
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
                                  self.getPattern(),
-                                 self.samplingRate.get(),
-                                 self.importAcquisitionFrom.get(),
-                                 self.acquisitionAngleMax.get(),
-                                 self.acquisitionAngleMin.get(),
-                                 self.step.get(),
-                                 self.angleAxis1.get(),
-                                 self.angleAxis2.get(),
-                                 self.acquisitionData.get())
+                                 self.samplingRate.get())
 
     # --------------------------- STEPS functions -----------------------------
 
     def importSubTomogramsStep(
             self,
             pattern,
-            samplingRate,
-            importAcquisitionFrom,
-            acquisitionAngleMax,
-            acquisitionAngleMin,
-            step,
-            angleAxis1,
-            angleAxis2,
-            acquisitionDataPath,
+            samplingRate
     ):
         """ Copy images matching the filename pattern
         Register other parameters.
@@ -153,27 +91,14 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         subtomoSet = self._createSetOfSubTomograms()
         subtomoSet.setSamplingRate(samplingRate)
 
-        if importAcquisitionFrom == self.FROM_FILE_IMPORT:
-            acquisitionParams = self._parseAcquisitionData(acquisitionDataPath)
+        self.coordDict = []
+        for coord3DSet in self.importCoordinates.get().iterCoordinates():
+            self.coordDict.append(coord3DSet.clone())
+        subtomoSet.setCoordinates3D(self.importCoordinates)
 
         for fileName, fileId in self.iterFiles():
-            onlyName = fileName.split('/')[-1]
 
-            if importAcquisitionFrom == self.MANUAL_IMPORT:
-                subtomo.setAcquisitionAngleMax(acquisitionAngleMax)
-                subtomo.setAcquisitionAngleMin(acquisitionAngleMin)
-                subtomo.setStep(step)
-                subtomo.setAngleAxis1(angleAxis1)
-                subtomo.setAngleAxis2(angleAxis2)
-            else:
-                try:
-                    subtomo.setAcquisitionAngleMin(acquisitionParams[onlyName]['acquisitionAngleMin'])
-                    subtomo.setAcquisitionAngleMax(acquisitionParams[onlyName]['acquisitionAngleMax'])
-                    subtomo.setStep(acquisitionParams[onlyName]['step'])
-                    subtomo.setAngleAxis1(acquisitionParams[onlyName]['angleAxis1'])
-                    subtomo.setAngleAxis2(acquisitionParams[onlyName]['angleAxis2'])
-                except:
-                    raise Exception('Acqusition data file missing parameters')
+            self._extractAcquisitionParameters(subtomo, fileName)
 
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
@@ -193,22 +118,23 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
             subtomo.setOrigin(origin)  # read origin from form
 
-
             newFileName = abspath(self._getVolumeFileName(fileName))
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
             createAbsLink(fileName, newFileName)
+
             if n == 1:
                 subtomo.cleanObjId()
                 subtomo.setFileName(newFileName)
+                subtomo.setCoordinate3D(self.coordDict.pop(0))
                 subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
+                    subtomo.setCoordinate3D(self.coordDict.pop(0))
                     subtomoSet.append(subtomo)
-                subtomoSet.setCoordinates3D(self.importCoordinates)
 
         if subtomoSet.getSize() > 1:
             self._defineOutputs(outputSubTomograms=subtomoSet)
@@ -232,21 +158,15 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
             summary.append("%s imported from:\n%s"
                            % (self._getSubTomMessage(), self.getPattern()))
 
-            summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-                           self.samplingRate.get())
+            if self.samplingRate.get():
+                summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
+                               self.samplingRate.get())
             if self.hasAttribute('outputSubTomogram'):
                 outputSubTomograms = [getattr(self, 'outputSubTomogram')]
             else:
                 outputSubTomograms = getattr(self, 'outputSubTomograms')
-            i = 1
-            for outputSubTomogram in outputSubTomograms:
-                summary.append(u"File %d" % i)
-                summary.append(u"Acquisition angle max: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMax())
-                summary.append(u"Acquisition angle min: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMin())
-                summary.append(u"Step: *%d*" % outputSubTomogram.getStep())
-                summary.append(u"Angle axis 1: *%0.2f*" % outputSubTomogram.getAngleAxis1())
-                summary.append(u"Angle axis 2: *%0.2f*" % outputSubTomogram.getAngleAxis2())
-                i += 1
+
+            ProtTomoImportAcquisition._summary(self, summary, outputSubTomograms)
 
         return summary
 
@@ -254,7 +174,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
         methods = []
         if self._hasOutput():
             methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getSubTomMessage(), self.samplingRate.get()),)
+                           (self._getSubTomMessage(), self.samplingRate.get()))
         return methods
 
     def _getVolumeFileName(self, fileName, extension=None):
@@ -265,20 +185,4 @@ class ProtImportSubTomograms(ProtTomoImportFiles):
 
         return self._getExtraPath(baseFileName)
 
-    def _parseAcquisitionData(self, pathToData):
-        params = open(pathToData, "r")
-        lines = params.readlines()
-        parameters = {}
-        for l in lines:
-            words = l.split()
-            try:
-                parameters.update({words[0]: {
-                    'acquisitionAngleMin': float(words[1]),
-                    'acquisitionAngleMax': float(words[2]),
-                    'step': int(words[3]),
-                    'angleAxis1': float(words[4]),
-                    'angleAxis2': float(words[5])
-                }})
-            except:
-                raise Exception('Wrong acquisition data file format')
-        return parameters
+

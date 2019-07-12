@@ -26,7 +26,7 @@
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
-from pyworkflow.protocol.params import PointerParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, PathParam, FloatParam
 from pyworkflow.mapper.sqlite_db import SqliteDb
 from pyworkflow.utils.properties import Message
 
@@ -183,3 +183,128 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
 class ProtTomoSubtomogramAveraging(pwem.EMProtocol, ProtTomoBase):
     """ Base class for subtomogram averaging protocols. """
     pass
+
+class ProtTomoImportAcquisition:
+
+    MANUAL_IMPORT = 0
+    FROM_FILE_IMPORT = 1
+
+    def _defineParams(self, form):
+
+        """ Override to add options related to acquisition info.
+        """
+
+        importAcquisitionChoices = ['Manual', 'From file']
+
+        form.addSection(label='Acquisition Info')
+
+        form.addParam('importAcquisitionFrom', EnumParam,
+                      choices=importAcquisitionChoices, default=self._getDefaultChoice(),
+                      label='Import from',
+                      help='Select the type of import.')
+
+        form.addParam('acquisitionData', PathParam,
+                      label="Acquisition parameters file",
+                      help="File with the acquisition parameters for every "
+                           "subtomogram to import. File must be in plain format. The file must contain a row per file to be imported "
+                           "and have the following parameters in order: \n"
+                           "\n"
+                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step AngleAxis1 AngleAxis2' \n"
+                           "\n"
+                           "An example would be: \n"
+                           "subtomo1.em -40 40 3 25 30 \n"
+                           "subtomo2.em -45 50 2 15 15 \n",
+                      condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
+
+        form.addParam('acquisitionAngleMax', FloatParam,
+                      allowsNull=True,
+                      default=90,
+                      label='Acquisition angle max',
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help='Enter the positive limit of the acquisition angle')
+
+        form.addParam('acquisitionAngleMin', FloatParam,
+                      allowsNull=True,
+                      default=-90,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Acquisition angle min',
+                      help='Enter the negative limit of the acquisition angle')
+
+        form.addParam('step', FloatParam,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Step',
+                      help='Enter the step size for the import')
+
+        form.addParam('angleAxis1', FloatParam,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Angle axis 1',
+                      help='Enter the angle axis 1')
+
+        form.addParam('angleAxis2', FloatParam,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Angle Axis 2',
+                      help='Enter the angle axis 2')
+
+    def _parseAcquisitionData(self, pathToData):
+        params = open(pathToData, "r")
+        lines = params.readlines()
+        parameters = {}
+        for l in lines:
+            words = l.split()
+            try:
+                parameters.update({words[0]: {
+                    'acquisitionAngleMin': float(words[1]),
+                    'acquisitionAngleMax': float(words[2]),
+                    'step': int(words[3]),
+                    'angleAxis1': float(words[4]),
+                    'angleAxis2': float(words[5])
+                }})
+            except:
+                raise Exception('Wrong acquisition data file format')
+        return parameters
+
+    def _extractAcquisitionParameters(self, object, fileName):
+
+        if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
+            object.setAcquisitionAngleMax(self.acquisitionAngleMax.get())
+            object.setAcquisitionAngleMin(self.acquisitionAngleMin.get())
+            object.setStep(self.step.get())
+            object.setAngleAxis1(self.angleAxis1.get())
+            object.setAngleAxis2(self.angleAxis2.get())
+        else:
+            try:
+                onlyName = fileName.split('/')[-1]
+                acquisitionParamsFile = self._parseAcquisitionData(self.acquisitionData.get())
+                acquisitionParams = acquisitionParamsFile[onlyName]
+                object.setAcquisitionAngleMin(acquisitionParams['acquisitionAngleMin'])
+                object.setAcquisitionAngleMax(acquisitionParams['acquisitionAngleMax'])
+                object.setStep(acquisitionParams['step'])
+                object.setAngleAxis1(acquisitionParams['angleAxis1'])
+                object.setAngleAxis2(acquisitionParams['angleAxis2'])
+            except:
+                raise Exception('Acquisition data file missing parameters')
+
+    def _summary(self, summary, object):
+        if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
+            summary.append(u"Acquisition angle max: *%0.2f*" % self.acquisitionAngleMax.get())
+            summary.append(u"Acquisition angle min: *%0.2f*" % self.acquisitionAngleMin.get())
+            if self.step.get():
+                summary.append(u"Step: *%d*" % self.step.get())
+            if self.angleAxis1.get():
+                summary.append(u"Angle axis 1: *%0.2f*" % self.angleAxis1.get())
+            if self.angleAxis2.get():
+                summary.append(u"Angle axis 2: *%0.2f*" % self.angleAxis2.get())
+        else:
+            for key, outputSubTomogram in enumerate(object, 1):
+                summary.append(u"File %d" % key)
+                summary.append(u"Acquisition angle max: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMax())
+                summary.append(u"Acquisition angle min: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMin())
+                if outputSubTomogram.getStep():
+                    summary.append(u"Step: *%d*" % outputSubTomogram.getStep())
+                if outputSubTomogram.getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % outputSubTomogram.getAngleAxis1())
+                if outputSubTomogram.getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % outputSubTomogram.getAngleAxis2())

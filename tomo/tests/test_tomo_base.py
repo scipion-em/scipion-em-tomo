@@ -33,7 +33,6 @@ from pyworkflow.em import Domain, CTFModel
 from tomo.tests import DataSet
 from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
-import inspect
 
 
 class TestTomoBase(BaseTest):
