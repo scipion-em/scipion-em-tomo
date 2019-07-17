@@ -90,20 +90,17 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return (self.hasAttribute('outputSubTomogram')
-                or self.hasAttribute('outputSubTomograms'))
+        return self.hasAttribute('outputCoordinates')
 
-    def _getSubTomMessage(self):
-        if self.hasAttribute('outputSubTomogram'):
-            return "SubTomogram %s" % self.getObjectTag('outputSubTomogram')
-        else:
-            return "SubTomograms %s" % self.getObjectTag('outputSubTomograms')
+
+    def _getCoordsMessage(self):
+        return "Coordinates %s" % self.getObjectTag('outputCoordinates')
 
     def _summary(self):
         summary = []
         if self._hasOutput():
             summary.append("%s imported from:\n%s"
-                           % (self._getSubTomMessage(), self.getPattern()))
+                           % (self._getCoordsMessage(), self.getPattern()))
 
             summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
                            self.samplingRate.get())
@@ -113,7 +110,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         methods = []
         if self._hasOutput():
             methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getSubTomMessage(), self.samplingRate.get()),)
+                           (self._getCoordsMessage(), self.samplingRate.get()),)
         return methods
 
     def _getVolumeFileName(self, fileName, extension=None):
