@@ -96,9 +96,9 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             self.coordDict.append(coord3DSet.clone())
         subtomoSet.setCoordinates3D(self.importCoordinates)
 
-        for fileName, fileId in self.iterFiles():
+        self._parseAcquisitionData()
 
-            self._extractAcquisitionParameters(subtomo, fileName)
+        for fileName, fileId in self.iterFiles():
 
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
@@ -128,12 +128,14 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 subtomo.cleanObjId()
                 subtomo.setFileName(newFileName)
                 subtomo.setCoordinate3D(self.coordDict.pop(0))
+                subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
                     subtomo.setCoordinate3D(self.coordDict.pop(0))
+                    subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     subtomoSet.append(subtomo)
 
         if subtomoSet.getSize() > 1:

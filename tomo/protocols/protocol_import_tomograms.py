@@ -46,9 +46,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
-
         ProtTomoImportAcquisition._defineParams(self, form)
-
 
     def _getImportChoices(self):
         """ Return a list of possible choices
@@ -82,9 +80,11 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoSet = self._createSetOfTomograms()
         tomoSet.setSamplingRate(samplingRate)
 
+        self._parseAcquisitionData()
+
         for fileName, fileId in self.iterFiles():
 
-            self._extractAcquisitionParameters(tomo, fileName)
+
 
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
@@ -112,17 +112,28 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             if n == 1:
                 tomo.cleanObjId()
                 tomo.setFileName(newFileName)
+                tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+                self.debug("aki")
+                print(tomo.getAcquisition()._angleMax)
+                print(tomo.getAcquisition()._angleMax.get())
                 tomoSet.append(tomo)
             else:
                 for index in range(1, n+1):
                     tomo.cleanObjId()
                     tomo.setLocation(index, newFileName)
+                    tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+                    self.debug("aki")
+                    print(tomo.getAcquisition()._angleMax)
+                    print(tomo.getAcquisition()._angleMax.get())
                     tomoSet.append(tomo)
 
         if tomoSet.getSize() > 1:
             self._defineOutputs(outputTomograms=tomoSet)
         else:
             self._defineOutputs(outputTomogram=tomo)
+            print('hey')
+            print(tomo.getAcquisition().getAngleMax())
+
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
@@ -136,20 +147,25 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             return "Tomograms %s" % self.getObjectTag('outputTomograms')
 
     def _summary(self):
-        summary = []
-        if self._hasOutput():
-            summary.append("%s imported from:\n%s"
-                           % (self._getTomMessage(), self.getPattern()))
 
-            if self.samplingRate.get():
-                summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
+        try:
+            summary = []
+            if self._hasOutput():
+                summary.append("%s imported from:\n%s"
+                               % (self._getTomMessage(), self.getPattern()))
 
-            if self.hasAttribute('outputTomogram'):
-                outputTomograms = [getattr(self, 'outputTomogram')]
-            else:
-                outputTomograms = getattr(self, 'outputTomograms')
+                if self.samplingRate.get():
+                    summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
 
-            ProtTomoImportAcquisition._summary(self, summary, outputTomograms)
+                if self.hasAttribute('outputTomogram'):
+                    outputTomograms = [getattr(self, 'outputTomogram')]
+                else:
+                    outputTomograms = getattr(self, 'outputTomograms')
+
+                ProtTomoImportAcquisition._summary(self, summary, outputTomograms)
+
+        except Exception as e:
+            print(e)
 
         return summary
 

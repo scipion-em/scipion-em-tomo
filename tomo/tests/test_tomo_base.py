@@ -248,8 +248,8 @@ class TestTomoImportTomograms(BaseTest):
          self.assertIsNotNone(protImport.outputTomogram.getYDim() == 1024,
                              "There was a problem with Import Tomograms protocol")
 
-         self.assertTrue(protImport.outputTomogram.getAcquisitionAngleMax() == 40, "There was a problem with the aquisition angle max")
-         self.assertTrue(protImport.outputTomogram.getAcquisitionAngleMin() == -40, "There was a problem with the aquisition angle min")
+         self.assertTrue(protImport.outputTomogram.getAcquisition().getAngleMax() == 40, "There was a problem with the aquisition angle max")
+         self.assertTrue(protImport.outputTomogram.getAcquisition().getAngleMin() == -40, "There was a problem with the aquisition angle min")
 
 
 
@@ -281,7 +281,7 @@ class TestTomoImportSubTomograms(BaseTest):
                                       filesPath=self.tomogram,
                                       filesPattern='',
                                       samplingRate=1.35,
-                                      importCoordinates=protImportCoordinates3d)
+                                      importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
         return protImport
 

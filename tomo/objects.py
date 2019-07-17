@@ -252,25 +252,26 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         self._darkFile.set(other.getDark())
         #self._firstFramesRange.set(other.getFramesRange())
 
-class TomoAcquisition:
+class TomoAcquisition(data.EMObject):
     def __init__(self, **kwargs):
-        self._acquisitionAngleMin = pwobj.Float(kwargs.get('acquisitionAngleMin', None))
-        self._acquisitionAngleMax = pwobj.Float(kwargs.get('acquisitionAngleMax', None))
-        self._step = pwobj.Integer(None)
-        self._angleAxis1 = pwobj.Float(None)
-        self._angleAxis2 = pwobj.Float(None)
+        data.EMObject.__init__(self, **kwargs)
+        self._angleMin = pwobj.Float(kwargs.get('angleMin', None))
+        self._angleMax = pwobj.Float(kwargs.get('angleMax', None))
+        self._step = pwobj.Integer(kwargs.get('step', None))
+        self._angleAxis1 = pwobj.Float(kwargs.get('angleAxis1', None))
+        self._angleAxis2 = pwobj.Float(kwargs.get('angleAxis2', None))
 
-    def getAcquisitionAngleMax(self):
-        return self._acquisitionAngleMax.get()
+    def getAngleMax(self):
+        return self._angleMax.get()
 
-    def getAcquisitionAngleMin(self):
-        return self._acquisitionAngleMin.get()
+    def setAngleMax(self, value):
+        self._angleMax.set(value)
 
-    def setAcquisitionAngleMax(self, value):
-        self._acquisitionAngleMax.set(value)
+    def getAngleMin(self):
+        return self._angleMin.get()
 
-    def setAcquisitionAngleMin(self, value):
-        self._acquisitionAngleMin.set(value)
+    def setAngleMin(self, value):
+        self._angleMin.set(value)
 
     def getStep(self):
         return self._step.get()
@@ -290,10 +291,10 @@ class TomoAcquisition:
     def setAngleAxis2(self, value):
         self._angleAxis2.set(value)
 
-class Tomogram(data.Volume, TomoAcquisition):
+class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
-        TomoAcquisition.__init__(self, **kwargs)
+        self._acquisition = None
         self._tsId = pwobj.String(kwargs.get('tsId', None))
 
     def getTsId(self):
@@ -304,6 +305,15 @@ class Tomogram(data.Volume, TomoAcquisition):
 
     def setTsId(self, value):
         self._tsId.set(value)
+
+    def getAcquisition(self):
+        return self._acquisition
+
+    def setAcquisition(self, acquisition):
+        self._acquisition = acquisition
+
+    def hasAcquisition(self):
+        return self._acquisition.getAngleMin() is not None
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
@@ -522,10 +532,10 @@ class SetOfCoordinates3D(data.EMSet):
 
         return s
 
-class SubTomogram(data.Volume, TomoAcquisition):
+class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
-        TomoAcquisition.__init__(self, **kwargs)
+        self._acquisition = None
         self._coordinate = None
 
     def hasCoordinate3D(self):
@@ -536,6 +546,15 @@ class SubTomogram(data.Volume, TomoAcquisition):
 
     def getCoordinate3D(self):
         return self._coordinate
+
+    def getAcquisition(self):
+        return self._acquisition
+
+    def setAcquisition(self, acquisition):
+        self._acquisition = acquisition
+
+    def hasAcquisition(self):
+        return self._acquisition.getAngleMin() is not None
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
