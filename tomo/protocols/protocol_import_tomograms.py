@@ -113,27 +113,18 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 tomo.cleanObjId()
                 tomo.setFileName(newFileName)
                 tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-                self.debug("aki")
-                print(tomo.getAcquisition()._angleMax)
-                print(tomo.getAcquisition()._angleMax.get())
                 tomoSet.append(tomo)
             else:
                 for index in range(1, n+1):
                     tomo.cleanObjId()
                     tomo.setLocation(index, newFileName)
                     tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-                    self.debug("aki")
-                    print(tomo.getAcquisition()._angleMax)
-                    print(tomo.getAcquisition()._angleMax.get())
                     tomoSet.append(tomo)
 
         if tomoSet.getSize() > 1:
             self._defineOutputs(outputTomograms=tomoSet)
         else:
             self._defineOutputs(outputTomogram=tomo)
-            print('hey')
-            print(tomo.getAcquisition().getAngleMax())
-
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):

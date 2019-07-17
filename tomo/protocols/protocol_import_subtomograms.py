@@ -92,13 +92,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         subtomoSet.setSamplingRate(samplingRate)
 
         if self.importCoordinates.get():
-            self.coordDict = []
-            for coord3DSet in self.importCoordinates.get().iterCoordinates():
-                self.coordDict.append(coord3DSet.clone())
+            self.coords = []
+            for coord3D in self.importCoordinates.get().iterCoordinates():
+                self.coords.append(coord3D.clone())
             subtomoSet.setCoordinates3D(self.importCoordinates)
 
         self._parseAcquisitionData()
-
         for fileName, fileId in self.iterFiles():
 
             x, y, z, n = imgh.getDimensions(fileName)
@@ -128,17 +127,15 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             if n == 1:
                 subtomo.cleanObjId()
                 subtomo.setFileName(newFileName)
-                if self.hasAttribute('coordDict'):
-                    subtomo.setCoordinate3D(self.coordDict.pop(0))
                 subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+                self._setCoordinates3D(subtomo)
                 subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
-                    if self.hasAttribute('coordDict'):
-                        subtomo.setCoordinate3D(self.coordDict.pop(0))
                     subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+                    self._setCoordinates3D(subtomo)
                     subtomoSet.append(subtomo)
 
         if subtomoSet.getSize() > 1:
@@ -147,6 +144,13 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             self._defineOutputs(outputSubTomogram=subtomo)
 
     # --------------------------- INFO functions ------------------------------
+    def _setCoordinates3D(self, subtomo):
+        if self.importCoordinates.get():
+            if len(self.coords) < 1:
+                raise Exception("Coordinates 3D and subtomograms should have the same size")
+            else:
+                subtomo.setCoordinate3D(self.coords.pop(0))
+
     def _hasOutput(self):
         return (self.hasAttribute('outputSubTomogram')
                 or self.hasAttribute('outputSubTomograms'))
