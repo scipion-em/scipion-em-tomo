@@ -280,13 +280,14 @@ class ProtTomoImportAcquisition:
 
     def _summary(self, summary, setOfObject):
         for object in setOfObject:
-            summary.append(u"File %s" % self.getObjectTag(object))
-            summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
+            if object.hasAcquisition():
+                summary.append(u"File %s" % self.getObjectTag(object))
+                summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
 
-            summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
-            if object.getAcquisition().getStep():
-                summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
-            if object.getAcquisition().getAngleAxis1():
-                summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
-            if object.getAcquisition().getAngleAxis2():
-                summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
+                summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
+                if object.getAcquisition().getStep():
+                    summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
+                if object.getAcquisition().getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
+                if object.getAcquisition().getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
