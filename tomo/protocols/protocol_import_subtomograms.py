@@ -91,10 +91,11 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         subtomoSet = self._createSetOfSubTomograms()
         subtomoSet.setSamplingRate(samplingRate)
 
-        self.coordDict = []
-        for coord3DSet in self.importCoordinates.get().iterCoordinates():
-            self.coordDict.append(coord3DSet.clone())
-        subtomoSet.setCoordinates3D(self.importCoordinates)
+        if self.importCoordinates.get():
+            self.coordDict = []
+            for coord3DSet in self.importCoordinates.get().iterCoordinates():
+                self.coordDict.append(coord3DSet.clone())
+            subtomoSet.setCoordinates3D(self.importCoordinates)
 
         self._parseAcquisitionData()
 
@@ -127,14 +128,16 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             if n == 1:
                 subtomo.cleanObjId()
                 subtomo.setFileName(newFileName)
-                subtomo.setCoordinate3D(self.coordDict.pop(0))
+                if self.hasAttribute('coordDict'):
+                    subtomo.setCoordinate3D(self.coordDict.pop(0))
                 subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
-                    subtomo.setCoordinate3D(self.coordDict.pop(0))
+                    if self.hasAttribute('coordDict'):
+                        subtomo.setCoordinate3D(self.coordDict.pop(0))
                     subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     subtomoSet.append(subtomo)
 
