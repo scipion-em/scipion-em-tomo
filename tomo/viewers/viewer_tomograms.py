@@ -65,6 +65,15 @@ class ViewerProtImportTomograms(ProtocolViewer):
                            'a system of coordinates is shown'
                       )
 
+    def visualize(self, obj, **args):
+        if hasattr(self.protocol, 'outputTomogram'):
+            ProtocolViewer.visualize(self, obj, **args)
+        else:
+            views = self._showTomogramsSlices()
+            if views:
+                for v in views:
+                    v.show()
+
     def _getVisualizeDict(self):
         return {
             'displayTomo': self._showTomograms,
@@ -151,8 +160,8 @@ class ViewerProtImportTomograms(ProtocolViewer):
         # Write an sqlite with all tomograms selected for visualization.
         sampling, setOfObjects = self._createSetOfObjects()
 
-        if len(setOfObjects) == 1:
-            return [self.objectView(setOfObjects)]
+        view = self.objectView(setOfObjects)
+        view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
         return [self.objectView(setOfObjects)]
 

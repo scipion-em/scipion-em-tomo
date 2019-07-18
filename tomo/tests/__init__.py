@@ -24,3 +24,12 @@
 # *
 # **************************************************************************
 
+from pyworkflow.tests import DataSet
+
+DataSet(name='tomo-em', folder='tomo-em',
+        files={
+               'tomo1': 'overview_wbp.em',
+               'tomo2': 'overview_wbp2.em',
+               'tomo3': 'import_tomo_8_mn.mrc',
+               'subtomo': 'basename.hdf',
+               'eman_coordinates': 'coordinates3Deman2'})

@@ -25,35 +25,58 @@
 # *
 # **************************************************************************
 
-from os.path import abspath
+from os.path import abspath, basename
 
-import pyworkflow.em as pwem
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from pyworkflow.em.convert import Ccp4Header
+from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils.path import createAbsLink
 
-from .protocol_base import ProtTomoBase
+from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from tomo.objects import SubTomogram
 
 
-class ProtImportSubTomograms(pwem.ProtImportVolumes, ProtTomoBase):
+class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfSubTomograms'
     _label = 'import subtomograms'
 
     def __init__(self, **args):
-        pwem.ProtImportVolumes.__init__(self, **args)
+        ProtTomoImportFiles.__init__(self, **args)
+
+    def _defineParams(self, form):
+        ProtTomoImportFiles._defineParams(self, form)
+
+        form.addParam('importCoordinates', PointerParam,
+                      pointerClass='SetOfCoordinates3D',
+                      allowsNull=True,
+                      label='Input coordinates 3D',
+                      help='Select the coordinates for which the '
+                            'subtomograms were extracted.')
+
+        ProtTomoImportAcquisition._defineParams(self, form)
+
+
+    def _getImportChoices(self):
+        """ Return a list of possible choices
+        from which the import can be done.
+        (usually packages formats such as: xmipp3, eman2, relion...etc.
+        """
+        return ['eman2']
+
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
                                  self.getPattern(),
-                                 self.samplingRate.get(),
-                                 self.setOrigCoord.get())
+                                 self.samplingRate.get())
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importSubTomogramsStep(self, pattern, samplingRate, setOrigCoord=False):
+    def importSubTomogramsStep(
+            self,
+            pattern,
+            samplingRate
+    ):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
@@ -68,7 +91,15 @@ class ProtImportSubTomograms(pwem.ProtImportVolumes, ProtTomoBase):
         subtomoSet = self._createSetOfSubTomograms()
         subtomoSet.setSamplingRate(samplingRate)
 
+        if self.importCoordinates.get():
+            self.coords = []
+            for coord3D in self.importCoordinates.get().iterCoordinates():
+                self.coords.append(coord3D.clone())
+            subtomoSet.setCoordinates3D(self.importCoordinates)
+
+        self._parseAcquisitionData()
         for fileName, fileId in self.iterFiles():
+
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
                 fileName += ':mrc'
@@ -80,33 +111,31 @@ class ProtImportSubTomograms(pwem.ProtImportVolumes, ProtTomoBase):
             else:
                 zDim = z
             origin = Transform()
-            if setOrigCoord:
-                origin.setShiftsTuple(self._getOrigCoord())
-            else:
-                origin.setShifts(x/-2. * samplingRate,
-                            y/-2. * samplingRate,
-                            zDim/-2. * samplingRate)
+
+            origin.setShifts(x/-2. * samplingRate,
+                        y/-2. * samplingRate,
+                        zDim/-2. * samplingRate)
 
             subtomo.setOrigin(origin)  # read origin from form
 
-            if self.copyFiles or setOrigCoord:
-                newFileName = abspath(self._getVolumeFileName(fileName, "mrc"))
-                Ccp4Header.fixFile(fileName, newFileName, origin.getShifts(),
-                                   samplingRate, Ccp4Header.ORIGIN)
-            else:
-                newFileName = abspath(self._getVolumeFileName(fileName))
+            newFileName = abspath(self._getVolumeFileName(fileName))
 
-                if fileName.endswith(':mrc'):
-                    fileName = fileName[:-4]
-                createAbsLink(fileName, newFileName)
+            if fileName.endswith(':mrc'):
+                fileName = fileName[:-4]
+            createAbsLink(fileName, newFileName)
+
             if n == 1:
                 subtomo.cleanObjId()
                 subtomo.setFileName(newFileName)
+                subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+                self._setCoordinates3D(subtomo)
                 subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
+                    subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+                    self._setCoordinates3D(subtomo)
                     subtomoSet.append(subtomo)
 
         if subtomoSet.getSize() > 1:
@@ -115,6 +144,13 @@ class ProtImportSubTomograms(pwem.ProtImportVolumes, ProtTomoBase):
             self._defineOutputs(outputSubTomogram=subtomo)
 
     # --------------------------- INFO functions ------------------------------
+    def _setCoordinates3D(self, subtomo):
+        if self.importCoordinates.get():
+            if len(self.coords) < 1:
+                raise Exception("Coordinates 3D and subtomograms should have the same size")
+            else:
+                subtomo.setCoordinate3D(self.coords.pop(0))
+
     def _hasOutput(self):
         return (self.hasAttribute('outputSubTomogram')
                 or self.hasAttribute('outputSubTomograms'))
@@ -131,16 +167,31 @@ class ProtImportSubTomograms(pwem.ProtImportVolumes, ProtTomoBase):
             summary.append("%s imported from:\n%s"
                            % (self._getSubTomMessage(), self.getPattern()))
 
-            summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-                           self.samplingRate.get())
+            if self.samplingRate.get():
+                summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
+                               self.samplingRate.get())
+            if self.hasAttribute('outputSubTomogram'):
+                outputSubTomograms = [getattr(self, 'outputSubTomogram')]
+            else:
+                outputSubTomograms = getattr(self, 'outputSubTomograms')
+
+            ProtTomoImportAcquisition._summary(self, summary, outputSubTomograms)
+
         return summary
 
     def _methods(self):
         methods = []
         if self._hasOutput():
             methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getSubTomMessage(), self.samplingRate.get()),)
+                           (self._getSubTomMessage(), self.samplingRate.get()))
         return methods
 
-    def _getOrigCoord(self):
-        return -1.*self.x.get(), -1.*self.y.get(), -1.*self.z.get()
+    def _getVolumeFileName(self, fileName, extension=None):
+        if extension is not None:
+            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+        else:
+            baseFileName="import_" + basename(fileName).split(":")[0]
+
+        return self._getExtraPath(baseFileName)
+
+

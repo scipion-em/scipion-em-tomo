@@ -26,8 +26,9 @@
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
-from pyworkflow.protocol.params import PointerParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, PathParam, FloatParam
 from pyworkflow.mapper.sqlite_db import SqliteDb
+from pyworkflow.utils.properties import Message
 
 import tomo.objects
 
@@ -69,6 +70,13 @@ class ProtTomoBase:
         return self.__createSet(tomo.objects.SetOfSubTomograms,
                                 'subtomograms%s.sqlite', suffix)
 
+    def _createSetOfClassesSubTomograms(self, subTomograms, suffix=''):
+        classes = self.__createSet(pwem.SetOfClasses3D,
+                                   'classes3D%s.sqlite', suffix)
+        classes.setImages(subTomograms)
+
+        return classes
+
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
         For example: output3DCoordinates7.
@@ -91,7 +99,7 @@ class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
     pass
 
-class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
+class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
 
     OUTPUT_PREFIX = 'output3DCoordinates'
 
@@ -104,6 +112,182 @@ class ProtTomoPicking(pwem.EMProtocol, ProtTomoBase):
                       help='Select the Tomogram to be used during picking.')
 
 
+class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
 
+    def _defineParams(self, form):
+        self._defineImportParams(form)
 
+        self._defineAcquisitionParams(form)
 
+    def _defineImportParams(self, form):
+        """ Override to add options related to the different types
+        of import that are allowed by each protocol.
+        """
+        importChoices = self._getImportChoices()
+
+        form.addSection(label='Import')
+        if len(importChoices) > 1: # not only from files
+            form.addParam('importFrom', pwem.params.EnumParam,
+                          choices=importChoices, default=self._getDefaultChoice(),
+                          label='Import from',
+                          help='Select the type of import.')
+        else:
+            form.addHidden('importFrom', pwem.params.EnumParam,
+                          choices=importChoices, default=self.IMPORT_FROM_FILES,
+                          label='Import from',
+                          help='Select the type of import.')
+
+        form.addParam('filesPath', pwem.params.PathParam,
+                      label="Files directory",
+                      help="Directory with the files you want to import.\n\n"
+                           "The path can also contain wildcards to select"
+                           "from several folders. \n\n"
+                           "Examples:\n"
+                           "  ~/Tomograms/data/day??_tomograms/\n"
+                           "Each '?' represents one unknown character\n\n"
+                           "  ~/Tomograms/data/day*_tomograms/\n"
+                           "'*' represents any number of unknown characters\n\n"
+                           "  ~/Tomograms/data/day#_tomograms/\n"
+                           "'#' represents one digit that will be used as "
+                           "tomogram ID\n\n"
+                           "NOTE: wildcard characters ('*', '?', '#') "
+                           "cannot appear in the actual path.)")
+        form.addParam('filesPattern', pwem.params.StringParam,
+                      label='Pattern',
+                      help="Pattern of the files to be imported.\n\n"
+                           "The pattern can contain standard wildcards such as\n"
+                           "*, ?, etc, or special ones like ### to mark some\n"
+                           "digits in the filename as ID.\n\n"
+                           "NOTE: wildcards and special characters "
+                           "('*', '?', '#', ':', '%') cannot appear in the "
+                           "actual path.")
+        form.addParam('copyFiles', pwem.params.BooleanParam, default=False,
+                      expertLevel=pwem.params.LEVEL_ADVANCED,
+                      label="Copy files?",
+                      help="By default the files are not copied into the "
+                           "project to avoid data duplication and to save "
+                           "disk space. Instead of copying, symbolic links are "
+                           "created pointing to original files. This approach "
+                           "has the drawback that if the project is moved to "
+                           "another computer, the links need to be restored.")
+
+    def _defineAcquisitionParams(self, form):
+        """ Override to add options related to acquisition info.
+        """
+        form.addParam('samplingRate', pwem.params.FloatParam,
+                      label=Message.LABEL_SAMP_RATE)
+
+    def _validate(self):
+        pass
+
+class ProtTomoImportAcquisition:
+
+    MANUAL_IMPORT = 0
+    FROM_FILE_IMPORT = 1
+
+    def _defineParams(self, form):
+
+        """ Override to add options related to acquisition info.
+        """
+
+        importAcquisitionChoices = ['Manual', 'From file']
+
+        form.addSection(label='Acquisition Info')
+
+        form.addParam('importAcquisitionFrom', EnumParam,
+                      choices=importAcquisitionChoices, default=self._getDefaultChoice(),
+                      label='Import from',
+                      help='Select the type of import.')
+
+        form.addParam('acquisitionData', PathParam,
+                      label="Acquisition parameters file",
+                      help="File with the acquisition parameters for every "
+                           "subtomogram to import. File must be in plain format. The file must contain a row per file to be imported "
+                           "and have the following parameters in order: \n"
+                           "\n"
+                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step AngleAxis1 AngleAxis2' \n"
+                           "\n"
+                           "An example would be: \n"
+                           "subtomo1.em -40 40 3 25 30 \n"
+                           "subtomo2.em -45 50 2 15 15 \n",
+                      condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
+
+        form.addParam('acquisitionAngleMax', FloatParam,
+                      allowsNull=True,
+                      default=90,
+                      label='Acquisition angle max',
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help='Enter the positive limit of the acquisition angle')
+
+        form.addParam('acquisitionAngleMin', FloatParam,
+                      allowsNull=True,
+                      default=-90,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Acquisition angle min',
+                      help='Enter the negative limit of the acquisition angle')
+
+        form.addParam('step', FloatParam,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Step',
+                      help='Enter the step size for the import')
+
+        form.addParam('angleAxis1', FloatParam,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Angle axis 1',
+                      help='Enter the angle axis 1')
+
+        form.addParam('angleAxis2', FloatParam,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      label='Angle Axis 2',
+                      help='Enter the angle axis 2')
+
+    def _parseAcquisitionData(self):
+        if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
+            self.acquisitionParameters = {
+                        'angleMin': self.acquisitionAngleMin.get(),
+                        'angleMax': self.acquisitionAngleMax.get(),
+                        'step': self.step.get(),
+                        'angleAxis1': self.angleAxis1.get(),
+                        'angleAxis2': self.angleAxis2.get()
+                    }
+        else:
+            params = open(self.acquisitionData.get(), "r")
+            self.acquisitionParameters = {}
+            for line in params.readlines():
+                param = line.split()
+                try:
+                    self.acquisitionParameters.update({param[0]: {
+                        'angleMin': float(param[1]),
+                        'angleMax': float(param[2]),
+                        'step': int(param[3]),
+                        'angleAxis1': float(param[4]),
+                        'angleAxis2': float(param[5])
+                    }})
+                except:
+                    raise Exception('Wrong acquisition data file format')
+
+    def _extractAcquisitionParameters(self, fileName):
+        if self.importAcquisitionFrom.get() == self.FROM_FILE_IMPORT:
+            onlyName = fileName.split('/')[-1]
+            acquisitionParams = self.acquisitionParameters[onlyName]
+        else:
+            acquisitionParams = self.acquisitionParameters
+
+        return tomo.objects.TomoAcquisition(**acquisitionParams)
+
+    def _summary(self, summary, setOfObject):
+        for object in setOfObject:
+            if object.hasAcquisition():
+                summary.append(u"File %s" % self.getObjectTag(object))
+                summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
+
+                summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
+                if object.getAcquisition().getStep():
+                    summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
+                if object.getAcquisition().getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
+                if object.getAcquisition().getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
