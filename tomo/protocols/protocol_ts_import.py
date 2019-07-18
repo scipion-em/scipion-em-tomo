@@ -232,7 +232,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
 
-        self.info("Files: ")
         tiltSeriesDict = OrderedDict()
 
         for f, ts, to, ta in self.getMatchingFiles():
@@ -242,7 +241,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             tiltSeriesList = tiltSeriesDict[ts]
             order = len(tiltSeriesList) + 1
             tiltSeriesList.append(tiClass(location=f,
-                                          acqOrder=order,
+                                          acquisitionOrder=order,
                                           tiltAngle=ta))
 
         for ts, tiltSeriesList in tiltSeriesDict.iteritems():
@@ -254,7 +253,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                 tsObj.append(tim)
 
             outputSet.update(tsObj)  # update items and size info
-            tsObj.printAll()
 
         outputSet.updateDim()
         outputName = 'outputTiltSeries%s' % self._outputSuffix
@@ -324,10 +322,18 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         filePaths = glob(self._globPattern)
         filePaths.sort()
 
+        def _getTsId(match):
+            """ Retrieve the TiltSerie ID from the matching object.
+            We need to have tsId that starts with character, so
+            let's add a prefix if it is not the case
+            """
+            tsId = match.group('TS')
+            return 'TS_%s' % tsId if tsId[0].isdigit() else tsId
+
         def _addOne(fileList, f, m):
             """ Return one file matching. """
             fileList.append(
-                (f, m.group('TS'), int(m.group('TO')), float(m.group('TA'))))
+                (f, _getTsId(m), int(m.group('TO')), float(m.group('TA'))))
 
         def _addMany(fileList, f, m):
             """ Return many 'files' (when angles in header or mdoc). """
@@ -335,7 +341,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             # FIXME, read proper angles
             angles = tomo.convert.getAnglesFromHeader(f)
             for i, a in enumerate(angles):
-                fileList.append(((i+1, f), m.group('TS'), i+1, a))
+                fileList.append(((i+1, f), _getTsId(m), i+1, a))
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
 

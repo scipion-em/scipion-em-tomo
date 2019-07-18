@@ -143,13 +143,13 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
                            "The path can also contain wildcards to select"
                            "from several folders. \n\n"
                            "Examples:\n"
-                           "  ~/Particles/data/day??_micrographs/\n"
+                           "  ~/Tomograms/data/day??_tomograms/\n"
                            "Each '?' represents one unknown character\n\n"
-                           "  ~/Particles/data/day*_micrographs/\n"
+                           "  ~/Tomograms/data/day*_tomograms/\n"
                            "'*' represents any number of unknown characters\n\n"
-                           "  ~/Particles/data/day#_micrographs/\n"
+                           "  ~/Tomograms/data/day#_tomograms/\n"
                            "'#' represents one digit that will be used as "
-                           "micrograph ID\n\n"
+                           "tomogram ID\n\n"
                            "NOTE: wildcard characters ('*', '?', '#') "
                            "cannot appear in the actual path.)")
         form.addParam('filesPattern', pwem.params.StringParam,
@@ -248,63 +248,50 @@ class ProtTomoImportAcquisition:
                       label='Angle Axis 2',
                       help='Enter the angle axis 2')
 
-    def _parseAcquisitionData(self, pathToData):
-        params = open(pathToData, "r")
-        lines = params.readlines()
-        parameters = {}
-        for l in lines:
-            words = l.split()
-            try:
-                parameters.update({words[0]: {
-                    'acquisitionAngleMin': float(words[1]),
-                    'acquisitionAngleMax': float(words[2]),
-                    'step': int(words[3]),
-                    'angleAxis1': float(words[4]),
-                    'angleAxis2': float(words[5])
-                }})
-            except:
-                raise Exception('Wrong acquisition data file format')
-        return parameters
-
-    def _extractAcquisitionParameters(self, object, fileName):
-
+    def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
-            object.setAcquisitionAngleMax(self.acquisitionAngleMax.get())
-            object.setAcquisitionAngleMin(self.acquisitionAngleMin.get())
-            object.setStep(self.step.get())
-            object.setAngleAxis1(self.angleAxis1.get())
-            object.setAngleAxis2(self.angleAxis2.get())
+            self.acquisitionParameters = {
+                        'angleMin': self.acquisitionAngleMin.get(),
+                        'angleMax': self.acquisitionAngleMax.get(),
+                        'step': self.step.get(),
+                        'angleAxis1': self.angleAxis1.get(),
+                        'angleAxis2': self.angleAxis2.get()
+                    }
         else:
-            try:
-                onlyName = fileName.split('/')[-1]
-                acquisitionParamsFile = self._parseAcquisitionData(self.acquisitionData.get())
-                acquisitionParams = acquisitionParamsFile[onlyName]
-                object.setAcquisitionAngleMin(acquisitionParams['acquisitionAngleMin'])
-                object.setAcquisitionAngleMax(acquisitionParams['acquisitionAngleMax'])
-                object.setStep(acquisitionParams['step'])
-                object.setAngleAxis1(acquisitionParams['angleAxis1'])
-                object.setAngleAxis2(acquisitionParams['angleAxis2'])
-            except:
-                raise Exception('Acquisition data file missing parameters')
+            params = open(self.acquisitionData.get(), "r")
+            self.acquisitionParameters = {}
+            for line in params.readlines():
+                param = line.split()
+                try:
+                    self.acquisitionParameters.update({param[0]: {
+                        'angleMin': float(param[1]),
+                        'angleMax': float(param[2]),
+                        'step': int(param[3]),
+                        'angleAxis1': float(param[4]),
+                        'angleAxis2': float(param[5])
+                    }})
+                except:
+                    raise Exception('Wrong acquisition data file format')
 
-    def _summary(self, summary, object):
-        if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
-            summary.append(u"Acquisition angle max: *%0.2f*" % self.acquisitionAngleMax.get())
-            summary.append(u"Acquisition angle min: *%0.2f*" % self.acquisitionAngleMin.get())
-            if self.step.get():
-                summary.append(u"Step: *%d*" % self.step.get())
-            if self.angleAxis1.get():
-                summary.append(u"Angle axis 1: *%0.2f*" % self.angleAxis1.get())
-            if self.angleAxis2.get():
-                summary.append(u"Angle axis 2: *%0.2f*" % self.angleAxis2.get())
+    def _extractAcquisitionParameters(self, fileName):
+        if self.importAcquisitionFrom.get() == self.FROM_FILE_IMPORT:
+            onlyName = fileName.split('/')[-1]
+            acquisitionParams = self.acquisitionParameters[onlyName]
         else:
-            for key, outputSubTomogram in enumerate(object, 1):
-                summary.append(u"File %d" % key)
-                summary.append(u"Acquisition angle max: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMax())
-                summary.append(u"Acquisition angle min: *%0.2f*" % outputSubTomogram.getAcquisitionAngleMin())
-                if outputSubTomogram.getStep():
-                    summary.append(u"Step: *%d*" % outputSubTomogram.getStep())
-                if outputSubTomogram.getAngleAxis1():
-                    summary.append(u"Angle axis 1: *%0.2f*" % outputSubTomogram.getAngleAxis1())
-                if outputSubTomogram.getAngleAxis2():
-                    summary.append(u"Angle axis 2: *%0.2f*" % outputSubTomogram.getAngleAxis2())
+            acquisitionParams = self.acquisitionParameters
+
+        return tomo.objects.TomoAcquisition(**acquisitionParams)
+
+    def _summary(self, summary, setOfObject):
+        for object in setOfObject:
+            if object.hasAcquisition():
+                summary.append(u"File %s" % self.getObjectTag(object))
+                summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
+
+                summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
+                if object.getAcquisition().getStep():
+                    summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
+                if object.getAcquisition().getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
+                if object.getAcquisition().getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
