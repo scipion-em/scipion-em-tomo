@@ -81,11 +81,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoSet.setSamplingRate(samplingRate)
 
         self._parseAcquisitionData()
-
         for fileName, fileId in self.iterFiles():
-
-
-
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
                 fileName += ':mrc'

@@ -581,3 +581,18 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
+class ClassVol(SetOfSubTomograms):
+    REP_TYPE = SubTomogram
+    """ Represent a Class that groups Volume objects.
+    Usually the representative of the class is another Volume.
+    """
+    def close(self):
+        # Do nothing on close, since the db will be closed by SetOfClasses
+        pass
+
+class SetOfClassesSubtomograms(data.SetOfClasses):
+    """ Store results from a 3D classification of Particles. """
+    ITEM_TYPE = ClassVol
+    REP_TYPE = SubTomogram
+
+    pass
