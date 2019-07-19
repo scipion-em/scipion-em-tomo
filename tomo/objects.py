@@ -556,7 +556,9 @@ class SubTomogram(data.Volume):
         self._acquisition = acquisition
 
     def hasAcquisition(self):
-        return self._acquisition.getAngleMin() is not None
+        return self._acquisition is not None and \
+               self._acquisition.getAngleMin() is not None and \
+               self._acquisition.getAngleMax() is not None
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
