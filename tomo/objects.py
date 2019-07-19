@@ -562,6 +562,7 @@ class SubTomogram(data.Volume):
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
+    REP_TYPE = SubTomogram
 
     def __init__(self, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
@@ -581,7 +582,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
-class ClassVol(SetOfSubTomograms):
+class ClassSubTomogram(SetOfSubTomograms):
     REP_TYPE = SubTomogram
     """ Represent a Class that groups Volume objects.
     Usually the representative of the class is another Volume.
@@ -592,7 +593,7 @@ class ClassVol(SetOfSubTomograms):
 
 class SetOfClassesSubtomograms(data.SetOfClasses):
     """ Store results from a 3D classification of Particles. """
-    ITEM_TYPE = ClassVol
+    ITEM_TYPE = ClassSubTomogram
     REP_TYPE = SubTomogram
 
     pass
