@@ -582,14 +582,14 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
-class AverageSubtomogram(SubTomogram):
+class AverageSubTomogram(SubTomogram):
     """Represents a set of Averages.
     It is a SetOfParticles but it is useful to differentiate outputs."""
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
 class ClassSubTomogram(SetOfSubTomograms):
-    REP_TYPE = AverageSubtomogram
+    REP_TYPE = AverageSubTomogram
     """ Represent a Class that groups Volume objects.
     Usually the representative of the class is another Volume.
     """
