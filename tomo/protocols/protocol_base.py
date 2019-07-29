@@ -71,8 +71,8 @@ class ProtTomoBase:
                                 'subtomograms%s.sqlite', suffix)
 
     def _createSetOfClassesSubTomograms(self, subTomograms, suffix=''):
-        classes = self.__createSet(pwem.SetOfClasses3D,
-                                   'classes3D%s.sqlite', suffix)
+        classes = self.__createSet(tomo.objects.SetOfClassesSubTomograms,
+                                   'subtomogramClasses%s.sqlite', suffix)
         classes.setImages(subTomograms)
 
         return classes

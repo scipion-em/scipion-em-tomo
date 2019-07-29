@@ -598,8 +598,8 @@ class ClassSubTomogram(SetOfSubTomograms):
         pass
 
 class SetOfClassesSubTomograms(data.SetOfClasses):
-    """ Store results from a 3D classification of Particles. """
+    """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
-    REP_TYPE = SubTomogram
+    REP_TYPE = AverageSubTomogram
 
     pass
