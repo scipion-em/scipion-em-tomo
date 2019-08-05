@@ -25,9 +25,8 @@
 # **************************************************************************
 
 import pyworkflow.viewer as pwviewer
-
 import tomo.objects
-
+import views as vi
 
 class TomoDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
@@ -36,8 +35,13 @@ class TomoDataViewer(pwviewer.Viewer):
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
         tomo.objects.SetOfTiltSeriesM,
-        tomo.objects.SetOfTiltSeries
+        tomo.objects.SetOfTiltSeries,
+        tomo.objects.SetOfClassesSubTomograms
     ]
+
+    def __init__(self, **kwargs):
+        pwviewer.Viewer.__init__(self, **kwargs)
+        self._views = []
 
     def _getObjView(self, obj, fn, viewParams={}):
         return views.ObjectView(
@@ -53,6 +57,10 @@ class TomoDataViewer(pwviewer.Viewer):
             from .views_tkinter_tree import TiltSeriesDialogView
             setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, obj)
             views.append(setTsView)
+
+        elif issubclass(cls, tomo.objects.SetOfClassesSubTomograms):
+            views.append(vi.ClassesSubTomogramsView(self._project, obj.strId(),
+                                                   obj.getFileName()))
 
         return views
 
