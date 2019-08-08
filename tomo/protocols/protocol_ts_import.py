@@ -29,6 +29,7 @@ import re
 from glob import glob
 from datetime import datetime
 from collections import OrderedDict
+import numpy as np
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
@@ -111,7 +112,24 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                       display=params.EnumParam.DISPLAY_HLIST,
                       expertLevel=params.LEVEL_ADVANCED,
                       label="Import action on files",
-                      help="By default ...")
+                      help="This parameters determine how the project will deal "
+                           "with imported files. It can be: \n"
+                           "*Copy files*: Input files will be copied into your "
+                           "project. (this will duplicate the raw data)."
+                           "*Absolute symlink*: Create symbolic links to the "
+                           "absolute path of the files."
+                           "*Relative symlink*: Create symbolic links as "
+                           "relative path from the protocol run folder. ")
+
+        group = form.addGroup('Tilt info')
+        line = group.addLine('Tilt angular range',
+                             help="Specify the tilting angular range. "
+                                  "Depending on the collection schema, the "
+                                  "order of the acquisition does not need to "
+                                  "be the same order of the angular range. ")
+        line.addParam('minAngle', params.FloatParam, default=-60, label='min')
+        line.addParam('maxAngle', params.FloatParam, default=60, label='max')
+        line.addParam('stepAngle', params.FloatParam, default=3, label='step')
 
         self._defineAcquisitionParams(form)
 
@@ -149,7 +167,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         self._defineBlacklistParams(form)
 
     def _defineAcquisitionParams(self, form):
-        """ Define acq parameters, it can be overriden
+        """ Define acq parameters, it can be overridden
         by subclasses to change what parameters to include.
         """
         group = form.addGroup('Acquisition info')
@@ -232,25 +250,18 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
 
-        tiltSeriesDict = OrderedDict()
+        self.info("Files: ")
+        matchingFiles = self.getMatchingFiles()
 
-        for f, ts, to, ta in self.getMatchingFiles():
-            if ts not in tiltSeriesDict:
-                tiltSeriesDict[ts] = []
-
-            tiltSeriesList = tiltSeriesDict[ts]
-            order = len(tiltSeriesList) + 1
-            tiltSeriesList.append(tiClass(location=f,
-                                          acquisitionOrder=order,
-                                          tiltAngle=ta))
-
-        for ts, tiltSeriesList in tiltSeriesDict.iteritems():
+        for ts, tiltSeriesList in matchingFiles.iteritems():
             tsObj = tsClass(tsId=ts)
             # we need this to set mapper before adding any item
             outputSet.append(tsObj)
             # Add tilt images to the tiltSeries
-            for tim in tiltSeriesList:
-                tsObj.append(tim)
+            for f, to, ta in tiltSeriesList:
+                tsObj.append(tiClass(location=f,
+                                     acquisitionOrder=to,
+                                     tiltAngle=ta))
 
             outputSet.update(tsObj)  # update items and size info
 
@@ -278,6 +289,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         if not matching:
             errors.append("There are no files matching the pattern %s"
                           % self._globPattern)
+
+        tiltAngleRange = self._getTiltAngleRange()
+        n = len(tiltAngleRange)
+        ts = matching.keys()[0]
+        tiltSeriesList = matching.values()[0]
+
+        if len(tiltSeriesList) != n:
+            errors.append('Tilt-series %s has a different number of tilt'
+                          'images (%d) than expected (%d)'
+                          % (ts, len(tiltSeriesList), n))
 
         return errors
 
@@ -314,13 +335,15 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
     def getMatchingFiles(self):
-        """ Return a sorted list with the paths of files that
-        matched the pattern.
+        """ Return an ordered dict with TiltSeries found in the files as key
+        and a list of all tilt images of that series as value.
         """
         self.loadPatterns()
 
         filePaths = glob(self._globPattern)
-        filePaths.sort()
+        filePaths.sort(key=lambda fn: os.path.getmtime(fn))
+
+        matchingFiles = OrderedDict()
 
         def _getTsId(match):
             """ Retrieve the TiltSerie ID from the matching object.
@@ -332,8 +355,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
         def _addOne(fileList, f, m):
             """ Return one file matching. """
-            fileList.append(
-                (f, _getTsId(m), int(m.group('TO')), float(m.group('TA'))))
+            fileList.append((f, int(m.group('TO')), float(m.group('TA'))))
 
         def _addMany(fileList, f, m):
             """ Return many 'files' (when angles in header or mdoc). """
@@ -341,15 +363,17 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             # FIXME, read proper angles
             angles = tomo.convert.getAnglesFromHeader(f)
             for i, a in enumerate(angles):
-                fileList.append(((i+1, f), _getTsId(m), i+1, a))
+                fileList.append(((i+1, f), i+1, a))
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
 
-        matchingFiles = []
         for f in filePaths:
             m = self._regex.match(f)
             if m is not None:
-                addFunc(matchingFiles, f, m)
+                ts = _getTsId(m)
+                if ts not in matchingFiles:
+                    matchingFiles[ts] = []
+                addFunc(matchingFiles[ts], f, m)
 
         return matchingFiles
 
@@ -366,7 +390,8 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         than a given timeout.
         Params:
             fileName: input filename that will be checked.
-            fileTimeout: timeout """
+            fileTimeout: timeout
+        """
         self.debug('Checking file: %s' % fileName)
         mTime = datetime.fromtimestamp(os.path.getmtime(fileName))
         delta = datetime.now() - mTime
@@ -378,28 +403,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     def isBlacklisted(self, fileName):
         """ Overwrite in subclasses """
         return False
-
-    def iterFiles(self):
-        """ Iterate through the files matched with the pattern.
-        Provide the fileName and fileId.
-        """
-        filePaths = self.getMatchFiles()
-
-        for fileName in filePaths:
-            if self._idRegex:
-                # Try to match the file id from filename
-                # this is set by the user by using #### format in the pattern
-                match = self._idRegex.match(fileName)
-                if match is None:
-                    raise Exception("File '%s' doesn't match the pattern '%s'"
-                                    % (fileName, self._pattern))
-
-                fileId = int(match.group(1))
-
-            else:
-                fileId = None
-
-            yield fileName, fileId
 
     def worksInStreaming(self):
         # Import protocols always work in streaming
@@ -418,3 +421,9 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             inputTs.setDark(self.darkFile.get())
             acq.setDoseInitial(self.doseInitial.get())
             acq.setDosePerFrame(self.dosePerFrame.get())
+
+    def _getTiltAngleRange(self):
+        """ Return the list with all expected tilt angles. """
+        return np.arange(self.minAngle.get(),
+                         self.maxAngle.get() + 1,  # also include max angle
+                         self.stepAngle.get())
