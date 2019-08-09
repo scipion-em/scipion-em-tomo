@@ -252,8 +252,14 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
         self.info("Files: ")
         matchingFiles = self.getMatchingFiles()
+        tiltAngleRange = self._getTiltAngleRange()
 
         for ts, tiltSeriesList in matchingFiles.iteritems():
+            # FIXME: Allow the last one to be incomplete for the case of
+            # streaming
+            if not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList):
+                raise Exception("Invalid tilt angle range for tilt series: %s"
+                                % ts)
             tsObj = tsClass(tsId=ts)
             # we need this to set mapper before adding any item
             outputSet.append(tsObj)
@@ -295,10 +301,10 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         ts = matching.keys()[0]
         tiltSeriesList = matching.values()[0]
 
-        if len(tiltSeriesList) != n:
-            errors.append('Tilt-series %s has a different number of tilt'
-                          'images (%d) than expected (%d)'
-                          % (ts, len(tiltSeriesList), n))
+        if (len(tiltSeriesList) != n or
+            not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList)):
+            errors.append('Tilt-series %s differs from expected tilt '
+                          'angle range. ')
 
         return errors
 
@@ -427,3 +433,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         return np.arange(self.minAngle.get(),
                          self.maxAngle.get() + 1,  # also include max angle
                          self.stepAngle.get())
+
+    def _sameTiltAngleRange(self, tiltAngleRange, tiltSeriesList):
+        return np.allclose(tiltAngleRange,
+                           sorted(item[2] for item in tiltSeriesList))
