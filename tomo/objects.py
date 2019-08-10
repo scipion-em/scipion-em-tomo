@@ -75,6 +75,9 @@ class TiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = pwobj.String(kwargs.get('tsId', None))
+        # TiltSeries will always be used inside a SetOfTiltSeries
+        # so, let's do no store the mapper path by default
+        self._mapperPath.setStore(False)
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -136,7 +139,6 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         path of the SetOfClasses and also the prefix according to class id
         """
         item._mapperPath.set('%s,%s' % (self.getFileName(), item.getTsId()))
-        item._mapperPath.setStore(False)
         item.load()
 
     def _insertItem(self, item):

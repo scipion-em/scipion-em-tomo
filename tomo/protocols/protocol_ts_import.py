@@ -27,13 +27,15 @@
 import os
 import re
 from glob import glob
-from datetime import datetime
+import time
+from datetime import timedelta, datetime
 from collections import OrderedDict
 import numpy as np
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
+import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 
 import tomo.convert
@@ -216,7 +218,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
-        self.loadPatterns()
+        self._initialize()
         self._insertFunctionStep('importStep', self._pattern,
                                  self.voltage.get(),
                                  self.sphericalAberration.get(),
@@ -224,60 +226,123 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                                  self.magnification.get())
 
     # -------------------------- STEPS functions -------------------------------
-    def doImportMovies(self):
-        """ Return True if we are importing TiltSeries movies. """
-        return self.importType == self.IMPORT_TYPE_MOVS
-
-    def _createOutputSet(self, suffix=''):
-        if self.doImportMovies():
-            self._outputSuffix = 'M'
-            return self._createSetOfTiltSeriesM()
-        else:
-            self._outputSuffix = ''
-            return self._createSetOfTiltSeries()
-
     def importStep(self, pattern, voltage, sphericalAberration,
                          amplitudeContrast, magnification):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self.loadPatterns()
+        self._initialize()
         self.info("Using glob pattern: '%s'" % self._globPattern)
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
-        outputSet = self._createOutputSet()
+        outputSet = getattr(self, self._outputName, None)
+
+        if outputSet is None:
+            createSetFunc = getattr(self, self._createOutputName)
+            outputSet = createSetFunc()
+        elif outputSet.getSize() > 0:
+            outputSet.loadAllProperties()
+
+            for ts in outputSet:
+                self._existingTs.add(ts.getTsId())
+
         self._fillAcquisitionInfo(outputSet)
+        tiltAngleRange = self._getTiltAngleRange()
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
 
-        self.info("Files: ")
-        matchingFiles = self.getMatchingFiles()
-        tiltAngleRange = self._getTiltAngleRange()
+        finished = False
+        lastDetectedChange = datetime.now()
 
-        for ts, tiltSeriesList in matchingFiles.iteritems():
-            # FIXME: Allow the last one to be incomplete for the case of
-            # streaming
-            if not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList):
-                raise Exception("Invalid tilt angle range for tilt series: %s"
-                                % ts)
-            tsObj = tsClass(tsId=ts)
-            # we need this to set mapper before adding any item
-            outputSet.append(tsObj)
-            # Add tilt images to the tiltSeries
-            for f, to, ta in tiltSeriesList:
-                tsObj.append(tiClass(location=f,
-                                     acquisitionOrder=to,
-                                     tiltAngle=ta))
+        # Ignore the timeout variables if we are not really in streaming mode
+        if self.dataStreaming:
+            timeout = timedelta(seconds=self.timeout.get())
+            fileTimeout = timedelta(seconds=self.fileTimeout.get())
+        else:
+            timeout = timedelta(seconds=5)
+            fileTimeout = timedelta(seconds=5)
 
-            outputSet.update(tsObj)  # update items and size info
+        while not finished:
+            time.sleep(3)  # wait 3 seconds before check for new files
+            someNew = False  # Check if some new TS has been found
+            someAdded = False  # Check if some new were added
+            incompleteTs = False  # Check if there are incomplete TS
 
-        outputSet.updateDim()
-        outputName = 'outputTiltSeries%s' % self._outputSuffix
-        self._defineOutputs(**{outputName: outputSet})
+            matchingFiles = self.getMatchingFiles(fileTimeOut=fileTimeout)
+
+            if self._existingTs:
+                outputSet.enableAppend()
+
+            for ts, tiltSeriesList in matchingFiles.iteritems():
+                someNew = True
+
+                if len(tiltAngleRange) != len(tiltSeriesList):
+                    if incompleteTs:
+                        raise Exception("More than one tilt-series seems "
+                                        "incomplete regarding the expected "
+                                        "number of tilt images.")
+                    incompleteTs = True
+                    continue
+
+                if not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList):
+                    raise Exception("Invalid tilt angle range for tilt series: "
+                                    "%s" % ts)
+
+                tsObj = tsClass(tsId=ts)
+                # we need this to set mapper before adding any item
+                outputSet.append(tsObj)
+                print("After append...")
+                pwutils.prettyDict(tsObj.getObjDict(includeClass=True))
+                # Add tilt images to the tiltSeries
+                for f, to, ta in tiltSeriesList:
+                    tsObj.append(tiClass(location=f,
+                                         acquisitionOrder=to,
+                                         tiltAngle=ta))
+
+                outputSet.update(tsObj)  # update items and size info
+                print("After update....")
+                pwutils.prettyDict(tsObj.getObjDict(includeClass=True))
+                self._existingTs.add(ts)
+                someAdded = True
+
+            if someAdded:
+                self.debug('Updating output...')
+                outputSet.updateDim()
+                self._updateOutputSet(self._outputName, outputSet,
+                                      state=outputSet.STREAM_OPEN)
+                self.debug('Update Done.')
+
+            self.debug('Checking if finished...someNew: %s' % someNew)
+
+            now = datetime.now()
+
+            if not someNew:
+                # If there are no new detected files, we should check the
+                # inactivity time elapsed (from last event to now) and
+                # if it is greater than the defined timeout, we conclude
+                # the import and close the output set
+                # Another option is to check if the protocol have some
+                # special stop condition, this can be used to manually stop
+                # some protocols such as import movies
+                finished = (now - lastDetectedChange > timeout
+                            or self.streamingHasFinished())
+                self.debug("Checking if finished:")
+                self.debug("   Now - Last Change: %s"
+                           % pwutils.prettyDelta(now - lastDetectedChange))
+                self.debug("Finished: %s" % finished)
+            else:
+                # If we have detected some files, we should update
+                # the timestamp of the last event
+                lastDetectedChange = now
+
+        # Close the output set
+        self._updateOutputSet(self._outputName, outputSet,
+                              state=outputSet.STREAM_CLOSED)
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
+        self._initialize()
         matching = self.getMatchingFiles()
 
         if self.importType == self.IMPORT_TYPE_MOVS:
@@ -316,10 +381,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         """
         return ['files']
 
-    # -------------------------- UTILS functions ------------------------------
-    def loadPatterns(self):
-        """ Expand the pattern using environ vars or username
-        and also replacing special character # by digit matching.
+    # -------------------------- UTILS functions -------------------------------
+    def doImportMovies(self):
+        """ Return True if we are importing TiltSeries movies. """
+        return self.importType == self.IMPORT_TYPE_MOVS
+
+    def _initialize(self):
+        """ Initialize some internal variables such as:
+        - patterns: Expand the pattern using environ vars or username
+            and also replacing special character # by digit matching.
+        - outputs: Output variable names
         """
         self._pattern = os.path.join(self.filesPath.get('').strip(),
                                      self.filesPattern.get('').strip())
@@ -336,18 +407,28 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         self._regex = re.compile(self._regexPattern)
         self._globPattern = _replace(self._pattern, '*', '*', '*')
 
+        # Set output names depending on the import type (either movies or images)
+        self._outputName = 'outputTiltSeries'
+        self._createOutputName = '_createSetOfTiltSeries'
+
+        if self.doImportMovies():
+            self._outputName += 'M'
+            self._createOutputName += 'M'
+
+        # Keep track of which existing tilt-series has already been found
+        self._existingTs = set()
+
     def _anglesInPattern(self):
-        """ This function should be called after a call to loadPatterns"""
+        """ This function should be called after a call to _initialize"""
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
-    def getMatchingFiles(self):
+    def getMatchingFiles(self, fileTimeOut=None):
         """ Return an ordered dict with TiltSeries found in the files as key
         and a list of all tilt images of that series as value.
         """
-        self.loadPatterns()
-
         filePaths = glob(self._globPattern)
         filePaths.sort(key=lambda fn: os.path.getmtime(fn))
+        fileTimeOut = fileTimeOut or timedelta(seconds=5)
 
         matchingFiles = OrderedDict()
 
@@ -374,12 +455,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         addFunc = _addOne if self._anglesInPattern() else _addMany
 
         for f in filePaths:
+            if self.fileModified(f, fileTimeOut):
+                continue
             m = self._regex.match(f)
             if m is not None:
                 ts = _getTsId(m)
-                if ts not in matchingFiles:
-                    matchingFiles[ts] = []
-                addFunc(matchingFiles[ts], f, m)
+                # Only report files of new tilt-series
+                if ts not in self._existingTs:
+                    if ts not in matchingFiles:
+                        matchingFiles[ts] = []
+                    addFunc(matchingFiles[ts], f, m)
 
         return matchingFiles
 
@@ -437,3 +522,31 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     def _sameTiltAngleRange(self, tiltAngleRange, tiltSeriesList):
         return np.allclose(tiltAngleRange,
                            sorted(item[2] for item in tiltSeriesList))
+
+    # --------------- Streaming special functions -----------------------
+    def _getStopStreamingFilename(self):
+        return self._getExtraPath("STOP_STREAMING.TXT")
+
+    def getActions(self):
+        """ This method will allow that the 'Stop import' action to appears
+        in the GUI when the user right-click in the protocol import box.
+        It will allow a user to manually stop the streaming.
+        """
+        # Only allow to stop if running and in streaming mode
+        if self.dataStreaming and self.isRunning():
+            return [('STOP STREAMING', self.stopImport)]
+        else:
+            return []
+
+    def stopImport(self):
+        """ Since the actual protocol that is running is in a different
+        process that the one that this method will be invoked from the GUI,
+        we will use a simple mechanism to place an special file to stop
+        the streaming.
+        """
+        # Just place an special file into the run folder
+        f = open(self._getStopStreamingFilename(), 'w')
+        f.close()
+
+    def streamingHasFinished(self):
+        return os.path.exists(self._getStopStreamingFilename())
