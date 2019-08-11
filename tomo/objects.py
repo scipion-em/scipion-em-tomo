@@ -25,10 +25,14 @@
 # *
 # **************************************************************************
 
+import os
+from datetime import datetime
+import threading
 from collections import OrderedDict
 
 import pyworkflow.object as pwobj
 import pyworkflow.em.data as data
+import pyworkflow.utils as pwutils
 
 
 class TiltImageBase:
@@ -254,6 +258,131 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         self._darkFile.set(other.getDark())
         #self._firstFramesRange.set(other.getFramesRange())
 
+
+class TiltSeriesDict:
+    """ Helper class that to store TiltSeries and TiltImage but
+    using dictionaries for quick access.
+    This class also contains some logic related to the streaming:
+    - Check for new input items that needs to be processed
+    - Check for items already done that needs to be saved.
+    """
+    def __init__(self, inputSet, outputSet=None,
+                 newItemsCallback=None,
+                 doneItemsCallback=None):
+        """
+        Initialize the dict.
+        :param inputSet: The set with input items. It will be monitored
+            for new items from streaming.
+        :param newItemsCallback: When new items are discovered, this
+            function will be called
+        :param doneItemsCallback: When some items are done, this function
+            will be called.
+        """
+        self.__dict = OrderedDict()
+        self.__inputSet = inputSet
+        self.__inputClosed = False
+        self.__lastCheck = None
+        self.__newItemsCallback = newItemsCallback
+        self.__doneItemsCallback = doneItemsCallback
+
+        self.__new = set()
+        self.__finished = set()  # Reported as finished tasks, but not saved
+        self.__done = set()  # Finished and saved tasks
+        self.__lock = threading.Lock()
+
+        if outputSet is not None:
+            for ts in outputSet:
+                # We don't need tilt-images for done items
+                self.addTs(ts, includeTi=False)
+                self.__done.add(ts.getTsId())
+
+    def addTs(self, ts, includeTi=False):
+        """ Add a clone of the tiltseries. """
+        self.__dict[ts.getTsId()] = (ts.clone(), OrderedDict())
+        if includeTi:
+            for ti in ts:
+                self.addTi(ti)
+
+    def hasTs(self, tsId):
+        return tsId in self.__dict
+
+    def getTs(self, tsId):
+        return self.__dict[tsId][0]
+
+    def addTi(self, ti):
+        self.getTiDict(ti.getTsId())[ti.getObjId()] = ti.clone()
+
+    def getTi(self, tsId, tiObjId):
+        return self.getTiDict(tsId)[tiObjId]
+
+    def getTiDict(self, tsId):
+        return self.__dict[tsId][1]
+
+    def getTiList(self, tsId):
+        return self.getTiDict(tsId).values()
+
+    def __iter__(self):
+        for ts, d in self.__dict.values():
+            yield ts
+
+    # ---- Streaming related methods -------------
+    def update(self):
+        self._checkNewInput()
+        self._checkNewOutput()
+
+    def _checkNewInput(self):
+        print(">>> _checkNewInput ")
+
+        inputSetFn = self.__inputSet.getFileName()
+        mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
+        if self.__lastCheck:
+            print('Last check: %s, modification: %s'
+                  % (pwutils.prettyTime(self.__lastCheck),
+                     pwutils.prettyTime(mTime)))
+
+        if self.__lastCheck is None or self.__lastCheck <= mTime:
+            updatedSet = self.__inputSet.getClass()(filename=inputSetFn)
+            updatedSet.loadAllProperties()
+            newItems = []
+            for ts in updatedSet:
+                if not self.hasTs(ts.getTsId()):
+                    self.addTs(ts, includeTi=True)
+                    newItems.append(ts.getTsId())
+            self.__inputClosed = updatedSet.isStreamClosed()
+            updatedSet.close()
+            if newItems:
+                self.__newItemsCallback(newItems)
+        self.__lastCheck = datetime.now()
+
+    def _checkNewOutput(self):
+        # First check that we have some items in the finished
+        self.__lock.acquire()
+        doneItems = list(self.__finished)
+        self.__finished.clear()
+        self.__lock.release()
+
+        # Ensure that we check at least once
+        self._checkedOnce = getattr(self, '_checkedOnce', False)
+        if doneItems or not self._checkedOnce:
+            self.__done.update(doneItems)
+            self.__doneItemsCallback(doneItems)
+            self._checkedOnce = True
+
+    def setFinished(self, *tsIdList):
+        """ Notify that all TiltSeries in the list of ids are finished. """
+        self.__lock.acquire()
+        self.__finished.update(tsIdList)
+        self.__lock.release()
+
+    def allDone(self):
+        """ Return True if input stream is closed and all task are done. """
+        # print(">>> DEBUG: allDone\n"
+        #       "    inputClosed: %s\n"
+        #       "    len(dict):   %s\n"
+        #       "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
+        return self.__inputClosed and len(self.__dict) == len(self.__done)
+
+
 class TomoAcquisition(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
@@ -293,6 +422,7 @@ class TomoAcquisition(data.EMObject):
     def setAngleAxis2(self, value):
         self._angleAxis2.set(value)
 
+
 class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
@@ -315,46 +445,14 @@ class Tomogram(data.Volume):
         self._acquisition = acquisition
 
     def hasAcquisition(self):
-        return self._acquisition is not None and\
-               self._acquisition.getAngleMin() is not None and\
-               self._acquisition.getAngleMax() is not None
+        return (self._acquisition is not None
+                and self._acquisition.getAngleMin() is not None
+                and self._acquisition.getAngleMax() is not None)
+
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = True
-
-class TiltSeriesDict:
-    """ Helper class that to store TiltSeries and TiltImage but
-    using dictionaries for quick access.
-    """
-    def __init__(self):
-        self.__dict = OrderedDict()
-
-    def addTs(self, tiltSeries, includeTi=False):
-        """ Add a clone of the tiltseries. """
-        self.__dict[tiltSeries.getTsId()] = (tiltSeries.clone(), OrderedDict())
-        if includeTi:
-            for ti in tiltSeries:
-                self.addTi(ti)
-
-    def getTs(self, tsId):
-        return self.__dict[tsId][0]
-
-    def addTi(self, ti):
-        self.getTiDict(ti.getTsId())[ti.getObjId()] = ti.clone()
-
-    def getTi(self, tsId, tiObjId):
-        return self.getTiDict(tsId)[tiObjId]
-
-    def getTiDict(self, tsId):
-        return self.__dict[tsId][1]
-
-    def getTiList(self, tsId):
-        return self.getTiDict(tsId).values()
-
-    def __iter__(self):
-        for ts, d in self.__dict.values():
-            yield ts
 
 
 class Coordinate3D(data.EMObject):
@@ -405,7 +503,7 @@ class Coordinate3D(data.EMObject):
         mode: select if the position is the center of the box
         or in the top left corner.
         """
-        return (self.getX(), self.getY(), self.getZ())
+        return self.getX(), self.getY(), self.getZ()
 
     def setPosition(self, x, y, z):
         self.setX(x)
@@ -536,6 +634,7 @@ class SetOfCoordinates3D(data.EMSet):
 
         return s
 
+
 class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
@@ -559,6 +658,7 @@ class SubTomogram(data.Volume):
 
     def hasAcquisition(self):
         return self._acquisition.getAngleMin() is not None
+
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram

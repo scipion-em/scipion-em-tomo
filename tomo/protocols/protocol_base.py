@@ -99,6 +99,7 @@ class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
     """ Base class for Tomogram reconstruction protocols. """
     pass
 
+
 class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
 
     OUTPUT_PREFIX = 'output3DCoordinates'
@@ -179,6 +180,7 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
 
     def _validate(self):
         pass
+
 
 class ProtTomoImportAcquisition:
 

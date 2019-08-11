@@ -29,7 +29,7 @@ import os
 import pyworkflow as pw
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol import STEPS_PARALLEL
+from pyworkflow.protocol import STEPS_PARALLEL, STATUS_NEW
 
 from pyworkflow.utils.properties import Message
 
@@ -89,7 +89,8 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
                        label='Binning factor',
                        help='1x or 2x. Bin stack before processing.')
 
-        line = group.addLine('Crop offsets (px)', expertLevel=params.LEVEL_ADVANCED)
+        line = group.addLine('Crop offsets (px)',
+                             expertLevel=params.LEVEL_ADVANCED)
         line.addParam('cropOffsetX', params.IntParam, default=0, label='X')
         line.addParam('cropOffsetY', params.IntParam, default=0, label='Y')
 
@@ -105,37 +106,45 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         inputTs = self.inputTiltSeriesM.get()
+        self._ciStepId = self._insertFunctionStep('convertInputStep',
+                                                inputTs.getObjId())
+        self._insertFunctionStep('createOutputStep', wait=True,
+                                 prerequisites=[self._ciStepId])
+        self._coStep = self._steps[-1]  # get last step
+
+        self._tsDict = TiltSeriesDict(inputTs, self._getOutputTs(),
+                                      newItemsCallback=self._insertNewSteps,
+                                      doneItemsCallback=self._updateOutput)
+        self._tsDict.update()
+
+    def _insertNewSteps(self, tsIdList):
+        """ Insert processing steps for newly discovered tilt-series. """
+        inputTs = self.inputTiltSeriesM.get()
         acq = inputTs.getAcquisition()
         initialDose = acq.getDoseInitial()
-        dosePerFrame = acq.getDosePerFrame()
+        frameDose = acq.getDosePerFrame()
         gain, dark = self.getGainAndDark()
 
-        ciStepId = self._insertFunctionStep('convertInputStep',
-                                            inputTs.getObjId())
-        self._tsDict = TiltSeriesDict()
-        allSteps = []
-
-        for ts in inputTs:
-            tsId = ts.getTsId()
-            self._tsDict.addTs(ts)
-            tsAllSteps = []
-            for i, ti in enumerate(ts):
-                self._tsDict.addTi(ti)
-                tiStepId = self._insertFunctionStep('processTiltImageMStep',
-                                                    tsId, ti.getObjId(),
-                                                    initialDose + (i * dosePerFrame),
-                                                    dosePerFrame,
-                                                    gain, dark,
-                                                    *self._getArgs(),
-                                                    prerequisites=[ciStepId])
-                tsAllSteps.append(tiStepId)
+        for tsId in tsIdList:
+            ts = self._tsDict.getTs(tsId)
+            tsSteps = []
+            for i, ti in enumerate(self._tsDict.getTiList(tsId)):
+                tiStep = self._insertFunctionStep('processTiltImageMStep',
+                                                  tsId, ti.getObjId(),
+                                                  initialDose + (i * frameDose),
+                                                  frameDose, gain, dark,
+                                                  *self._getArgs(),
+                                                  prerequisites=[self._ciStepId])
+                tsSteps.append(tiStep)
 
             tsStepId = self._insertFunctionStep('composeTiltSeriesStep', tsId,
-                                                prerequisites=tsAllSteps)
-            allSteps.append(tsStepId)
+                                                prerequisites=tsSteps)
+            self._coStep.addPrerequisites(tsStepId)
 
-        self._insertFunctionStep('createOutputStep', 66,
-                                 prerequisites=allSteps)
+        self.updateSteps()
+
+    def _stepsCheck(self):
+        self._tsDict.update()
 
     # --------------------------- STEPS functions ----------------------------
     def convertInputStep(self, inputId):
@@ -185,24 +194,58 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
                 ih.convert(tiFnDW, (i+1, tsFnDW))
                 pw.utils.cleanPath(tiFnDW)
 
-    def createOutputStep(self, xxx):
-        inputTs = self.inputTiltSeriesM.get()
-        outputTs = self._createSetOfTiltSeries()
-        outputTs.copyInfo(inputTs)
+        self._tsDict.setFinished(tsId)
 
-        def _updateTs(i, ts, tsOut):
-            tsOut.setDim([])
+    def _updateOutput(self, tsIdList):
+        """ Update the output set with the finished Tilt-series.
+        Params:
+            :param tsIdList: list of ids of finished tasks.
+        """
+        # Flag to check the first time we save output
+        self._createOutput = getattr(self, '_createOutput', True)
 
-        def _updateTi(j, ts, ti, tsOut, tiOut):
-            tiOut.setLocation((j + 1, self._getOutputTiltSeriesPath(ts)))
+        outputSet = self._getOutputTs()
 
-        outputTs.copyItems(inputTs,
-                           updateTsCallback=_updateTs,
-                           orderByTi='_tiltAngle',
-                           updateTiCallback=_updateTi)
-        outputTs.updateDim()
-        self._defineOutputs(outputTiltSeries=outputTs)
-        self._defineSourceRelation(self.inputTiltSeriesM, outputTs)
+        if outputSet is None:
+            inputTs = self.inputTiltSeriesM.get()
+            outputSet = self._createSetOfTiltSeries()
+            outputSet.copyInfo(inputTs)
+        else:
+            outputSet.enableAppend()
+            self._createOutput = False
+
+        for tsId in tsIdList:
+            ts = self._tsDict.getTs(tsId)
+            tsPath = self._getOutputTiltSeriesPath(ts)
+            tiList = sorted(self._tsDict.getTiList(tsId),
+                            key=lambda ti: ti.getTiltAngle())
+            ts.setDim([])
+            outputSet.append(ts)
+            for i, ti in enumerate(tiList):
+                ti.setLocation((i+1, tsPath))
+                ts.append(ti)
+
+            outputSet.update(ts)
+
+        outputSet.setStreamState(outputSet.STREAM_OPEN)
+
+        if self._createOutput:
+            outputSet.updateDim()
+            self._defineOutputs(outputTiltSeries=outputSet)
+            self._defineSourceRelation(self.inputTiltSeriesM, outputSet)
+        else:
+            outputSet.write()
+            self._store(outputSet)
+
+        outputSet.close()
+
+        if self._tsDict.allDone():
+            self._coStep.setStatus(STATUS_NEW)
+
+    def createOutputStep(self):
+        outputSet = self._getOutputTs()
+        outputSet.setStreamState(outputSet.STREAM_CLOSED)
+        self._store(outputSet)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
@@ -274,6 +317,9 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
         return [self.summaryVar.get('')]
 
     # --------------------------- UTILS functions ----------------------------
+    def _getOutputTs(self):
+        return getattr(self, 'outputTiltSeries', None)
+
     def _getArgs(self):
         """ Return a list with parameters that will be passed to the process
         TiltSeries step. It can be redefined by subclasses.
