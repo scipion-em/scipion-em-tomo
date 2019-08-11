@@ -280,7 +280,7 @@ class TiltSeriesDict:
         """
         self.__dict = OrderedDict()
         self.__inputSet = inputSet
-        self.__inputClosed = False
+        self.__inputClosed = inputSet.isStreamClosed()
         self.__lastCheck = None
         self.__newItemsCallback = newItemsCallback
         self.__doneItemsCallback = doneItemsCallback
@@ -331,7 +331,7 @@ class TiltSeriesDict:
         self._checkNewOutput()
 
     def _checkNewInput(self):
-        print(">>> _checkNewInput ")
+        #print(">>> DEBUG: _checkNewInput ")
 
         inputSetFn = self.__inputSet.getFileName()
         mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
@@ -355,15 +355,14 @@ class TiltSeriesDict:
         self.__lastCheck = datetime.now()
 
     def _checkNewOutput(self):
+        #print(">>> DEBUG: _checkNewInput ")
         # First check that we have some items in the finished
         self.__lock.acquire()
         doneItems = list(self.__finished)
         self.__finished.clear()
         self.__lock.release()
 
-        # Ensure that we check at least once
-        self._checkedOnce = getattr(self, '_checkedOnce', False)
-        if doneItems or not self._checkedOnce:
+        if doneItems or self.allDone():
             self.__done.update(doneItems)
             self.__doneItemsCallback(doneItems)
             self._checkedOnce = True
@@ -376,10 +375,10 @@ class TiltSeriesDict:
 
     def allDone(self):
         """ Return True if input stream is closed and all task are done. """
-        # print(">>> DEBUG: allDone\n"
-        #       "    inputClosed: %s\n"
-        #       "    len(dict):   %s\n"
-        #       "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
+        #print(">>> DEBUG: allDone\n"
+        #      "    inputClosed: %s\n"
+        #      "    len(dict):   %s\n"
+        #      "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 
