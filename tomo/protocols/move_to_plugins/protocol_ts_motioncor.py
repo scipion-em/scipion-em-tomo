@@ -213,6 +213,7 @@ class ProtTsMotionCorr(ProtTsCorrectMotion):
         cropDimY = self.cropDimY.get() or 1
 
         numbOfFrames = self._getNumberOfFrames(tiltImageM)
+        order = tiltImageM.getAcquisitionOrder()
 
         # reset values = 1 to 0 (motioncor2 does it automatically,
         # but we need to keep this for consistency)
@@ -235,7 +236,7 @@ class ProtTsMotionCorr(ProtTsCorrectMotion):
             '-PixSize': tiltImageM.getSamplingRate(),
             '-kV': tiltImageM.getAcquisition().getVoltage(),
             '-LogFile': logFileBase,
-            '-InitDose': initialDose,
+            '-InitDose': initialDose + order * dosePerFrame,
             '-OutStack': 0
         }
 
