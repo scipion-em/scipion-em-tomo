@@ -47,8 +47,8 @@ class ProtTsGctf(ProtTsEstimateCTF):
         self.stepsExecutionMode = STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions -----------------------
-    def _defineCtfParamsDict(self):
-        ProtTsEstimateCTF._defineCtfParamsDict(self)
+    def _initialize(self):
+        ProtTsEstimateCTF._initialize(self)
         self._gctfProgram = ProgramGctf(self)
 
     def _defineProcessParams(self, form):
