@@ -282,6 +282,7 @@ class TiltSeriesDict:
         self.__inputSet = inputSet
         self.__inputClosed = inputSet.isStreamClosed()
         self.__lastCheck = None
+        self.__finalCheck = False
         self.__newItemsCallback = newItemsCallback
         self.__doneItemsCallback = doneItemsCallback
 
@@ -362,10 +363,11 @@ class TiltSeriesDict:
         self.__finished.clear()
         self.__lock.release()
 
-        if doneItems or self.allDone():
+        if doneItems or (self.allDone() and not self.__finalCheck):
             self.__done.update(doneItems)
             self.__doneItemsCallback(doneItems)
-            self._checkedOnce = True
+            if self.allDone():
+                self.__finalCheck = True
 
     def setFinished(self, *tsIdList):
         """ Notify that all TiltSeries in the list of ids are finished. """
@@ -375,10 +377,10 @@ class TiltSeriesDict:
 
     def allDone(self):
         """ Return True if input stream is closed and all task are done. """
-        #print(">>> DEBUG: allDone\n"
-        #      "    inputClosed: %s\n"
-        #      "    len(dict):   %s\n"
-        #      "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
+        # print(">>> DEBUG: allDone\n"
+        #       "    inputClosed: %s\n"
+        #       "    len(dict):   %s\n"
+        #       "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 

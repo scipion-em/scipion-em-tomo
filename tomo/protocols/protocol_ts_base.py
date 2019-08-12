@@ -158,7 +158,7 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         outputSet = self._getOutputTs()
         outputSet.setStreamState(outputSet.STREAM_CLOSED)
-        outputSet.write
+        outputSet.write()
         self._store(outputSet)
 
     # --------------------------- INFO functions ------------------------------
