@@ -63,6 +63,11 @@ class TiltImageBase:
     def getAcquisitionOrder(self):
         return self.getObjId()
 
+    def copyInfo(self, other, copyId=False):
+        self.copyAttributes(other, '_tiltAngle', '_tsId')
+        if copyId:
+            self.copyObjId(other)
+
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
@@ -70,10 +75,9 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other):
+    def copyInfo(self, other, copyId=False):
         data.Image.copyInfo(self, other)
-        self.copyAttributes(other, '_tiltAngle', '_tsId')
-
+        TiltImageBase.copyInfo(self, other, copyId=copyId)
 
 class TiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
@@ -92,11 +96,11 @@ class TiltSeriesBase(data.SetOfImages):
     def setTsId(self, value):
         self._tsId.set(value)
 
-    def copyInfo(self, other):
+    def copyInfo(self, other, copyId=False):
         """ Copy basic information (id and other properties) but
         not _mapperPath or _size from other set of micrographs to current one.
         """
-        self.copy(other, copyId=False, ignoreAttrs=['_mapperPath', '_size'])
+        self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
 
     def append(self, tiltImage):
         tiltImage.setTsId(self.getTsId())
@@ -217,6 +221,10 @@ class TiltImageM(data.Movie, TiltImageBase):
     def __init__(self, location=None, **kwargs):
         data.Movie.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
+
+    def copyInfo(self, other, copyId=False):
+        data.Movie.copyInfo(self, other)
+        TiltImageBase.copyInfo(self, other, copyId=copyId)
 
 
 class TiltSeriesM(TiltSeriesBase):

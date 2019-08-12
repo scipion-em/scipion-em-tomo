@@ -31,7 +31,9 @@ import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
 
+from tomo.objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
+
 
 
 class ProtTsCorrectMotion(ProtTsProcess):
@@ -149,6 +151,20 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 pw.utils.cleanPath(tiFnDW)
 
         self._tsDict.setFinished(tsId)
+
+    def _updateOutputTsSet(self, outputSet, tsIdList):
+        """ Override this method to convert the TiltSeriesM into TiltSeries.
+        """
+        for tsId in tsIdList:
+            ts = TiltSeries()
+            ts.copyInfo(self._tsDict.getTs(tsId), copyId=True)
+            outputSet.append(ts)
+            for ti in self._tsDict.getTiList(tsId):
+                tiOut = TiltImage(location=ti.getLocation())
+                tiOut.copyInfo(ti, copyId=True)
+                ts.append(tiOut)
+
+            outputSet.update(ts)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
