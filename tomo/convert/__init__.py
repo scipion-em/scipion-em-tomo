@@ -67,3 +67,36 @@ def getAnglesFromHeader(tsImage):
         angles = [float(line) for line in f]
     return angles
 
+
+def parseMdoc(mdocFn):
+    """
+    Parse the mdoc file and return a list with a dict key=value for each
+    of the [Zvalue = X] sections
+    :param mdocFn: Path to the mdoc file
+    :return: list of dictonaries
+    """
+    zvalueList = []
+
+    with open(mdocFn) as f:
+        for line in f:
+            if line.startswith('[ZValue'):
+                # We have found a new Zvalue
+                zvalue = int(line.split(']')[0].split('=')[1])
+                if zvalue != len(zvalueList):
+                    raise Exception("Unexpected ZValue = %d" % zvalue)
+                zvalueDict = {}
+                zvalueList.append(zvalueDict)
+            else:
+                if line.strip() and zvalueList:
+                    key, value = line.split('=')
+                    zvalueDict[key.strip()] = value.strip()
+
+    return zvalueList
+
+
+def getAnglesFromMdoc(mdocFn):
+    """ Return only the angles from the given mdoc file. """
+    return [float(d['TiltAngle']) for d in parseMdoc(mdocFn)]
+
+
+

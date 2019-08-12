@@ -291,8 +291,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                 tsObj = tsClass(tsId=ts)
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
-                print("After append...")
-                pwutils.prettyDict(tsObj.getObjDict(includeClass=True))
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
                     tsObj.append(tiClass(location=f,
@@ -300,8 +298,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                                          tiltAngle=ta))
 
                 outputSet.update(tsObj)  # update items and size info
-                print("After update....")
-                pwutils.prettyDict(tsObj.getObjDict(includeClass=True))
                 self._existingTs.add(ts)
                 someAdded = True
 
@@ -343,7 +339,14 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     def _validate(self):
         errors = []
         self._initialize()
-        matching = self.getMatchingFiles()
+        try:
+            matching = self.getMatchingFiles()
+        except Exception as e:
+            errorStr = str(e)
+            if 'Missing mdoc file:' in errorStr:
+                return [errorStr]
+            else:
+                raise e
 
         if self.importType == self.IMPORT_TYPE_MOVS:
             if self.anglesFrom != self.ANGLES_FROM_FILES:
@@ -353,23 +356,21 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             elif not self._anglesInPattern():
                 errors.append('When importing movies, {TA} and {TO} should be '
                               'in the files pattern.')
-        else:
-            if self.anglesFrom == self.ANGLES_FROM_MDOC:
-                errors.append('Importing angles from mdoc is not yet implemented.')
 
         if not matching:
             errors.append("There are no files matching the pattern %s"
                           % self._globPattern)
 
-        tiltAngleRange = self._getTiltAngleRange()
-        n = len(tiltAngleRange)
-        ts = matching.keys()[0]
-        tiltSeriesList = matching.values()[0]
+        else:
+            tiltAngleRange = self._getTiltAngleRange()
+            n = len(tiltAngleRange)
+            ts = matching.keys()[0]
+            tiltSeriesList = matching.values()[0]
 
-        if (len(tiltSeriesList) != n or
-            not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList)):
-            errors.append('Tilt-series %s differs from expected tilt '
-                          'angle range. ')
+            if (len(tiltSeriesList) != n or
+                not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList)):
+                errors.append('Tilt-series %s differs from expected tilt '
+                              'angle range. ')
 
         return errors
 
@@ -441,14 +442,21 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             return 'TS_%s' % tsId if tsId[0].isdigit() else tsId
 
         def _addOne(fileList, f, m):
-            """ Return one file matching. """
+            """ Add one file matching to the list. """
             fileList.append((f, int(m.group('TO')), float(m.group('TA'))))
 
         def _addMany(fileList, f, m):
-            """ Return many 'files' (when angles in header or mdoc). """
+            """ Add many 'files' (when angles in header or mdoc) to the list. """
             _, _, _, n = pwem.ImageHandler().getDimensions(f)
-            # FIXME, read proper angles
-            angles = tomo.convert.getAnglesFromHeader(f)
+
+            if self.anglesFrom == self.ANGLES_FROM_HEADER:
+                angles = tomo.convert.getAnglesFromHeader(f)
+            else:
+                mdocFn = f + '.mdoc'
+                if not os.path.exists(mdocFn):
+                    raise Exception("Missing mdoc file: %s" % mdocFn)
+                angles = tomo.convert.getAnglesFromMdoc(mdocFn)
+
             for i, a in enumerate(angles):
                 fileList.append(((i+1, f), i+1, a))
 
@@ -520,8 +528,10 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                          self.stepAngle.get())
 
     def _sameTiltAngleRange(self, tiltAngleRange, tiltSeriesList):
+        # allow some tolerance when comparing tilt-angles
         return np.allclose(tiltAngleRange,
-                           sorted(item[2] for item in tiltSeriesList))
+                           sorted(item[2] for item in tiltSeriesList),
+                           atol=0.1)
 
     # --------------- Streaming special functions -----------------------
     def _getStopStreamingFilename(self):
