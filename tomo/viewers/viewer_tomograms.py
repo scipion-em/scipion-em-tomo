@@ -38,6 +38,7 @@ from pyworkflow.em.convert import ImageHandler
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.em.viewers as viewers
 
+
 from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
 
 TOMOGRAM_SLICES = 1
@@ -158,8 +159,13 @@ class ViewerProtImportTomograms(ProtocolViewer):
         # Write an sqlite with all tomograms selected for visualization.
         sampling, setOfObjects = self._createSetOfObjects()
 
+        # This is the best view but this will enable the 'Create Subset'
+        # that will fail because there isn't a create subset for tomo and subtomo in Xmipp
+        # viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
+        # view = self.objectView(setOfObjects, viewParams=viewParams)
+
         view = self.objectView(setOfObjects)
         view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
-        return [self.objectView(setOfObjects)]
+        return [view]
 
