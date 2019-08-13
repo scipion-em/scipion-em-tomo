@@ -99,15 +99,13 @@ class ViewerProtImportTomograms(ProtocolViewer):
 
     def _createSetOfObjects(self):
         if hasattr(self.protocol, 'outputTomogram'):
-            setOfObjects = self.protocol._createSetOfTomograms()
-            setOfObjects.append(self.protocol.outputTomogram)
+            setOfObjects = self.protocol.outputTomogram
             sampling = self.protocol.outputTomogram.getSamplingRate()
         elif hasattr(self.protocol, 'outputTomograms'):
             setOfObjects = self.protocol.outputTomograms
             sampling = self.protocol.outputTomograms.getSamplingRate()
         elif hasattr(self.protocol, 'outputSubTomogram'):
-            setOfObjects = self.protocol._createSetOfSubTomograms()
-            setOfObjects.append(self.protocol.outputSubTomogram)
+            setOfObjects = self.protocol.outputSubTomogram
             sampling = self.protocol.outputSubTomogram.getSamplingRate()
         elif hasattr(self.protocol, 'outputSubTomograms'):
             setOfObjects = self.protocol.outputSubTomograms
