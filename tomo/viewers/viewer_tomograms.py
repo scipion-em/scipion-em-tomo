@@ -161,10 +161,10 @@ class ViewerProtImportTomograms(ProtocolViewer):
 
         # This is the best view but this will enable the 'Create Subset'
         # that will fail because there isn't a create subset for tomo and subtomo in Xmipp
-        # viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
-        # view = self.objectView(setOfObjects, viewParams=viewParams)
+        viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
+        view = self.objectView(setOfObjects, viewParams=viewParams)
 
-        view = self.objectView(setOfObjects)
+        #view = self.objectView(setOfObjects)
         view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
         return [view]
