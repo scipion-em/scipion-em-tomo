@@ -79,6 +79,7 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.copyInfo(self, other)
         TiltImageBase.copyInfo(self, other, copyId=copyId)
 
+
 class TiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
@@ -274,7 +275,7 @@ class TiltSeriesDict:
     - Check for new input items that needs to be processed
     - Check for items already done that needs to be saved.
     """
-    def __init__(self, inputSet, outputSet=None,
+    def __init__(self, inputSet=None, outputSet=None,
                  newItemsCallback=None,
                  doneItemsCallback=None):
         """
@@ -288,7 +289,8 @@ class TiltSeriesDict:
         """
         self.__dict = OrderedDict()
         self.__inputSet = inputSet
-        self.__inputClosed = inputSet.isStreamClosed()
+        if inputSet is not None:
+            self.__inputClosed = inputSet.isStreamClosed()
         self.__lastCheck = None
         self.__finalCheck = False
         self.__newItemsCallback = newItemsCallback

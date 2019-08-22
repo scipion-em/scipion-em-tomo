@@ -75,8 +75,8 @@ class ProtImodAuto3D(ProtTomoReconstruct):
     # -------------------------- INSERT steps functions ---------------------
     def _loadInputTs(self):
         """ Load input TiltSeries (set or single item). """
-        self._tsDict = TiltSeriesDict()
         inputTs = self.inputTiltSeries.get()
+        self._tsDict = TiltSeriesDict()
 
         if isinstance(inputTs, TiltSeries):
             self._tsDict.addTs(inputTs, includeTi=True)
