@@ -25,8 +25,7 @@
 # **************************************************************************
 
 import pyworkflow.em
-import tomo.objects
-from tomo.protocols import ProtTomoBase
+
 
 _logo = ""
 _references = []
