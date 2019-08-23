@@ -44,12 +44,3 @@ class Plugin(pyworkflow.em.Plugin):
 
 pyworkflow.em.Domain.registerPlugin(__name__)
 
-protUserSubSet = pyworkflow.em.ProtUserSubSet
-
-
-setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSubTomograms.__func__)
-setattr(protUserSubSet, "_createSet", ProtTomoBase._createSet.__func__)
-
-
-
