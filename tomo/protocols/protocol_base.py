@@ -95,11 +95,6 @@ class ProtTomoBase:
         return str(maxCounter+1) if maxCounter > 0 else '' # empty if not output
 
 
-class ProtTomoReconstruct(pwem.EMProtocol, ProtTomoBase):
-    """ Base class for Tomogram reconstruction protocols. """
-    pass
-
-
 class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
 
     OUTPUT_PREFIX = 'output3DCoordinates'

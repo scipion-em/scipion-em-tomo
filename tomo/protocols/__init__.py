@@ -24,7 +24,8 @@
 # *
 # **************************************************************************
 
-from .protocol_base import ProtTomoBase, ProtTomoReconstruct, ProtTomoPicking
+from .protocol_base import ProtTomoBase, ProtTomoPicking
+from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTiltSeries
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
 from .protocol_ts_estimate_ctf import ProtTsEstimateCTF

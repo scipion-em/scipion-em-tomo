@@ -342,7 +342,7 @@ class TiltSeriesDict:
         self._checkNewOutput()
 
     def _checkNewInput(self):
-        #print(">>> DEBUG: _checkNewInput ")
+        print(">>> DEBUG: _checkNewInput ")
 
         inputSetFn = self.__inputSet.getFileName()
         mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
@@ -366,7 +366,7 @@ class TiltSeriesDict:
         self.__lastCheck = datetime.now()
 
     def _checkNewOutput(self):
-        #print(">>> DEBUG: _checkNewInput ")
+        print(">>> DEBUG: _checkNewInput ")
         # First check that we have some items in the finished
         self.__lock.acquire()
         doneItems = list(self.__finished)
@@ -387,10 +387,10 @@ class TiltSeriesDict:
 
     def allDone(self):
         """ Return True if input stream is closed and all task are done. """
-        # print(">>> DEBUG: allDone\n"
-        #       "    inputClosed: %s\n"
-        #       "    len(dict):   %s\n"
-        #       "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
+        print(">>> DEBUG: allDone\n"
+              "    inputClosed: %s\n"
+              "    len(dict):   %s\n"
+              "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 
@@ -464,6 +464,10 @@ class Tomogram(data.Volume):
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = True
+
+    def updateDim(self):
+        """ Update dimensions of this set base on the first element. """
+        self.setDim(self.getFirstItem().getDim())
 
 
 class Coordinate3D(data.EMObject):

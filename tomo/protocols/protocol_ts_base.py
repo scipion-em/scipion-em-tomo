@@ -24,16 +24,11 @@
 # *
 # **************************************************************************
 
-import os
 
-import pyworkflow as pw
 import pyworkflow.em as pwem
-import pyworkflow.protocol.params as params
 from pyworkflow.protocol import STEPS_PARALLEL, STATUS_NEW
 
-from pyworkflow.utils.properties import Message
-
-from tomo.objects import TiltSeriesDict
+from tomo.objects import TiltSeriesDict, Tomogram
 from .protocol_base import ProtTomoBase
 
 
@@ -49,8 +44,6 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
         pwem.EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
-    # -------------------------- DEFINE param functions -----------------------
-
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         self._initialize()
@@ -63,7 +56,7 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
                                  prerequisites=[self._ciStepId])
         self._coStep = self._steps[-1]  # get last step
 
-        self._tsDict = TiltSeriesDict(inputTs, self._getOutputTs(),
+        self._tsDict = TiltSeriesDict(inputTs, self._getOutputSet(),
                                       newItemsCallback=self._insertNewSteps,
                                       doneItemsCallback=self._updateOutput)
         self._tsDict.update()
@@ -72,12 +65,12 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
         """ Insert processing steps for newly discovered tilt-series. """
         for tsId in tsIdList:
             tsSteps = []
-            for i, ti in enumerate(self._tsDict.getTiList(tsId)):
-                tiStep = self._insertFunctionStep('processTiltImageStep',
-                                                  tsId, ti.getObjId(),
-                                                  *self._getArgs(),
-                                                  prerequisites=[self._ciStepId])
-                tsSteps.append(tiStep)
+            if self._doInsertTiltImageSteps():
+                for i, ti in enumerate(self._tsDict.getTiList(tsId)):
+                    tiStep = self._insertFunctionStep(
+                        'processTiltImageStep', tsId, ti.getObjId(),
+                        *self._getArgs(), prerequisites=[self._ciStepId])
+                    tsSteps.append(tiStep)
 
             tsStepId = self._insertFunctionStep('processTiltSeriesStep', tsId,
                                                 prerequisites=tsSteps)
@@ -101,7 +94,7 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
         """ To be implemented in subclasses. """
         pass
 
-    def _updateOutputTsSet(self, outputSet, tsIdList):
+    def _updateOutputSet(self, outputSet, tsIdList):
         """ Update the output set with the finished Tilt-series.
         Params:
             :param tsIdList: list of ids of finished tasks.
@@ -122,28 +115,26 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
         # Flag to check the first time we save output
         self._createOutput = getattr(self, '_createOutput', True)
 
-        outputSet = self._getOutputTs()
+        outputSet = self._getOutputSet()
 
         if outputSet is None:
             # Special case just to update the outputSet status
             # but it only makes sense when there is outputSet
             if not tsIdList:
                 return
-            inputTs = self._getInputTs()
-            outputSet = self._createSetOfTiltSeries()
-            outputSet.copyInfo(inputTs)
+            outputSet = self._createOutputSet()
         else:
             outputSet.enableAppend()
             self._createOutput = False
 
         # Call the sub-class method to update the output
-        self._updateOutputTsSet(outputSet, tsIdList)
+        self._updateOutputSet(outputSet, tsIdList)
 
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
         if self._createOutput:
             outputSet.updateDim()
-            self._defineOutputs(outputTiltSeries=outputSet)
+            self._defineOutputs(**{self._getOutputName(): outputSet})
             self._defineSourceRelation(self._getInputTsPointer(), outputSet)
             self._createOutput = False
         else:
@@ -156,7 +147,7 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
             self._coStep.setStatus(STATUS_NEW)
 
     def createOutputStep(self):
-        outputSet = self._getOutputTs()
+        outputSet = self._getOutputSet()
         outputSet.setStreamState(outputSet.STREAM_CLOSED)
         outputSet.write()
         self._store(outputSet)
@@ -181,8 +172,23 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
         """ Return the tiltSeries input object. """
         return self._getInputTsPointer().get()
 
-    def _getOutputTs(self):
-        return getattr(self, 'outputTiltSeries', None)
+    def _getOutputName(self):
+        """ Return the output name, by default 'outputTiltSeries'.
+        This method can be re-implemented in subclasses that have a
+        different output. (e.g outputTomograms).
+        """
+        return 'outputTiltSeries'
+
+    def _getOutputSet(self):
+        return getattr(self, self._getOutputName(), None)
+
+    def _createOutputSet(self):
+        """ Method to create the output set.
+        By default will a SetOfTiltSeries, but can be re-defined in subclasses.
+        """
+        outputSet = self._createSetOfTiltSeries()
+        outputSet.copyInfo(self._getInputTs())
+        return outputSet
 
     def _getArgs(self):
         """ Return a list with parameters that will be passed to the process
@@ -190,3 +196,45 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
         """
         return []
 
+    def _doInsertTiltImageSteps(self):
+        """ Default True, but if return False, the steps for each
+        TiltImage will not be inserted. """
+        return True
+
+
+class ProtTomoReconstruct(ProtTsProcess):
+    """ Base class for Tomogram reconstruction protocols. """
+
+    def _doInsertTiltImageSteps(self):
+        # For reconstruction protocols, usually we don't
+        # want one step per each tilt-image
+        return False
+
+    def _updateOutputSet(self, outputSet, tsIdList):
+        """ Override this method to convert the TiltSeriesM into TiltSeries.
+        """
+        for tsId in tsIdList:
+            t = Tomogram(location=self._getPath(self._getTomoName(tsId)))
+            outputSet.append(t)
+
+    def _createOutputSet(self):
+        """ Create the output set of Tomograms. """
+        outputSet = self._createSetOfTomograms()
+        samplingRate = self._getInputTs().getSamplingRate()
+
+        if self.bin > 1:
+            samplingRate *= self.bin.get()
+
+        outputSet.setSamplingRate(samplingRate)
+
+        return outputSet
+
+    def _getOutputName(self):
+        return 'outputTomograms'
+
+    # --------------------------- UTILS functions ----------------------------
+    def _getInputTsPointer(self):
+        return self.inputTiltSeries
+
+    def _getTomoName(self, tsId):
+        return '%s_tomo.mrc' % tsId

@@ -152,7 +152,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         self._tsDict.setFinished(tsId)
 
-    def _updateOutputTsSet(self, outputSet, tsIdList):
+    def _updateOutputSet(self, outputSet, tsIdList):
         """ Override this method to convert the TiltSeriesM into TiltSeries.
         """
         for tsId in tsIdList:
