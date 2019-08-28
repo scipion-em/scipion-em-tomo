@@ -394,9 +394,9 @@ class TiltSeriesDict:
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 
-class TomoAcquisition(data.EMObject):
+class TomoAcquisition(data.Acquisition):
     def __init__(self, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
+        data.Acquisition.__init__(self, **kwargs)
         self._angleMin = pwobj.Float(kwargs.get('angleMin', None))
         self._angleMax = pwobj.Float(kwargs.get('angleMax', None))
         self._step = pwobj.Integer(kwargs.get('step', None))
@@ -464,6 +464,10 @@ class Tomogram(data.Volume):
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = True
+
+    def __init__(self, *args, **kwargs):
+        data.SetOfVolumes.__init__(self, *args, **kwargs)
+        self._acquisition = TomoAcquisition()
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
