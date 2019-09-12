@@ -35,7 +35,6 @@ from tomo.objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
 
 
-
 class ProtTsCorrectMotion(ProtTsProcess):
     """
     Base class for movie alignment protocols such as:

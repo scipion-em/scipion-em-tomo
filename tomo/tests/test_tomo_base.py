@@ -55,7 +55,8 @@ class TestTomoBase(BaseTest):
         expected = ['TiltImage', 'TiltSeries', 'SetOfTiltSeries',
                     'TiltImageM', 'TiltSeriesM', 'SetOfTiltSeriesM']
         for e in expected:
-            self.assertTrue(e in objects, "%s should be in Domain.getObjects" % e)
+            self.assertTrue(e in objects,
+                            "%s should be in Domain.getObjects" % e)
 
     def _create_tiltseries(self, tiltSeriesClass):
         setFn = self.getOutputPath('%s.sqlite' % tiltSeriesClass.__name__)
@@ -122,8 +123,7 @@ class TestTomoBaseProtocols(BaseTest):
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
-            tomo.protocols.ProtImportTiltSeries,
-            importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+            tomo.protocols.ProtImportTsMovies,
             filesPath=os.path.join(self.dataPath, 'data', 'frames'),
             filesPattern=filesPattern,
             voltage=300,
@@ -146,8 +146,10 @@ class TestTomoBaseProtocols(BaseTest):
     def test_motioncorTiltSeriesM(self):
         protImport = self.test_importTiltSeriesM()
 
+        # --------- Motion correction with motioncor2 for Tilt-series ------
+        import motioncorr.protocols
         protMc = self.newProtocol(
-            tomo.protocols.ProtTsMotionCorr,
+            motioncorr.protocols.ProtTsMotionCorr,
             binFactor=2.0
         )
 
@@ -168,8 +170,7 @@ class TestTomoImportTs(BaseTest):
                                 "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
 
             protImport = self.newProtocol(
-                tomo.protocols.ProtImportTiltSeries,
-                importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+                tomo.protocols.ProtImportTsMovies,
                 filesPath=os.path.join(self.empiar10164, 'data', 'frames'),
                 filesPattern=filesPattern,
                 voltage=300,
@@ -188,8 +189,7 @@ class TestTomoImportTs(BaseTest):
                                 "SCIPION_TOMO_ETOMO_TUTORIAL variable not defined. ")
 
             protImport = self.newProtocol(
-                tomo.protocols.ProtImportTiltSeries,
-                importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MICS,
+                tomo.protocols.ProtImportTs,
                 filesPath=os.path.join(self.etomoTutorial),
                 filesPattern='BB{TS}.st',
                 voltage=300,
@@ -398,8 +398,7 @@ class TestTomoPreprocessing(BaseTest):
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
-            tomo.protocols.ProtImportTiltSeries,
-            importType=tomo.protocols.ProtImportTiltSeries.IMPORT_TYPE_MOVS,
+            tomo.protocols.ProtImportTsMovies,
             filesPath=os.path.join(self.dataPath, 'data', 'frames'),
             filesPattern=filesPattern,
             voltage=300,

@@ -42,15 +42,8 @@ import tomo.convert
 from .protocol_base import ProtTomoBase
 
 
-class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
-    """ Base class for other Import protocols.
-    All imports protocols will have:
-    1) Several options to import from (_getImportOptions function)
-    2) First option will always be "from files". (for this option
-      files with a given pattern will be retrieved  and the ### will
-      be used to mark an ID part from the filename.
-      - For each file a function to process it will be called
-        (_importFile(fileName, fileId))
+class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
+    """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
     """
     IMPORT_FROM_FILES = 0
 
@@ -59,26 +52,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     IMPORT_LINK_ABS = 1
     IMPORT_LINK_REL = 2
 
-    IMPORT_TYPE_MICS = 0
-    IMPORT_TYPE_MOVS = 1
-
-    ANGLES_FROM_FILES = 0
-    ANGLES_FROM_HEADER = 1
-    ANGLES_FROM_MDOC = 2
-
-    _label = 'import tilt-series'
+    ANGLES_FROM_FILENAME = 'Filename'
+    ANGLES_FROM_HEADER = 'Header'
+    ANGLES_FROM_MDOC = 'Mdoc'
+    ANGLES_FROM_TLT = 'Tlt'
+    ANGLES_FROM_RANGE = 'Range'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
 
-        form.addParam('importType', params.EnumParam, default=1,
-                      choices=['Tilt series', 'Tilt series Movies'],
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Select type of input images',
-                      help='If you import tilt-series movies, then'
-                           'you need to provide also dose information'
-                           'and maybe gain/dark images.')
         form.addParam('filesPath', params.PathParam,
                       label="Files directory",
                       help="Root directory of the tilt-series (or movies).")
@@ -96,16 +79,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                            "         (positive or negative float value).\n\n"
                            "Examples:\n"
                            "")
-        form.addParam('anglesFrom', params.EnumParam,
-                      default=self.ANGLES_FROM_FILES,
-                      choices=['Files', 'Header', 'Mdoc'],
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Import angles from',
-                      help='By default, the angles should be provided as part '
-                           'of the files pattern, using the {TA} token. '
-                           'Additionally, in the case of importing tilt-series,'
-                           'angles can be read from the header or from mdoc '
-                           'files.')
+        self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
                       choices=['Copy files',
@@ -168,6 +142,10 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
         self._defineBlacklistParams(form)
 
+    def _defineAngleParam(self, form):
+        """ Used in subclasses to define the option to fetch tilt angles. """
+        pass
+
     def _defineAcquisitionParams(self, form):
         """ Define acq parameters, it can be overridden
         by subclasses to change what parameters to include.
@@ -190,25 +168,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                        label=Message.LABEL_SAMP_RATE,
                        help=Message.TEXT_SAMP_RATE)
 
-        moviesCond = 'importType==%d' % self.IMPORT_TYPE_MOVS
-        line = group.addLine('Dose (e/A^2)',
-                             condition=moviesCond,
-                             help="Initial accumulated dose (usually 0) and "
-                                  "dose per frame. ")
-        line.addParam('doseInitial', params.FloatParam, default=0,
-                      label='Initial')
-        line.addParam('dosePerFrame', params.FloatParam, default=None,
-                      allowsNull=True,
-                      label='Per frame')
-        group.addParam('gainFile', params.FileParam,
-                       condition=moviesCond,
-                       label='Gain image',
-                       help='A gain reference related to a set of movies '
-                            'for gain correction')
-        group.addParam('darkFile', params.FileParam,
-                       condition=moviesCond,
-                       label='Dark image',
-                       help='A dark image related to a set of movies')
         return group
 
     def _defineBlacklistParams(self, form):
@@ -343,17 +302,15 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             matching = self.getMatchingFiles()
         except Exception as e:
             errorStr = str(e)
-            if 'Missing mdoc file:' in errorStr:
+            if 'Missing angles file: ' in errorStr:
                 return [errorStr]
             else:
                 raise e
 
-        if self.importType == self.IMPORT_TYPE_MOVS:
-            if self.anglesFrom != self.ANGLES_FROM_FILES:
-                errors.append('Angle information could only be taken from '
-                              'the files pattern when importing tilt-series'
-                              'movies.')
-            elif not self._anglesInPattern():
+        anglesFrom = self.getEnumText('anglesFrom')
+
+        if anglesFrom == self.ANGLES_FROM_FILENAME:
+            if not self._anglesInPattern():
                 errors.append('When importing movies, {TA} and {TO} should be '
                               'in the files pattern.')
 
@@ -370,7 +327,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             if (len(tiltSeriesList) != n or
                 not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList)):
                 errors.append('Tilt-series %s differs from expected tilt '
-                              'angle range. ')
+                              'angle range. ' % ts)
 
         return errors
 
@@ -383,10 +340,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         return ['files']
 
     # -------------------------- UTILS functions -------------------------------
-    def doImportMovies(self):
-        """ Return True if we are importing TiltSeries movies. """
-        return self.importType == self.IMPORT_TYPE_MOVS
-
     def _initialize(self):
         """ Initialize some internal variables such as:
         - patterns: Expand the pattern using environ vars or username
@@ -411,10 +364,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         # Set output names depending on the import type (either movies or images)
         self._outputName = 'outputTiltSeries'
         self._createOutputName = '_createSetOfTiltSeries'
-
-        if self.doImportMovies():
-            self._outputName += 'M'
-            self._createOutputName += 'M'
 
         # Keep track of which existing tilt-series has already been found
         self._existingTs = set()
@@ -449,13 +398,24 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             """ Add many 'files' (when angles in header or mdoc) to the list. """
             _, _, _, n = pwem.ImageHandler().getDimensions(f)
 
-            if self.anglesFrom == self.ANGLES_FROM_HEADER:
+            anglesFrom = self.getEnumText('anglesFrom')
+
+            if anglesFrom == self.ANGLES_FROM_HEADER:
                 angles = tomo.convert.getAnglesFromHeader(f)
-            else:
+            elif anglesFrom == self.ANGLES_FROM_MDOC:
                 mdocFn = f + '.mdoc'
                 if not os.path.exists(mdocFn):
-                    raise Exception("Missing mdoc file: %s" % mdocFn)
+                    raise Exception("Missing angles file: %s" % mdocFn)
                 angles = tomo.convert.getAnglesFromMdoc(mdocFn)
+            elif anglesFrom == self.ANGLES_FROM_TLT:
+                tltFn = f + '.tlt'
+                if not os.path.exists(tltFn):
+                    raise Exception("Missing angles file: %s" % tltFn)
+                angles = tomo.convert.getAnglesFromTlt(tltFn)
+            elif anglesFrom == self.ANGLES_FROM_RANGE:
+                angles = self._getTiltAngleRange()
+            else:
+                raise Exception('Invalid angles option: %s' % anglesFrom)
 
             for i, a in enumerate(angles):
                 fileList.append(((i+1, f), i+1, a))
@@ -515,12 +475,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         acq.setAmplitudeContrast(self.amplitudeContrast.get())
         acq.setMagnification(self.magnification.get())
 
-        if self.doImportMovies():
-            inputTs.setGain(self.gainFile.get())
-            inputTs.setDark(self.darkFile.get())
-            acq.setDoseInitial(self.doseInitial.get())
-            acq.setDosePerFrame(self.dosePerFrame.get())
-
     def _getTiltAngleRange(self):
         """ Return the list with all expected tilt angles. """
         return np.arange(self.minAngle.get(),
@@ -560,3 +514,81 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
     def streamingHasFinished(self):
         return os.path.exists(self._getStopStreamingFilename())
+
+
+class ProtImportTs(ProtImportTsBase):
+    _label = 'import tilt-series'
+
+    def _defineAngleParam(self, form):
+        """ Used in subclasses to define the option to fetch tilt angles. """
+        form.addParam('anglesFrom', params.EnumParam,
+                      default=0,
+                      choices=[self.ANGLES_FROM_RANGE,
+                               self.ANGLES_FROM_HEADER,
+                               self.ANGLES_FROM_MDOC,
+                               self.ANGLES_FROM_TLT],
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label='Import angles from',
+                      help='Select how the tilt angles will be imported. '
+                           'Always the angular range defined by Min, Max, Step '
+                           'will be taken into account and validated against '
+                           'the angles imported. '
+                           ''
+                           'By default, the angles should be provided as part '
+                           'of the files pattern, using the {TA} token. '
+                           'Additionally, in the case of importing tilt-series,'
+                           'angles can be read from the header or from mdoc '
+                           'files.')
+
+
+class ProtImportTsMovies(ProtImportTsBase):
+    _label = 'import tilt-series movies'
+
+    def _defineAngleParam(self, form):
+        """ Used in subclasses to define the option to fetch tilt angles. """
+        form.addParam('anglesFrom', params.EnumParam,
+                      default=0,
+                      choices=[self.ANGLES_FROM_FILENAME],
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label='Import angles from',
+                      help='FIXME: '
+                           'By default, the angles should be provided as part '
+                           'of the filename pattern, using the {TA} token. '
+                           'Additionally, in the case of importing tilt-series,'
+                           'angles can be read from the header or from mdoc '
+                           'files.')
+
+    def _defineAcquisitionParams(self, form):
+        """ Add movie specific options to the acquisition section. """
+        group = ProtImportTsBase._defineAcquisitionParams(self, form)
+
+        line = group.addLine('Dose (e/A^2)',
+                             help="Initial accumulated dose (usually 0) and "
+                                  "dose per frame. ")
+        line.addParam('doseInitial', params.FloatParam, default=0,
+                      label='Initial')
+        line.addParam('dosePerFrame', params.FloatParam, default=None,
+                      allowsNull=True,
+                      label='Per frame')
+        group.addParam('gainFile', params.FileParam,
+                       label='Gain image',
+                       help='A gain reference related to a set of movies '
+                            'for gain correction')
+        group.addParam('darkFile', params.FileParam,
+                       label='Dark image',
+                       help='A dark image related to a set of movies')
+        return group
+
+    def _fillAcquisitionInfo(self, inputTs):
+        ProtImportTsBase._fillAcquisitionInfo(self, inputTs)
+
+        inputTs.setGain(self.gainFile.get())
+        inputTs.setDark(self.darkFile.get())
+        acq = inputTs.getAcquisition()
+        acq.setDoseInitial(self.doseInitial.get())
+        acq.setDosePerFrame(self.dosePerFrame.get())
+
+    def _initialize(self):
+        ProtImportTsBase._initialize(self)
+        self._outputName += 'M'
+        self._createOutputName += 'M'
