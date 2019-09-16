@@ -38,6 +38,7 @@ from pyworkflow.em.convert import ImageHandler
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pyworkflow.em.viewers as viewers
 
+
 from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
 
 TOMOGRAM_SLICES = 1
@@ -99,15 +100,13 @@ class ViewerProtImportTomograms(ProtocolViewer):
 
     def _createSetOfObjects(self):
         if hasattr(self.protocol, 'outputTomogram'):
-            setOfObjects = self.protocol._createSetOfTomograms()
-            setOfObjects.append(self.protocol.outputTomogram)
+            setOfObjects = self.protocol.outputTomogram
             sampling = self.protocol.outputTomogram.getSamplingRate()
         elif hasattr(self.protocol, 'outputTomograms'):
             setOfObjects = self.protocol.outputTomograms
             sampling = self.protocol.outputTomograms.getSamplingRate()
         elif hasattr(self.protocol, 'outputSubTomogram'):
-            setOfObjects = self.protocol._createSetOfSubTomograms()
-            setOfObjects.append(self.protocol.outputSubTomogram)
+            setOfObjects = self.protocol.outputSubTomogram
             sampling = self.protocol.outputSubTomogram.getSamplingRate()
         elif hasattr(self.protocol, 'outputSubTomograms'):
             setOfObjects = self.protocol.outputSubTomograms
@@ -160,8 +159,9 @@ class ViewerProtImportTomograms(ProtocolViewer):
         # Write an sqlite with all tomograms selected for visualization.
         sampling, setOfObjects = self._createSetOfObjects()
 
-        view = self.objectView(setOfObjects)
+        viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
+        view = self.objectView(setOfObjects, viewParams=viewParams)
         view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
-        return [self.objectView(setOfObjects)]
+        return [view]
 
