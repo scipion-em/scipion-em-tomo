@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
+import pyworkflow
+
 from .protocol_base import ProtTomoBase, ProtTomoPicking
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
@@ -32,4 +34,16 @@ from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
 from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
+
+from .move_to_plugins.protocol_ts_motioncor import ProtTsMotionCorr
+from .move_to_plugins.protocol_ts_ctffind import ProtTsCtffind
+from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
+from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
+from .move_to_plugins.protocol_imod_etomo import ProtImodEtomo
+
+
+protUserSubSet = pyworkflow.em.ProtUserSubSet
+setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
+setattr(protUserSubSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
+setattr(protUserSubSet, "_createSet", ProtTomoBase._createSet.__func__)
 

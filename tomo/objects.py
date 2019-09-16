@@ -676,11 +676,14 @@ class SubTomogram(data.Volume):
         self._acquisition = acquisition
 
     def hasAcquisition(self):
-        return self._acquisition.getAngleMin() is not None
+        return self._acquisition is not None and \
+               self._acquisition.getAngleMin() is not None and \
+               self._acquisition.getAngleMax() is not None
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
+    REP_TYPE = SubTomogram
 
     def __init__(self, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
@@ -700,3 +703,27 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
+
+class AverageSubTomogram(SubTomogram):
+    """Represents a set of Averages.
+    It is a SetOfParticles but it is useful to differentiate outputs."""
+    def __init__(self, **kwargs):
+        SubTomogram.__init__(self, **kwargs)
+
+
+class ClassSubTomogram(SetOfSubTomograms):
+    REP_TYPE = AverageSubTomogram
+    """ Represent a Class that groups Volume objects.
+    Usually the representative of the class is another Volume.
+    """
+    def close(self):
+        # Do nothing on close, since the db will be closed by SetOfClasses
+        pass
+
+
+class SetOfClassesSubTomograms(data.SetOfClasses):
+    """ Store results from a subtomogram averaging method. """
+    ITEM_TYPE = ClassSubTomogram
+    REP_TYPE = AverageSubTomogram
+
+    pass
