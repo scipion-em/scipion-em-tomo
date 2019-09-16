@@ -35,6 +35,10 @@ from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 
+# Hack to allow creating subsets of Tomograms and Subtomograms from ShowJ
+# We should modify ProtUserSubSet to remove hardcoded methods to create subsets
+# This method/class can be pass as parameter to showj
+# See https://github.com/I2PC/scipion/issues/2036
 protUserSubSet = pyworkflow.em.ProtUserSubSet
 setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
 setattr(protUserSubSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
