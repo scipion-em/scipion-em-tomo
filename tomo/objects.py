@@ -463,6 +463,7 @@ class SetOfCoordinates3D(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._volumesPointer = pwobj.Pointer()
         self._boxSize = pwobj.Integer()
+        self._samplingRate = pwobj.Integer()
 
     def getBoxSize(self):
         """ Return the box size of the particles.
@@ -472,6 +473,14 @@ class SetOfCoordinates3D(data.EMSet):
     def setBoxSize(self, boxSize):
         """ Set the box size of the particles. """
         self._boxSize.set(boxSize)
+
+    def getSamplingRate(self):
+       """ Return the sampling rate of the particles. """
+       return self._samplingRate.get()
+
+    def setSamplingRate(self, sampling):
+       """ Set the sampling rate of the particles. """
+       self._samplingRate.set(sampling)
 
     def iterVolumes(self):
         """ Iterate over the micrographs set associated with this
