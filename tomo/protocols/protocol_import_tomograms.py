@@ -121,10 +121,11 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                     tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
-        if tomoSet.getSize() > 1:
-            self._defineOutputs(outputTomograms=tomoSet)
-        else:
-            self._defineOutputs(outputTomogram=tomo)
+        ### Change needed to import always a set
+        # if tomoSet.getSize() > 1:
+        self._defineOutputs(outputTomograms=tomoSet)
+        # else:
+        #     self._defineOutputs(outputTomogram=tomo)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
