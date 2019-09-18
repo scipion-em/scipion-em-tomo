@@ -252,6 +252,7 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         self._darkFile.set(other.getDark())
         #self._firstFramesRange.set(other.getFramesRange())
 
+
 class TomoAcquisition(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
@@ -291,6 +292,7 @@ class TomoAcquisition(data.EMObject):
     def setAngleAxis2(self, value):
         self._angleAxis2.set(value)
 
+
 class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
@@ -317,9 +319,11 @@ class Tomogram(data.Volume):
                self._acquisition.getAngleMin() is not None and\
                self._acquisition.getAngleMax() is not None
 
+
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = True
+
 
 class TiltSeriesDict:
     """ Helper class that to store TiltSeries and TiltImage but
@@ -459,6 +463,7 @@ class SetOfCoordinates3D(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._volumesPointer = pwobj.Pointer()
         self._boxSize = pwobj.Integer()
+        self._samplingRate = pwobj.Integer()
 
     def getBoxSize(self):
         """ Return the box size of the particles.
@@ -468,6 +473,14 @@ class SetOfCoordinates3D(data.EMSet):
     def setBoxSize(self, boxSize):
         """ Set the box size of the particles. """
         self._boxSize.set(boxSize)
+
+    def getSamplingRate(self):
+       """ Return the sampling rate of the particles. """
+       return self._samplingRate.get()
+
+    def setSamplingRate(self, sampling):
+       """ Set the sampling rate of the particles. """
+       self._samplingRate.set(sampling)
 
     def iterVolumes(self):
         """ Iterate over the micrographs set associated with this
@@ -534,6 +547,7 @@ class SetOfCoordinates3D(data.EMSet):
 
         return s
 
+
 class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
@@ -556,10 +570,14 @@ class SubTomogram(data.Volume):
         self._acquisition = acquisition
 
     def hasAcquisition(self):
-        return self._acquisition.getAngleMin() is not None
+        return self._acquisition is not None and \
+               self._acquisition.getAngleMin() is not None and \
+               self._acquisition.getAngleMax() is not None
+
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
+    REP_TYPE = SubTomogram
 
     def __init__(self, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
@@ -579,3 +597,27 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
+
+class AverageSubTomogram(SubTomogram):
+    """Represents a set of Averages.
+    It is a SetOfParticles but it is useful to differentiate outputs."""
+    def __init__(self, **kwargs):
+        SubTomogram.__init__(self, **kwargs)
+
+
+class ClassSubTomogram(SetOfSubTomograms):
+    REP_TYPE = AverageSubTomogram
+    """ Represent a Class that groups Volume objects.
+    Usually the representative of the class is another Volume.
+    """
+    def close(self):
+        # Do nothing on close, since the db will be closed by SetOfClasses
+        pass
+
+
+class SetOfClassesSubTomograms(data.SetOfClasses):
+    """ Store results from a subtomogram averaging method. """
+    ITEM_TYPE = ClassSubTomogram
+    REP_TYPE = AverageSubTomogram
+
+    pass
