@@ -34,6 +34,7 @@ import numpy as np
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
+from pyworkflow.em.convert import ImageHandler
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
@@ -96,16 +97,6 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
                            "absolute path of the files."
                            "*Relative symlink*: Create symbolic links as "
                            "relative path from the protocol run folder. ")
-
-        group = form.addGroup('Tilt info')
-        line = group.addLine('Tilt angular range',
-                             help="Specify the tilting angular range. "
-                                  "Depending on the collection schema, the "
-                                  "order of the acquisition does not need to "
-                                  "be the same order of the angular range. ")
-        line.addParam('minAngle', params.FloatParam, default=-60, label='min')
-        line.addParam('maxAngle', params.FloatParam, default=60, label='max')
-        line.addParam('stepAngle', params.FloatParam, default=3, label='step')
 
         self._defineAcquisitionParams(form)
 
@@ -206,7 +197,6 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
                 self._existingTs.add(ts.getTsId())
 
         self._fillAcquisitionInfo(outputSet)
-        tiltAngleRange = self._getTiltAngleRange()
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
 
@@ -235,17 +225,13 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
             for ts, tiltSeriesList in matchingFiles.iteritems():
                 someNew = True
 
-                if len(tiltAngleRange) != len(tiltSeriesList):
+                if len(self._tiltAngleList) != len(tiltSeriesList):
                     if incompleteTs:
                         raise Exception("More than one tilt-series seems "
                                         "incomplete regarding the expected "
                                         "number of tilt images.")
                     incompleteTs = True
                     continue
-
-                if not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList):
-                    raise Exception("Invalid tilt angle range for tilt series: "
-                                    "%s" % ts)
 
                 tsObj = tsClass(tsId=ts)
                 # we need this to set mapper before adding any item
@@ -307,29 +293,20 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
             else:
                 raise e
 
-        anglesFrom = self.getEnumText('anglesFrom')
-
-        if anglesFrom == self.ANGLES_FROM_FILENAME:
-            if not self._anglesInPattern():
-                errors.append('When importing movies, {TA} and {TO} should be '
-                              'in the files pattern.')
-
         if not matching:
-            errors.append("There are no files matching the pattern %s"
-                          % self._globPattern)
+            return ["There are no files matching the pattern %s"
+                    % self._globPattern]
 
-        else:
-            tiltAngleRange = self._getTiltAngleRange()
-            n = len(tiltAngleRange)
-            ts = matching.keys()[0]
-            tiltSeriesList = matching.values()[0]
+        self._firstMatch = list(matching.items())[0]
+        self._tiltAngleList = self._getSortedAngles(self._firstMatch[1])
 
-            if (len(tiltSeriesList) != n or
-                not self._sameTiltAngleRange(tiltAngleRange, tiltSeriesList)):
-                errors.append('Tilt-series %s differs from expected tilt '
-                              'angle range. ' % ts)
+        return self._validateAngles()
 
-        return errors
+    def _validateAngles(self):
+        """ Function to be implemented in subclass to validate
+        the angles range.
+        """
+        return []
 
     # -------------------------- BASE methods to be overridden -----------------
     def _getImportChoices(self):
@@ -481,10 +458,14 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
                          self.maxAngle.get() + 1,  # also include max angle
                          self.stepAngle.get())
 
+    def _getSortedAngles(self, tiltSeriesList):
+        """ Return the sorted angles from a given tiltSeriesList. """
+        return sorted(item[2] for item in tiltSeriesList)
+
     def _sameTiltAngleRange(self, tiltAngleRange, tiltSeriesList):
         # allow some tolerance when comparing tilt-angles
         return np.allclose(tiltAngleRange,
-                           sorted(item[2] for item in tiltSeriesList),
+                           self._getSortedAngles(tiltSeriesList),
                            atol=0.1)
 
     # --------------- Streaming special functions -----------------------
@@ -521,24 +502,43 @@ class ProtImportTs(ProtImportTsBase):
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
-        form.addParam('anglesFrom', params.EnumParam,
-                      default=0,
-                      choices=[self.ANGLES_FROM_RANGE,
-                               self.ANGLES_FROM_HEADER,
-                               self.ANGLES_FROM_MDOC,
-                               self.ANGLES_FROM_TLT],
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Import angles from',
-                      help='Select how the tilt angles will be imported. '
-                           'Always the angular range defined by Min, Max, Step '
-                           'will be taken into account and validated against '
-                           'the angles imported. '
-                           ''
-                           'By default, the angles should be provided as part '
-                           'of the files pattern, using the {TA} token. '
-                           'Additionally, in the case of importing tilt-series,'
-                           'angles can be read from the header or from mdoc '
-                           'files.')
+        group = form.addGroup('Tilt info')
+
+        group.addParam('anglesFrom', params.EnumParam,
+                       default=0,
+                       choices=[self.ANGLES_FROM_RANGE,
+                                self.ANGLES_FROM_HEADER,
+                                self.ANGLES_FROM_MDOC,
+                                self.ANGLES_FROM_TLT],
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       label='Import angles from',
+                       help='Select how the tilt angles will be imported. '
+                            'It can be defined by range: Min, Max, Step '
+                            'or from image header, or from complementary'
+                            'mdoc or tlt files (should have the same filename '
+                            'plus the .mdoc or .tlt extension).')
+
+        line = group.addLine('Tilt angular range',
+                             condition='anglesFrom==0',  # ANGLES_FROM_RANGE
+                             help="Specify the tilting angular range. "
+                                  "Depending on the collection schema, the "
+                                  "order of the acquisition does not need to "
+                                  "be the same order of the angular range. ")
+        line.addParam('minAngle', params.FloatParam, default=-60, label='min')
+        line.addParam('maxAngle', params.FloatParam, default=60, label='max')
+        line.addParam('stepAngle', params.FloatParam, default=3, label='step')
+
+    def _validateAngles(self):
+        ts, tiltSeriesList = self._firstMatch
+        i, fileName = tiltSeriesList[0][0]
+        x, y, z, n = ImageHandler().getDimensions(fileName)
+        nImages = max(z, n)  # Just handle ambiguity with mrc format
+        nAngles = len(self._tiltAngleList)
+        if nAngles != nImages:
+            return ['Tilt-series %s stack has different number of images (%d) '
+                    'than the expected number of tilt angles (%d). '
+                    % (fileName, nImages, nAngles)]
+        return []
 
 
 class ProtImportTsMovies(ProtImportTsBase):
@@ -546,17 +546,17 @@ class ProtImportTsMovies(ProtImportTsBase):
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
-        form.addParam('anglesFrom', params.EnumParam,
-                      default=0,
-                      choices=[self.ANGLES_FROM_FILENAME],
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Import angles from',
-                      help='FIXME: '
-                           'By default, the angles should be provided as part '
-                           'of the filename pattern, using the {TA} token. '
-                           'Additionally, in the case of importing tilt-series,'
-                           'angles can be read from the header or from mdoc '
-                           'files.')
+        group = form.addGroup('Tilt info')
+
+        group.addParam('anglesFrom', params.EnumParam,
+                       default=0,
+                       choices=[self.ANGLES_FROM_FILENAME],
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       label='Import angles from',
+                       help='Angles will be parsed from the filename pattern.'
+                            'The special token {TA} should be specified as part'
+                            'of the pattern, that will be used to match the '
+                            'value of the angle for each TiltSeriesMovie.')
 
     def _defineAcquisitionParams(self, form):
         """ Add movie specific options to the acquisition section. """
@@ -592,3 +592,13 @@ class ProtImportTsMovies(ProtImportTsBase):
         ProtImportTsBase._initialize(self)
         self._outputName += 'M'
         self._createOutputName += 'M'
+
+    def _validateAngles(self):
+        """ Function to be implemented in subclass to validate
+        the angles range.
+        """
+        if self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
+            if not self._anglesInPattern():
+                return ['When importing movies, {TA} and {TO} should be in the '
+                        'files pattern.']
+        return []
