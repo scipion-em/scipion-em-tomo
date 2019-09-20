@@ -87,7 +87,7 @@ class TiltSeriesBase(data.SetOfImages):
 
     def copyInfo(self, other):
         """ Copy basic information (id and other properties) but
-        not _mapperPath or _size from other set of micrographs to current one.
+        not _mapperPath or _size from other set of tomograms to current one.
         """
         self.copy(other, copyId=False, ignoreAttrs=['_mapperPath', '_size'])
 
@@ -483,7 +483,7 @@ class SetOfCoordinates3D(data.EMSet):
        self._samplingRate.set(sampling)
 
     def iterVolumes(self):
-        """ Iterate over the micrographs set associated with this
+        """ Iterate over the tomograms set associated with this
         set of coordinates.
         """
         return self.getVolumes()
@@ -516,14 +516,14 @@ class SetOfCoordinates3D(data.EMSet):
             yield coord
 
     def getVolumes(self):
-        """ Returns the SetOfMicrographs associated with
+        """ Returns the SetOfTomograms associated with
         this SetOfCoordinates"""
         return self._volumesPointer.get()
 
     def setVolumes(self, volumes):
-        """ Set the micrographs associated with this set of coordinates.
+        """ Set the tomograms associated with this set of coordinates.
         Params:
-            micrographs: Either a SetOfMicrographs object or a pointer to it.
+            tomograms: Either a SetOfTomograms object or a pointer to it.
         """
         if volumes.isPointer():
             self._volumesPointer.copy(volumes)
