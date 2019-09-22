@@ -390,7 +390,8 @@ class TiltSeriesDict:
         print(">>> DEBUG: allDone\n"
               "    inputClosed: %s\n"
               "    len(dict):   %s\n"
-              "    len(done):   %s" % (self.__inputClosed, len(self.__dict), len(self.__done)))
+              "    len(done):   %s" % (self.__inputClosed, len(self.__dict),
+                                       len(self.__done)))
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 

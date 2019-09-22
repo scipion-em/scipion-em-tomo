@@ -270,11 +270,13 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
                 self.debug("Checking if finished:")
                 self.debug("   Now - Last Change: %s"
                            % pwutils.prettyDelta(now - lastDetectedChange))
-                self.debug("Finished: %s" % finished)
             else:
                 # If we have detected some files, we should update
                 # the timestamp of the last event
                 lastDetectedChange = now
+                finished = not self.isInStreaming()
+
+            self.debug("Finished: %s" % finished)
 
         # Close the output set
         self._updateOutputSet(self._outputName, outputSet,
@@ -323,8 +325,9 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
             and also replacing special character # by digit matching.
         - outputs: Output variable names
         """
-        self._pattern = os.path.join(self.filesPath.get('').strip(),
-                                     self.filesPattern.get('').strip())
+        path = self.filesPath.get('').strip()
+        pattern = self.filesPattern.get('').strip()
+        self._pattern = os.path.join(path, pattern) if pattern else path
 
         def _replace(p, ts, to, ta):
             p = p.replace('{TS}', ts)
@@ -399,17 +402,26 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
 
-        for f in filePaths:
-            if self.fileModified(f, fileTimeOut):
-                continue
-            m = self._regex.match(f)
-            if m is not None:
-                ts = _getTsId(m)
-                # Only report files of new tilt-series
-                if ts not in self._existingTs:
-                    if ts not in matchingFiles:
-                        matchingFiles[ts] = []
-                    addFunc(matchingFiles[ts], f, m)
+        # Handle special case of just one TiltSeries, to avoid
+        # the user the need to specify {TS}
+        if len(filePaths) == 1 and not self.isInStreaming():
+            f = filePaths[0]
+            ts = pwutils.removeBaseExt(f)
+            print("single Ts: ", ts)
+            matchingFiles[ts] = []
+            _addMany(matchingFiles[ts], f, None)
+        else:
+            for f in filePaths:
+                if self.fileModified(f, fileTimeOut):
+                    continue
+                m = self._regex.match(f)
+                if m is not None:
+                    ts = _getTsId(m)
+                    # Only report files of new tilt-series
+                    if ts not in self._existingTs:
+                        if ts not in matchingFiles:
+                            matchingFiles[ts] = []
+                        addFunc(matchingFiles[ts], f, m)
 
         return matchingFiles
 
@@ -494,7 +506,11 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
         f.close()
 
     def streamingHasFinished(self):
-        return os.path.exists(self._getStopStreamingFilename())
+        return (not self.isInStreaming() or
+                os.path.exists(self._getStopStreamingFilename()))
+
+    def isInStreaming(self):
+        return self.dataStreaming.get()
 
 
 class ProtImportTs(ProtImportTsBase):
