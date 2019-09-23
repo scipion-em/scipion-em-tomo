@@ -29,8 +29,11 @@ from os.path import basename
 
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import importFromPlugin
+import os
 
 from .protocol_base import ProtTomoImportFiles
+
+from tomo.objects import SetOfCoordinates3D
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -59,10 +62,10 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         ProtTomoImportFiles._defineParams(self, form)
         form.addParam('boxSize', params.IntParam, label='Box size')
 
-        form.addParam('importTomogram', params.PointerParam,
-                      pointerClass='Tomogram',
-                      label='Input tomogram',
-                      help='Select the tomogram for which you '
+        form.addParam('importTomograms', params.PointerParam,
+                      pointerClass='SetOfTomograms',
+                      label='Input tomograms',
+                      help='Select the tomograms/tomogram for which you '
                             'want to import coordinates.')
 
     def _insertAllSteps(self):
@@ -72,22 +75,29 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     # --------------------------- STEPS functions -----------------------------
 
     def importCoordinatesStep(self, samplingRate):
-        importTomogram = self.importTomogram.get()
-        coordsSet = self._createSetOfCoordinates3D(importTomogram)
+        importTomograms = self.importTomograms.get()
+        suffix = self._getOutputSuffix(SetOfCoordinates3D)
+        coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
         coordsSet.setBoxSize(self.boxSize.get())
-        coordsSet.setSamplingRate(self.samplingRate.get())
+        coordsSet.setSamplingRate(samplingRate)
+        coordsSet.setVolumes(importTomograms)
         ci = self.getImportClass()
-        for coordFile, fileId in self.iterFiles():
-            if importTomogram is not None:
-                def addCoordinate(coord):
-                    coord.setVolume(importTomogram)
-                    coordsSet.append(coord)
+        for tomo in importTomograms.iterItems():
+            tomoName = os.path.splitext(tomo.getFileName())[0]
+            tomoName = basename(tomoName)
+            for coordFile, fileId in self.iterFiles():
+                fileName = os.path.splitext(coordFile)[0]
+                fileName = "import_" + basename(fileName)
+                if tomo is not None and tomoName == fileName:
+                    def addCoordinate(coord):
+                        coord.setVolume(tomo.clone())
+                        coordsSet.append(coord)
 
-                # Parse the coordinates in the given format for this micrograph
-                ci.importCoordinates3D(coordFile, addCoordinate)
+                    # Parse the coordinates in the given format for this micrograph
+                    ci.importCoordinates3D(coordFile, addCoordinate)
 
         self._defineOutputs(outputCoordinates=coordsSet)
-        self._defineSourceRelation(self.importTomogram, coordsSet)
+        self._defineSourceRelation(self.importTomograms, coordsSet)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
