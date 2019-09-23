@@ -46,3 +46,7 @@ setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSub
 setattr(protUserSubSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
 setattr(protUserSubSet, "_createSet", ProtTomoBase._createSet.__func__)
 
+protUnionSet = pyworkflow.em.ProtUnionSet
+setattr(protUnionSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
+setattr(protUnionSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
+setattr(protUnionSet, "_createSet", ProtTomoBase._createSet.__func__)
