@@ -56,14 +56,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         ProtTomoImportAcquisition._defineParams(self, form)
 
-
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
         return ['eman2']
-
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
@@ -188,9 +186,9 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+            baseFileName = "import_" + basename(fileName).split(".")[0] + ".%s"%extension
         else:
-            baseFileName="import_" + basename(fileName).split(":")[0]
+            baseFileName = "import_" + basename(fileName).split(":")[0]
 
         return self._getExtraPath(baseFileName)
 

@@ -394,20 +394,19 @@ class TiltSeriesDict:
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 
-class TomoAcquisition(data.Acquisition):
+class TomoTiltScheme:
     def __init__(self, **kwargs):
-        data.Acquisition.__init__(self, **kwargs)
         self._angleMin = pwobj.Float(kwargs.get('angleMin', None))
         self._angleMax = pwobj.Float(kwargs.get('angleMax', None))
         self._step = pwobj.Integer(kwargs.get('step', None))
-        self._angleAxis1 = pwobj.Float(kwargs.get('angleAxis1', None))
-        self._angleAxis2 = pwobj.Float(kwargs.get('angleAxis2', None))
 
-    def getAngleMax(self):
-        return self._angleMax.get()
+        self._acquisitionAngles = pwobj.CsvList(pType=float)
 
-    def setAngleMax(self, value):
-        self._angleMax.set(value)
+    def getStep(self):
+        return self._step.get()
+
+    def setStep(self, value):
+        return self._step.set(value)
 
     def getAngleMin(self):
         return self._angleMin.get()
@@ -415,11 +414,48 @@ class TomoAcquisition(data.Acquisition):
     def setAngleMin(self, value):
         self._angleMin.set(value)
 
+    def getAngleMax(self):
+        return self._angleMax.get()
+
+    def setAngleMax(self, value):
+        self._angleMax.set(value)
+
+    def getAcquisitionAngles(self):
+        return self._acquisitionAngles.get()
+
+    def setAcquisitionAngles(self, value):
+        self._acquisitionAngles = value
+
+
+
+
+class TomoAcquisition(data.Acquisition):
+    def __init__(self, **kwargs):
+        data.Acquisition.__init__(self, **kwargs)
+        # self._angleMin = pwobj.Float(kwargs.get('angleMin', None))
+        # self._angleMax = pwobj.Float(kwargs.get('angleMax', None))
+        # self._step = pwobj.Integer(kwargs.get('step', None))
+        self._tiltScheme = TomoTiltScheme.__init__(self, **kwargs)
+        self._angleAxis1 = pwobj.Float(kwargs.get('angleAxis1', None))
+        self._angleAxis2 = pwobj.Float(kwargs.get('angleAxis2', None))
+
+    def getAngleMax(self):
+        return self._tiltScheme.getAngleMax()
+
+    def setAngleMax(self, value):
+        self._tiltScheme.setAngleMax(value)
+
+    def getAngleMin(self):
+        return self._tiltScheme.getAngleMin()
+
+    def setAngleMin(self, value):
+        self._tiltScheme.setAngleMin(value)
+
     def getStep(self):
-        return self._step.get()
+        return self._tiltScheme.getStep()
 
     def setStep(self, value):
-        return self._step.set(value)
+        return self._tiltScheme.setStep(value)
 
     def getAngleAxis1(self):
         return self._angleAxis1.get()
