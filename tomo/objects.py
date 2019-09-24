@@ -463,7 +463,7 @@ class SetOfCoordinates3D(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._volumesPointer = pwobj.Pointer()
         self._boxSize = pwobj.Integer()
-        self._samplingRate = pwobj.Integer()
+        self._samplingRate = pwobj.Float()
 
     def getBoxSize(self):
         """ Return the box size of the particles.
