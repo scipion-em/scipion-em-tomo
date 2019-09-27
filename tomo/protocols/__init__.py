@@ -40,13 +40,21 @@ from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
 from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
 from .move_to_plugins.protocol_imod_etomo import ProtImodEtomo
 
+emprotocol = pyworkflow.em.protocol.EMProtocol
+setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
+setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
+setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
+setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
 
-protUserSubSet = pyworkflow.em.ProtUserSubSet
-setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-setattr(protUserSubSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
-setattr(protUserSubSet, "_createSet", ProtTomoBase._createSet.__func__)
 
-protUnionSet = pyworkflow.em.ProtUnionSet
-setattr(protUnionSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-setattr(protUnionSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
-setattr(protUnionSet, "_createSet", ProtTomoBase._createSet.__func__)
+def scaleSplines(inputFn, outputFn, scaleFactor):
+    """ Scale an image using splines. """
+    import xmippLib
+    I = xmippLib.Image(inputFn)
+    x, y, z, _ = I.getDimensions()
+    I.scale(int(x * scaleFactor), int(y * scaleFactor),
+            int(z * scaleFactor))
+    I.write(outputFn)
+
+ih = pyworkflow.em.ImageHandler
+setattr(ih, "scaleSplines", staticmethod(scaleSplines))
