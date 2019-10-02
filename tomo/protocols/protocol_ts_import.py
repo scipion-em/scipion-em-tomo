@@ -466,8 +466,11 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
 
     def _getTiltAngleRange(self):
         """ Return the list with all expected tilt angles. """
+        offset = 1
+        if self.minAngle.get() > self.maxAngle.get():
+            offset = -1 * offset
         return np.arange(self.minAngle.get(),
-                         self.maxAngle.get() + 1,  # also include max angle
+                         self.maxAngle.get() + offset,  # also include last angle
                          self.stepAngle.get())
 
     def _getSortedAngles(self, tiltSeriesList):
