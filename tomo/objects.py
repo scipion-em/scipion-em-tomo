@@ -606,10 +606,22 @@ class AverageSubTomogram(SubTomogram):
 
 
 class ClassSubTomogram(SetOfSubTomograms):
-    REP_TYPE = AverageSubTomogram
-    """ Represent a Class that groups Volume objects.
-    Usually the representative of the class is another Volume.
+    """ Represent a Class that groups SubTomogram objects.
+    The representative of the class is an AverageSubTomogram.
     """
+    REP_TYPE = AverageSubTomogram
+
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but not
+        _mapperPath or _size from other set of SubTomograms to current one.
+        """
+        self.copy(other, copyId=False, ignoreAttrs=['_mapperPath', '_size'])
+
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=['_mapperPath', '_size'])
+        return clone
+
     def close(self):
         # Do nothing on close, since the db will be closed by SetOfClasses
         pass
