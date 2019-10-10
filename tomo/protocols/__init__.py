@@ -47,7 +47,9 @@ setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomo
 setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
 setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
 
-# This cosde extends ImageHandler allowing the use of scaling with splines untill this functionality is implemented in Scipion
+
+# This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
+# in Scipion
 def scaleSplines(inputFn, outputFn, scaleFactor):
     """ Scale an image using splines. """
     import xmippLib
