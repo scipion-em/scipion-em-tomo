@@ -75,6 +75,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         importTomogram = self.importTomogram.get()
         coordsSet = self._createSetOfCoordinates3D(importTomogram)
         coordsSet.setBoxSize(self.boxSize.get())
+        coordsSet.setSamplingRate(self.samplingRate.get())
         ci = self.getImportClass()
         for coordFile, fileId in self.iterFiles():
             if importTomogram is not None:

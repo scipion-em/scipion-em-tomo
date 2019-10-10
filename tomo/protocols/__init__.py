@@ -40,9 +40,24 @@ from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
 from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
 from .move_to_plugins.protocol_imod_etomo import ProtImodEtomo
 
+# This code extends EMProtocol allowing the use of Scipion protocols to create subsets for tomography objects
+emprotocol = pyworkflow.em.protocol.EMProtocol
+setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
+setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
+setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
+setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
 
-protUserSubSet = pyworkflow.em.ProtUserSubSet
-setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-setattr(protUserSubSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
-setattr(protUserSubSet, "_createSet", ProtTomoBase._createSet.__func__)
 
+# This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
+# in Scipion
+def scaleSplines(inputFn, outputFn, scaleFactor):
+    """ Scale an image using splines. """
+    import xmippLib
+    I = xmippLib.Image(inputFn)
+    x, y, z, _ = I.getDimensions()
+    I.scale(int(x * scaleFactor), int(y * scaleFactor),
+            int(z * scaleFactor))
+    I.write(outputFn)
+
+ih = pyworkflow.em.ImageHandler
+setattr(ih, "scaleSplines", staticmethod(scaleSplines))
