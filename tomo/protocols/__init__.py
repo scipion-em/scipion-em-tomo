@@ -40,7 +40,21 @@ from .protocol_import_coordinates import ProtImportCoordinates3D
 # This method/class can be pass as parameter to showj
 # See https://github.com/I2PC/scipion/issues/2036
 protUserSubSet = pyworkflow.em.ProtUserSubSet
-setattr(protUserSubSet, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-setattr(protUserSubSet, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
-setattr(protUserSubSet, "_createSet", ProtTomoBase._createSet.__func__)
+setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
+setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
+setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
+setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
 
+# This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
+# in Scipion
+def scaleSplines(inputFn, outputFn, scaleFactor):
+    """ Scale an image using splines. """
+    import xmippLib
+    I = xmippLib.Image(inputFn)
+    x, y, z, _ = I.getDimensions()
+    I.scale(int(x * scaleFactor), int(y * scaleFactor),
+            int(z * scaleFactor))
+    I.write(outputFn)
+
+ih = pyworkflow.em.ImageHandler
+setattr(ih, "scaleSplines", staticmethod(scaleSplines))

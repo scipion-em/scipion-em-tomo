@@ -369,7 +369,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                                  filesPath= self.coords3D,
                                  importTomogram=protImportTomogram.outputTomogram,
                                  filesPattern='', boxSize=32,
-                                 samplingRate=5)
+                                 samplingRate=5.5)
         self.launchProtocol(protImportCoordinates3d)
 
         return protImportCoordinates3d
@@ -381,8 +381,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                              "There was a problem with coordinates 3d output")
         self.assertTrue(output.getSize() == 5)
         self.assertTrue(output.getBoxSize() == 32)
-
-
+        self.assertTrue(output.getSamplingRate() == 5.5)
         return output
 
 
