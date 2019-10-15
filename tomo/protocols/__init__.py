@@ -39,11 +39,12 @@ from .protocol_import_coordinates import ProtImportCoordinates3D
 # We should modify ProtUserSubSet to remove hardcoded methods to create subsets
 # This method/class can be pass as parameter to showj
 # See https://github.com/I2PC/scipion/issues/2036
-protUserSubSet = pyworkflow.em.ProtUserSubSet
+emprotocol = pyworkflow.em.protocol.EMProtocol
 setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
 setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
 setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
 setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
+
 
 # This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
 # in Scipion
