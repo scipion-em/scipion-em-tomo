@@ -117,11 +117,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                     tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
-        ### Change needed to import always a set
-        # if tomoSet.getSize() > 1:
         self._defineOutputs(outputTomograms=tomoSet)
-        # else:
-        #     self._defineOutputs(outputTomogram=tomo)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
@@ -145,10 +141,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 if self.samplingRate.get():
                     summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
 
-                if self.hasAttribute('outputTomogram'):
-                    outputTomograms = [getattr(self, 'outputTomogram')]
-                else:
-                    outputTomograms = getattr(self, 'outputTomograms')
+                outputTomograms = getattr(self, 'outputTomograms')
 
                 ProtTomoImportAcquisition._summary(self, summary, outputTomograms)
 
