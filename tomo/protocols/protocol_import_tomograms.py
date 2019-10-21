@@ -121,14 +121,10 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return (self.hasAttribute('outputTomogram')
-                or self.hasAttribute('outputTomograms'))
+        return self.hasAttribute('outputTomograms')
 
     def _getTomMessage(self):
-        if self.hasAttribute('outputTomogram'):
-            return "Tomogram %s" % self.getObjectTag('outputTomogram')
-        else:
-            return "Tomograms %s" % self.getObjectTag('outputTomograms')
+        return "Tomograms %s" % self.getObjectTag('outputTomograms')
 
     def _summary(self):
 

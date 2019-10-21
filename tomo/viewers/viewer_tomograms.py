@@ -67,13 +67,10 @@ class ViewerProtImportTomograms(ProtocolViewer):
                       )
 
     def visualize(self, obj, **args):
-        if hasattr(self.protocol, 'outputTomogram'):
-            ProtocolViewer.visualize(self, obj, **args)
-        else:
-            views = self._showTomogramsSlices()
-            if views:
-                for v in views:
-                    v.show()
+        views = self._showTomogramsSlices()
+        if views:
+            for v in views:
+                v.show()
 
     def _getVisualizeDict(self):
         return {
@@ -99,15 +96,9 @@ class ViewerProtImportTomograms(ProtocolViewer):
             return self._showTomogramsSlices()
 
     def _createSetOfObjects(self):
-        if hasattr(self.protocol, 'outputTomogram'):
-            setOfObjects = self.protocol.outputTomogram
-            sampling = self.protocol.outputTomogram.getSamplingRate()
-        elif hasattr(self.protocol, 'outputTomograms'):
+        if hasattr(self.protocol, 'outputTomograms'):
             setOfObjects = self.protocol.outputTomograms
             sampling = self.protocol.outputTomograms.getSamplingRate()
-        elif hasattr(self.protocol, 'outputSubTomogram'):
-            setOfObjects = self.protocol.outputSubTomogram
-            sampling = self.protocol.outputSubTomogram.getSamplingRate()
         elif hasattr(self.protocol, 'outputSubTomograms'):
             setOfObjects = self.protocol.outputSubTomograms
             sampling = self.protocol.outputSubTomograms.getSamplingRate()

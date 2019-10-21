@@ -31,9 +31,9 @@ from os.path import basename
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import importFromPlugin
 
-from .protocol_base import ProtTomoImportFiles
-
 from tomo.objects import SetOfCoordinates3D
+
+from .protocol_base import ProtTomoImportFiles
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
