@@ -317,14 +317,15 @@ class TestTomoImportSubTomograms(BaseTest):
 
      def test_import_sub_tomograms(self):
          protImport = self._runImportSubTomograms()
-         output = getattr(protImport, 'outputSubTomogram', None)
+         output = getattr(protImport, 'outputSubTomograms', None)
          self.assertTrue(output.getSamplingRate() == 1.35)
+         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
          self.assertTrue(output.getDim()[0] == 1024)
          self.assertTrue(output.getDim()[1] == 1024)
          self.assertTrue(output.getDim()[2] == 512)
-         self.assertTrue(output.getCoordinate3D().getX() == 314)
-         self.assertTrue(output.getCoordinate3D().getY() == 350)
-         self.assertTrue(output.getCoordinate3D().getZ() == 256)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
          self.assertIsNotNone(output,
                              "There was a problem with Import SubTomograms protocol")
 
@@ -341,7 +342,7 @@ class TestTomoImportSubTomograms(BaseTest):
                  self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
                  self.assertTrue(subtomo.getCoordinate3D().getY() == 172)
                  self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
-             if i == 2:
+             if i == 0:
                  self.assertTrue(subtomo.getCoordinate3D().getX() == 314)
                  self.assertTrue(subtomo.getCoordinate3D().getY() == 350)
                  self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
