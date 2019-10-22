@@ -346,10 +346,10 @@ class TiltSeriesDict:
 
         inputSetFn = self.__inputSet.getFileName()
         mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
-        if self.__lastCheck:
-            # print('Last check: %s, modification: %s'
-            #       % (pwutils.prettyTime(self.__lastCheck),
-            #          pwutils.prettyTime(mTime)))
+        # if self.__lastCheck:
+        # print('Last check: %s, modification: %s'
+        #       % (pwutils.prettyTime(self.__lastCheck),
+        #          pwutils.prettyTime(mTime)))
 
         if self.__lastCheck is None or self.__lastCheck <= mTime:
             updatedSet = self.__inputSet.getClass()(filename=inputSetFn)
