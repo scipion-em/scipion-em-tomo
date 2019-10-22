@@ -164,74 +164,12 @@ class ProtTsCorrectMotion(ProtTsProcess):
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
         errors = []
-
-        return errors
-
-        # Only validate about cropDimensions if the protocol supports them
-        if (hasattr(self, 'cropDimX') and hasattr(self, 'cropDimY')
-            and (self.cropDimX > 0 and self.cropDimY <= 0
-                 or self.cropDimY > 0 and self.cropDimX <= 0)):
-            errors.append("If you give cropDimX, you should also give "
-                          "cropDimY and vice versa")
-
-        inputMovies = self.inputMovies.get()
-
-        # Do not continue if there ar no movies. Validation message will
-        # take place since attribute is a Pointer.
-        if inputMovies is None:
-            return errors
-
-        firstItem = inputMovies.getFirstItem()
-
-        firstFrame, lastFrame, _ = inputMovies.getFramesRange()
-        if lastFrame == 0:
-            # Although getFirstItem is not recommended in general, here it is
-            # used only once, for validation purposes, so performance
-            # problems should not appear.
-            frames = firstItem.getNumberOfFrames()
-            lastFrame = frames
-        else:
-            frames = lastFrame - firstFrame + 1
-
-        if frames is not None:
-            def _validateRange(prefix):
-                # Avoid validation when the range is not defined
-                if not hasattr(self, '%sFrame0' % prefix):
-                    return
-
-                f0, fN = self._getFrameRange(frames, prefix)
-                if fN < firstFrame or fN > lastFrame:
-                    errors.append("Check the selected last frame to *%s*. "
-                                  "Last frame (%d) should be in range: %s "
-                                  % (prefix.upper(), fN, (firstFrame,
-                                                          lastFrame)))
-                if f0 < firstFrame or f0 > lastFrame:
-                    errors.append("Check the selected first frame to *%s*. "
-                                  "First frame (%d) should be in range: %s "
-                                  % (prefix.upper(), f0, (firstFrame,
-                                                          lastFrame)))
-                if fN < f0:
-                    errors.append("Check the selected frames range to *%s*. "
-                                  "Last frame (%d) should be greater or equal "
-                                  "than first frame (%d)"
-                                  % (prefix.upper(), fN, f0))
-
-            _validateRange("align")
-            _validateRange("sum")
-
-        if not ImageHandler().existsLocation(firstItem.getLocation()):
-            errors.append("The input movie files do not exist!!! "
-                          "Since usually input movie files are symbolic links, "
-                          "please check that links are not broken if you "
-                          "moved the project folder. ")
-
         return errors
 
     def _summary(self):
         return [self.summaryVar.get('')]
 
     # --------------------------- UTILS functions ----------------------------
-
     def _initialize(self):
         inputTs = self._getInputTs()
         acq = inputTs.getAcquisition()
