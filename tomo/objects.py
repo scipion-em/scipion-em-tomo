@@ -342,14 +342,14 @@ class TiltSeriesDict:
         self._checkNewOutput()
 
     def _checkNewInput(self):
-        print(">>> DEBUG: _checkNewInput ")
+        # print(">>> DEBUG: _checkNewInput ")
 
         inputSetFn = self.__inputSet.getFileName()
         mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
         if self.__lastCheck:
-            print('Last check: %s, modification: %s'
-                  % (pwutils.prettyTime(self.__lastCheck),
-                     pwutils.prettyTime(mTime)))
+            # print('Last check: %s, modification: %s'
+            #       % (pwutils.prettyTime(self.__lastCheck),
+            #          pwutils.prettyTime(mTime)))
 
         if self.__lastCheck is None or self.__lastCheck <= mTime:
             updatedSet = self.__inputSet.getClass()(filename=inputSetFn)
@@ -366,7 +366,7 @@ class TiltSeriesDict:
         self.__lastCheck = datetime.now()
 
     def _checkNewOutput(self):
-        print(">>> DEBUG: _checkNewInput ")
+        # print(">>> DEBUG: _checkNewInput ")
         # First check that we have some items in the finished
         self.__lock.acquire()
         doneItems = list(self.__finished)
@@ -387,11 +387,11 @@ class TiltSeriesDict:
 
     def allDone(self):
         """ Return True if input stream is closed and all task are done. """
-        print(">>> DEBUG: allDone\n"
-              "    inputClosed: %s\n"
-              "    len(dict):   %s\n"
-              "    len(done):   %s" % (self.__inputClosed, len(self.__dict),
-                                       len(self.__done)))
+        # print(">>> DEBUG: allDone\n"
+        #       "    inputClosed: %s\n"
+        #       "    len(dict):   %s\n"
+        #       "    len(done):   %s" % (self.__inputClosed, len(self.__dict),
+        #                                len(self.__done)))
         return self.__inputClosed and len(self.__dict) == len(self.__done)
 
 

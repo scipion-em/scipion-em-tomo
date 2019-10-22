@@ -111,12 +111,8 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     def processTiltImageStep(self, tsId, tiltImageId, *args):
         tiltImageM = self._tsDict.getTi(tsId, tiltImageId)
-
         workingFolder = self.__getTiltImageMWorkingFolder(tiltImageM)
-
         pw.utils.makePath(workingFolder)
-
-        print("args: ", args)
         self._processTiltImageM(workingFolder, tiltImageM, *args)
 
         tiFn, tiFnDW = self._getOutputTiltImagePaths(tiltImageM)

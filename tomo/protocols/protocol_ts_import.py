@@ -407,7 +407,6 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
         if len(filePaths) == 1 and not self.isInStreaming():
             f = filePaths[0]
             ts = pwutils.removeBaseExt(f)
-            print("single Ts: ", ts)
             matchingFiles[ts] = []
             _addMany(matchingFiles[ts], f, None)
         else:
