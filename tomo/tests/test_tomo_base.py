@@ -237,23 +237,23 @@ class TestTomoImportTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-     def test_importTomograms(self):
-         protImport = self._runImportTomograms()
-         output = getattr(protImport, 'outputTomograms', None)
-         self.assertIsNotNone(output,
+    def test_importTomograms(self):
+        protImport = self._runImportTomograms()
+        output = getattr(protImport, 'outputTomograms', None)
+        self.assertIsNotNone(output,
                              "There was a problem with Import Tomograms protocol")
 
-         for tomo in protImport.outputTomograms.iterItems():
+        for tomo in protImport.outputTomograms.iterItems():
 
-             self.assertTrue(tomo.getXDim() == 1024,
-                                 "There was a problem with Import Tomograms protocol")
-             self.assertIsNotNone(tomo.getYDim() == 1024,
-                                 "There was a problem with Import Tomograms protocol")
+            self.assertTrue(tomo.getXDim() == 1024,
+                                "There was a problem with Import Tomograms protocol")
+            self.assertIsNotNone(tomo.getYDim() == 1024,
+                                "There was a problem with Import Tomograms protocol")
 
-             self.assertTrue(tomo.getAcquisition().getAngleMax() == 40, "There was a problem with the aquisition angle max")
-             self.assertTrue(tomo.getAcquisition().getAngleMin() == -40, "There was a problem with the aquisition angle min")
+            self.assertTrue(tomo.getAcquisition().getAngleMax() == 40, "There was a problem with the aquisition angle max")
+            self.assertTrue(tomo.getAcquisition().getAngleMin() == -40, "There was a problem with the aquisition angle min")
 
-             break
+            break
 
 
 
