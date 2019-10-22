@@ -27,27 +27,24 @@
 import os
 import re
 from glob import glob
-from datetime import datetime
+import time
+from datetime import timedelta, datetime
 from collections import OrderedDict
+import numpy as np
 
 import pyworkflow as pw
 import pyworkflow.em as pwem
+from pyworkflow.em.convert import ImageHandler
 import pyworkflow.protocol.params as params
+import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
 
 import tomo.convert
 from .protocol_base import ProtTomoBase
 
 
-class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
-    """ Base class for other Import protocols.
-    All imports protocols will have:
-    1) Several options to import from (_getImportOptions function)
-    2) First option will always be "from files". (for this option
-      files with a given pattern will be retrieved  and the ### will
-      be used to mark an ID part from the filename.
-      - For each file a function to process it will be called
-        (_importFile(fileName, fileId))
+class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
+    """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
     """
     IMPORT_FROM_FILES = 0
 
@@ -56,26 +53,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     IMPORT_LINK_ABS = 1
     IMPORT_LINK_REL = 2
 
-    IMPORT_TYPE_MICS = 0
-    IMPORT_TYPE_MOVS = 1
-
-    ANGLES_FROM_FILES = 0
-    ANGLES_FROM_HEADER = 1
-    ANGLES_FROM_MDOC = 2
-
-    _label = 'import tilt-series'
+    ANGLES_FROM_FILENAME = 'Filename'
+    ANGLES_FROM_HEADER = 'Header'
+    ANGLES_FROM_MDOC = 'Mdoc'
+    ANGLES_FROM_TLT = 'Tlt'
+    ANGLES_FROM_RANGE = 'Range'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
 
-        form.addParam('importType', params.EnumParam, default=1,
-                      choices=['Tilt series', 'Tilt series Movies'],
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Select type of input images',
-                      help='If you import tilt-series movies, then'
-                           'you need to provide also dose information'
-                           'and maybe gain/dark images.')
         form.addParam('filesPath', params.PathParam,
                       label="Files directory",
                       help="Root directory of the tilt-series (or movies).")
@@ -93,16 +80,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                            "         (positive or negative float value).\n\n"
                            "Examples:\n"
                            "")
-        form.addParam('anglesFrom', params.EnumParam,
-                      default=self.ANGLES_FROM_FILES,
-                      choices=['Files', 'Header', 'Mdoc'],
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Import angles from',
-                      help='By default, the angles should be provided as part '
-                           'of the files pattern, using the {TA} token. '
-                           'Additionally, in the case of importing tilt-series,'
-                           'angles can be read from the header or from mdoc '
-                           'files.')
+        self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
                       choices=['Copy files',
@@ -111,7 +89,14 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                       display=params.EnumParam.DISPLAY_HLIST,
                       expertLevel=params.LEVEL_ADVANCED,
                       label="Import action on files",
-                      help="By default ...")
+                      help="This parameters determine how the project will deal "
+                           "with imported files. It can be: \n"
+                           "*Copy files*: Input files will be copied into your "
+                           "project. (this will duplicate the raw data)."
+                           "*Absolute symlink*: Create symbolic links to the "
+                           "absolute path of the files."
+                           "*Relative symlink*: Create symbolic links as "
+                           "relative path from the protocol run folder. ")
 
         self._defineAcquisitionParams(form)
 
@@ -148,8 +133,12 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
         self._defineBlacklistParams(form)
 
+    def _defineAngleParam(self, form):
+        """ Used in subclasses to define the option to fetch tilt angles. """
+        pass
+
     def _defineAcquisitionParams(self, form):
-        """ Define acq parameters, it can be overriden
+        """ Define acq parameters, it can be overridden
         by subclasses to change what parameters to include.
         """
         group = form.addGroup('Acquisition info')
@@ -170,25 +159,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                        label=Message.LABEL_SAMP_RATE,
                        help=Message.TEXT_SAMP_RATE)
 
-        moviesCond = 'importType==%d' % self.IMPORT_TYPE_MOVS
-        line = group.addLine('Dose (e/A^2)',
-                             condition=moviesCond,
-                             help="Initial accumulated dose (usually 0) and "
-                                  "dose per frame. ")
-        line.addParam('doseInitial', params.FloatParam, default=0,
-                      label='Initial')
-        line.addParam('dosePerFrame', params.FloatParam, default=None,
-                      allowsNull=True,
-                      label='Per frame')
-        group.addParam('gainFile', params.FileParam,
-                       condition=moviesCond,
-                       label='Gain image',
-                       help='A gain reference related to a set of movies '
-                            'for gain correction')
-        group.addParam('darkFile', params.FileParam,
-                       condition=moviesCond,
-                       label='Dark image',
-                       help='A dark image related to a set of movies')
         return group
 
     def _defineBlacklistParams(self, form):
@@ -198,7 +168,7 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
 
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
-        self.loadPatterns()
+        self._initialize()
         self._insertFunctionStep('importStep', self._pattern,
                                  self.voltage.get(),
                                  self.sphericalAberration.get(),
@@ -206,80 +176,139 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
                                  self.magnification.get())
 
     # -------------------------- STEPS functions -------------------------------
-    def doImportMovies(self):
-        """ Return True if we are importing TiltSeries movies. """
-        return self.importType == self.IMPORT_TYPE_MOVS
-
-    def _createOutputSet(self, suffix=''):
-        if self.doImportMovies():
-            self._outputSuffix = 'M'
-            return self._createSetOfTiltSeriesM()
-        else:
-            self._outputSuffix = ''
-            return self._createSetOfTiltSeries()
-
     def importStep(self, pattern, voltage, sphericalAberration,
                          amplitudeContrast, magnification):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self.loadPatterns()
+        self._initialize()
         self.info("Using glob pattern: '%s'" % self._globPattern)
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
-        outputSet = self._createOutputSet()
+        outputSet = getattr(self, self._outputName, None)
+
+        if outputSet is None:
+            createSetFunc = getattr(self, self._createOutputName)
+            outputSet = createSetFunc()
+        elif outputSet.getSize() > 0:
+            outputSet.loadAllProperties()
+
+            for ts in outputSet:
+                self._existingTs.add(ts.getTsId())
+
         self._fillAcquisitionInfo(outputSet)
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
 
-        tiltSeriesDict = OrderedDict()
+        finished = False
+        lastDetectedChange = datetime.now()
 
-        for f, ts, to, ta in self.getMatchingFiles():
-            if ts not in tiltSeriesDict:
-                tiltSeriesDict[ts] = []
+        # Ignore the timeout variables if we are not really in streaming mode
+        if self.dataStreaming:
+            timeout = timedelta(seconds=self.timeout.get())
+            fileTimeout = timedelta(seconds=self.fileTimeout.get())
+        else:
+            timeout = timedelta(seconds=5)
+            fileTimeout = timedelta(seconds=5)
 
-            tiltSeriesList = tiltSeriesDict[ts]
-            order = len(tiltSeriesList) + 1
-            tiltSeriesList.append(tiClass(location=f,
-                                          acquisitionOrder=order,
-                                          tiltAngle=ta))
+        while not finished:
+            time.sleep(3)  # wait 3 seconds before check for new files
+            someNew = False  # Check if some new TS has been found
+            someAdded = False  # Check if some new were added
+            incompleteTs = False  # Check if there are incomplete TS
 
-        for ts, tiltSeriesList in tiltSeriesDict.iteritems():
-            tsObj = tsClass(tsId=ts)
-            # we need this to set mapper before adding any item
-            outputSet.append(tsObj)
-            # Add tilt images to the tiltSeries
-            for tim in tiltSeriesList:
-                tsObj.append(tim)
+            matchingFiles = self.getMatchingFiles(fileTimeOut=fileTimeout)
 
-            outputSet.update(tsObj)  # update items and size info
+            if self._existingTs:
+                outputSet.enableAppend()
 
-        outputSet.updateDim()
-        outputName = 'outputTiltSeries%s' % self._outputSuffix
-        self._defineOutputs(**{outputName: outputSet})
+            for ts, tiltSeriesList in matchingFiles.iteritems():
+                someNew = True
+
+                if len(self._tiltAngleList) != len(tiltSeriesList):
+                    if incompleteTs:
+                        raise Exception("More than one tilt-series seems "
+                                        "incomplete regarding the expected "
+                                        "number of tilt images.")
+                    incompleteTs = True
+                    continue
+
+                tsObj = tsClass(tsId=ts)
+                # we need this to set mapper before adding any item
+                outputSet.append(tsObj)
+                # Add tilt images to the tiltSeries
+                for f, to, ta in tiltSeriesList:
+                    tsObj.append(tiClass(location=f,
+                                         acquisitionOrder=to,
+                                         tiltAngle=ta))
+
+                outputSet.update(tsObj)  # update items and size info
+                self._existingTs.add(ts)
+                someAdded = True
+
+            if someAdded:
+                self.debug('Updating output...')
+                outputSet.updateDim()
+                self._updateOutputSet(self._outputName, outputSet,
+                                      state=outputSet.STREAM_OPEN)
+                self.debug('Update Done.')
+
+            self.debug('Checking if finished...someNew: %s' % someNew)
+
+            now = datetime.now()
+
+            if not someNew:
+                # If there are no new detected files, we should check the
+                # inactivity time elapsed (from last event to now) and
+                # if it is greater than the defined timeout, we conclude
+                # the import and close the output set
+                # Another option is to check if the protocol have some
+                # special stop condition, this can be used to manually stop
+                # some protocols such as import movies
+                finished = (now - lastDetectedChange > timeout
+                            or self.streamingHasFinished())
+                self.debug("Checking if finished:")
+                self.debug("   Now - Last Change: %s"
+                           % pwutils.prettyDelta(now - lastDetectedChange))
+            else:
+                # If we have detected some files, we should update
+                # the timestamp of the last event
+                lastDetectedChange = now
+                finished = not self.isInStreaming()
+
+            self.debug("Finished: %s" % finished)
+
+        # Close the output set
+        self._updateOutputSet(self._outputName, outputSet,
+                              state=outputSet.STREAM_CLOSED)
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
-        matching = self.getMatchingFiles()
-
-        if self.importType == self.IMPORT_TYPE_MOVS:
-            if self.anglesFrom != self.ANGLES_FROM_FILES:
-                errors.append('Angle information could only be taken from '
-                              'the files pattern when importing tilt-series'
-                              'movies.')
-            elif not self._anglesInPattern():
-                errors.append('When importing movies, {TA} and {TO} should be '
-                              'in the files pattern.')
-        else:
-            if self.anglesFrom == self.ANGLES_FROM_MDOC:
-                errors.append('Importing angles from mdoc is not yet implemented.')
+        self._initialize()
+        try:
+            matching = self.getMatchingFiles()
+        except Exception as e:
+            errorStr = str(e)
+            if 'Missing angles file: ' in errorStr:
+                return [errorStr]
+            else:
+                raise e
 
         if not matching:
-            errors.append("There are no files matching the pattern %s"
-                          % self._globPattern)
+            return ["There are no files matching the pattern %s"
+                    % self._globPattern]
 
-        return errors
+        self._firstMatch = list(matching.items())[0]
+        self._tiltAngleList = self._getSortedAngles(self._firstMatch[1])
+
+        return self._validateAngles()
+
+    def _validateAngles(self):
+        """ Function to be implemented in subclass to validate
+        the angles range.
+        """
+        return []
 
     # -------------------------- BASE methods to be overridden -----------------
     def _getImportChoices(self):
@@ -289,13 +318,16 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         """
         return ['files']
 
-    # -------------------------- UTILS functions ------------------------------
-    def loadPatterns(self):
-        """ Expand the pattern using environ vars or username
-        and also replacing special character # by digit matching.
+    # -------------------------- UTILS functions -------------------------------
+    def _initialize(self):
+        """ Initialize some internal variables such as:
+        - patterns: Expand the pattern using environ vars or username
+            and also replacing special character # by digit matching.
+        - outputs: Output variable names
         """
-        self._pattern = os.path.join(self.filesPath.get('').strip(),
-                                     self.filesPattern.get('').strip())
+        path = self.filesPath.get('').strip()
+        pattern = self.filesPattern.get('').strip()
+        self._pattern = os.path.join(path, pattern) if pattern else path
 
         def _replace(p, ts, to, ta):
             p = p.replace('{TS}', ts)
@@ -309,18 +341,26 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         self._regex = re.compile(self._regexPattern)
         self._globPattern = _replace(self._pattern, '*', '*', '*')
 
+        # Set output names depending on the import type (either movies or images)
+        self._outputName = 'outputTiltSeries'
+        self._createOutputName = '_createSetOfTiltSeries'
+
+        # Keep track of which existing tilt-series has already been found
+        self._existingTs = set()
+
     def _anglesInPattern(self):
-        """ This function should be called after a call to loadPatterns"""
+        """ This function should be called after a call to _initialize"""
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
-    def getMatchingFiles(self):
-        """ Return a sorted list with the paths of files that
-        matched the pattern.
+    def getMatchingFiles(self, fileTimeOut=None):
+        """ Return an ordered dict with TiltSeries found in the files as key
+        and a list of all tilt images of that series as value.
         """
-        self.loadPatterns()
-
         filePaths = glob(self._globPattern)
-        filePaths.sort()
+        filePaths.sort(key=lambda fn: os.path.getmtime(fn))
+        fileTimeOut = fileTimeOut or timedelta(seconds=5)
+
+        matchingFiles = OrderedDict()
 
         def _getTsId(match):
             """ Retrieve the TiltSerie ID from the matching object.
@@ -331,25 +371,56 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
             return 'TS_%s' % tsId if tsId[0].isdigit() else tsId
 
         def _addOne(fileList, f, m):
-            """ Return one file matching. """
-            fileList.append(
-                (f, _getTsId(m), int(m.group('TO')), float(m.group('TA'))))
+            """ Add one file matching to the list. """
+            fileList.append((f, int(m.group('TO')), float(m.group('TA'))))
 
         def _addMany(fileList, f, m):
-            """ Return many 'files' (when angles in header or mdoc). """
+            """ Add many 'files' (when angles in header or mdoc) to the list. """
             _, _, _, n = pwem.ImageHandler().getDimensions(f)
-            # FIXME, read proper angles
-            angles = tomo.convert.getAnglesFromHeader(f)
+
+            anglesFrom = self.getEnumText('anglesFrom')
+
+            if anglesFrom == self.ANGLES_FROM_HEADER:
+                angles = tomo.convert.getAnglesFromHeader(f)
+            elif anglesFrom == self.ANGLES_FROM_MDOC:
+                mdocFn = f + '.mdoc'
+                if not os.path.exists(mdocFn):
+                    raise Exception("Missing angles file: %s" % mdocFn)
+                angles = tomo.convert.getAnglesFromMdoc(mdocFn)
+            elif anglesFrom == self.ANGLES_FROM_TLT:
+                tltFn = f + '.tlt'
+                if not os.path.exists(tltFn):
+                    raise Exception("Missing angles file: %s" % tltFn)
+                angles = tomo.convert.getAnglesFromTlt(tltFn)
+            elif anglesFrom == self.ANGLES_FROM_RANGE:
+                angles = self._getTiltAngleRange()
+            else:
+                raise Exception('Invalid angles option: %s' % anglesFrom)
+
             for i, a in enumerate(angles):
-                fileList.append(((i+1, f), _getTsId(m), i+1, a))
+                fileList.append(((i+1, f), i+1, a))
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
 
-        matchingFiles = []
-        for f in filePaths:
-            m = self._regex.match(f)
-            if m is not None:
-                addFunc(matchingFiles, f, m)
+        # Handle special case of just one TiltSeries, to avoid
+        # the user the need to specify {TS}
+        if len(filePaths) == 1 and not self.isInStreaming():
+            f = filePaths[0]
+            ts = pwutils.removeBaseExt(f)
+            matchingFiles[ts] = []
+            _addMany(matchingFiles[ts], f, None)
+        else:
+            for f in filePaths:
+                if self.fileModified(f, fileTimeOut):
+                    continue
+                m = self._regex.match(f)
+                if m is not None:
+                    ts = _getTsId(m)
+                    # Only report files of new tilt-series
+                    if ts not in self._existingTs:
+                        if ts not in matchingFiles:
+                            matchingFiles[ts] = []
+                        addFunc(matchingFiles[ts], f, m)
 
         return matchingFiles
 
@@ -366,7 +437,8 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         than a given timeout.
         Params:
             fileName: input filename that will be checked.
-            fileTimeout: timeout """
+            fileTimeout: timeout
+        """
         self.debug('Checking file: %s' % fileName)
         mTime = datetime.fromtimestamp(os.path.getmtime(fileName))
         delta = datetime.now() - mTime
@@ -378,28 +450,6 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
     def isBlacklisted(self, fileName):
         """ Overwrite in subclasses """
         return False
-
-    def iterFiles(self):
-        """ Iterate through the files matched with the pattern.
-        Provide the fileName and fileId.
-        """
-        filePaths = self.getMatchFiles()
-
-        for fileName in filePaths:
-            if self._idRegex:
-                # Try to match the file id from filename
-                # this is set by the user by using #### format in the pattern
-                match = self._idRegex.match(fileName)
-                if match is None:
-                    raise Exception("File '%s' doesn't match the pattern '%s'"
-                                    % (fileName, self._pattern))
-
-                fileId = int(match.group(1))
-
-            else:
-                fileId = None
-
-            yield fileName, fileId
 
     def worksInStreaming(self):
         # Import protocols always work in streaming
@@ -413,8 +463,160 @@ class ProtImportTiltSeries(pwem.ProtImport, ProtTomoBase):
         acq.setAmplitudeContrast(self.amplitudeContrast.get())
         acq.setMagnification(self.magnification.get())
 
-        if self.doImportMovies():
-            inputTs.setGain(self.gainFile.get())
-            inputTs.setDark(self.darkFile.get())
-            acq.setDoseInitial(self.doseInitial.get())
-            acq.setDosePerFrame(self.dosePerFrame.get())
+    def _getTiltAngleRange(self):
+        """ Return the list with all expected tilt angles. """
+        offset = 1
+        if self.minAngle.get() > self.maxAngle.get():
+            offset = -1 * offset
+        return np.arange(self.minAngle.get(),
+                         self.maxAngle.get() + offset,  # also include last angle
+                         self.stepAngle.get())
+
+    def _getSortedAngles(self, tiltSeriesList):
+        """ Return the sorted angles from a given tiltSeriesList. """
+        return sorted(item[2] for item in tiltSeriesList)
+
+    def _sameTiltAngleRange(self, tiltAngleRange, tiltSeriesList):
+        # allow some tolerance when comparing tilt-angles
+        return np.allclose(tiltAngleRange,
+                           self._getSortedAngles(tiltSeriesList),
+                           atol=0.1)
+
+    # --------------- Streaming special functions -----------------------
+    def _getStopStreamingFilename(self):
+        return self._getExtraPath("STOP_STREAMING.TXT")
+
+    def getActions(self):
+        """ This method will allow that the 'Stop import' action to appears
+        in the GUI when the user right-click in the protocol import box.
+        It will allow a user to manually stop the streaming.
+        """
+        # Only allow to stop if running and in streaming mode
+        if self.dataStreaming and self.isRunning():
+            return [('STOP STREAMING', self.stopImport)]
+        else:
+            return []
+
+    def stopImport(self):
+        """ Since the actual protocol that is running is in a different
+        process that the one that this method will be invoked from the GUI,
+        we will use a simple mechanism to place an special file to stop
+        the streaming.
+        """
+        # Just place an special file into the run folder
+        f = open(self._getStopStreamingFilename(), 'w')
+        f.close()
+
+    def streamingHasFinished(self):
+        return (not self.isInStreaming() or
+                os.path.exists(self._getStopStreamingFilename()))
+
+    def isInStreaming(self):
+        return self.dataStreaming.get()
+
+
+class ProtImportTs(ProtImportTsBase):
+    _label = 'import tilt-series'
+
+    def _defineAngleParam(self, form):
+        """ Used in subclasses to define the option to fetch tilt angles. """
+        group = form.addGroup('Tilt info')
+
+        group.addParam('anglesFrom', params.EnumParam,
+                       default=0,
+                       choices=[self.ANGLES_FROM_RANGE,
+                                self.ANGLES_FROM_HEADER,
+                                self.ANGLES_FROM_MDOC,
+                                self.ANGLES_FROM_TLT],
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       label='Import angles from',
+                       help='Select how the tilt angles will be imported. '
+                            'It can be defined by range: Min, Max, Step '
+                            'or from image header, or from complementary'
+                            'mdoc or tlt files (should have the same filename '
+                            'plus the .mdoc or .tlt extension).')
+
+        line = group.addLine('Tilt angular range',
+                             condition='anglesFrom==0',  # ANGLES_FROM_RANGE
+                             help="Specify the tilting angular range. "
+                                  "Depending on the collection schema, the "
+                                  "order of the acquisition does not need to "
+                                  "be the same order of the angular range. ")
+        line.addParam('minAngle', params.FloatParam, default=-60, label='min')
+        line.addParam('maxAngle', params.FloatParam, default=60, label='max')
+        line.addParam('stepAngle', params.FloatParam, default=3, label='step')
+
+    def _validateAngles(self):
+        ts, tiltSeriesList = self._firstMatch
+        i, fileName = tiltSeriesList[0][0]
+        x, y, z, n = ImageHandler().getDimensions(fileName)
+        nImages = max(z, n)  # Just handle ambiguity with mrc format
+        nAngles = len(self._tiltAngleList)
+        if nAngles != nImages:
+            return ['Tilt-series %s stack has different number of images (%d) '
+                    'than the expected number of tilt angles (%d). '
+                    % (fileName, nImages, nAngles)]
+        return []
+
+
+class ProtImportTsMovies(ProtImportTsBase):
+    _label = 'import tilt-series movies'
+
+    def _defineAngleParam(self, form):
+        """ Used in subclasses to define the option to fetch tilt angles. """
+        group = form.addGroup('Tilt info')
+
+        group.addParam('anglesFrom', params.EnumParam,
+                       default=0,
+                       choices=[self.ANGLES_FROM_FILENAME],
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       label='Import angles from',
+                       help='Angles will be parsed from the filename pattern.'
+                            'The special token {TA} should be specified as part'
+                            'of the pattern, that will be used to match the '
+                            'value of the angle for each TiltSeriesMovie.')
+
+    def _defineAcquisitionParams(self, form):
+        """ Add movie specific options to the acquisition section. """
+        group = ProtImportTsBase._defineAcquisitionParams(self, form)
+
+        line = group.addLine('Dose (e/A^2)',
+                             help="Initial accumulated dose (usually 0) and "
+                                  "dose per frame. ")
+        line.addParam('doseInitial', params.FloatParam, default=0,
+                      label='Initial')
+        line.addParam('dosePerFrame', params.FloatParam, default=None,
+                      allowsNull=True,
+                      label='Per frame')
+        group.addParam('gainFile', params.FileParam,
+                       label='Gain image',
+                       help='A gain reference related to a set of movies '
+                            'for gain correction')
+        group.addParam('darkFile', params.FileParam,
+                       label='Dark image',
+                       help='A dark image related to a set of movies')
+        return group
+
+    def _fillAcquisitionInfo(self, inputTs):
+        ProtImportTsBase._fillAcquisitionInfo(self, inputTs)
+
+        inputTs.setGain(self.gainFile.get())
+        inputTs.setDark(self.darkFile.get())
+        acq = inputTs.getAcquisition()
+        acq.setDoseInitial(self.doseInitial.get())
+        acq.setDosePerFrame(self.dosePerFrame.get())
+
+    def _initialize(self):
+        ProtImportTsBase._initialize(self)
+        self._outputName += 'M'
+        self._createOutputName += 'M'
+
+    def _validateAngles(self):
+        """ Function to be implemented in subclass to validate
+        the angles range.
+        """
+        if self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
+            if not self._anglesInPattern():
+                return ['When importing movies, {TA} and {TO} should be in the '
+                        'files pattern.']
+        return []

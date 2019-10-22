@@ -26,21 +26,19 @@
 
 import pyworkflow
 
-from .protocol_base import ProtTomoBase, ProtTomoReconstruct, ProtTomoPicking
-from .protocol_ts_import import ProtImportTiltSeries
+from .protocol_base import ProtTomoBase, ProtTomoPicking
+from .protocol_ts_base import ProtTomoReconstruct
+from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
 from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
 from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 
-from .move_to_plugins.protocol_ts_motioncor import ProtTsMotionCorr
-from .move_to_plugins.protocol_ts_ctffind import ProtTsCtffind
-from .move_to_plugins.protocol_ts_gctf import ProtTsGctf
-from .move_to_plugins.protocol_imod_auto3d import ProtImodAuto3D
-from .move_to_plugins.protocol_imod_etomo import ProtImodEtomo
-
-# This code extends EMProtocol allowing the use of Scipion protocols to create subsets for tomography objects
+# Hack to allow creating subsets of Tomograms and Subtomograms from ShowJ
+# We should modify ProtUserSubSet to remove hardcoded methods to create subsets
+# This method/class can be pass as parameter to showj
+# See https://github.com/I2PC/scipion/issues/2036
 emprotocol = pyworkflow.em.protocol.EMProtocol
 setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
 setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
