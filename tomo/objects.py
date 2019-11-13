@@ -747,5 +747,38 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
-
     pass
+
+
+class Landmark(data.EMObject):
+    """Represents the location of a landmark in a Tilt-image belonging to an specific Tilt-series."""
+    def __init__(self, xCoor, yCoor, tsIm, tsId, **kwargs):
+        data.EMObject.__init__(**kwargs)
+        self._landmark = [xCoor, yCoor, tsIm, tsId]
+
+
+class LandmarkChain(data.EMObject):
+    """Represents the location of several landmarks present in a set of
+    Tilt-images belonging to the same Tilt-series."""
+    _landmarkChain = []
+
+    def addLandmark(self, xCoor, yCoor, tsIm, tsId):
+        newLandmark = Landmark(xCoor, yCoor, tsIm, tsId)
+        self._landmarkChain.append(newLandmark)
+
+    def removeAllLandmarks(self):
+        self._landmarkChain = []
+
+    def getChain(self):
+        return self._landmarkChain
+
+    def hasChain(self):
+        return self._landmarkChain is not None
+
+
+class SetOfLandmarkChains(data.EMObject):
+    """Represents a class that groups a set of landmark chains."""
+    _setOfLandmarkChains = []
+
+    def addLandmarkChain(self, landmarkChain):
+        self._setOfLandmarkChains.append(landmarkChain)
