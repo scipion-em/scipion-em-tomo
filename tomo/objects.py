@@ -697,6 +697,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
     def __init__(self, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
+        self._acquisition = TomoAcquisition()
         self._coordsPointer = pwobj.Pointer()
 
     def hasCoordinates3D(self):
