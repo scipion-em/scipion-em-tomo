@@ -248,7 +248,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
     Simple protocol to average TiltSeries movies as basic
     motion correction. It is used mainly for testing purposes.
     """
-    _label = 'average tiltseries (testing)'
+    _label = 'average tiltseries'
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ Simple add all frames and divide by its number. """
