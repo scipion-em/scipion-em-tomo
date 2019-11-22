@@ -161,8 +161,11 @@ class TestTomoImportTs(BaseTest):
         @classmethod
         def setUpClass(cls):
             setupTestProject(cls)
-            cls.empiar10164 = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-            cls.etomoTutorial = os.environ.get('SCIPION_TOMO_ETOMO_TUTORIAL', '')
+            cls.dataset = DataSet.getDataSet('tomo-em')
+            cls.getFile = cls.dataset.getFile('ts')
+
+            # cls.empiar10164 = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
+            # cls.etomoTutorial = os.environ.get('SCIPION_TOMO_ETOMO_TUTORIAL', '')
 
         def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
             if not os.path.exists(self.empiar10164):
@@ -184,14 +187,18 @@ class TestTomoImportTs(BaseTest):
             return protImport
 
         def _runImportTiltSeries(self):
-            if not os.path.exists(self.etomoTutorial):
-                raise Exception("Can not run tomo tests, "
-                                "SCIPION_TOMO_ETOMO_TUTORIAL variable not defined. ")
+            # if not os.path.exists(self.etomoTutorial):
+            #     raise Exception("Can not run tomo tests, "
+            #                     "SCIPION_TOMO_ETOMO_TUTORIAL variable not defined. ")
 
             protImport = self.newProtocol(
                 tomo.protocols.ProtImportTs,
-                filesPath=os.path.join(self.etomoTutorial),
+                #filesPath=os.path.join(self.etomoTutorial),
+                filesPath=self.getFile,
                 filesPattern='BB{TS}.st',
+                minAngle=-55,
+                maxAngle=65,
+                stepAngle=2,
                 voltage=300,
                 magnification=105000,
                 sphericalAberration=2.7,
