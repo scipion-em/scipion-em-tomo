@@ -722,7 +722,7 @@ class AverageSubTomogram(SubTomogram):
         SubTomogram.__init__(self, **kwargs)
 
 
-class SetOfAverageSubTomograms(data.SetOfSubTomograms):
+class SetOfAverageSubTomograms(SetOfSubTomograms):
     ITEM_TYPE = AverageSubTomogram
     REP_TYPE = AverageSubTomogram
 
