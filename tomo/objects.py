@@ -722,6 +722,14 @@ class AverageSubTomogram(SubTomogram):
         SubTomogram.__init__(self, **kwargs)
 
 
+class SetOfAverageSubTomograms(data.SetOfSubTomograms):
+    ITEM_TYPE = AverageSubTomogram
+    REP_TYPE = AverageSubTomogram
+
+    def __init__(self, **kwargs):
+        data.SetOfSubTomograms.__init__(self, **kwargs)
+
+
 class ClassSubTomogram(SetOfSubTomograms):
     """ Represent a Class that groups SubTomogram objects.
     The representative of the class is an AverageSubTomogram.
