@@ -117,21 +117,14 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                     tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
-        if tomoSet.getSize() > 1:
-            self._defineOutputs(outputTomograms=tomoSet)
-        else:
-            self._defineOutputs(outputTomogram=tomo)
+        self._defineOutputs(outputTomograms=tomoSet)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return (self.hasAttribute('outputTomogram')
-                or self.hasAttribute('outputTomograms'))
+        return self.hasAttribute('outputTomograms')
 
     def _getTomMessage(self):
-        if self.hasAttribute('outputTomogram'):
-            return "Tomogram %s" % self.getObjectTag('outputTomogram')
-        else:
-            return "Tomograms %s" % self.getObjectTag('outputTomograms')
+        return "Tomograms %s" % self.getObjectTag('outputTomograms')
 
     def _summary(self):
 
@@ -144,10 +137,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 if self.samplingRate.get():
                     summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
 
-                if self.hasAttribute('outputTomogram'):
-                    outputTomograms = [getattr(self, 'outputTomogram')]
-                else:
-                    outputTomograms = getattr(self, 'outputTomograms')
+                outputTomograms = getattr(self, 'outputTomograms')
 
                 ProtTomoImportAcquisition._summary(self, summary, outputTomograms)
 
