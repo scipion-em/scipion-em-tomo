@@ -727,7 +727,7 @@ class SetOfAverageSubTomograms(SetOfSubTomograms):
     REP_TYPE = AverageSubTomogram
 
     def __init__(self, **kwargs):
-        data.SetOfSubTomograms.__init__(self, **kwargs)
+        SetOfSubTomograms.__init__(self, **kwargs)
 
 
 class ClassSubTomogram(SetOfSubTomograms):
