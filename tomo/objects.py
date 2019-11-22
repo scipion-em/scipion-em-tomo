@@ -752,33 +752,21 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 class Landmark(data.EMObject):
     """Represents the location of a landmark in a Tilt-image belonging to an specific Tilt-series."""
-    def __init__(self, xCoor, yCoor, tsIm, tsId, **kwargs):
-        data.EMObject.__init__(**kwargs)
-        self._landmark = [xCoor, yCoor, tsIm, tsId]
+    def __init__(self, xCoor, yCoor, tsIm, chainId, tsId, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._landmark = [xCoor, yCoor, tsIm, chainId, tsId]
+
+    def getLandMark(self):
+        return self._landmark
+
+    def getLandmarkInfo(self):
+        return int(self._landmark[0]), \
+               int(self._landmark[1]), \
+               int(self._landmark[2]), \
+               int(self._landmark[3]), \
+               str(self._landmark[4])
 
 
-class LandmarkChain(data.EMObject):
-    """Represents the location of several landmarks present in a set of
-    Tilt-images belonging to the same Tilt-series."""
-    _landmarkChain = []
-
-    def addLandmark(self, xCoor, yCoor, tsIm, tsId):
-        newLandmark = Landmark(xCoor, yCoor, tsIm, tsId)
-        self._landmarkChain.append(newLandmark)
-
-    def removeAllLandmarks(self):
-        self._landmarkChain = []
-
-    def getChain(self):
-        return self._landmarkChain
-
-    def hasChain(self):
-        return self._landmarkChain is not None
-
-
-class SetOfLandmarkChains(data.EMObject):
-    """Represents a class that groups a set of landmark chains."""
-    _setOfLandmarkChains = []
-
-    def addLandmarkChain(self, landmarkChain):
-        self._setOfLandmarkChains.append(landmarkChain)
+class SetOfLandmarks(data.EMSet):
+    """Represents a class that groups a set of landmarks."""
+    ITEM_TYPE = Landmark
