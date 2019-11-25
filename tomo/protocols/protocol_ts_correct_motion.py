@@ -29,15 +29,13 @@ import os
 import pyworkflow as pw
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol import STEPS_PARALLEL
-
 from pyworkflow.utils.properties import Message
 
-from tomo.objects import TiltSeriesDict
-from .protocol_base import ProtTomoBase
+from tomo.objects import TiltSeries, TiltImage
+from .protocol_ts_base import ProtTsProcess
 
 
-class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
+class ProtTsCorrectMotion(ProtTsProcess):
     """
     Base class for movie alignment protocols such as:
     motioncorr, crosscorrelation and optical flow
@@ -46,10 +44,6 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
     the frames range used for alignment and final sum, the binning factor
     or the cropping options (region of interest)
     """
-    def __init__(self, **kwargs):
-        pwem.EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
-
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
@@ -89,7 +83,8 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
                        label='Binning factor',
                        help='1x or 2x. Bin stack before processing.')
 
-        line = group.addLine('Crop offsets (px)', expertLevel=params.LEVEL_ADVANCED)
+        line = group.addLine('Crop offsets (px)',
+                             expertLevel=params.LEVEL_ADVANCED)
         line.addParam('cropOffsetX', params.IntParam, default=0, label='X')
         line.addParam('cropOffsetY', params.IntParam, default=0, label='Y')
 
@@ -101,41 +96,6 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
         line.addParam('cropDimY', params.IntParam, default=0, label='Y')
 
         form.addParallelSection(threads=4, mpi=1)
-
-    # -------------------------- INSERT steps functions ---------------------
-    def _insertAllSteps(self):
-        inputTs = self.inputTiltSeriesM.get()
-        acq = inputTs.getAcquisition()
-        initialDose = acq.getDoseInitial()
-        dosePerFrame = acq.getDosePerFrame()
-        gain, dark = self.getGainAndDark()
-
-        ciStepId = self._insertFunctionStep('convertInputStep',
-                                            inputTs.getObjId())
-        self._tsDict = TiltSeriesDict()
-        allSteps = []
-
-        for ts in inputTs:
-            tsId = ts.getTsId()
-            self._tsDict.addTs(ts)
-            tsAllSteps = []
-            for i, ti in enumerate(ts):
-                self._tsDict.addTi(ti)
-                tiStepId = self._insertFunctionStep('processTiltImageMStep',
-                                                    tsId, ti.getObjId(),
-                                                    initialDose + (i * dosePerFrame),
-                                                    dosePerFrame,
-                                                    gain, dark,
-                                                    *self._getArgs(),
-                                                    prerequisites=[ciStepId])
-                tsAllSteps.append(tiStepId)
-
-            tsStepId = self._insertFunctionStep('composeTiltSeriesStep', tsId,
-                                                prerequisites=tsAllSteps)
-            allSteps.append(tsStepId)
-
-        self._insertFunctionStep('createOutputStep', 66,
-                                 prerequisites=allSteps)
 
     # --------------------------- STEPS functions ----------------------------
     def convertInputStep(self, inputId):
@@ -149,13 +109,10 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
         _convert(inputTs.getGain(), 'gain.mrc')
         _convert(inputTs.getDark(), 'dark.mrc')
 
-    def processTiltImageMStep(self, tsId, tiltImageId, *args):
+    def processTiltImageStep(self, tsId, tiltImageId, *args):
         tiltImageM = self._tsDict.getTi(tsId, tiltImageId)
-
         workingFolder = self.__getTiltImageMWorkingFolder(tiltImageM)
-
         pw.utils.makePath(workingFolder)
-
         self._processTiltImageM(workingFolder, tiltImageM, *args)
 
         tiFn, tiFnDW = self._getOutputTiltImagePaths(tiltImageM)
@@ -165,9 +122,10 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
 
-    def composeTiltSeriesStep(self, tsId):
+    def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
         ts = self._tsDict.getTs(tsId)
+        ts.setDim([])
 
         tiList = self._tsDict.getTiList(tsId)
         tiList.sort(key=lambda ti: ti.getTiltAngle())
@@ -179,106 +137,51 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
 
         for i, ti in enumerate(tiList):
             tiFn, tiFnDW = self._getOutputTiltImagePaths(ti)
-            ih.convert(tiFn, (i+1, tsFn))
+            newLocation = (i+1, tsFn)
+            ih.convert(tiFn, newLocation)
+            ti.setLocation(newLocation)
             pw.utils.cleanPath(tiFn)
             if os.path.exists(tiFnDW):
                 ih.convert(tiFnDW, (i+1, tsFnDW))
                 pw.utils.cleanPath(tiFnDW)
 
-    def createOutputStep(self, xxx):
-        inputTs = self.inputTiltSeriesM.get()
-        outputTs = self._createSetOfTiltSeries()
-        outputTs.copyInfo(inputTs)
+        self._tsDict.setFinished(tsId)
 
-        def _updateTs(i, ts, tsOut):
-            tsOut.setDim([])
+    def _updateOutputSet(self, outputSet, tsIdList):
+        """ Override this method to convert the TiltSeriesM into TiltSeries.
+        """
+        for tsId in tsIdList:
+            ts = TiltSeries()
+            ts.copyInfo(self._tsDict.getTs(tsId), copyId=True)
+            outputSet.append(ts)
+            for ti in self._tsDict.getTiList(tsId):
+                tiOut = TiltImage(location=ti.getLocation())
+                tiOut.copyInfo(ti, copyId=True)
+                ts.append(tiOut)
 
-        def _updateTi(j, ts, ti, tsOut, tiOut):
-            tiOut.setLocation((j + 1, self._getOutputTiltSeriesPath(ts)))
-
-        outputTs.copyItems(inputTs,
-                           updateTsCallback=_updateTs,
-                           orderByTi='_tiltAngle',
-                           updateTiCallback=_updateTi)
-        outputTs.updateDim()
-        self._defineOutputs(outputTiltSeries=outputTs)
-        self._defineSourceRelation(self.inputTiltSeriesM, outputTs)
+            outputSet.update(ts)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
         errors = []
-
-        return errors
-
-        # Only validate about cropDimensions if the protocol supports them
-        if (hasattr(self, 'cropDimX') and hasattr(self, 'cropDimY')
-            and (self.cropDimX > 0 and self.cropDimY <= 0
-                 or self.cropDimY > 0 and self.cropDimX <= 0)):
-            errors.append("If you give cropDimX, you should also give "
-                          "cropDimY and vice versa")
-
-        inputMovies = self.inputMovies.get()
-
-        # Do not continue if there ar no movies. Validation message will
-        # take place since attribute is a Pointer.
-        if inputMovies is None:
-            return errors
-
-        firstItem = inputMovies.getFirstItem()
-
-        firstFrame, lastFrame, _ = inputMovies.getFramesRange()
-        if lastFrame == 0:
-            # Although getFirstItem is not recommended in general, here it is
-            # used only once, for validation purposes, so performance
-            # problems should not appear.
-            frames = firstItem.getNumberOfFrames()
-            lastFrame = frames
-        else:
-            frames = lastFrame - firstFrame + 1
-
-        if frames is not None:
-            def _validateRange(prefix):
-                # Avoid validation when the range is not defined
-                if not hasattr(self, '%sFrame0' % prefix):
-                    return
-
-                f0, fN = self._getFrameRange(frames, prefix)
-                if fN < firstFrame or fN > lastFrame:
-                    errors.append("Check the selected last frame to *%s*. "
-                                  "Last frame (%d) should be in range: %s "
-                                  % (prefix.upper(), fN, (firstFrame,
-                                                          lastFrame)))
-                if f0 < firstFrame or f0 > lastFrame:
-                    errors.append("Check the selected first frame to *%s*. "
-                                  "First frame (%d) should be in range: %s "
-                                  % (prefix.upper(), f0, (firstFrame,
-                                                          lastFrame)))
-                if fN < f0:
-                    errors.append("Check the selected frames range to *%s*. "
-                                  "Last frame (%d) should be greater or equal "
-                                  "than first frame (%d)"
-                                  % (prefix.upper(), fN, f0))
-
-            _validateRange("align")
-            _validateRange("sum")
-
-        if not ImageHandler().existsLocation(firstItem.getLocation()):
-            errors.append("The input movie files do not exist!!! "
-                          "Since usually input movie files are symbolic links, "
-                          "please check that links are not broken if you "
-                          "moved the project folder. ")
-
         return errors
 
     def _summary(self):
         return [self.summaryVar.get('')]
 
     # --------------------------- UTILS functions ----------------------------
+    def _initialize(self):
+        inputTs = self._getInputTs()
+        acq = inputTs.getAcquisition()
+        gain, dark = self.getGainAndDark()
+        self.__basicArgs = [
+            acq.getDoseInitial(), acq.getDosePerFrame(), gain, dark]
+
     def _getArgs(self):
-        """ Return a list with parameters that will be passed to the process
-        TiltSeries step. It can be redefined by subclasses.
-        """
-        return []
+        return self.__basicArgs
+
+    def _getInputTsPointer(self):
+        return self.inputTiltSeriesM
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ This function should be implemented in subclasses to really provide
@@ -320,18 +223,6 @@ class ProtTsCorrectMotion(pwem.EMProtocol, ProtTomoBase):
     def _getBinFactor(self):
         return self.getAttributeValue('binFactor', 1.0)
 
-    # def _getDose(self, tiltImageM):
-    #     """get and correct the pre-exposure dose. It is important for cases
-    #     in which the first frame is different of one. The method support both
-    #     movie and sets of movies"""
-    #     movieSet = self.inputTiltSeriesM.get()
-    #     firstFrame, _, _ = movieSet.getFramesRange()
-    #     preExp = movieSet.getAcquisition().getDoseInitial()
-    #     dose = movieSet.getAcquisition().getDosePerFrame()
-    #     preExp += dose * (firstFrame - 1)
-    #
-    #     return preExp, dose
-
     # ----- Some internal functions ---------
     def _getTiltImageMRoot(self, tim):
         return '%s_%02d' % (tim.getTsId(), tim.getObjId())
@@ -357,7 +248,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
     Simple protocol to average TiltSeries movies as basic
     motion correction. It is used mainly for testing purposes.
     """
-    _label = 'average tiltseries (testing)'
+    _label = 'average tiltseries'
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ Simple add all frames and divide by its number. """

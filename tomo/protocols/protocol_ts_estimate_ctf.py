@@ -29,22 +29,15 @@ import os
 import pyworkflow as pw
 import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol import STEPS_PARALLEL
-
 from pyworkflow.utils.properties import Message
 
-from tomo.objects import TiltSeriesDict
-from .protocol_base import ProtTomoBase
+from .protocol_ts_base import ProtTsProcess
 
 
-class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
+class ProtTsEstimateCTF(ProtTsProcess):
     """
     Base class for estimating the CTF on TiltSeries
     """
-    def __init__(self, **kwargs):
-        pwem.EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
-
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_CTF_ESTI)
@@ -105,39 +98,9 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
 
         form.addParallelSection(threads=2, mpi=1)
 
-    # -------------------------- INSERT steps functions ---------------------
-    def _insertAllSteps(self):
-        self._defineCtfParamsDict()
-        inputTs = self.inputTiltSeries.get()
-        ciStepId = self._insertFunctionStep('convertInputStep',
-                                            inputTs.getObjId())
-        self._tsDict = TiltSeriesDict()
-        allSteps = []
-
-        for ts in inputTs:
-            tsId = ts.getTsId()
-            self._tsDict.addTs(ts)
-            tsAllSteps = []
-            for i, ti in enumerate(ts):
-                self._tsDict.addTi(ti)
-                tiStepId = self._insertFunctionStep('estimateCtfStep',
-                                                    tsId, ti.getObjId(),
-                                                    *self._getArgs(),
-                                                    prerequisites=[ciStepId])
-                tsAllSteps.append(tiStepId)
-
-            tsStepId = self._insertFunctionStep('processTsStep', tsId,
-                                                prerequisites=tsAllSteps)
-            allSteps.append(tsStepId)
-
-        self._insertFunctionStep('createOutputStep',
-                                 prerequisites=allSteps)
-
     # --------------------------- STEPS functions ----------------------------
-    def convertInputStep(self, inputId):
-        pass
 
-    def estimateCtfStep(self, tsId, tiltImageId, *args):
+    def processTiltImageStep(self, tsId, tiltImageId, *args):
         ti = self._tsDict.getTi(tsId, tiltImageId)
 
         # Create working directory for a tilt-image
@@ -151,6 +114,8 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
 
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingDir)
+
+        ti.setCTF(self.getCtf(ti))
 
     def _convertInputTi(self, ti, tiFn):
         """ This function will convert the input tilt-image
@@ -171,22 +136,9 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
     def _estimateCtf(self, workingDir, tiFn, tiltImage):
         raise Exception("_estimateCTF function should be implemented!")
 
-    def processTsStep(self, tsId):
+    def processTiltSeriesStep(self, tsId):
         """ Step called after all CTF are estimated for a given tiltseries. """
-        pass
-
-    def createOutputStep(self):
-        inputTs = self.inputTiltSeries.get()
-        outputTs = self._createSetOfTiltSeries()
-        outputTs.copyInfo(inputTs)
-
-        def _updateCtf(j, ts, ti, tsOut, tiOut):
-            tiOut.setCTF(self.getCtf(ti))
-
-        outputTs.copyItems(inputTs, updateTiCallback=_updateCtf)
-
-        self._defineOutputs(outputTiltSeries=outputTs)
-        self._defineSourceRelation(self.inputTiltSeries, outputTs)
+        self._tsDict.setFinished(tsId)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
@@ -198,11 +150,14 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
         return [self.summaryVar.get('')]
 
     # --------------------------- UTILS functions ----------------------------
-    def _defineCtfParamsDict(self):
+    def _getInputTsPointer(self):
+        return self.inputTiltSeries
+
+    def _initialize(self):
         """ This function define a dictionary with parameters used
         for CTF estimation that are common for all micrographs. """
         # Get pointer to input micrographs
-        inputTs = self.inputTiltSeries.get()
+        inputTs = self._getInputTs()
         acq = inputTs.getAcquisition()
         downFactor = self.getAttributeValue('ctfDownFactor', 1.0)
         sampling = inputTs.getSamplingRate()
@@ -226,12 +181,6 @@ class ProtTsEstimateCTF(pwem.EMProtocol, ProtTomoBase):
         """ Return a copy of the global params dict,
         to avoid overwriting values. """
         return self._params
-
-    def _getArgs(self):
-        """ Return a list with parameters that will be passed to the process
-        TiltSeries step. It can be redefined by subclasses.
-        """
-        return []
 
     # ----- Some internal functions ---------
     def getTiRoot(self, tim):
