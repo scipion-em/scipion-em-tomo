@@ -741,32 +741,3 @@ class ClassSubTomogram(SetOfSubTomograms):
     def close(self):
         # Do nothing on close, since the db will be closed by SetOfClasses
         pass
-
-
-class SetOfClassesSubTomograms(data.SetOfClasses):
-    """ Store results from a subtomogram averaging method. """
-    ITEM_TYPE = ClassSubTomogram
-    REP_TYPE = AverageSubTomogram
-    pass
-
-
-class Landmark(data.EMObject):
-    """Represents the location of a landmark in a Tilt-image belonging to an specific Tilt-series."""
-    def __init__(self, xCoor, yCoor, tsIm, chainId, tsId, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
-        self._landmark = [xCoor, yCoor, tsIm, chainId, tsId]
-
-    def getLandMark(self):
-        return self._landmark
-
-    def getLandmarkInfo(self):
-        return int(self._landmark[0]), \
-               int(self._landmark[1]), \
-               int(self._landmark[2]), \
-               int(self._landmark[3]), \
-               str(self._landmark[4])
-
-
-class SetOfLandmarks(data.EMSet):
-    """Represents a class that groups a set of landmarks."""
-    ITEM_TYPE = Landmark
