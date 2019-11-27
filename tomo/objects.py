@@ -741,3 +741,11 @@ class ClassSubTomogram(SetOfSubTomograms):
     def close(self):
         # Do nothing on close, since the db will be closed by SetOfClasses
         pass
+
+
+class SetOfClassesSubTomograms(data.SetOfClasses):
+    """ Store results from a subtomogram averaging method. """
+    ITEM_TYPE = ClassSubTomogram
+    REP_TYPE = AverageSubTomogram
+
+    pass
