@@ -165,9 +165,6 @@ class TestTomoImportTs(BaseTest):
             cls.getFile = cls.dataset.getFile('etomo')
             cls.getFileM = cls.dataset.getFile('empiar')
 
-            # cls.empiar10164 = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-            # cls.etomoTutorial = os.environ.get('SCIPION_TOMO_ETOMO_TUTORIAL', '')
-
         def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
             protImport = self.newProtocol(
                 tomo.protocols.ProtImportTsMovies,
