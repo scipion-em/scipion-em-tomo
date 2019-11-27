@@ -162,19 +162,16 @@ class TestTomoImportTs(BaseTest):
         def setUpClass(cls):
             setupTestProject(cls)
             cls.dataset = DataSet.getDataSet('tomo-em')
-            cls.getFile = cls.dataset.getFile('ts')
+            cls.getFile = cls.dataset.getFile('etomo')
+            cls.getFileM = cls.dataset.getFile('empiar')
 
             # cls.empiar10164 = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
             # cls.etomoTutorial = os.environ.get('SCIPION_TOMO_ETOMO_TUTORIAL', '')
 
         def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
-            if not os.path.exists(self.empiar10164):
-                raise Exception("Can not run tomo tests, "
-                                "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
-
             protImport = self.newProtocol(
                 tomo.protocols.ProtImportTsMovies,
-                filesPath=os.path.join(self.empiar10164, 'data', 'frames'),
+                filesPath=self.getFileM,
                 filesPattern=filesPattern,
                 voltage=300,
                 magnification=105000,
@@ -187,13 +184,8 @@ class TestTomoImportTs(BaseTest):
             return protImport
 
         def _runImportTiltSeries(self):
-            # if not os.path.exists(self.etomoTutorial):
-            #     raise Exception("Can not run tomo tests, "
-            #                     "SCIPION_TOMO_ETOMO_TUTORIAL variable not defined. ")
-
             protImport = self.newProtocol(
                 tomo.protocols.ProtImportTs,
-                #filesPath=os.path.join(self.etomoTutorial),
                 filesPath=self.getFile,
                 filesPattern='BB{TS}.st',
                 minAngle=-55,
@@ -213,7 +205,7 @@ class TestTomoImportTs(BaseTest):
             protImport = self._runImportTiltSeriesM()
             output = getattr(protImport, 'outputTiltSeriesM', None)
             self.assertFalse(output is None)
-            self.assertEqual(output.getSize(), 3)
+            self.assertEqual(output.getSize(), 2)
 
             return protImport
 

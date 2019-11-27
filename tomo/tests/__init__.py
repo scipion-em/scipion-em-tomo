@@ -33,5 +33,6 @@ DataSet(name='tomo-em', folder='tomo-em',
                'tomo3': 'import_tomo_8_mn.mrc',
                'subtomo': 'basename.hdf',
                'eman_coordinates': 'coordinates3Deman2',
-               'ts': 'tutorialData'
+               'etomo': 'tutorialData',
+               'empiar': 'EMPIAR-10164'
         })
