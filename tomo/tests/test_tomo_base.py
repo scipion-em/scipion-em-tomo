@@ -123,7 +123,7 @@ class TestTomoBaseProtocols(BaseTest):
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
-            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPath=self.getFileM,
             filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
@@ -146,9 +146,8 @@ class TestTomoBaseProtocols(BaseTest):
         protImport = self.test_importTiltSeriesM()
 
         # --------- Motion correction with motioncor2 for Tilt-series ------
-        import motioncorr.protocols
         protMc = self.newProtocol(
-            motioncorr.protocols.ProtTsMotionCorr,
+            tomo.protocols.ProtTsAverage,
             binFactor=2.0
         )
 
@@ -391,16 +390,14 @@ class TestTomoPreprocessing(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-
-        if not os.path.exists(cls.dataPath):
-            raise Exception("Can not run tomo tests, "
-                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.getFile = cls.dataset.getFile('etomo')
+        cls.getFileM = cls.dataset.getFile('empiar')
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
-            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPath=self.getFileM,
             filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
@@ -424,9 +421,8 @@ class TestTomoPreprocessing(BaseTest):
         threads = len(gpuList.split()) + 1
 
         # --------- Motion correction with motioncor2 for Tilt-series ------
-        import motioncorr.protocols
         protMc = self.newProtocol(
-            motioncorr.protocols.ProtTsMotionCorr,
+            tomo.protocols.ProtTsAverage,
             inputTiltSeriesM=protImport.outputTiltSeriesM,
             binFactor=2.0,
             gpuList=gpuList,
