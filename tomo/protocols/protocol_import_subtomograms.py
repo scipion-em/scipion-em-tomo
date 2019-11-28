@@ -138,10 +138,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                     self._setCoordinates3D(subtomo)
                     subtomoSet.append(subtomo)
 
-        if subtomoSet.getSize() > 1:
-            self._defineOutputs(outputSubTomograms=subtomoSet)
-        else:
-            self._defineOutputs(outputSubTomogram=subtomo)
+        self._defineOutputs(outputSubTomograms=subtomoSet)
 
     # --------------------------- INFO functions ------------------------------
     def _setCoordinates3D(self, subtomo):
@@ -152,14 +149,11 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 subtomo.setCoordinate3D(self.coords.pop(0))
 
     def _hasOutput(self):
-        return (self.hasAttribute('outputSubTomogram')
-                or self.hasAttribute('outputSubTomograms'))
+        return self.hasAttribute('outputSubTomograms')
+
 
     def _getSubTomMessage(self):
-        if self.hasAttribute('outputSubTomogram'):
-            return "SubTomogram %s" % self.getObjectTag('outputSubTomogram')
-        else:
-            return "SubTomograms %s" % self.getObjectTag('outputSubTomograms')
+        return "SubTomograms %s" % self.getObjectTag('outputSubTomograms')
 
     def _summary(self):
         summary = []
@@ -170,12 +164,8 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             if self.samplingRate.get():
                 summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
                                self.samplingRate.get())
-            if self.hasAttribute('outputSubTomogram'):
-                outputSubTomograms = [getattr(self, 'outputSubTomogram')]
-            else:
-                outputSubTomograms = getattr(self, 'outputSubTomograms')
 
-            ProtTomoImportAcquisition._summary(self, summary, outputSubTomograms)
+            ProtTomoImportAcquisition._summary(self, summary, getattr(self, 'outputSubTomograms'))
 
         return summary
 

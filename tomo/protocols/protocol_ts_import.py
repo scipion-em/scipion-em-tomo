@@ -451,7 +451,8 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
         """ Overwrite in subclasses """
         return False
 
-    def worksInStreaming(self):
+    @classmethod
+    def worksInStreaming(cls):
         # Import protocols always work in streaming
         return True
 
