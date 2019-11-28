@@ -116,11 +116,9 @@ class TestTomoBaseProtocols(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-
-        if not os.path.exists(cls.dataPath):
-            raise Exception("Can not run tomo tests, "
-                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.getFile = cls.dataset.getFile('etomo')
+        cls.getFileM = cls.dataset.getFile('empiar')
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
