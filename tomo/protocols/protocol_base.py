@@ -77,8 +77,8 @@ class ProtTomoBase:
 
         return classes
 
-    def _createSetOfLandmarks(self, suffix=''):
-        return self._createSet(tomo.objects.SetOfLandmarks, 'setOfLandmarks%s.sqlite', suffix)
+    def _createSetOfLandmarkModels(self, suffix=''):
+        return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
 
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.

@@ -750,23 +750,49 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     pass
 
 
-class Landmark(data.EMObject):
-    """Represents the location of a landmark in a Tilt-image belonging to an specific Tilt-series."""
-    def __init__(self, xCoor, yCoor, tsIm, chainId, tsId, **kwargs):
+class LandmarkModel(data.EMObject):
+    """Represents the set of landmarks belonging to an specific Tilt-series."""
+    def __init__(self, tsId=None, fileName=None, modelName = None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
-        self._landmark = [xCoor, yCoor, tsIm, chainId, tsId]
+        self._tsId = pwobj.String(tsId)
+        self._fileName = pwobj.String(fileName)
+        self._modelName = pwobj.String(modelName)
 
-    def getLandMark(self):
-        return self._landmark
+    def getTsId(self):
+        return str(self._tsId)
 
-    def getLandmarkInfo(self):
-        return int(self._landmark[0]), \
-               int(self._landmark[1]), \
-               int(self._landmark[2]), \
-               int(self._landmark[3]), \
-               str(self._landmark[4])
+    def getFileName(self):
+        return str(self._fileName)
+
+    def getModelName(self):
+        return str(self._modelName)
+
+    def setTsId(self, tsId):
+        self._tsId = pwobj.String(tsId)
+
+    def setFileName(self, fileName):
+        self._fileName = pwobj.String(fileName)
+
+    def setModelName(self, modelName):
+        self._modelName = pwobj.String(modelName)
+
+    def addLandmark(self, xCoor, yCoor, tiltIm, chainId):
+        import csv
+        fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId']
+        if os.path.exists(self.getFileName()):
+            with open(self.getFileName(), 'a') as f:
+                writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
+                writer.writerow({'xCoor': xCoor, 'yCoor': yCoor, 'tiltIm': tiltIm, 'chainId': chainId})
+        else:
+            with open(self.getFileName(), 'w') as f:
+                writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
+                writer.writeheader()
+                writer.writerow({'xCoor': xCoor, 'yCoor': yCoor, 'tiltIm': tiltIm, 'chainId': chainId})
 
 
-class SetOfLandmarks(data.EMSet):
-    """Represents a class that groups a set of landmarks."""
-    ITEM_TYPE = Landmark
+class SetOfLandmarkModels(data.EMSet):
+    """Represents a class that groups a set of landmark models."""
+    ITEM_TYPE = LandmarkModel
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
