@@ -232,7 +232,6 @@ class TomogramsDialog(ToolbarListDialog):
 
     def __init__(self, parent, viewer, **kwargs):
         self.path = kwargs.get("path", None)
-        print(self.path)
         self.provider = kwargs.get("provider", None)
         if viewer:
             ToolbarListDialog.__init__(self, parent,
