@@ -9,7 +9,8 @@ In the meantime, it can be used for development, base on Scipion v2.x with plugi
  
 This tomography plugin can be enabled by cloning this repository and execute the command: 
 ```
-scipion installp -p scipion-em-tomo $PATH_TO_THE_SOURCES_FOLDER --devel
+git clone https://github.com/scipion-em/scipion-em-tomo.git
+scipion installp -p ~/scipion-em-tomo --devel
 ```
 
 or by adding the path to the $PYTHONPATH environment variable. 
@@ -32,7 +33,7 @@ To check the installation, simply run one of the following Scipion tests:
  A complete list of tests can also be seen by executing ``scipion test tomo.tests.test_tomo_base``
 
 ### Pre-requisites
-* Use scipion v2.0.0 from branch 'tomo' (recommended but not compulsory)
+* Use scipion v2.0.0
 * Use scipion-em-tomo from branch 'tomo' (see previous section for a possible setup)
 * TestTomoPreprocessing test requires gctf and imod plugins to work properly. If these plugins cannot be found the test will not be executed. For this test to succeed one available GPU is needed, more GPUs can be defined defining the var SCIPION_TEST_GPULIST (e.g export SCIPION_TEST_GPULIST='0 1' )
 
