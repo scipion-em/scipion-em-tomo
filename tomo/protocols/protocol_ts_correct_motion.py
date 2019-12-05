@@ -117,7 +117,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         tiFn, tiFnDW = self._getOutputTiltImagePaths(tiltImageM)
         if not os.path.exists(tiFn):
-            raise Exception("Expected output file '%' not produced!" % tiFn)
+            raise Exception("Expected output file '%s' not produced!" % tiFn)
 
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
