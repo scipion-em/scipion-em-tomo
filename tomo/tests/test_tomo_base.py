@@ -410,6 +410,14 @@ class TestTomoPreprocessing(BaseTest):
         return protImport
 
     def test_preprocess1(self):
+        try:
+            import gctf.protocols
+            import imod.protocols
+        except ImportError:
+            print('To run this test scipion-em-gctf and scipion-em-imod plugins are required. '
+                  'This test will not be executed unless this plugins are installed')
+            return
+
         """ Run the basic preprocessing pipeline for just one TS. """
         protImport = self._runImportTiltSeriesM(
             filesPattern='{TS}1_{TO}_{TA}.mrc')
@@ -431,7 +439,6 @@ class TestTomoPreprocessing(BaseTest):
         self.launchProtocol(protMc)
 
         # --------- CTF estimation with Gctf ------
-        import gctf.protocols
         protGctf = self.newProtocol(
             gctf.protocols.ProtTsGctf,
             inputTiltSeries=protMc.outputTiltSeries,
@@ -441,7 +448,6 @@ class TestTomoPreprocessing(BaseTest):
         self.launchProtocol(protGctf)
 
         # -------- Basic alignment and reconstruction with IMOD ------
-        import imod.protocols
         protImodAuto = self.newProtocol(
             imod.protocols.ProtImodAuto3D,
             inputTiltSeries=protGctf.outputTiltSeries,
