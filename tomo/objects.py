@@ -577,9 +577,10 @@ class SetOfCoordinates3D(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._volumesPointer = pwobj.Pointer()
+        # self._volumesPointer = pwobj.Pointer()
         self._boxSize = pwobj.Integer()
         self._samplingRate = pwobj.Float()
+        self._precedentsPointer = pwobj.Pointer()
 
     def getBoxSize(self):
         """ Return the box size of the particles.
@@ -631,20 +632,35 @@ class SetOfCoordinates3D(data.EMSet):
         for coord in self.iterItems(where=coordWhere):
             yield coord
 
-    def getVolumes(self):
-        """ Returns the SetOfTomograms associated with
-        this SetOfCoordinates"""
-        return self._volumesPointer.get()
+    # def getVolumes(self):
+    #     """ Returns the SetOfTomograms associated with
+    #     this SetOfCoordinates"""
+    #     return self._volumesPointer.get()
+    #
+    # def setVolumes(self, volumes):
+    #     """ Set the tomograms associated with this set of coordinates.
+    #     Params:
+    #         tomograms: Either a SetOfTomograms object or a pointer to it.
+    #     """
+    #     if volumes.isPointer():
+    #         self._volumesPointer.copy(volumes)
+    #     else:
+    #         self._volumesPointer.set(volumes)
 
-    def setVolumes(self, volumes):
-        """ Set the tomograms associated with this set of coordinates.
-        Params:
-            tomograms: Either a SetOfTomograms object or a pointer to it.
-        """
-        if volumes.isPointer():
-            self._volumesPointer.copy(volumes)
+    def getPrecedents(self):
+        """ Returns the SetOfTomograms or Tilt Series associated with
+                this SetOfCoordinates"""
+        return self._precedentsPointer.get()
+
+    def setPrecedents(self, precedents):
+        """ Set the tomograms  or Tilt Series associated with this set of coordinates.
+                Params:
+                    tomograms: Either a SetOfTomograms or Tilt Series object or a pointer to it.
+                """
+        if precedents.isPointer():
+            self._precedentsPointer.copy(precedents)
         else:
-            self._volumesPointer.set(volumes)
+            self._precedentsPointer.set(precedents)
 
     def getFiles(self):
         filePaths = set()
