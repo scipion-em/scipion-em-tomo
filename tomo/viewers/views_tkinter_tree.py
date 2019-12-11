@@ -313,7 +313,7 @@ class TomogramsDialog(ToolbarListDialog):
         args = "-i %s -macro %s" % (tomogramFile, macroPath)
         app = "xmipp.ij.commons.XmippImageJ"
 
-        runJavaIJapp(None, app, args).wait()
+        runJavaIJapp(4, app, args).wait()
 
     def lanchIJForViewing(self, path, tomogram):
         macroPath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "View_ROI.ijm")
@@ -332,4 +332,4 @@ class TomogramsDialog(ToolbarListDialog):
         args = "-i %s -macro %s" % (tomogramFile, macroPath)
         app = "xmipp.ij.commons.XmippImageJ"
 
-        runJavaIJapp(None, app, args).wait()
+        runJavaIJapp(4, app, args).wait()
