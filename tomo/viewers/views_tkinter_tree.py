@@ -28,6 +28,7 @@ import os, threading
 
 import pyworkflow.object as pwobj
 import pyworkflow.em as pwem
+from pyworkflow.em.viewers import showj
 from pyworkflow.em.viewers.showj import runJavaIJapp
 from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
@@ -311,6 +312,10 @@ class TomogramsDialog(ToolbarListDialog):
 
         imagej_home = getXmippPath(os.path.join('bindings', 'java'), 'imagej')
         args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        viewParams = {showj.ZOOM: 50}
+        for key, value in viewParams.items():
+            args = "%s --%s %s" % (args, key, value)
+
         app = "xmipp.ij.commons.XmippImageJ"
 
         runJavaIJapp(4, app, args).wait()
@@ -330,6 +335,10 @@ class TomogramsDialog(ToolbarListDialog):
 
         imagej_home = getXmippPath(os.path.join('bindings', 'java'), 'imagej')
         args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        viewParams = {showj.ZOOM: 50}
+        for key, value in viewParams.items():
+            args = "%s --%s %s" % (args, key, value)
+
         app = "xmipp.ij.commons.XmippImageJ"
 
         runJavaIJapp(4, app, args).wait()
