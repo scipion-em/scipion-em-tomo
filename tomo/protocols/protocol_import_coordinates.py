@@ -35,8 +35,6 @@ from .protocol_base import ProtTomoImportFiles
 
 from tomo.objects import SetOfCoordinates3D
 
-from .protocol_base import ProtTomoImportFiles
-
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
     """Protocol to import a set of tomograms to the project"""
