@@ -31,9 +31,9 @@ from os.path import basename
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import importFromPlugin
 
-from tomo.objects import SetOfCoordinates3D
-
 from .protocol_base import ProtTomoImportFiles
+
+from tomo.objects import SetOfCoordinates3D
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -53,6 +53,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
         return ['eman']
+
+    def _getDefaultChoice(self):
+        return self.IMPORT_FROM_AUTO
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
@@ -135,8 +138,18 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     def getImportFrom(self):
         importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_AUTO:
-            importFrom = self.IMPORT_FROM_EMAN
+            importFrom = self.getFormat()
         return importFrom
+
+    def getFormat(self):
+        for coordFile, _ in self.iterFiles():
+            if coordFile.endswith('.pos'):
+                return self.IMPORT_FROM_XMIPP
+            if coordFile.endswith('.star'):
+                return self.IMPORT_FROM_RELION
+            if coordFile.endswith('.json') or coordFile.endswith('.txt'):
+                return self.IMPORT_FROM_EMAN
+        return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """
