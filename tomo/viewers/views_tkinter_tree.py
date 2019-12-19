@@ -193,16 +193,16 @@ class TomogramsTreeProvider(TreeProvider):
         return [('Tomogram', 300), ('status', 150)]
 
     def getObjectInfo(self, tomo):
-        tomogramName = os.path.basename(tomo.get().getFileName())
+        tomogramName = os.path.basename(tomo.getFileName())
         tomogramName = os.path.splitext(tomogramName)[0]
         filePath = os.path.join(self._path, tomogramName + ".txt")
 
         if not os.path.isfile(filePath):
-            return {'key': tomo, 'parent': None,
+            return {'key': tomogramName, 'parent': None,
                     'text': tomogramName, 'values': ("TODO"),
                     'tags': ("pending")}
         else:
-            return {'key': tomo, 'parent': None,
+            return {'key': tomogramName, 'parent': None,
                     'text': tomogramName, 'values': ("DONE"),
                     'tags': ("done")}
 
@@ -214,10 +214,7 @@ class TomogramsTreeProvider(TreeProvider):
 
     def _getObjectList(self):
         """Retrieve the object list"""
-        objList = []
-        for obj in self.tomoList:
-            objList.append(ObjStr(obj))
-        return objList
+        return self.tomoList
 
     def getObjects(self):
         objList = self._getObjectList()
@@ -256,13 +253,13 @@ class TomogramsDialog(ToolbarListDialog):
             self.after(1000, self.refresh_gui)
 
     def doubleClickOnTomogram(self, e=None):
-        self.tomo = e.get()
+        self.tomo = e
         self.proc = threading.Thread(target=self.lanchIJForTomogram, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)
 
     def doubleClickViewer(self, e=None):
-        self.tomo = e.get()
+        self.tomo = e
         self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)
@@ -345,14 +342,3 @@ class TomogramsDialog(ToolbarListDialog):
         app = "xmipp.ij.commons.XmippImageJ"
 
         runJavaIJapp(4, app, args).wait()
-
-
-class ObjStr:
-    def __init__(self, obj):
-        self.obj = obj
-
-    def get(self):
-        return self.obj
-
-    def __str__(self):
-        return self.get().getFileName()
