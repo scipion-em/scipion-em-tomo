@@ -376,16 +376,17 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
     def test_import_set_of_coordinates_3D(self):
         protCoordinates = self._runTomoImportSetOfCoordinates('*.json')
-        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt')
         output = getattr(protCoordinates, 'outputCoordinates', None)
-        output2 = getattr(protCoordinates2, 'outputCoordinates', None)
         self.assertTrue(output,
-                             "There was a problem with coordinates 3d output")
-        self.assertTrue(output2,
                              "There was a problem with coordinates 3d output")
         self.assertTrue(output.getSize() == 19)
         self.assertTrue(output.getBoxSize() == 32)
         self.assertTrue(output.getSamplingRate() == 5.5)
+
+        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt')
+        output2 = getattr(protCoordinates2, 'outputCoordinates', None)
+        self.assertTrue(output2,
+                             "There was a problem with coordinates 3d output")
         self.assertTrue(output2.getSize() == 5)
         self.assertTrue(output2.getBoxSize() == 32)
         self.assertTrue(output2.getSamplingRate() == 5.5)
