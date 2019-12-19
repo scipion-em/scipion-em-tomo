@@ -26,7 +26,6 @@
 
 import os, threading
 
-import pyworkflow.object as pwobj
 import pyworkflow.em as pwem
 from pyworkflow.em.viewers import showj
 from pyworkflow.em.viewers.showj import runJavaIJapp
@@ -34,12 +33,9 @@ from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
 
 import pyworkflow.viewer as pwviewer
-import pyworkflow.utils as pwutils
 from pyworkflow.viewer import View
 
 import tomo.objects
-
-from xmipp_base import getXmippPath
 
 
 class TiltSeriesTreeProvider(TreeProvider):
@@ -310,7 +306,6 @@ class TomogramsDialog(ToolbarListDialog):
         macroFid.write(macro)
         macroFid.close()
 
-        imagej_home = getXmippPath(os.path.join('bindings', 'java'), 'imagej')
         args = "-i %s -macro %s" % (tomogramFile, macroPath)
         viewParams = {showj.ZOOM: 50}
         for key, value in viewParams.items():
@@ -333,7 +328,6 @@ class TomogramsDialog(ToolbarListDialog):
         macroFid.write(macro)
         macroFid.close()
 
-        imagej_home = getXmippPath(os.path.join('bindings', 'java'), 'imagej')
         args = "-i %s -macro %s" % (tomogramFile, macroPath)
         viewParams = {showj.ZOOM: 50}
         for key, value in viewParams.items():
