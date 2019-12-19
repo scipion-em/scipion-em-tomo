@@ -577,7 +577,6 @@ class SetOfCoordinates3D(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        # self._volumesPointer = pwobj.Pointer()
         self._boxSize = pwobj.Integer()
         self._samplingRate = pwobj.Float()
         self._precedentsPointer = pwobj.Pointer()
@@ -600,10 +599,10 @@ class SetOfCoordinates3D(data.EMSet):
        self._samplingRate.set(sampling)
 
     def iterVolumes(self):
-        """ Iterate over the tomograms set associated with this
+        """ Iterate over the objects set associated with this
         set of coordinates.
         """
-        return self.getVolumes()
+        return self.getPrecedents()
 
     def iterVolumeCoordinates(self, volume):
         """ Iterates over the set of coordinates belonging to that micrograph.
@@ -631,21 +630,6 @@ class SetOfCoordinates3D(data.EMSet):
 
         for coord in self.iterItems(where=coordWhere):
             yield coord
-
-    # def getVolumes(self):
-    #     """ Returns the SetOfTomograms associated with
-    #     this SetOfCoordinates"""
-    #     return self._volumesPointer.get()
-    #
-    # def setVolumes(self, volumes):
-    #     """ Set the tomograms associated with this set of coordinates.
-    #     Params:
-    #         tomograms: Either a SetOfTomograms object or a pointer to it.
-    #     """
-    #     if volumes.isPointer():
-    #         self._volumesPointer.copy(volumes)
-    #     else:
-    #         self._volumesPointer.set(volumes)
 
     def getPrecedents(self):
         """ Returns the SetOfTomograms or Tilt Series associated with
