@@ -147,9 +147,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 return self.IMPORT_FROM_XMIPP
             if coordFile.endswith('.star'):
                 return self.IMPORT_FROM_RELION
-            if coordFile.endswith('.json') or coordFile.endswith('.box'):
+            if coordFile.endswith('.json') or coordFile.endswith('.txt'):
                 return self.IMPORT_FROM_EMAN
-        return self.IMPORT_FROM_EMAN
+        return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """
