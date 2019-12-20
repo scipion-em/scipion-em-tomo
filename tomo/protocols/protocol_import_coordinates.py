@@ -25,12 +25,15 @@
 # *
 # **************************************************************************
 
+import os
 from os.path import basename
 
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import importFromPlugin
 
 from .protocol_base import ProtTomoImportFiles
+
+from tomo.objects import SetOfCoordinates3D
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -51,6 +54,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         """
         return ['eman']
 
+    def _getDefaultChoice(self):
+        return self.IMPORT_FROM_AUTO
+
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
@@ -59,11 +65,12 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         ProtTomoImportFiles._defineParams(self, form)
         form.addParam('boxSize', params.IntParam, label='Box size')
 
-        form.addParam('importTomogram', params.PointerParam,
-                      pointerClass='Tomogram',
-                      label='Input tomogram',
-                      help='Select the tomogram for which you '
-                            'want to import coordinates.')
+        form.addParam('importTomograms', params.PointerParam,
+                      pointerClass='SetOfTomograms',
+                      label='Input tomograms',
+                      help='Select the tomograms/tomogram for which you '
+                            'want to import coordinates. The file names of the tomogram and '
+                            'coordinate files must be the same.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importCoordinatesStep',
@@ -72,22 +79,27 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     # --------------------------- STEPS functions -----------------------------
 
     def importCoordinatesStep(self, samplingRate):
-        importTomogram = self.importTomogram.get()
-        coordsSet = self._createSetOfCoordinates3D(importTomogram)
+        importTomograms = self.importTomograms.get()
+        suffix = self._getOutputSuffix(SetOfCoordinates3D)
+        coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
         coordsSet.setBoxSize(self.boxSize.get())
-        coordsSet.setSamplingRate(self.samplingRate.get())
+        coordsSet.setSamplingRate(samplingRate)
+        coordsSet.setPrecedents(importTomograms)
         ci = self.getImportClass()
-        for coordFile, fileId in self.iterFiles():
-            if importTomogram is not None:
-                def addCoordinate(coord):
-                    coord.setVolume(importTomogram)
-                    coordsSet.append(coord)
+        for tomo in importTomograms.iterItems():
+            tomoName = basename(os.path.splitext(tomo.getFileName())[0])
+            for coordFile, fileId in self.iterFiles():
+                fileName = "import_" + basename(os.path.splitext(coordFile)[0])
+                if tomo is not None and tomoName == fileName:
+                    def addCoordinate(coord):
+                        coord.setVolume(tomo.clone())
+                        coordsSet.append(coord)
 
-                # Parse the coordinates in the given format for this micrograph
-                ci.importCoordinates3D(coordFile, addCoordinate)
+                    # Parse the coordinates in the given format for this micrograph
+                    ci.importCoordinates3D(coordFile, addCoordinate)
 
         self._defineOutputs(outputCoordinates=coordsSet)
-        self._defineSourceRelation(self.importTomogram, coordsSet)
+        self._defineSourceRelation(self.importTomograms, coordsSet)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
@@ -126,8 +138,18 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     def getImportFrom(self):
         importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_AUTO:
-            importFrom = self.IMPORT_FROM_EMAN
+            importFrom = self.getFormat()
         return importFrom
+
+    def getFormat(self):
+        for coordFile, _ in self.iterFiles():
+            if coordFile.endswith('.pos'):
+                return self.IMPORT_FROM_XMIPP
+            if coordFile.endswith('.star'):
+                return self.IMPORT_FROM_RELION
+            if coordFile.endswith('.json') or coordFile.endswith('.txt'):
+                return self.IMPORT_FROM_EMAN
+        return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """

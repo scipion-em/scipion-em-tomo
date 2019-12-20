@@ -59,7 +59,7 @@ class ProtTomoBase:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                       'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
-        coord3DSet.setVolumes(volSet)
+        coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
     def _createSetOfTomograms(self, suffix=''):
@@ -284,7 +284,7 @@ class ProtTomoImportAcquisition:
     def _summary(self, summary, setOfObject):
         for object in setOfObject:
             if object.hasAcquisition():
-                summary.append(u"File %s" % self.getObjectTag(object))
+                summary.append(u"File: %s" % object.getFileName())
                 summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
 
                 summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
