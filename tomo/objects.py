@@ -803,7 +803,4 @@ class SetOfLandmarkModels(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-=======
 
-    pass
->>>>>>> feature/misc-changes
