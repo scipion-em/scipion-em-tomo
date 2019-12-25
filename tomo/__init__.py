@@ -24,14 +24,14 @@
 # *
 # **************************************************************************
 
-import pyworkflow.em
+import pwem
 
 
 _logo = ""
 _references = []
 
 
-class Plugin(pyworkflow.em.Plugin):
+class Plugin(pwem.Plugin):
     @classmethod
     def _defineVariables(cls):
         pass
@@ -41,5 +41,4 @@ class Plugin(pyworkflow.em.Plugin):
         return None
 
 
-pyworkflow.em.Domain.registerPlugin(__name__)
-
+pwem.Domain.registerPlugin(__name__)

@@ -34,9 +34,9 @@ import os
 from distutils.spawn import find_executable
 
 import pyworkflow.protocol.params as params
-from pyworkflow.em.convert import ImageHandler
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
-import pyworkflow.em.viewers as viewers
+import pwem.viewers as viewers
+from pwem.convert import ImageHandler
 
 
 from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
@@ -155,4 +155,3 @@ class ViewerProtImportTomograms(ProtocolViewer):
         view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
         return [view]
-

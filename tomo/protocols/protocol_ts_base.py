@@ -25,14 +25,14 @@
 # **************************************************************************
 
 
-import pyworkflow.em as pwem
+from pwem.protocols import EMProtocol
 from pyworkflow.protocol import STEPS_PARALLEL, STATUS_NEW
 
 from tomo.objects import TiltSeriesDict, Tomogram
 from .protocol_base import ProtTomoBase
 
 
-class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
+class ProtTsProcess(EMProtocol, ProtTomoBase):
     """
     Base class for Tilt-Series (images or movies) processing protocols.
     This class should be used by protocols that receive tilt-series as input
@@ -41,7 +41,7 @@ class ProtTsProcess(pwem.EMProtocol, ProtTomoBase):
     the output generation.
     """
     def __init__(self, **kwargs):
-        pwem.EMProtocol.__init__(self, **kwargs)
+        EMProtocol.__init__(self, **kwargs)
         self.stepsExecutionMode = STEPS_PARALLEL
 
     # -------------------------- INSERT steps functions ---------------------

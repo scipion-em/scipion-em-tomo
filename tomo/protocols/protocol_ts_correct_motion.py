@@ -27,9 +27,9 @@
 import os
 
 import pyworkflow as pw
-import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
+from pwem.convert import ImageHandler
 
 from tomo.objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
@@ -100,7 +100,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     # --------------------------- STEPS functions ----------------------------
     def convertInputStep(self, inputId):
         inputTs = self.inputTiltSeriesM.get()
-        ih = pwem.ImageHandler()
+        ih = ImageHandler()
 
         def _convert(path, tmpFn):
             if path:
@@ -117,7 +117,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         tiFn, tiFnDW = self._getOutputTiltImagePaths(tiltImageM)
         if not os.path.exists(tiFn):
-            raise Exception("Expected output file '%' not produced!" % tiFn)
+            raise Exception("Expected output file '%s' not produced!" % tiFn)
 
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
@@ -252,7 +252,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ Simple add all frames and divide by its number. """
-        ih = pwem.ImageHandler()
+        ih = ImageHandler()
         sumImg = ih.createImage()
         img = ih.createImage()
 
@@ -268,4 +268,3 @@ class ProtTsAverage(ProtTsCorrectMotion):
         # sumImg.inplaceDivide(float(n))
         outputFn = self._getOutputTiltImagePaths(tiltImageM)[0]
         sumImg.write(outputFn)
-

@@ -27,8 +27,8 @@
 
 from os.path import abspath, basename
 
-from pyworkflow.em import ImageHandler
-from pyworkflow.em.data import Transform
+from pwem.convert import ImageHandler
+from pwem.objects import Transform
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils.path import createAbsLink
 
@@ -63,7 +63,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
         return ['eman2']
-
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
@@ -183,5 +182,3 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             baseFileName="import_" + basename(fileName).split(":")[0]
 
         return self._getExtraPath(baseFileName)
-
-

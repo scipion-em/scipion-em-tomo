@@ -25,6 +25,8 @@
 # **************************************************************************
 
 import pyworkflow
+import pwem
+
 
 from .protocol_base import ProtTomoBase, ProtTomoPicking
 from .protocol_ts_base import ProtTomoReconstruct
@@ -39,7 +41,7 @@ from .protocol_import_coordinates import ProtImportCoordinates3D
 # We should modify ProtUserSubSet to remove hardcoded methods to create subsets
 # This method/class can be pass as parameter to showj
 # See https://github.com/I2PC/scipion/issues/2036
-emprotocol = pyworkflow.em.protocol.EMProtocol
+emprotocol = pwem.protocols.EMProtocol
 setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
 setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
 setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
@@ -57,5 +59,6 @@ def scaleSplines(inputFn, outputFn, scaleFactor):
             int(z * scaleFactor))
     I.write(outputFn)
 
-ih = pyworkflow.em.ImageHandler
+
+ih = pwem.convert.ImageHandler
 setattr(ih, "scaleSplines", staticmethod(scaleSplines))

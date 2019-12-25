@@ -24,16 +24,10 @@
 # *
 # **************************************************************************
 
-import os
-
-import pyworkflow.object as pwobj
-import pyworkflow.em as pwem
 from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog
 
 import pyworkflow.viewer as pwviewer
-import pyworkflow.utils as pwutils
-from pyworkflow.viewer import View
 
 import tomo.objects
 
@@ -149,7 +143,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         return actions
 
 
-class TiltSeriesDialogView(View):
+class TiltSeriesDialogView(pwviewer.View):
     """ This class implements a view using Tkinter ListDialog
     and the TiltSeriesTreeProvider.
     """

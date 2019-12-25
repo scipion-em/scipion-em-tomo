@@ -25,10 +25,12 @@
 # **************************************************************************
 
 import pyworkflow as pw
-import pyworkflow.em as pwem
-from pyworkflow.protocol.params import PointerParam, EnumParam, PathParam, FloatParam
+from pyworkflow.protocol.params import (PointerParam, EnumParam, PathParam,
+                                        FloatParam, StringParam,
+                                        BooleanParam, LEVEL_ADVANCED)
 from pyworkflow.mapper.sqlite_db import SqliteDb
 from pyworkflow.utils.properties import Message
+from pwem.protocols import ProtImport, EMProtocol, ProtImportFiles
 
 import tomo.objects
 
@@ -47,32 +49,32 @@ class ProtTomoBase:
         return setObj
 
     def _createSetOfTiltSeriesM(self, suffix=''):
-            return self._createSet(tomo.objects.SetOfTiltSeriesM,
-                                    'tiltseriesM%s.sqlite', suffix)
+        return self._createSet(tomo.objects.SetOfTiltSeriesM,
+                               'tiltseriesM%s.sqlite', suffix)
 
     def _createSetOfTiltSeries(self, suffix=''):
-            self._ouputSuffix = ''
-            return self._createSet(tomo.objects.SetOfTiltSeries,
-                                    'tiltseries%s.sqlite', suffix)
+        self._ouputSuffix = ''
+        return self._createSet(tomo.objects.SetOfTiltSeries,
+                               'tiltseries%s.sqlite', suffix)
 
     def _createSetOfCoordinates3D(self, volSet, suffix=''):
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
-                                      'coordinates%s.sqlite', suffix,
+                                     'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
         coord3DSet.setVolumes(volSet)
         return coord3DSet
 
     def _createSetOfTomograms(self, suffix=''):
         return self._createSet(tomo.objects.SetOfTomograms,
-                                'tomograms%s.sqlite', suffix)
+                               'tomograms%s.sqlite', suffix)
 
     def _createSetOfSubTomograms(self, suffix=''):
         return self._createSet(tomo.objects.SetOfSubTomograms,
-                                'subtomograms%s.sqlite', suffix)
+                               'subtomograms%s.sqlite', suffix)
 
     def _createSetOfClassesSubTomograms(self, subTomograms, suffix=''):
         classes = self._createSet(tomo.objects.SetOfClassesSubTomograms,
-                                   'subtomogramClasses%s.sqlite', suffix)
+                                  'subtomogramClasses%s.sqlite', suffix)
         classes.setImages(subTomograms)
 
         return classes
@@ -95,7 +97,7 @@ class ProtTomoBase:
         return str(maxCounter+1) if maxCounter > 0 else '' # empty if not output
 
 
-class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
+class ProtTomoPicking(ProtImport, ProtTomoBase):
 
     OUTPUT_PREFIX = 'output3DCoordinates'
 
@@ -108,7 +110,7 @@ class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
                       help='Select the Tomogram to be used during picking.')
 
 
-class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
+class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
 
     def _defineParams(self, form):
         self._defineImportParams(form)
@@ -123,17 +125,17 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
 
         form.addSection(label='Import')
         if len(importChoices) > 1: # not only from files
-            form.addParam('importFrom', pwem.params.EnumParam,
+            form.addParam('importFrom', EnumParam,
                           choices=importChoices, default=self._getDefaultChoice(),
                           label='Import from',
                           help='Select the type of import.')
         else:
-            form.addHidden('importFrom', pwem.params.EnumParam,
+            form.addHidden('importFrom', EnumParam,
                           choices=importChoices, default=self.IMPORT_FROM_FILES,
                           label='Import from',
                           help='Select the type of import.')
 
-        form.addParam('filesPath', pwem.params.PathParam,
+        form.addParam('filesPath', PathParam,
                       label="Files directory",
                       help="Directory with the files you want to import.\n\n"
                            "The path can also contain wildcards to select"
@@ -148,7 +150,7 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
                            "tomogram ID\n\n"
                            "NOTE: wildcard characters ('*', '?', '#') "
                            "cannot appear in the actual path.)")
-        form.addParam('filesPattern', pwem.params.StringParam,
+        form.addParam('filesPattern', StringParam,
                       label='Pattern',
                       help="Pattern of the files to be imported.\n\n"
                            "The pattern can contain standard wildcards such as\n"
@@ -157,8 +159,8 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
                            "NOTE: wildcards and special characters "
                            "('*', '?', '#', ':', '%') cannot appear in the "
                            "actual path.")
-        form.addParam('copyFiles', pwem.params.BooleanParam, default=False,
-                      expertLevel=pwem.params.LEVEL_ADVANCED,
+        form.addParam('copyFiles', BooleanParam, default=False,
+                      expertLevel=LEVEL_ADVANCED,
                       label="Copy files?",
                       help="By default the files are not copied into the "
                            "project to avoid data duplication and to save "
@@ -170,15 +172,17 @@ class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
     def _defineAcquisitionParams(self, form):
         """ Override to add options related to acquisition info.
         """
-        form.addParam('samplingRate', pwem.params.FloatParam,
+        form.addParam('samplingRate', FloatParam,
                       label=Message.LABEL_SAMP_RATE)
 
     def _validate(self):
         pass
 
-class ProtTomoSubtomogramAveraging(pwem.EMProtocol, ProtTomoBase):
+
+class ProtTomoSubtomogramAveraging(EMProtocol, ProtTomoBase):
     """ Base class for subtomogram averaging protocols. """
     pass
+
 
 class ProtTomoImportAcquisition:
 
@@ -195,14 +199,16 @@ class ProtTomoImportAcquisition:
         form.addSection(label='Acquisition Info')
 
         form.addParam('importAcquisitionFrom', EnumParam,
-                      choices=importAcquisitionChoices, default=self._getDefaultChoice(),
+                      choices=importAcquisitionChoices,
+                      default=self._getDefaultChoice(),
                       label='Import from',
                       help='Select the type of import.')
 
         form.addParam('acquisitionData', PathParam,
                       label="Acquisition parameters file",
                       help="File with the acquisition parameters for every "
-                           "subtomogram to import. File must be in plain format. The file must contain a row per file to be imported "
+                           "subtomogram to import. File must be in plain format."
+                           " The file must contain a row per file to be imported "
                            "and have the following parameters in order: \n"
                            "\n"
                            "'File_name AcquisitionAngleMin AcquisitionAngleMax Step AngleAxis1 AngleAxis2' \n"
@@ -266,8 +272,8 @@ class ProtTomoImportAcquisition:
                         'angleAxis1': float(param[4]),
                         'angleAxis2': float(param[5])
                     }})
-                except:
-                    raise Exception('Wrong acquisition data file format')
+                except Exception as e:
+                    print('Wrong acquisition data file format', e)
 
     def _extractAcquisitionParameters(self, fileName):
         if self.importAcquisitionFrom.get() == self.FROM_FILE_IMPORT:

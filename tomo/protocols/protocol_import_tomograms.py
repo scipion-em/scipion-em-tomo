@@ -27,8 +27,8 @@
 
 from os.path import abspath, basename
 
-from pyworkflow.em import ImageHandler
-from pyworkflow.em.data import Transform
+from pwem.convert import ImageHandler
+from pwem.objects import Transform
 from pyworkflow.utils.path import createAbsLink
 
 
@@ -94,9 +94,9 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 zDim = z
             origin = Transform()
 
-            origin.setShifts(x/-2. * samplingRate,
-                        y/-2. * samplingRate,
-                        zDim/-2. * samplingRate)
+            origin.setShifts(x / -2. * samplingRate,
+                        y / -2. * samplingRate,
+                        zDim / -2. * samplingRate)
 
             tomo.setOrigin(origin)  # read origin from form
 
@@ -160,4 +160,3 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             baseFileName="import_" + basename(fileName).split(":")[0]
 
         return self._getExtraPath(baseFileName)
-

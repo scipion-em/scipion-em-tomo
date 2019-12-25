@@ -25,7 +25,7 @@
 # **************************************************************************
 
 import pyworkflow.utils as pwutils
-import pyworkflow.em as pwem
+from pwem.convert import ImageHandler
 
 
 def writeTiStack(inputTiList, outputStackFn, outputTltFn=None,
@@ -40,7 +40,7 @@ def writeTiStack(inputTiList, outputStackFn, outputTltFn=None,
         A new stack file will be created and also a tlt file with tilt-angles
     """
     excludeList = excludeList or []
-    ih = pwem.ImageHandler()
+    ih = ImageHandler()
     j = 0
     f = open(outputTltFn, 'w') if outputStackFn else None
 
@@ -110,4 +110,3 @@ def getAnglesFromTlt(tltFn):
                 angles.append(float(line))
 
     return angles
-
