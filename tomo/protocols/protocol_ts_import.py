@@ -376,7 +376,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         def _addMany(fileList, f, m):
             """ Add many 'files' (when angles in header or mdoc) to the list. """
-            _, _, _, n = pwem.ImageHandler().getDimensions(f)
+            _, _, _, n = ImageHandler().getDimensions(f)
 
             anglesFrom = self.getEnumText('anglesFrom')
 
