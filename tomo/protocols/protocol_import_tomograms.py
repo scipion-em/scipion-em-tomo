@@ -33,7 +33,7 @@ from pyworkflow.utils.path import createAbsLink
 
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
-from tomo.objects import Tomogram
+from ..objects import Tomogram
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -155,8 +155,8 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+            baseFileName="import_" + basename(str(fileName)).split(".")[0] + ".%s"%extension
         else:
-            baseFileName="import_" + basename(fileName).split(":")[0]
+            baseFileName="import_" + basename(str(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)

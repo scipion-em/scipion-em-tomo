@@ -32,7 +32,6 @@ from collections import OrderedDict
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
-import pyworkflow.utils as pwutils
 
 
 class TiltImageBase:

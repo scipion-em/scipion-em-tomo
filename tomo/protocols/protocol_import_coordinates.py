@@ -31,7 +31,7 @@ from os.path import basename
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
 
-from tomo.objects import SetOfCoordinates3D
+from ..objects import SetOfCoordinates3D
 
 from .protocol_base import ProtTomoImportFiles
 
@@ -125,9 +125,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s" % extension
+            baseFileName="import_" + basename(str(fileName)).split(".")[0] + ".%s" % extension
         else:
-            baseFileName="import_" + basename(fileName).split(":")[0]
+            baseFileName="import_" + basename(str(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
 

@@ -26,7 +26,7 @@
 
 from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog
-
+from pyworkflow.plugin import Domain
 import pyworkflow.viewer as pwviewer
 
 import tomo.objects
@@ -130,8 +130,8 @@ class TiltSeriesTreeProvider(TreeProvider):
         actions = []
 
         if isinstance(obj, tomo.objects.TiltSeries):
-            viewers = pwem.findViewers(obj.getClassName(),
-                                       pwviewer.DESKTOP_TKINTER)
+            viewers = Domain.findViewers(obj.getClassName(),
+                                         pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 def createViewer(viewerClass, obj):
                     proj = self.protocol.getProject()

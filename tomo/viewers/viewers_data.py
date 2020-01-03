@@ -26,8 +26,8 @@
 
 import pyworkflow.viewer as pwviewer
 from pwem.viewers import ObjectView
-from .views import ClassesSubTomogramsView
 
+from .views import ClassesSubTomogramsView
 import tomo.objects
 
 

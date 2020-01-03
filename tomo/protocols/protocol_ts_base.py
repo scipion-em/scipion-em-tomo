@@ -28,7 +28,7 @@
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import STEPS_PARALLEL, STATUS_NEW
 
-from tomo.objects import TiltSeriesDict, Tomogram
+from ..objects import TiltSeriesDict, Tomogram
 from .protocol_base import ProtTomoBase
 
 

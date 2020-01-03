@@ -31,7 +31,7 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
 from pwem.convert import ImageHandler
 
-from tomo.objects import TiltSeries, TiltImage
+from ..objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
 
 
@@ -130,7 +130,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         tiList = self._tsDict.getTiList(tsId)
         tiList.sort(key=lambda ti: ti.getTiltAngle())
 
-        ih = pwem.ImageHandler()
+        ih = ImageHandler()
 
         tsFn = self._getOutputTiltSeriesPath(ts)
         tsFnDW = self._getOutputTiltSeriesPath(ts, '_DW')

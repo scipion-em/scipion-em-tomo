@@ -25,15 +25,14 @@
 # **************************************************************************
 
 import os
-from shutil import copyfile
 
 import pyworkflow as pw
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pwem import Domain
 from pwem.objects import CTFModel
 
-from tomo.tests import DataSet
-from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
+from . import DataSet
+from ..objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
 
 

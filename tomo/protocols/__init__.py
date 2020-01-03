@@ -24,9 +24,7 @@
 # *
 # **************************************************************************
 
-import pyworkflow
 import pwem
-
 
 from .protocol_base import ProtTomoBase, ProtTomoPicking
 from .protocol_ts_base import ProtTomoReconstruct
