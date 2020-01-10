@@ -29,8 +29,9 @@ from os.path import abspath, basename
 
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from pyworkflow.protocol.params import PointerParam
+from pyworkflow.protocol.params import PointerParam, EnumParam
 from pyworkflow.utils.path import createAbsLink
+from pyworkflow.utils import importFromPlugin
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from tomo.objects import SubTomogram
@@ -41,11 +42,19 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     _outputClassName = 'SetOfSubTomograms'
     _label = 'import subtomograms'
 
+    IMPORT_FROM_AUTO = 0
+    IMPORT_FROM_EMAN = 1
+    IMPORT_FROM_DYNAMO = 2
+
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
+
+        form.addParam('importFrom', EnumParam, choices=[' ', 'Eman', 'Dynamo'], display=EnumParam.DISPLAY_HLIST,
+                      label='Import from:', default=0,
+                      help='If the subtomograms come from another program, select that program.')
 
         form.addParam('importCoordinates', PointerParam,
                       pointerClass='SetOfCoordinates3D',
@@ -90,6 +99,9 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         subtomoSet = self._createSetOfSubTomograms()
         subtomoSet.setSamplingRate(samplingRate)
+
+        # if self.importFrom.get() == 2:
+
 
         if self.importCoordinates.get():
             self.coords = []
@@ -184,4 +196,23 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         return self._getExtraPath(baseFileName)
 
+    def getImportClass(self):
+        """ Return the class in charge of importing the files. """
+        filesPath = self.filesPath.get()
+        importFrom = self.getImportFrom()
+
+        if importFrom == self.IMPORT_FROM_EMAN:
+            EmanImport = importFromPlugin('eman2.convert', 'EmanImport',
+                                          errorMsg='Eman is needed to import .hdf files',
+                                          doRaise=True)
+            return EmanImport(self, None)
+
+        elif importFrom == self.IMPORT_FROM_DYNAMO:
+            DynamoImport = importFromPlugin('dynamo.convert', 'DynamoImport',
+                                               errorMsg='Dynamo plugin is needed to import table files',
+                                               doRaise=True)
+            return DynamoImport(self)
+        else:
+            self.importFilePath = ''
+            return None
 
