@@ -33,7 +33,6 @@ from collections import OrderedDict
 import pyworkflow.object as pwobj
 import pyworkflow.em.data as data
 import pyworkflow.utils as pwutils
-from pyworkflow.em.data import EMObject, EMSet, ImageDim
 
 
 class TiltImageBase:
@@ -761,9 +760,9 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     pass
 
 
-class Mesh(EMObject):
+class Mesh(data.EMObject):
     def __init__(self, path=None, files=None, **kwargs):
-        EMObject.__init__(self, **kwargs)
+        data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
         self._volumePointer = pwobj.Pointer(objDoStore=False)
         self._volId = pwobj.Integer()
@@ -807,13 +806,13 @@ class Mesh(EMObject):
         return "Mesh (path=%s)" % self.getPath()
 
 
-class SetOfMeshes(EMSet):
+class SetOfMeshes(data.EMSet):
     """ Store a series of meshes. """
     ITEM_TYPE = Mesh
 
     def __init__(self, *args, **kwargs):
-        EMSet.__init__(self, *args, **kwargs)
-        self._firstDim = ImageDim()
+        data.EMSet.__init__(self, *args, **kwargs)
+        self._firstDim = data.ImageDim()
         self._volumesPointer = pwobj.Pointer()
 
     def _setFirstDim(self, tuple):
@@ -824,7 +823,7 @@ class SetOfMeshes(EMSet):
         if self.isEmpty():
             self._setFirstDim((1,1,1))
 
-        EMSet.append(self, mesh)
+        data.EMSet.append(self, mesh)
 
     def setVolumes(self, volumes):
         """ Set the tomograms associated with this set of coordinates.
@@ -843,7 +842,7 @@ class SetOfMeshes(EMSet):
 
     def iterItems(self, orderBy='id', direction='ASC', where='1', limit=None):
         """ Redefine iteration to set the acquisition to images. """
-        for mesh in EMSet.iterItems(self, orderBy=orderBy, direction=direction,
+        for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
                                  where=where, limit=limit):
 
             # Set te volume
