@@ -2,8 +2,10 @@
 # **************************************************************************
 # *
 # * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
+# *              Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es) [2]
 # *
 # * [1] EyeSeeTea Ltd, London, UK
+# * [2] BCU, Centro Nacional de Biotecnologia, CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -29,13 +31,14 @@ from os.path import abspath, basename
 
 from pyworkflow.em import ImageHandler
 from pyworkflow.em.data import Transform
-from pyworkflow.protocol.params import PointerParam, EnumParam
-from pyworkflow.utils.path import createAbsLink
+from pyworkflow.protocol.params import PointerParam, EnumParam, PathParam
+from pyworkflow.utils.path import createAbsLink, copyFile
 from pyworkflow.utils import importFromPlugin
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from tomo.objects import SubTomogram
 
+readDynTable = importFromPlugin("dynamo.convert.convert", "readDynTable")
 
 class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
@@ -52,9 +55,14 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
 
-        form.addParam('importFrom', EnumParam, choices=[' ', 'Eman', 'Dynamo'], display=EnumParam.DISPLAY_HLIST,
+        form.addParam('source', EnumParam, choices=[' ', 'Eman', 'Dynamo'],
                       label='Import from:', default=0,
                       help='If the subtomograms come from another program, select that program.')
+
+        form.addParam('tablePath', PathParam,
+                      label="Dynamo table file:", allowsNull=True, condition='source == 2',
+                      help='Select dynamo table (.tbl) to link dynamo metadata to the subtomograms that will be '
+                           'imported to Scipion. ')
 
         form.addParam('importCoordinates', PointerParam,
                       pointerClass='SetOfCoordinates3D',
@@ -78,6 +86,11 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self._insertFunctionStep('importSubTomogramsStep',
                                  self.getPattern(),
                                  self.samplingRate.get())
+        if self.source.get() != 0:
+            self._insertFunctionStep('importMetadata')
+
+        self._insertFunctionStep('createOutput')
+
 
     # --------------------------- STEPS functions -----------------------------
 
@@ -97,17 +110,15 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         imgh = ImageHandler()
 
-        subtomoSet = self._createSetOfSubTomograms()
-        subtomoSet.setSamplingRate(samplingRate)
-
-        # if self.importFrom.get() == 2:
+        self.subtomoSet = self._createSetOfSubTomograms()
+        self.subtomoSet.setSamplingRate(samplingRate)
 
 
         if self.importCoordinates.get():
             self.coords = []
             for coord3D in self.importCoordinates.get().iterCoordinates():
                 self.coords.append(coord3D.clone())
-            subtomoSet.setCoordinates3D(self.importCoordinates)
+            self.subtomoSet.setCoordinates3D(self.importCoordinates)
 
         self._parseAcquisitionData()
         for fileName, fileId in self.iterFiles():
@@ -141,16 +152,27 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 subtomo.setFileName(newFileName)
                 subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 self._setCoordinates3D(subtomo)
-                subtomoSet.append(subtomo)
+                self.subtomoSet.append(subtomo)
             else:
                 for index in range(1, n+1):
                     subtomo.cleanObjId()
                     subtomo.setLocation(index, newFileName)
                     subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     self._setCoordinates3D(subtomo)
-                    subtomoSet.append(subtomo)
+                    self.subtomoSet.append(subtomo)
 
-        self._defineOutputs(outputSubTomograms=subtomoSet)
+    def importMetadata(self):
+        source = self.source.get()
+        if source == 1:
+            pass  # TODO: read .hdf5 header (EMAN)
+        if source == 2:
+            dynTable = self._getExtraPath('dynamo_table.tbl')
+            copyFile(self.tablePath.get(), dynTable)
+            self.fhTable = open(dynTable, 'r')
+            self.subtomoSet.copyItems(self.subtomoSet, updateItemCallback=self._updateItem)
+
+    def createOutput(self):
+        self._defineOutputs(outputSubTomograms=self.subtomoSet)
 
     # --------------------------- INFO functions ------------------------------
     def _setCoordinates3D(self, subtomo):
@@ -196,23 +218,26 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         return self._getExtraPath(baseFileName)
 
-    def getImportClass(self):
-        """ Return the class in charge of importing the files. """
-        filesPath = self.filesPath.get()
-        importFrom = self.getImportFrom()
+    def _updateItem(self, item, row):
+        readDynTable(self, item)
 
-        if importFrom == self.IMPORT_FROM_EMAN:
-            EmanImport = importFromPlugin('eman2.convert', 'EmanImport',
-                                          errorMsg='Eman is needed to import .hdf files',
-                                          doRaise=True)
-            return EmanImport(self, None)
-
-        elif importFrom == self.IMPORT_FROM_DYNAMO:
-            DynamoImport = importFromPlugin('dynamo.convert', 'DynamoImport',
-                                               errorMsg='Dynamo plugin is needed to import table files',
-                                               doRaise=True)
-            return DynamoImport(self)
-        else:
-            self.importFilePath = ''
-            return None
+    # def getImportClass(self):
+    #     """ Return the class in charge of importing the files. """
+    #     filesPath = self.filesPath.get()
+    #     source = self.getImportFrom()
+    #
+    #     if source == self.IMPORT_FROM_EMAN:
+    #         EmanImport = importFromPlugin('eman2.convert', 'EmanImport',
+    #                                       errorMsg='Eman is needed to import .hdf files',
+    #                                       doRaise=True)
+    #         return EmanImport(self, None)
+    #
+    #     elif source == self.IMPORT_FROM_DYNAMO:
+    #         DynamoImport = importFromPlugin('dynamo.convert', 'DynamoImport',
+    #                                            errorMsg='Dynamo plugin is needed to import table files',
+    #                                            doRaise=True)
+    #         return DynamoImport(self)
+    #     else:
+    #         self.importFilePath = ''
+    #         return None
 

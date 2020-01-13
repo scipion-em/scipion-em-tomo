@@ -308,6 +308,16 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
+     def _runImportDynSubTomograms(self):
+        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                      filesPath=self.path,
+                                      filesPattern='*.em',
+                                      samplingRate=1.35,
+                                      source=2,
+                                      table='/home/estrellafg/initial.tbl')  # TODO: change by testdata!
+        self.launchProtocol(protImport)
+        return protImport
+
      def test_import_sub_tomograms(self):
          protImport = self._runImportSubTomograms()
          output = getattr(protImport, 'outputSubTomograms', None)
@@ -341,6 +351,28 @@ class TestTomoImportSubTomograms(BaseTest):
                  self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
 
          return output2
+
+     def test_import_dynamo_subtomograms(self):
+         protImport = self._runImportDynSubTomograms()
+         output = getattr(protImport, 'outputSubTomograms', None)
+         self.assertTrue(output.getSamplingRate() == 1.35)
+         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
+         self.assertTrue(output.getDim()[0] == 1024)
+         self.assertTrue(output.getDim()[1] == 1024)
+         self.assertTrue(output.getDim()[2] == 512)
+         # Metada from dynamo table:
+         self.assertTrue(output.getFirstItem().getObjId() == 34)
+         self.assertTrue(output.getFirstItem().getClassId() == 1)
+         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
+         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
+         self.assertTrue(output.getFirstItem().getCoordinate3D.getX() == 129)
+         self.assertTrue(output.getFirstItem().getCoordinate3D.getY() == 156)
+         self.assertTrue(output.getFirstItem().getCoordinate3D.getZ() == 166)
+
+
+
+
+        # TODO: check if subtomos attributes are the same as in the table
 
 
 class TestTomoImportSetOfCoordinates3D(BaseTest):
