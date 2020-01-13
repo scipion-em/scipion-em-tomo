@@ -40,23 +40,26 @@ from .protocol_import_coordinates import ProtImportCoordinates3D
 # This method/class can be pass as parameter to showj
 # See https://github.com/I2PC/scipion/issues/2036
 emprotocol = pwem.protocols.EMProtocol
-setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
-setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
-setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
+try :
+    setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
+    setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
+    setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
+    setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
+except Exception as e:
+    print("Tomo hacks need a solution. subsets will not work.")
 
-
-# This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
-# in Scipion
-def scaleSplines(inputFn, outputFn, scaleFactor):
-    """ Scale an image using splines. """
-    import xmippLib
-    I = xmippLib.Image(inputFn)
-    x, y, z, _ = I.getDimensions()
-    I.scale(int(x * scaleFactor), int(y * scaleFactor),
-            int(z * scaleFactor))
-    I.write(outputFn)
-
-
-ih = pwem.convert.ImageHandler
-setattr(ih, "scaleSplines", staticmethod(scaleSplines))
+# This is already in pwem Image handler for Scipion 3.0. No need to hack it.
+# # This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
+# # in Scipion
+# def scaleSplines(inputFn, outputFn, scaleFactor):
+#     """ Scale an image using splines. """
+#     import xmippLib
+#     I = xmippLib.Image(inputFn)
+#     x, y, z, _ = I.getDimensions()
+#     I.scale(int(x * scaleFactor), int(y * scaleFactor),
+#             int(z * scaleFactor))
+#     I.write(outputFn)
+#
+#
+# ih = pwem.convert.ImageHandler
+# setattr(ih, "scaleSplines", staticmethod(scaleSplines))

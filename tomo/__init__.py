@@ -40,5 +40,3 @@ class Plugin(pwem.Plugin):
     def getEnviron(cls):
         return None
 
-
-pwem.Domain.registerPlugin(__name__)
