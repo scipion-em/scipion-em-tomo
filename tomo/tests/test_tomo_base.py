@@ -371,11 +371,6 @@ class TestTomoImportSubTomograms(BaseTest):
          self.assertTrue(output.getFirstItem().getCoordinate3D.getZ() == 166)
 
 
-
-
-        # TODO: check if subtomos attributes are the same as in the table
-
-
 class TestTomoImportSetOfCoordinates3D(BaseTest):
     """This class check if the protocol to import set of coordinates 3d works properly."""
 
