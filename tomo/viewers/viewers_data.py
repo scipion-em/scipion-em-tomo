@@ -25,8 +25,11 @@
 # **************************************************************************
 
 import pyworkflow.viewer as pwviewer
+from pwem.viewers import ObjectView
+
+from .views import ClassesSubTomogramsView
 import tomo.objects
-import views as vi
+
 
 class TomoDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
@@ -44,7 +47,7 @@ class TomoDataViewer(pwviewer.Viewer):
         self._views = []
 
     def _getObjView(self, obj, fn, viewParams={}):
-        return views.ObjectView(
+        return ObjectView(
             self._project, obj.strId(), fn, viewParams=viewParams)
 
     def _visualize(self, obj, **kwargs):
@@ -59,9 +62,7 @@ class TomoDataViewer(pwviewer.Viewer):
             views.append(setTsView)
 
         elif issubclass(cls, tomo.objects.SetOfClassesSubTomograms):
-            views.append(vi.ClassesSubTomogramsView(self._project, obj.strId(),
+            views.append(ClassesSubTomogramsView(self._project, obj.strId(),
                                                    obj.getFileName()))
 
         return views
-
-
