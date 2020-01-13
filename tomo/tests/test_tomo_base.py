@@ -259,6 +259,7 @@ class TestTomoImportSubTomograms(BaseTest):
          cls.dataset = DataSet.getDataSet('tomo-em')
          cls.tomogram = cls.dataset.getFile('tomo1')
          cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+         cls.table = cls.dataset.getFile('initial.tbl')
          cls.path = cls.dataset.getPath()
 
      def _runImportSubTomograms(self):
@@ -314,7 +315,7 @@ class TestTomoImportSubTomograms(BaseTest):
                                       filesPattern='*.em',
                                       samplingRate=1.35,
                                       source=2,
-                                      table='/home/estrellafg/initial.tbl')  # TODO: change by testdata!
+                                      tablePath=self.table)
         self.launchProtocol(protImport)
         return protImport
 
