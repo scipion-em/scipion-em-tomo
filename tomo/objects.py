@@ -758,3 +758,95 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     REP_TYPE = AverageSubTomogram
 
     pass
+
+
+class Mesh(data.EMObject):
+    def __init__(self, path=None, files=None, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._path = pwobj.String(path)
+        self._volumePointer = pwobj.Pointer(objDoStore=False)
+        self._volId = pwobj.Integer()
+        self._volName = pwobj.String()
+
+    def getPath(self):
+        return self._path.get()
+
+    def setPath(self, path):
+        self._path.set(path)
+
+    def getMesh(self):
+        filePath = self.getPath()
+        fid = open(filePath, 'r')
+        matrix = [[item for item in line.replace("\n", "").split(',')] for line in fid.readlines()]
+        fid.close()
+        numROIs = list(set([row[len(matrix[0])-1] for row in matrix]))
+        numROIs.sort()
+        mesh = []
+        for roi in numROIs:
+            aux = [list(map(int, col[0:3])) for col in matrix if col[-1] == roi]
+            mesh.append(aux)
+        return mesh
+
+    def getMeshDim(self):
+        return len(self.getMesh())
+
+    def getVolume(self):
+        """ Return the tomogram object to which
+        this mesh is associated.
+        """
+        return self._volumePointer.get()
+
+    def setVolume(self, volume):
+        """ Set the tomogram to which this mesh belongs. """
+        self._volumePointer.set(volume)
+        self._volId.set(volume.getObjId())
+        self._volName.set(volume.getFileName())
+
+    def __str__(self):
+        return "Mesh (path=%s)" % self.getPath()
+
+
+class SetOfMeshes(data.EMSet):
+    """ Store a series of meshes. """
+    ITEM_TYPE = Mesh
+
+    def __init__(self, *args, **kwargs):
+        data.EMSet.__init__(self, *args, **kwargs)
+        self._firstDim = data.ImageDim()
+        self._volumesPointer = pwobj.Pointer()
+
+    def _setFirstDim(self, tuple):
+        self._firstDim.set(tuple)
+
+    def append(self, mesh):
+
+        if self.isEmpty():
+            self._setFirstDim((1,1,1))
+
+        data.EMSet.append(self, mesh)
+
+    def setVolumes(self, volumes):
+        """ Set the tomograms associated with this set of coordinates.
+        Params:
+            tomograms: Either a SetOfTomograms object or a pointer to it.
+        """
+        if volumes.isPointer():
+            self._volumesPointer.copy(volumes)
+        else:
+            self._volumesPointer.set(volumes)
+
+    def getVolumes(self):
+        """ Returns the SetOfTomograms associated with
+        this SetOfCoordinates"""
+        return self._volumesPointer.get()
+
+    def iterItems(self, orderBy='id', direction='ASC', where='1', limit=None):
+        """ Redefine iteration to set the acquisition to images. """
+        for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
+                                 where=where, limit=limit):
+
+            # Set te volume
+            mesh.setVolume(data.Volume(location=(mesh._volId, mesh._volName)))
+
+            yield mesh
+

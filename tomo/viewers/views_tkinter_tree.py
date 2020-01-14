@@ -24,15 +24,15 @@
 # *
 # **************************************************************************
 
-import os
+import os, threading
 
-import pyworkflow.object as pwobj
 import pyworkflow.em as pwem
+from pyworkflow.em.viewers import showj
+from pyworkflow.em.viewers.showj import runJavaIJapp
 from pyworkflow.gui.tree import TreeProvider
-from pyworkflow.gui.dialog import ListDialog
+from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
 
 import pyworkflow.viewer as pwviewer
-import pyworkflow.utils as pwutils
 from pyworkflow.viewer import View
 
 import tomo.objects
@@ -175,3 +175,164 @@ class TiltSeriesDialogView(View):
 
     def show(self):
         dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider)
+
+
+class TomogramsTreeProvider(TreeProvider):
+    """ Populate Tree from SetOfTomograms. """
+
+    def __init__(self, tomoList, path):
+        TreeProvider.__init__(self)
+        self.tomoList = tomoList
+        self._path = path
+
+    def getColumns(self):
+        return [('Tomogram', 300), ('status', 150)]
+
+    def getObjectInfo(self, tomo):
+        tomogramName = os.path.basename(tomo.getFileName())
+        tomogramName = os.path.splitext(tomogramName)[0]
+        filePath = os.path.join(self._path, tomogramName + ".txt")
+
+        if not os.path.isfile(filePath):
+            return {'key': tomogramName, 'parent': None,
+                    'text': tomogramName, 'values': ("TODO"),
+                    'tags': ("pending")}
+        else:
+            return {'key': tomogramName, 'parent': None,
+                    'text': tomogramName, 'values': ("DONE"),
+                    'tags': ("done")}
+
+    def getObjectPreview(self, obj):
+        return (None, None)
+
+    def getObjectActions(self, obj):
+        return []
+
+    def _getObjectList(self):
+        """Retrieve the object list"""
+        return self.tomoList
+
+    def getObjects(self):
+        objList = self._getObjectList()
+        return objList
+
+    def configureTags(self, tree):
+        tree.tag_configure("pending", foreground="red")
+        tree.tag_configure("done", foreground="green")
+
+
+class TomogramsDialog(ToolbarListDialog):
+    """
+    This class extend from ListDialog to allow calling
+    an ImageJ subprocess from a list of Tomograms.
+    """
+
+    def __init__(self, parent, viewer, **kwargs):
+        self.path = kwargs.get("path", None)
+        self.provider = kwargs.get("provider", None)
+        if viewer:
+            ToolbarListDialog.__init__(self, parent,
+                                       "Tomogram List",
+                                       allowsEmptySelection=False,
+                                       itemDoubleClick=self.doubleClickViewer,
+                                       **kwargs)
+        else:
+            ToolbarListDialog.__init__(self, parent,
+                                       "Tomogram List",
+                                       allowsEmptySelection=False,
+                                       itemDoubleClick=self.doubleClickOnTomogram,
+                                       **kwargs)
+
+    def refresh_gui(self):
+        self.tree.update()
+        if self.proc.isAlive():
+            self.after(1000, self.refresh_gui)
+
+    def doubleClickOnTomogram(self, e=None):
+        self.tomo = e
+        self.proc = threading.Thread(target=self.lanchIJForTomogram, args=(self.path, self.tomo,))
+        self.proc.start()
+        self.after(1000, self.refresh_gui)
+
+    def doubleClickViewer(self, e=None):
+        self.tomo = e
+        self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
+        self.proc.start()
+        self.after(1000, self.refresh_gui)
+
+    def lanchIJForTomogram(self, path, tomogram):
+        macroPath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "AutoSave_ROI.ijm")
+        tomogramFile = tomogram.getFileName()
+        tomogramName = os.path.basename(tomogramFile)
+
+        macro = r"""path = "%s";
+    file = "%s"
+    if (File.exists(path + file + ".zip")){
+    roiManager("Open", path + file + ".zip");
+    }
+    else{
+    roiManager("Draw");
+    }
+
+    setTool("polygon");
+    waitForUser("Draw the desired ROIs\n\nThen click Ok");
+    wait(50);
+
+    while(roiManager("count")==0)
+    {
+    waitForUser("Draw the desired ROIs\n\nThen click Ok");
+    wait(50);
+    }
+
+    string = "";
+    rois = roiManager("count");
+    for (i=0; i<rois; i++){
+    roiManager("select", i);
+    Stack.getPosition(channel, slice, frame);
+    getSelectionCoordinates(xpoints, ypoints);
+    for (j = 0; j < xpoints.length; j++) {
+    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + "ROI" + i + "\n";
+    }
+    }
+
+    outname = file + ".txt";
+    fid = File.open(path + outname);
+    print(fid, string);
+    File.close(fid);
+
+    roiManager("save", path + file + ".zip");
+    run("Quit");""" % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
+        macroFid = open(macroPath, 'w')
+        macroFid.write(macro)
+        macroFid.close()
+
+        args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        viewParams = {showj.ZOOM: 50}
+        for key, value in viewParams.items():
+            args = "%s --%s %s" % (args, key, value)
+
+        app = "xmipp.ij.commons.XmippImageJ"
+
+        runJavaIJapp(4, app, args).wait()
+
+    def lanchIJForViewing(self, path, tomogram):
+        macroPath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "View_ROI.ijm")
+        tomogramFile = tomogram.getFileName()
+        tomogramName = os.path.basename(tomogramFile)
+
+        macro = r"""path = "%s";
+    file = "%s"
+    roiManager("Open", path + file + ".zip");
+    """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
+        macroFid = open(macroPath, 'w')
+        macroFid.write(macro)
+        macroFid.close()
+
+        args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        viewParams = {showj.ZOOM: 50}
+        for key, value in viewParams.items():
+            args = "%s --%s %s" % (args, key, value)
+
+        app = "xmipp.ij.commons.XmippImageJ"
+
+        runJavaIJapp(4, app, args).wait()
