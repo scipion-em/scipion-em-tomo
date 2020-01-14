@@ -362,13 +362,13 @@ class TestTomoImportSubTomograms(BaseTest):
          self.assertTrue(output.getDim()[1] == 1024)
          self.assertTrue(output.getDim()[2] == 512)
          # Metada from dynamo table:
-         self.assertTrue(output.getFirstItem().getObjId() == 34)
+         self.assertTrue(output.getFirstItem().getObjId() == 4)
          self.assertTrue(output.getFirstItem().getClassId() == 1)
          self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
          self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-         self.assertTrue(output.getFirstItem().getCoordinate3D.getX() == 129)
-         self.assertTrue(output.getFirstItem().getCoordinate3D.getY() == 156)
-         self.assertTrue(output.getFirstItem().getCoordinate3D.getZ() == 166)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
 
 
 class TestTomoImportSetOfCoordinates3D(BaseTest):

@@ -38,7 +38,6 @@ from pyworkflow.utils import importFromPlugin
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from tomo.objects import SubTomogram
 
-readDynTable = importFromPlugin("dynamo.convert.convert", "readDynTable")
 
 class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
@@ -73,7 +72,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         ProtTomoImportAcquisition._defineParams(self, form)
 
-
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
@@ -81,16 +79,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         """
         return ['eman2']
 
-
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
                                  self.getPattern(),
                                  self.samplingRate.get())
-        if self.source.get() != 0:
-            self._insertFunctionStep('importMetadata')
 
         self._insertFunctionStep('createOutput')
-
 
     # --------------------------- STEPS functions -----------------------------
 
@@ -113,6 +107,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
 
+        self._openMetadataFile()  # Open the metadata file associated to the software used
 
         if self.importCoordinates.get():
             self.coords = []
@@ -148,28 +143,51 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             createAbsLink(fileName, newFileName)
 
             if n == 1:
-                subtomo.cleanObjId()
-                subtomo.setFileName(newFileName)
-                subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-                self._setCoordinates3D(subtomo)
-                self.subtomoSet.append(subtomo)
+                self._addSubtomogram(subtomo, fileName, newFileName)
             else:
                 for index in range(1, n+1):
-                    subtomo.cleanObjId()
-                    subtomo.setLocation(index, newFileName)
-                    subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-                    self._setCoordinates3D(subtomo)
-                    self.subtomoSet.append(subtomo)
+                    self._addSubtomogram(subtomo, fileName, newFileName, index=index)
 
-    def importMetadata(self):
+        self._closeMetadataFile()  # Close the metadata file associated to the software used
+
+    def _addSubtomogram(self, subtomo, fileName, newFileName, index=None):
+        """ adds a subtomogram to a set """
+        subtomo.cleanObjId()
+        if index is None:
+            subtomo.setFileName(newFileName)
+        else:
+            subtomo.setLocation(index, newFileName)
+
+        subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+        self._setCoordinates3D(subtomo)
+
+        self._importMetadata(subtomo)  # Select the import function from the software used
+
+        self.subtomoSet.append(subtomo)
+
+    def _importMetadata(self, subtomo):
+
+        # TODO: This is a temporal solution to add different import functions from different plugins
         source = self.source.get()
         if source == 1:
             pass  # TODO: read .hdf5 header (EMAN)
-        if source == 2:
+        if source == self.IMPORT_FROM_DYNAMO:
+            readDynTable = importFromPlugin("dynamo.convert.convert", "readDynTable")
+            readDynTable(self, subtomo)
+
+    def _openMetadataFile(self):
+
+        source = self.source.get()
+        if source == self.IMPORT_FROM_DYNAMO:
             dynTable = self._getExtraPath('dynamo_table.tbl')
             copyFile(self.tablePath.get(), dynTable)
             self.fhTable = open(dynTable, 'r')
-            self.subtomoSet.copyItems(self.subtomoSet, updateItemCallback=self._updateItem)
+
+    def _closeMetadataFile(self):
+
+        source = self.source.get()
+        if source == self.IMPORT_FROM_DYNAMO:
+            self.fhTable.close()
 
     def createOutput(self):
         self._defineOutputs(outputSubTomograms=self.subtomoSet)
@@ -184,7 +202,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _hasOutput(self):
         return self.hasAttribute('outputSubTomograms')
-
 
     def _getSubTomMessage(self):
         return "SubTomograms %s" % self.getObjectTag('outputSubTomograms')
@@ -217,27 +234,3 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             baseFileName="import_" + basename(fileName).split(":")[0]
 
         return self._getExtraPath(baseFileName)
-
-    def _updateItem(self, item, row):
-        readDynTable(self, item)
-
-    # def getImportClass(self):
-    #     """ Return the class in charge of importing the files. """
-    #     filesPath = self.filesPath.get()
-    #     source = self.getImportFrom()
-    #
-    #     if source == self.IMPORT_FROM_EMAN:
-    #         EmanImport = importFromPlugin('eman2.convert', 'EmanImport',
-    #                                       errorMsg='Eman is needed to import .hdf files',
-    #                                       doRaise=True)
-    #         return EmanImport(self, None)
-    #
-    #     elif source == self.IMPORT_FROM_DYNAMO:
-    #         DynamoImport = importFromPlugin('dynamo.convert', 'DynamoImport',
-    #                                            errorMsg='Dynamo plugin is needed to import table files',
-    #                                            doRaise=True)
-    #         return DynamoImport(self)
-    #     else:
-    #         self.importFilePath = ''
-    #         return None
-
