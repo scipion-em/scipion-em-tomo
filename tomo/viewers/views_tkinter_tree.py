@@ -322,7 +322,9 @@ class TomogramsDialog(ToolbarListDialog):
 
         macro = r"""path = "%s";
     file = "%s"
+    if (File.exists(path + file + ".zip")){
     roiManager("Open", path + file + ".zip");
+    }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
         macroFid = open(macroPath, 'w')
         macroFid.write(macro)
