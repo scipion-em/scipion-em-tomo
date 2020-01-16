@@ -61,12 +61,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _getDefaultChoice(self):
         return self.IMPORT_FROM_AUTO
 
-    def getImportFrom(self):
-        importFrom = self.importFrom.get()
-        if importFrom == self.IMPORT_FROM_AUTO:
-            importFrom = self.getFormat()
-        return importFrom
-
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
 
@@ -173,7 +167,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _importMetadata(self, subtomo):
 
         # TODO: This is a temporal solution to add different import functions from different plugins
-        importFrom = self.getImportFrom()
+        importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_EMAN:
             pass  # TODO: read .hdf5 header (EMAN)
         if importFrom == self.IMPORT_FROM_DYNAMO:
@@ -181,14 +175,14 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             readDynTable(self, subtomo)
 
     def _openMetadataFile(self):
-        importFrom = self.getImportFrom()
+        importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_DYNAMO:
             dynTable = self._getExtraPath('dynamo_table.tbl')
             copyFile(self.tablePath.get(), dynTable)
             self.fhTable = open(dynTable, 'r')
 
     def _closeMetadataFile(self):
-        importFrom = self.getImportFrom()
+        importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_DYNAMO:
             self.fhTable.close()
 
