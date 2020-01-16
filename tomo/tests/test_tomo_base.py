@@ -271,15 +271,15 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
                                  auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                 filesPath= self.coords3D,
+                                 filesPath=self.coords3D,
                                  importTomograms=protImportTomogram.outputTomograms,
                                  filesPattern='', boxSize=32,
                                  samplingRate=5)
         self.launchProtocol(protImportCoordinates3d)
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.tomogram,
-                                      filesPattern='',
+                                      filesPath=self.path,
+                                      filesPattern='*.hdf',
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -295,7 +295,7 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
                                  auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                 filesPath= self.coords3D,
+                                 filesPath=self.coords3D,
                                  importTomograms=protImportTomogram.outputTomograms,
                                  filesPattern='', boxSize=32,
                                  samplingRate=5)
@@ -303,7 +303,7 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.path,
-                                      filesPattern='*.em',
+                                      filesPattern='*.hdf',
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -312,7 +312,7 @@ class TestTomoImportSubTomograms(BaseTest):
      def _runImportDynSubTomograms(self):
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.path,
-                                      filesPattern='*.em',
+                                      filesPattern='*.hdf',
                                       samplingRate=1.35,
                                       importFrom=2,
                                       tablePath=self.table)
@@ -324,9 +324,9 @@ class TestTomoImportSubTomograms(BaseTest):
          output = getattr(protImport, 'outputSubTomograms', None)
          self.assertTrue(output.getSamplingRate() == 1.35)
          self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-         self.assertTrue(output.getDim()[0] == 1024)
-         self.assertTrue(output.getDim()[1] == 1024)
-         self.assertTrue(output.getDim()[2] == 512)
+         self.assertTrue(output.getDim()[0] == 32)
+         self.assertTrue(output.getDim()[1] == 32)
+         self.assertTrue(output.getDim()[2] == 32)
          self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
          self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
          self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
@@ -338,9 +338,9 @@ class TestTomoImportSubTomograms(BaseTest):
          self.assertIsNotNone(output2,
                               "There was a problem with Import SubTomograms protocol")
          self.assertTrue(output2.getSamplingRate() == 1.35)
-         self.assertTrue(output2.getDim()[0] == 1024)
-         self.assertTrue(output2.getDim()[1] == 1024)
-         self.assertTrue(output2.getDim()[2] == 512)
+         self.assertTrue(output2.getDim()[0] == 32)
+         self.assertTrue(output2.getDim()[1] == 32)
+         self.assertTrue(output2.getDim()[2] == 32)
          for i, subtomo in enumerate(output2.iterItems()):
              if i == 1:
                  self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
@@ -358,9 +358,9 @@ class TestTomoImportSubTomograms(BaseTest):
          output = getattr(protImport, 'outputSubTomograms', None)
          self.assertTrue(output.getSamplingRate() == 1.35)
          self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-         self.assertTrue(output.getDim()[0] == 1024)
-         self.assertTrue(output.getDim()[1] == 1024)
-         self.assertTrue(output.getDim()[2] == 512)
+         self.assertTrue(output.getDim()[0] == 32)
+         self.assertTrue(output.getDim()[1] == 32)
+         self.assertTrue(output.getDim()[2] == 32)
          # Metada from dynamo table:
          self.assertTrue(output.getFirstItem().getObjId() == 4)
          self.assertTrue(output.getFirstItem().getClassId() == 1)
