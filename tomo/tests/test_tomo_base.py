@@ -314,7 +314,7 @@ class TestTomoImportSubTomograms(BaseTest):
                                       filesPath=self.path,
                                       filesPattern='*.em',
                                       samplingRate=1.35,
-                                      source=2,
+                                      importFrom=2,
                                       tablePath=self.table)
         self.launchProtocol(protImport)
         return protImport

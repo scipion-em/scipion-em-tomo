@@ -51,15 +51,21 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
+    def _getImportChoices(self):
+        """ Return a list of possible choices
+        from which the import can be done.
+        (usually packages formats such as: xmipp3, eman2, relion...etc.
+        """
+        return [' ', 'Eman', 'Dynamo']
+
+    def _getDefaultChoice(self):
+        return self.IMPORT_FROM_AUTO
+
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
 
-        form.addParam('source', EnumParam, choices=[' ', 'Eman', 'Dynamo'],
-                      label='Import from:', default=0,
-                      help='If the subtomograms come from another program, select that program.')
-
         form.addParam('tablePath', PathParam,
-                      label="Dynamo table file:", allowsNull=True, condition='source == 2',
+                      label="Dynamo table file:", allowsNull=True, condition='importFrom == 2',
                       help='Select dynamo table (.tbl) to link dynamo metadata to the subtomograms that will be '
                            'imported to Scipion. ')
 
@@ -71,13 +77,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                             'subtomograms were extracted.')
 
         ProtTomoImportAcquisition._defineParams(self, form)
-
-    def _getImportChoices(self):
-        """ Return a list of possible choices
-        from which the import can be done.
-        (usually packages formats such as: xmipp3, eman2, relion...etc.
-        """
-        return ['eman2']
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
@@ -168,25 +167,23 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _importMetadata(self, subtomo):
 
         # TODO: This is a temporal solution to add different import functions from different plugins
-        source = self.source.get()
-        if source == 1:
+        importFrom = self.importFrom.get()
+        if importFrom == self.IMPORT_FROM_EMAN:
             pass  # TODO: read .hdf5 header (EMAN)
-        if source == self.IMPORT_FROM_DYNAMO:
+        if importFrom == self.IMPORT_FROM_DYNAMO:
             readDynTable = importFromPlugin("dynamo.convert.convert", "readDynTable")
             readDynTable(self, subtomo)
 
     def _openMetadataFile(self):
-
-        source = self.source.get()
-        if source == self.IMPORT_FROM_DYNAMO:
+        importFrom = self.importFrom.get()
+        if importFrom == self.IMPORT_FROM_DYNAMO:
             dynTable = self._getExtraPath('dynamo_table.tbl')
             copyFile(self.tablePath.get(), dynTable)
             self.fhTable = open(dynTable, 'r')
 
     def _closeMetadataFile(self):
-
-        source = self.source.get()
-        if source == self.IMPORT_FROM_DYNAMO:
+        importFrom = self.importFrom.get()
+        if importFrom == self.IMPORT_FROM_DYNAMO:
             self.fhTable.close()
 
     def createOutput(self):
