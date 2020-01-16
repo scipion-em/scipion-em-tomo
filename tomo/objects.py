@@ -480,12 +480,12 @@ class Coordinate3D(data.EMObject):
     associated with a coordinate"""
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
-        self._volumePointer = pwobj.Pointer(objDoStore=False)
+        self._precedentPointer = pwobj.Pointer(objDoStore=False)
         self._x = pwobj.Integer(kwargs.get('x', None))
         self._y = pwobj.Integer(kwargs.get('y', None))
         self._z = pwobj.Integer(kwargs.get('z', None))
-        self._volId = pwobj.Integer()
-        self._volName = pwobj.String()
+        self._precedentId = pwobj.Integer()
+        self._precedentName = pwobj.String()
 
     def getX(self):
         return self._x.get()
@@ -538,9 +538,9 @@ class Coordinate3D(data.EMObject):
 
     def setVolume(self, volume):
         """ Set the micrograph to which this coordinate belongs. """
-        self._volumePointer.set(volume)
-        self._volId.set(volume.getObjId())
-        self._volName.set(volume.getFileName())
+        self._precedentPointer.set(volume)
+        self._precedentId.set(volume.getObjId())
+        self._precedentName.set(volume.getFileName())
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
@@ -548,11 +548,11 @@ class Coordinate3D(data.EMObject):
         self.setObjId(coord.getObjId())
         self.setBoxSize(coord.getBoxSize())
 
-    def getVolId(self):
-        return self._volId.get()
+    def getPrecedentId(self):
+        return self._precedentId.get()
 
-    def setVolId(self, volId):
-        self._volId.set(volId)
+    def setPrecendentId(self, _precedentId):
+        self._precedentId.set(_precedentId)
 
     def invertY(self):
         if not self.getVolume() is None:
@@ -561,11 +561,11 @@ class Coordinate3D(data.EMObject):
             self.setY(height - self.getY())
         # else: error TODO
 
-    def setVolName(self, volName):
-        self._volName.set(volName)
+    def setPredecentName(self, precedentName):
+        self._precedentName.set(precedentName)
 
-    def getVolName(self):
-        return self._volName.get()
+    def getPrecedentName(self):
+        return self._precedentName.get()
 
 
 class SetOfCoordinates3D(data.EMSet):
