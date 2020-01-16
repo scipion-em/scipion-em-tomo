@@ -180,18 +180,24 @@ class TiltSeriesDialogView(View):
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
 
-    def __init__(self, tomoList, path):
+    def __init__(self, tomoList, path, mode):
         TreeProvider.__init__(self)
         self.tomoList = tomoList
         self._path = path
+        self._mode = mode
 
     def getColumns(self):
         return [('Tomogram', 300), ('status', 150)]
 
     def getObjectInfo(self, tomo):
-        tomogramName = os.path.basename(tomo.getFileName())
-        tomogramName = os.path.splitext(tomogramName)[0]
-        filePath = os.path.join(self._path, tomogramName + ".txt")
+        if self._mode == 'imagej':
+            tomogramName = os.path.basename(tomo.getFileName())
+            tomogramName = os.path.splitext(tomogramName)[0]
+            filePath = os.path.join(self._path, tomogramName + ".txt")
+        elif self._mode == 'eman':
+            tomogramName = os.path.basename(tomo.getFileName())
+            tomogramName = os.path.splitext(tomogramName)[0]
+            filePath = os.path.join(self._path, 'extra-%s_info.json' % tomogramName)
 
         if not os.path.isfile(filePath):
             return {'key': tomogramName, 'parent': None,

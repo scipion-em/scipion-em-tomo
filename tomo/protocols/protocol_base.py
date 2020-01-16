@@ -107,8 +107,8 @@ class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
     def _defineParams(self, form):
 
         form.addSection(label='Input')
-        form.addParam('inputTomogram', PointerParam, label="Input Tomogram", important=True,
-                      pointerClass='Tomogram',
+        form.addParam('inputTomograms', PointerParam, label="Input Tomograms", important=True,
+                      pointerClass='SetOfTomograms',
                       help='Select the Tomogram to be used during picking.')
 
 
