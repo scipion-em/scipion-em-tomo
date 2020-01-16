@@ -44,7 +44,7 @@ setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOf
 setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
 setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
 setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
-
+setattr(emprotocol, "_createSetOfMeshes", ProtTomoBase._createSetOfMeshes.__func__)
 
 # This code extends ImageHandler allowing the use of scaling with splines until this functionality is implemented
 # in Scipion
