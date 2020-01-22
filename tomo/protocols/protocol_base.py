@@ -59,7 +59,7 @@ class ProtTomoBase:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                       'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
-        coord3DSet.setVolumes(volSet)
+        coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
     def _createSetOfTomograms(self, suffix=''):

@@ -84,7 +84,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
         coordsSet.setBoxSize(self.boxSize.get())
         coordsSet.setSamplingRate(samplingRate)
-        coordsSet.setVolumes(importTomograms)
+        coordsSet.setPrecedents(importTomograms)
         ci = self.getImportClass()
         for tomo in importTomograms.iterItems():
             tomoName = basename(os.path.splitext(tomo.getFileName())[0])
