@@ -59,6 +59,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
+        self.OUTPUT_PREFIX = "outputCoordinates3D"
 
 
     def _defineParams(self, form):
@@ -98,16 +99,18 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                     # Parse the coordinates in the given format for this micrograph
                     ci.importCoordinates3D(coordFile, addCoordinate)
 
-        self._defineOutputs(outputCoordinates=coordsSet)
+        args = {}
+        args[self.OUTPUT_PREFIX] = coordsSet
+        self._defineOutputs(**args)
         self._defineSourceRelation(self.importTomograms, coordsSet)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return self.hasAttribute('outputCoordinates')
+        return self.hasAttribute('outputCoordinates3D')
 
 
     def _getCoordsMessage(self):
-        return "Coordinates %s" % self.getObjectTag('outputCoordinates')
+        return "Coordinates %s" % self.getObjectTag('outputCoordinates3D')
 
     def _summary(self):
         summary = []
