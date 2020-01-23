@@ -190,11 +190,11 @@ class TomogramsTreeProvider(TreeProvider):
         return [('Tomogram', 300), ('status', 150)]
 
     def getObjectInfo(self, tomo):
-        if self._mode == 'imagej':
+        if self._mode == 'txt':
             tomogramName = os.path.basename(tomo.getFileName())
             tomogramName = os.path.splitext(tomogramName)[0]
             filePath = os.path.join(self._path, tomogramName + ".txt")
-        elif self._mode == 'eman':
+        elif self._mode == 'json':
             tomogramName = os.path.basename(tomo.getFileName())
             tomogramName = os.path.splitext(tomogramName)[0]
             filePath = os.path.join(self._path, 'extra-%s_info.json' % tomogramName)
