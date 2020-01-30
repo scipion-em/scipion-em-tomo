@@ -148,9 +148,8 @@ class TiltSeries(TiltSeriesBase):
                     newStack = False
                 transform = ti.getTransform().getMatrix()
                 transformArray = np.array(transform)
-                print(transformArray)
                 ih.applyTransform(inputFile=str(index + 1) + '@' + inputFilePath,
-                                  outputFile=str(self.getSize() - index) + '@' + outputFilePath,
+                                  outputFile=str(index + 1) + '@' + outputFilePath,
                                   transformMatrix=transformArray,
                                   shape=(ti.getXDim(), ti.getYDim()),
                                   borderAverage=True)
