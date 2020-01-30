@@ -273,13 +273,41 @@ class TomogramsDialog(ToolbarListDialog):
 
         macro = r"""path = "%s";
     file = "%s"
-    if (File.exists(path + file + ".zip")){
-    roiManager("Open", path + file + ".zip");
+    
+    // Read input mesh file
+    
+    if (File.exists(path + file + ".txt")){
+    positions = File.openAsString(path + file + ".txt"); //read in the data
+    lines = split(positions, "\n"); //split the data by line
+    xpoints = newArray();
+    ypoints = newArray();
+    for (idx=0; idx < lines.length; idx++){
+    values = split(lines[idx], ",");
+    if (idx+1 < lines.length){
+    valuesNext = split(lines[idx+1], ",");
+    }
+    else{
+    valuesNext =  newArray(-1,-1,-1);
+    }
+    xpoints = Array.concat(xpoints, values[0]);
+    ypoints = Array.concat(ypoints, values[1]);
+    if (values[2] != valuesNext[2]){
+    xpoints = Array.concat(xpoints, xpoints[0]);
+    ypoints = Array.concat(ypoints, ypoints[0]);
+    Stack.setSlice(values[2]);
+    makeSelection("polyline", xpoints, ypoints);
+    roiManager("add");
+    xpoints = newArray();
+    ypoints = newArray();
+    }
+    }
     }
     else{
     roiManager("Draw");
     }
 
+    // Draw Meshes
+    
     setTool("polygon");
     waitForUser("Draw the desired ROIs\n\nThen click Ok");
     wait(50);
@@ -290,6 +318,8 @@ class TomogramsDialog(ToolbarListDialog):
     wait(50);
     }
 
+    // Save Meshes
+    
     string = "";
     rois = roiManager("count");
     for (i=0; i<rois; i++){
@@ -306,7 +336,6 @@ class TomogramsDialog(ToolbarListDialog):
     print(fid, string);
     File.close(fid);
 
-    roiManager("save", path + file + ".zip");
     run("Quit");""" % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
         macroFid = open(macroPath, 'w')
         macroFid.write(macro)
@@ -328,8 +357,34 @@ class TomogramsDialog(ToolbarListDialog):
 
         macro = r"""path = "%s";
     file = "%s"
-    if (File.exists(path + file + ".zip")){
-    roiManager("Open", path + file + ".zip");
+    
+    // Read input mesh file
+    
+    if (File.exists(path + file + ".txt")){
+    positions = File.openAsString(path + file + ".txt"); //read in the data
+    lines = split(positions, "\n"); //split the data by line
+    xpoints = newArray();
+    ypoints = newArray();
+    for (idx=0; idx < lines.length; idx++){
+    values = split(lines[idx], ",");
+    if (idx+1 < lines.length){
+    valuesNext = split(lines[idx+1], ",");
+    }
+    else{
+    valuesNext =  newArray(-1,-1,-1);
+    }
+    xpoints = Array.concat(xpoints, values[0]);
+    ypoints = Array.concat(ypoints, values[1]);
+    if (values[2] != valuesNext[2]){
+    xpoints = Array.concat(xpoints, xpoints[0]);
+    ypoints = Array.concat(ypoints, ypoints[0]);
+    Stack.setSlice(values[2]);
+    makeSelection("polyline", xpoints, ypoints);
+    roiManager("add");
+    xpoints = newArray();
+    ypoints = newArray();
+    }
+    }
     }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
         macroFid = open(macroPath, 'w')

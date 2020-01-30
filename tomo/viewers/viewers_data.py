@@ -65,7 +65,7 @@ class TomoDataViewer(pwviewer.Viewer):
 
         elif issubclass(cls, tomo.objects.SetOfMeshes):
             from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
-            tomoList = [item.clone() for item in self.protocol.inputTomos.get().iterItems()]
+            tomoList = [item.clone() for item in obj.getVolumes().iterItems()]
 
             tomoProvider = TomogramsTreeProvider(tomoList, self.protocol._getExtraPath(), 'txt',)
 
