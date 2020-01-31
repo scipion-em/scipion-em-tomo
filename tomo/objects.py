@@ -33,7 +33,7 @@ import numpy as np
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
-from pwem.convert import ImageHandler
+from pwem.emlib.image import ImageHandler
 
 
 class TiltImageBase:
@@ -815,18 +815,28 @@ class LandmarkModel(data.EMObject):
     def setModelName(self, modelName):
         self._modelName = pwobj.String(modelName)
 
-    def addLandmark(self, xCoor, yCoor, tiltIm, chainId):
+    def addLandmark(self, xCoor, yCoor,  tiltIm, chainId, xResid, yResid):
         import csv
-        fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId']
+        fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
         if os.path.exists(self.getFileName()):
             with open(self.getFileName(), 'a') as f:
                 writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
-                writer.writerow({'xCoor': xCoor, 'yCoor': yCoor, 'tiltIm': tiltIm, 'chainId': chainId})
+                writer.writerow({'xCoor': xCoor,
+                                 'yCoor': yCoor,
+                                 'tiltIm': tiltIm,
+                                 'chainId': chainId,
+                                 'xResid': xResid,
+                                 'yResid': yResid})
         else:
             with open(self.getFileName(), 'w') as f:
                 writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
                 writer.writeheader()
-                writer.writerow({'xCoor': xCoor, 'yCoor': yCoor, 'tiltIm': tiltIm, 'chainId': chainId})
+                writer.writerow({'xCoor': xCoor,
+                                 'yCoor': yCoor,
+                                 'tiltIm': tiltIm,
+                                 'chainId': chainId,
+                                 'xResid': xResid,
+                                 'yResid': yResid})
 
 
 class SetOfLandmarkModels(data.EMSet):
