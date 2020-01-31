@@ -761,7 +761,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class Mesh(data.EMObject):
-    def __init__(self, path=None, files=None, **kwargs):
+    def __init__(self, path=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
         self._volumePointer = pwobj.Pointer(objDoStore=False)
