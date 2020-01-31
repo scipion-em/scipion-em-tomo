@@ -431,33 +431,116 @@ class TomogramsDialog(ToolbarListDialog):
         macro = r"""path = "%s";
     file = "%s"
     
-    // Read input mesh file
+    outPath = path + file + ".txt";
     
-    if (File.exists(path + file + ".txt")){
-    positions = File.openAsString(path + file + ".txt"); //read in the data
-    lines = split(positions, "\n"); //split the data by line
+    // --------- Load SetOfMeshes ---------
+    if (File.exists(outPath)){
+    loadMeshFile(outPath);
+    }
+    
+    // --------- Functions Definition ---------
+    function classDialog(){
+    Dialog.create("Class Selection");
+    Dialog.addMessage("Determine the group of the labels to be drawn");
+    Dialog.addNumber("Class Group", 1);
+    Dialog.show();
+    return floor(Dialog.getNumber());
+    }
+    
+    function newClassDialog(){
+    choices = newArray("Yes", "No");
+    Dialog.create("Create new class?");
+    Dialog.addChoice("Choice", choices);
+    Dialog.show();
+    return Dialog.getChoice();
+    }
+    
+    function waitForRoi(){
+    waitForUser("Draw the desired ROIs\n\nThen click Ok");
+    wait(50);
+    while(roiManager("count")==0){
+    waitForUser("Draw the desired ROIs\n\nThen click Ok");
+    wait(50);
+    }
+    }
+    
+    function emptyOutFile(outPath){
+    fid = File.open(outPath);
+    File.close(fid);
+    }
+    
+    function saveMeshes(class, outPath){
+    string = "";
+    meshes = roiManager("count");
+    for (i=0; i<meshes; i++){
+    roiManager("select", i);
+    Stack.getPosition(channel, slice, frame);
+    getSelectionCoordinates(xpoints, ypoints);
+    for (j = 0; j < xpoints.length; j++) {
+    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + class + "\n";
+    }
+    }
+    lastJump = lastIndexOf(string, "\n");
+    File.append(substring(string, 0, lastJump), outPath);
+    }
+    
+    function loadMeshFile(meshPath){
+    c = "";
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    contents = split(File.openAsString(meshPath), "\n");
     xpoints = newArray();
     ypoints = newArray();
-    for (idx=0; idx < lines.length; idx++){
-    values = split(lines[idx], ",");
-    if (idx+1 < lines.length){
-    valuesNext = split(lines[idx+1], ",");
+    groups = newArray();
+    for (idx=0; idx < contents.length; idx++){
+    values = split(contents[idx], ",");
+    if (idx+1 < contents.length){
+    valuesNext = split(contents[idx+1], ",");
     }
     else{
-    valuesNext =  newArray(-1,-1,-1);
+    valuesNext =  newArray(-1,-1,-1,-1);
     }
     xpoints = Array.concat(xpoints, values[0]);
     ypoints = Array.concat(ypoints, values[1]);
     if (values[2] != valuesNext[2]){
     xpoints = Array.concat(xpoints, xpoints[0]);
     ypoints = Array.concat(ypoints, ypoints[0]);
+    groups = Array.concat(groups, values[3]);
     Stack.setSlice(values[2]);
     makeSelection("polyline", xpoints, ypoints);
+    Roi.setName("Class " + values[3]);
+    Roi.setStrokeWidth(5);
     roiManager("add");
+    count = roiManager("count");
+    roiManager("select", count-1);
+    roiManager("Set Color", c);
+    if (values[3] != valuesNext[3]){
+    c = "";
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    }
     xpoints = newArray();
     ypoints = newArray();
     }
     }
+    return groups;
+    }
+    
+    function editMeshes(classVect, numMeshes, outPath){
+    waitForUser("Edit the input ROIs if needed\n\nThen click Ok");
+    string = "";
+    for (i=0; i<numMeshes; i++){
+    roiManager("select", i);
+    Stack.getPosition(channel, slice, frame);
+    getSelectionCoordinates(xpoints, ypoints);
+    for (j = 0; j < xpoints.length; j++) {
+    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + classVect[i] + "\n";
+    }
+    }
+    lastJump = lastIndexOf(string, "\n");
+    File.append(substring(string, 0, lastJump), outPath);
     }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
         macroFid = open(macroPath, 'w')
