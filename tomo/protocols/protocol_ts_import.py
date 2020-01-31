@@ -36,7 +36,7 @@ import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
-from pwem.convert import ImageHandler
+from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 
 import tomo.convert
