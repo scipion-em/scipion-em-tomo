@@ -29,7 +29,7 @@ import os
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
-from pwem.convert import ImageHandler, DT_FLOAT
+from pwem.emlib.image import ImageHandler, DT_FLOAT
 
 from .protocol_ts_base import ProtTsProcess
 
@@ -133,7 +133,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
         else:
             ih.convert(ti, tiFn, DT_FLOAT)
 
-    def _estimateCtf(self, workingDir, tiFn, tiltImage):
+    def _estimateCtf(self, workingDir, tiFn, tiltImage, *args):
         raise Exception("_estimateCTF function should be implemented!")
 
     def processTiltSeriesStep(self, tsId):

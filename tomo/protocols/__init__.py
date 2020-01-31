@@ -40,7 +40,7 @@ from .protocol_import_coordinates import ProtImportCoordinates3D
 # This method/class can be pass as parameter to showj
 # See https://github.com/I2PC/scipion/issues/2036
 emprotocol = pwem.protocols.EMProtocol
-try :
+try:
     setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
     setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
     setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)

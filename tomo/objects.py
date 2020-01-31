@@ -466,7 +466,7 @@ class SetOfTomograms(data.SetOfVolumes):
     EXPOSE_ITEMS = True
 
     def __init__(self, *args, **kwargs):
-        data.SetOfVolumes.__init__(self, *args, **kwargs)
+        data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
 
     def updateDim(self):

@@ -125,9 +125,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(str(fileName)).split(".")[0] + ".%s" % extension
+            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
         else:
-            baseFileName="import_" + basename(str(fileName)).split(":")[0]
+            baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
 

@@ -285,15 +285,15 @@ class ProtTomoImportAcquisition:
         return tomo.objects.TomoAcquisition(**acquisitionParams)
 
     def _summary(self, summary, setOfObject):
-        for object in setOfObject:
-            if object.hasAcquisition():
-                summary.append(u"File: %s" % object.getFileName())
-                summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
+        for obj in setOfObject:
+            if obj.hasAcquisition():
+                summary.append(u"File: %s" % obj.getFileName())
+                summary.append(u"Acquisition angle max: *%0.2f*" % obj.getAcquisition().getAngleMax())
 
-                summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
-                if object.getAcquisition().getStep():
-                    summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
-                if object.getAcquisition().getAngleAxis1():
-                    summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
-                if object.getAcquisition().getAngleAxis2():
-                    summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
+                summary.append(u"Acquisition angle min: *%0.2f*" % obj.getAcquisition().getAngleMin())
+                if obj.getAcquisition().getStep():
+                    summary.append(u"Step: *%d*" % obj.getAcquisition().getStep())
+                if obj.getAcquisition().getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % obj.getAcquisition().getAngleAxis1())
+                if obj.getAcquisition().getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % obj.getAcquisition().getAngleAxis2())
