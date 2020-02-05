@@ -32,6 +32,7 @@ from collections import OrderedDict
 import numpy as np
 
 import pyworkflow.object as pwobj
+import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.emlib.image import ImageHandler
 
@@ -137,24 +138,27 @@ class TiltSeries(TiltSeriesBase):
     def applyTransform(self, outputFilePath):
         inputFilePath = self.getFirstItem().getLocation()[1]
         newStack = True
-        for index, ti in enumerate(self):
-            if ti.hasTransform():
-                ih = ImageHandler()
-                if newStack:
-                    ih.createEmptyImage(fnOut=outputFilePath,
-                                        xDim=ti.getXDim(),
-                                        yDim=ti.getYDim(),
-                                        nDim=self.getSize())
-                    newStack = False
-                transform = ti.getTransform().getMatrix()
-                transformArray = np.array(transform)
-                ih.applyTransform(inputFile=str(index + 1) + '@' + inputFilePath,
-                                  outputFile=str(index + 1) + '@' + outputFilePath,
-                                  transformMatrix=transformArray,
-                                  shape=(ti.getXDim(), ti.getYDim()),
-                                  borderAverage=True)
-            else:
-                raise Exception('ERROR: At least one tilt-image does not have a transform object associated.')
+        if self.getFirstItem().hasTransform():
+            for index, ti in enumerate(self):
+                if ti.hasTransform():
+                    ih = ImageHandler()
+                    if newStack:
+                        ih.createEmptyImage(fnOut=outputFilePath,
+                                            xDim=ti.getXDim(),
+                                            yDim=ti.getYDim(),
+                                            nDim=self.getSize())
+                        newStack = False
+                    transform = ti.getTransform().getMatrix()
+                    transformArray = np.array(transform)
+                    ih.applyTransform(inputFile=str(index + 1) + '@' + inputFilePath,
+                                      outputFile=str(index + 1) + '@' + outputFilePath,
+                                      transformMatrix=transformArray,
+                                      shape=(ti.getXDim(), ti.getYDim()),
+                                      borderAverage=True)
+                else:
+                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        else:
+            path.createLink(self.getFirstItem().getLocation()[1], outputFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
