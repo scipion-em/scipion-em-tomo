@@ -53,8 +53,7 @@ def scaleSplines(inputFn, outputFn, scaleFactor):
     import xmippLib
     I = xmippLib.Image(inputFn)
     x, y, z, _ = I.getDimensions()
-    I.scale(int(x * scaleFactor), int(y * scaleFactor),
-            int(z * scaleFactor))
+    I.scale(int(x/scaleFactor), int(y/scaleFactor), int(z/scaleFactor))
     I.write(outputFn)
 
 ih = pyworkflow.em.ImageHandler
