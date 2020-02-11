@@ -26,6 +26,8 @@
 
 import os, threading
 
+import numpy as np
+
 import pyworkflow.em as pwem
 from pyworkflow.em.viewers import showj
 from pyworkflow.em.viewers.showj import runJavaIJapp
@@ -34,6 +36,9 @@ from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.viewer import View
+
+import pyworkflow.utils as pwutils
+import pyworkflow.object as pwobj
 
 import tomo.objects
 
@@ -226,6 +231,50 @@ class TomogramsTreeProvider(TreeProvider):
         tree.tag_configure("pending", foreground="red")
         tree.tag_configure("done", foreground="green")
 
+class MeshesTreeProvider(TreeProvider):
+    '''Populate tree from SetOfMeshes'''
+
+    def __init__(self, meshList):
+        TreeProvider.__init__(self)
+        self.meshList = meshList
+        self.tomoList = [mesh.getVolume() for mesh in self.meshList]
+
+    def getColumns(self):
+        return [('Tomogram', 300), ('Number of Mehes', 150)]
+
+    def getObjectInfo(self, obj):
+        if isinstance(obj, tomo.objects.Mesh):
+            meshName = 'Mesh %d' % obj.getObjId()
+            numMeshes = obj.getNumMeshes()
+            return {'key': meshName, 'parent': self._parentDict.get(obj.getObjId(), None),
+                    'text': meshName, 'values': (numMeshes)}
+        elif isinstance(obj, tomo.objects.Tomogram):
+            tomoName = obj.getFileName()
+            return {'key': tomoName, 'parent': None,
+                    'text': tomoName, 'values': (None)}
+
+    def getObjectActions(self, mesh):
+        return []
+
+    def _getObjectList(self):
+        """Retrieve the object list"""
+        return self.tomoList
+
+    def getObjects(self):
+        objList = self._getObjectList()
+        self._parentDict = {}
+        childs = []
+        for obj in self.meshList:
+            childs += self._getChilds(obj)
+        objList += childs
+        return objList
+
+    def _getChilds(self, obj):
+        childs = []
+        for idm in range(obj.getNumMeshes()):
+            childs.append(obj)
+        self._parentDict[obj.getObjId()] = obj.getVolume()
+        return childs
 
 class TomogramsDialog(ToolbarListDialog):
     """
@@ -255,13 +304,13 @@ class TomogramsDialog(ToolbarListDialog):
             self.after(1000, self.refresh_gui)
 
     def doubleClickOnTomogram(self, e=None):
-        self.tomo = e
+        self.tomo = e.getVolume()
         self.proc = threading.Thread(target=self.lanchIJForTomogram, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)
 
     def doubleClickViewer(self, e=None):
-        self.tomo = e
+        self.tomo = e.getVolume()
         self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)

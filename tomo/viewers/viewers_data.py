@@ -64,10 +64,10 @@ class TomoDataViewer(pwviewer.Viewer):
                                                    obj.getFileName()))
 
         elif issubclass(cls, tomo.objects.SetOfMeshes):
-            from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
-            tomoList = [item.clone() for item in obj.getVolumes().iterItems()]
+            from .views_tkinter_tree import MeshesTreeProvider, TomogramsDialog
+            meshList = [item.clone() for item in obj.iterItems()]
 
-            tomoProvider = TomogramsTreeProvider(tomoList, self.protocol._getExtraPath(), 'txt',)
+            tomoProvider = MeshesTreeProvider(meshList)
 
             path = self.protocol._getExtraPath()
             setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
