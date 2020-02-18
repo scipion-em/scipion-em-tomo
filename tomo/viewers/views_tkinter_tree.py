@@ -237,7 +237,11 @@ class MeshesTreeProvider(TreeProvider):
     def __init__(self, meshList):
         TreeProvider.__init__(self)
         self.meshList = meshList
-        self.tomoList = [mesh.getVolume() for mesh in self.meshList]
+        self.tomoList = []
+        for mesh in self.meshList:
+            tomo = mesh.getVolume()
+            tomo.setObjId(mesh.getObjId())
+            self.tomoList.append(tomo)
 
     def getColumns(self):
         return [('Tomogram', 300), ('Number of Mehes', 150)]
@@ -245,13 +249,13 @@ class MeshesTreeProvider(TreeProvider):
     def getObjectInfo(self, obj):
         if isinstance(obj, tomo.objects.Mesh):
             meshName = 'Mesh %d' % obj.getObjId()
-            numMeshes = obj.getNumMeshes()
             return {'key': meshName, 'parent': self._parentDict.get(obj.getObjId(), None),
-                    'text': meshName, 'values': (numMeshes)}
+                    'text': meshName, 'values': (1)}
         elif isinstance(obj, tomo.objects.Tomogram):
-            tomoName = obj.getFileName()
+            tomoName = pwutils.removeBaseExt(obj.getFileName())
+            numMeshes = self.meshList[obj.getObjId() - 1].getNumMeshes()
             return {'key': tomoName, 'parent': None,
-                    'text': tomoName, 'values': (None)}
+                    'text': tomoName, 'values': (numMeshes)}
 
     def getObjectActions(self, mesh):
         return []
@@ -267,13 +271,16 @@ class MeshesTreeProvider(TreeProvider):
         for obj in self.meshList:
             childs += self._getChilds(obj)
         objList += childs
+
         return objList
 
     def _getChilds(self, obj):
         childs = []
-        for idm in range(obj.getNumMeshes()):
-            childs.append(obj)
-        self._parentDict[obj.getObjId()] = obj.getVolume()
+        for idg in range(obj.getNumMeshes()):
+            aux_obj = obj.clone()
+            aux_obj.setObjId(idg + 1)
+            childs.append(aux_obj)
+            self._parentDict[aux_obj.getObjId()] = self.tomoList[obj.getObjId() - 1]
         return childs
 
 class TomogramsDialog(ToolbarListDialog):
