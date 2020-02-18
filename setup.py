@@ -117,14 +117,14 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 2.7'
+        'Programming Language :: Python :: 3'
     ],
 
     # This field adds keywords for your project which will appear on the
     # project page. What does your project relate to?
     #
     # Note that this is a string of words separated by whitespace, not a list.
-    keywords='scipion electron-microscopy cryo-em cryo-tomography subtomogram-averaging structural-biology image-processing scipion-2.0',  # Optional
+    keywords='scipion electron-microscopy cryo-em cryo-tomography subtomogram-averaging structural-biology image-processing scipion-3.0',  # Optional
 
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
@@ -182,11 +182,9 @@ setup(
     #
     # For example, the following would provide a command called `sample` which
     # executes the function `main` from this package when invoked:
-    #entry_points={  # Optional
-    #    'console_scripts': [
-    #        'sample=sample:main',
-    #    ],
-    #},
+    entry_points={
+        'pyworkflow.plugin': 'tomo = tomo'
+    },
 
     # List additional URLs that are relevant to your project as a dict.
     #

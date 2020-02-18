@@ -26,14 +26,14 @@
 
 import os, threading
 
-import pyworkflow.em as pwem
-from pyworkflow.em.viewers import showj
-from pyworkflow.em.viewers.showj import runJavaIJapp
+
+from pwem.viewers import showj
+from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui.tree import TreeProvider
+from pyworkflow.plugin import Domain
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
 
 import pyworkflow.viewer as pwviewer
-from pyworkflow.viewer import View
 
 import tomo.objects
 
@@ -136,8 +136,8 @@ class TiltSeriesTreeProvider(TreeProvider):
         actions = []
 
         if isinstance(obj, tomo.objects.TiltSeries):
-            viewers = pwem.findViewers(obj.getClassName(),
-                                       pwviewer.DESKTOP_TKINTER)
+            viewers = Domain.findViewers(obj.getClassName(),
+                                         pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 def createViewer(viewerClass, obj):
                     proj = self.protocol.getProject()
@@ -149,7 +149,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         return actions
 
 
-class TiltSeriesDialogView(View):
+class TiltSeriesDialogView(pwviewer.View):
     """ This class implements a view using Tkinter ListDialog
     and the TiltSeriesTreeProvider.
     """

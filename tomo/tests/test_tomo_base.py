@@ -25,14 +25,14 @@
 # **************************************************************************
 
 import os
-from shutil import copyfile
 
 import pyworkflow as pw
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
-from pyworkflow.em import Domain, CTFModel
+from pwem import Domain
+from pwem.objects import CTFModel
 
-from tomo.tests import DataSet
-from tomo.objects import SetOfTiltSeriesM, SetOfTiltSeries
+from . import DataSet
+from ..objects import SetOfTiltSeriesM, SetOfTiltSeries
 import tomo.protocols
 
 
@@ -249,12 +249,11 @@ class TestTomoImportTomograms(BaseTest):
             break
 
 
-
 class TestTomoImportSubTomograms(BaseTest):
-     """ This class check if the protocol to import sub tomograms works
+    """ This class check if the protocol to import sub tomograms works
      properly."""
-     @classmethod
-     def setUpClass(cls):
+    @classmethod
+    def setUpClass(cls):
          setupTestProject(cls)
          cls.dataset = DataSet.getDataSet('tomo-em')
          cls.tomogram = cls.dataset.getFile('tomo1')
@@ -262,7 +261,7 @@ class TestTomoImportSubTomograms(BaseTest):
          cls.table = cls.dataset.getFile('initial.tbl')
          cls.path = cls.dataset.getPath()
 
-     def _runImportSubTomograms(self):
+    def _runImportSubTomograms(self):
 
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=self.tomogram,
@@ -285,7 +284,7 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-     def _runImportSubTomograms2(self):
+    def _runImportSubTomograms2(self):
 
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=self.tomogram,
@@ -309,7 +308,7 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-     def _runImportDynSubTomograms(self):
+    def _runImportDynSubTomograms(self):
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.path,
                                       filesPattern='*.hdf',
@@ -319,7 +318,7 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-     def test_import_sub_tomograms(self):
+    def test_import_sub_tomograms(self):
          protImport = self._runImportSubTomograms()
          output = getattr(protImport, 'outputSubTomograms', None)
          self.assertTrue(output.getSamplingRate() == 1.35)
@@ -353,7 +352,7 @@ class TestTomoImportSubTomograms(BaseTest):
 
          return output2
 
-     def test_import_dynamo_subtomograms(self):
+    def test_import_dynamo_subtomograms(self):
          protImport = self._runImportDynSubTomograms()
          output = getattr(protImport, 'outputSubTomograms', None)
          self.assertTrue(output.getSamplingRate() == 1.35)
@@ -382,8 +381,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
     def _runTomoImportSetOfCoordinates(self, pattern):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
-                                 filesPath=self.tomogram,
-                                 samplingRate=5)
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
 
         self.launchProtocol(protImportTomogram)
 
