@@ -54,6 +54,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         """
         return ['eman']
 
+    def _getDefaultChoice(self):
+        return self.IMPORT_FROM_AUTO
+
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
@@ -81,7 +84,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
         coordsSet.setBoxSize(self.boxSize.get())
         coordsSet.setSamplingRate(samplingRate)
-        coordsSet.setVolumes(importTomograms)
+        coordsSet.setPrecedents(importTomograms)
         ci = self.getImportClass()
         for tomo in importTomograms.iterItems():
             tomoName = basename(os.path.splitext(tomo.getFileName())[0])
@@ -135,8 +138,18 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     def getImportFrom(self):
         importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_AUTO:
-            importFrom = self.IMPORT_FROM_EMAN
+            importFrom = self.getFormat()
         return importFrom
+
+    def getFormat(self):
+        for coordFile, _ in self.iterFiles():
+            if coordFile.endswith('.pos'):
+                return self.IMPORT_FROM_XMIPP
+            if coordFile.endswith('.star'):
+                return self.IMPORT_FROM_RELION
+            if coordFile.endswith('.json') or coordFile.endswith('.txt'):
+                return self.IMPORT_FROM_EMAN
+        return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """

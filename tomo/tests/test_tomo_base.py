@@ -116,16 +116,14 @@ class TestTomoBaseProtocols(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-
-        if not os.path.exists(cls.dataPath):
-            raise Exception("Can not run tomo tests, "
-                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.getFile = cls.dataset.getFile('etomo')
+        cls.getFileM = cls.dataset.getFile('empiar')
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
-            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPath=self.getFileM,
             filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
@@ -148,9 +146,8 @@ class TestTomoBaseProtocols(BaseTest):
         protImport = self.test_importTiltSeriesM()
 
         # --------- Motion correction with motioncor2 for Tilt-series ------
-        import motioncorr.protocols
         protMc = self.newProtocol(
-            motioncorr.protocols.ProtTsMotionCorr,
+            tomo.protocols.ProtTsAverage,
             binFactor=2.0
         )
 
@@ -162,17 +159,14 @@ class TestTomoImportTs(BaseTest):
         @classmethod
         def setUpClass(cls):
             setupTestProject(cls)
-            cls.empiar10164 = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-            cls.etomoTutorial = os.environ.get('SCIPION_TOMO_ETOMO_TUTORIAL', '')
+            cls.dataset = DataSet.getDataSet('tomo-em')
+            cls.getFile = cls.dataset.getFile('etomo')
+            cls.getFileM = cls.dataset.getFile('empiar')
 
         def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
-            if not os.path.exists(self.empiar10164):
-                raise Exception("Can not run tomo tests, "
-                                "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
-
             protImport = self.newProtocol(
                 tomo.protocols.ProtImportTsMovies,
-                filesPath=os.path.join(self.empiar10164, 'data', 'frames'),
+                filesPath=self.getFileM,
                 filesPattern=filesPattern,
                 voltage=300,
                 magnification=105000,
@@ -185,14 +179,13 @@ class TestTomoImportTs(BaseTest):
             return protImport
 
         def _runImportTiltSeries(self):
-            if not os.path.exists(self.etomoTutorial):
-                raise Exception("Can not run tomo tests, "
-                                "SCIPION_TOMO_ETOMO_TUTORIAL variable not defined. ")
-
             protImport = self.newProtocol(
                 tomo.protocols.ProtImportTs,
-                filesPath=os.path.join(self.etomoTutorial),
+                filesPath=self.getFile,
                 filesPattern='BB{TS}.st',
+                minAngle=-55,
+                maxAngle=65,
+                stepAngle=2,
                 voltage=300,
                 magnification=105000,
                 sphericalAberration=2.7,
@@ -207,7 +200,7 @@ class TestTomoImportTs(BaseTest):
             protImport = self._runImportTiltSeriesM()
             output = getattr(protImport, 'outputTiltSeriesM', None)
             self.assertFalse(output is None)
-            self.assertEqual(output.getSize(), 3)
+            self.assertEqual(output.getSize(), 2)
 
             return protImport
 
@@ -261,11 +254,12 @@ class TestTomoImportSubTomograms(BaseTest):
      properly."""
     @classmethod
     def setUpClass(cls):
-        setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
-        cls.tomogram = cls.dataset.getFile('tomo1')
-        cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
-        cls.path = cls.dataset.getPath()
+         setupTestProject(cls)
+         cls.dataset = DataSet.getDataSet('tomo-em')
+         cls.tomogram = cls.dataset.getFile('tomo1')
+         cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+         cls.table = cls.dataset.getFile('initial.tbl')
+         cls.path = cls.dataset.getPath()
 
     def _runImportSubTomograms(self):
 
@@ -275,16 +269,16 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImportTomogram)
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                   filesPath= self.coords3D,
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern='', boxSize=32,
-                                                   samplingRate=5)
+                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 filesPath=self.coords3D,
+                                 importTomograms=protImportTomogram.outputTomograms,
+                                 filesPattern='', boxSize=32,
+                                 samplingRate=5)
         self.launchProtocol(protImportCoordinates3d)
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.tomogram,
-                                      filesPattern='',
+                                      filesPath=self.path,
+                                      filesPattern='*.hdf',
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -299,54 +293,81 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImportTomogram)
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                   filesPath= self.coords3D,
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern='', boxSize=32,
-                                                   samplingRate=5)
+                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 filesPath=self.coords3D,
+                                 importTomograms=protImportTomogram.outputTomograms,
+                                 filesPattern='', boxSize=32,
+                                 samplingRate=5)
         self.launchProtocol(protImportCoordinates3d)
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.path,
-                                      filesPattern='*.em',
+                                      filesPattern='*.hdf',
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
         return protImport
 
+    def _runImportDynSubTomograms(self):
+        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                      filesPath=self.path,
+                                      filesPattern='*.hdf',
+                                      samplingRate=1.35,
+                                      importFrom=2,
+                                      tablePath=self.table)
+        self.launchProtocol(protImport)
+        return protImport
+
     def test_import_sub_tomograms(self):
-        protImport = self._runImportSubTomograms()
-        output = getattr(protImport, 'outputSubTomograms', None)
-        self.assertTrue(output.getSamplingRate() == 1.35)
-        self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-        self.assertTrue(output.getDim()[0] == 1024)
-        self.assertTrue(output.getDim()[1] == 1024)
-        self.assertTrue(output.getDim()[2] == 512)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
-        self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
-        self.assertIsNotNone(output,
+         protImport = self._runImportSubTomograms()
+         output = getattr(protImport, 'outputSubTomograms', None)
+         self.assertTrue(output.getSamplingRate() == 1.35)
+         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
+         self.assertTrue(output.getDim()[0] == 32)
+         self.assertTrue(output.getDim()[1] == 32)
+         self.assertTrue(output.getDim()[2] == 32)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
+         self.assertIsNotNone(output,
                              "There was a problem with Import SubTomograms protocol")
 
-        protImport2 = self._runImportSubTomograms2()
-        output2 = getattr(protImport2, 'outputSubTomograms', None)
-        self.assertIsNotNone(output2,
-                             "There was a problem with Import SubTomograms protocol")
-        self.assertTrue(output2.getSamplingRate() == 1.35)
-        self.assertTrue(output2.getDim()[0] == 1024)
-        self.assertTrue(output2.getDim()[1] == 1024)
-        self.assertTrue(output2.getDim()[2] == 512)
-        for i, subtomo in enumerate(output2.iterItems()):
-            if i == 1:
-                self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
-                self.assertTrue(subtomo.getCoordinate3D().getY() == 172)
-                self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
-            if i == 0:
-                self.assertTrue(subtomo.getCoordinate3D().getX() == 314)
-                self.assertTrue(subtomo.getCoordinate3D().getY() == 350)
-                self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
+         protImport2 = self._runImportSubTomograms2()
+         output2 = getattr(protImport2, 'outputSubTomograms', None)
+         self.assertIsNotNone(output2,
+                              "There was a problem with Import SubTomograms protocol")
+         self.assertTrue(output2.getSamplingRate() == 1.35)
+         self.assertTrue(output2.getDim()[0] == 32)
+         self.assertTrue(output2.getDim()[1] == 32)
+         self.assertTrue(output2.getDim()[2] == 32)
+         for i, subtomo in enumerate(output2.iterItems()):
+             if i == 1:
+                 self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
+                 self.assertTrue(subtomo.getCoordinate3D().getY() == 172)
+                 self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
+             if i == 0:
+                 self.assertTrue(subtomo.getCoordinate3D().getX() == 314)
+                 self.assertTrue(subtomo.getCoordinate3D().getY() == 350)
+                 self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
 
-        return output2
+         return output2
+
+    def test_import_dynamo_subtomograms(self):
+         protImport = self._runImportDynSubTomograms()
+         output = getattr(protImport, 'outputSubTomograms', None)
+         self.assertTrue(output.getSamplingRate() == 1.35)
+         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
+         self.assertTrue(output.getDim()[0] == 32)
+         self.assertTrue(output.getDim()[1] == 32)
+         self.assertTrue(output.getDim()[2] == 32)
+         # Metada from dynamo table:
+         self.assertTrue(output.getFirstItem().getObjId() == 4)
+         self.assertTrue(output.getFirstItem().getClassId() == 1)
+         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
+         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
+         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
 
 
 class TestTomoImportSetOfCoordinates3D(BaseTest):
@@ -357,9 +378,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('tomo1')
-        cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
 
-    def _runTomoImportSetOfCoordinates(self):
+    def _runTomoImportSetOfCoordinates(self, pattern):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=self.tomogram,
                                               samplingRate=5)
@@ -372,40 +392,46 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                              "There was a problem with tomogram output")
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                   filesPath= self.coords3D,
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern='', boxSize=32,
-                                                   samplingRate=5.5)
+                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 filesPath=self.dataset.getPath(),
+                                 importTomograms=protImportTomogram.outputTomograms,
+                                 filesPattern=pattern, boxSize=32,
+                                 samplingRate=5.5)
         self.launchProtocol(protImportCoordinates3d)
 
         return protImportCoordinates3d
 
     def test_import_set_of_coordinates_3D(self):
-        protCoordinates = self._runTomoImportSetOfCoordinates()
+        protCoordinates = self._runTomoImportSetOfCoordinates('*.json')
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertTrue(output,
-                        "There was a problem with coordinates 3d output")
-        self.assertTrue(output.getSize() == 5)
+                             "There was a problem with coordinates 3d output")
+        self.assertTrue(output.getSize() == 19)
         self.assertTrue(output.getBoxSize() == 32)
         self.assertTrue(output.getSamplingRate() == 5.5)
-        return output
+
+        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt')
+        output2 = getattr(protCoordinates2, 'outputCoordinates', None)
+        self.assertTrue(output2,
+                             "There was a problem with coordinates 3d output")
+        self.assertTrue(output2.getSize() == 5)
+        self.assertTrue(output2.getBoxSize() == 32)
+        self.assertTrue(output2.getSamplingRate() == 5.5)
+        return output, output2
 
 
 class TestTomoPreprocessing(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataPath = os.environ.get('SCIPION_TOMO_EMPIAR10164', '')
-
-        if not os.path.exists(cls.dataPath):
-            raise Exception("Can not run tomo tests, "
-                            "SCIPION_TOMO_EMPIAR10164 variable not defined. ")
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.getFile = cls.dataset.getFile('etomo')
+        cls.getFileM = cls.dataset.getFile('empiar')
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
-            filesPath=os.path.join(self.dataPath, 'data', 'frames'),
+            filesPath=self.getFileM,
             filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
@@ -418,6 +444,14 @@ class TestTomoPreprocessing(BaseTest):
         return protImport
 
     def test_preprocess1(self):
+        try:
+            import gctf.protocols
+            import imod.protocols
+        except ImportError:
+            print('To run this test scipion-em-gctf and scipion-em-imod plugins are required. '
+                  'This test will not be executed unless this plugins are installed')
+            return
+
         """ Run the basic preprocessing pipeline for just one TS. """
         protImport = self._runImportTiltSeriesM(
             filesPattern='{TS}1_{TO}_{TA}.mrc')
@@ -429,9 +463,8 @@ class TestTomoPreprocessing(BaseTest):
         threads = len(gpuList.split()) + 1
 
         # --------- Motion correction with motioncor2 for Tilt-series ------
-        import motioncorr.protocols
         protMc = self.newProtocol(
-            motioncorr.protocols.ProtTsMotionCorr,
+            tomo.protocols.ProtTsAverage,
             inputTiltSeriesM=protImport.outputTiltSeriesM,
             binFactor=2.0,
             gpuList=gpuList,
@@ -440,7 +473,6 @@ class TestTomoPreprocessing(BaseTest):
         self.launchProtocol(protMc)
 
         # --------- CTF estimation with Gctf ------
-        import gctf.protocols
         protGctf = self.newProtocol(
             gctf.protocols.ProtTsGctf,
             inputTiltSeries=protMc.outputTiltSeries,
@@ -450,7 +482,6 @@ class TestTomoPreprocessing(BaseTest):
         self.launchProtocol(protGctf)
 
         # -------- Basic alignment and reconstruction with IMOD ------
-        import imod.protocols
         protImodAuto = self.newProtocol(
             imod.protocols.ProtImodAuto3D,
             inputTiltSeries=protGctf.outputTiltSeries,

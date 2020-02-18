@@ -39,7 +39,8 @@ class TomoDataViewer(pwviewer.Viewer):
     _targets = [
         tomo.objects.SetOfTiltSeriesM,
         tomo.objects.SetOfTiltSeries,
-        tomo.objects.SetOfClassesSubTomograms
+        tomo.objects.SetOfClassesSubTomograms,
+        tomo.objects.SetOfMeshes
     ]
 
     def __init__(self, **kwargs):
@@ -64,5 +65,14 @@ class TomoDataViewer(pwviewer.Viewer):
         elif issubclass(cls, tomo.objects.SetOfClassesSubTomograms):
             views.append(ClassesSubTomogramsView(self._project, obj.strId(),
                                                    obj.getFileName()))
+
+        elif issubclass(cls, tomo.objects.SetOfMeshes):
+            from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
+            tomoList = [item.clone() for item in self.protocol.inputTomos.get().iterItems()]
+
+            tomoProvider = TomogramsTreeProvider(tomoList, self.protocol._getExtraPath())
+
+            path = self.protocol._getExtraPath()
+            setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
 
         return views
