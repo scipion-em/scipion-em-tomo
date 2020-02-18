@@ -29,9 +29,12 @@ import os
 from datetime import datetime
 import threading
 from collections import OrderedDict
+import numpy as np
 
 import pyworkflow.object as pwobj
+import pyworkflow.utils.path as path
 import pwem.objects.data as data
+from pwem.emlib.image import ImageHandler
 
 
 class TiltImageBase:
@@ -119,9 +122,42 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
+    def generateTltFile(self, tltFilePath, reverse=False):
+        angleList = []
+        for ti in self:
+            angleList.append(ti.getTiltAngle())
+        if reverse:
+            angleList.reverse()
+        with open(tltFilePath, 'w') as f:
+            f.writelines("%s\n" % angle for angle in angleList)
+
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
+
+    def applyTransform(self, outputFilePath):
+        inputFilePath = self.getFirstItem().getLocation()[1]
+        newStack = True
+        if self.getFirstItem().hasTransform():
+            for index, ti in enumerate(self):
+                if ti.hasTransform():
+                    ih = ImageHandler()
+                    if newStack:
+                        ih.createEmptyImage(fnOut=outputFilePath,
+                                            xDim=ti.getXDim(),
+                                            yDim=ti.getYDim(),
+                                            nDim=self.getSize())
+                        newStack = False
+                    transform = ti.getTransform().getMatrix()
+                    transformArray = np.array(transform)
+                    ih.applyTransform(inputFile=str(index + 1) + '@' + inputFilePath,
+                                      outputFile=str(index + 1) + '@' + outputFilePath,
+                                      transformMatrix=transformArray,
+                                      shape=(ti.getXDim(), ti.getYDim()))
+                else:
+                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        else:
+            path.createLink(self.getFirstItem().getLocation()[1], outputFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -782,18 +818,28 @@ class LandmarkModel(data.EMObject):
     def setModelName(self, modelName):
         self._modelName = pwobj.String(modelName)
 
-    def addLandmark(self, xCoor, yCoor, tiltIm, chainId):
+    def addLandmark(self, xCoor, yCoor,  tiltIm, chainId, xResid, yResid):
         import csv
-        fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId']
+        fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
         if os.path.exists(self.getFileName()):
             with open(self.getFileName(), 'a') as f:
                 writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
-                writer.writerow({'xCoor': xCoor, 'yCoor': yCoor, 'tiltIm': tiltIm, 'chainId': chainId})
+                writer.writerow({'xCoor': xCoor,
+                                 'yCoor': yCoor,
+                                 'tiltIm': tiltIm,
+                                 'chainId': chainId,
+                                 'xResid': xResid,
+                                 'yResid': yResid})
         else:
             with open(self.getFileName(), 'w') as f:
                 writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
                 writer.writeheader()
-                writer.writerow({'xCoor': xCoor, 'yCoor': yCoor, 'tiltIm': tiltIm, 'chainId': chainId})
+                writer.writerow({'xCoor': xCoor,
+                                 'yCoor': yCoor,
+                                 'tiltIm': tiltIm,
+                                 'chainId': chainId,
+                                 'xResid': xResid,
+                                 'yResid': yResid})
 
 
 class SetOfLandmarkModels(data.EMSet):

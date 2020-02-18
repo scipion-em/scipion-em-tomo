@@ -29,7 +29,7 @@ import os
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
-from pwem.convert import ImageHandler
+from pwem.emlib.image import ImageHandler
 
 from ..objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess

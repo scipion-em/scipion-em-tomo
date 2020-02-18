@@ -29,7 +29,7 @@ import os
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
-from pwem.convert import ImageHandler, DT_FLOAT
+from pwem.emlib.image import ImageHandler, DT_FLOAT
 
 from .protocol_ts_base import ProtTsProcess
 

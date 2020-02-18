@@ -27,7 +27,7 @@
 
 from os.path import abspath, basename
 
-from pwem.convert import ImageHandler
+from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils.path import createAbsLink
