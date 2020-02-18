@@ -24,5 +24,5 @@
 # *
 # **************************************************************************
 
-from .viewers_data import TomoDataViewer
-from .viewer_tomograms import ViewerProtImportTomograms
+from tomo.viewers.viewers_data import TomoDataViewer
+from tomo.viewers.viewer_tomograms import ViewerProtImportTomograms

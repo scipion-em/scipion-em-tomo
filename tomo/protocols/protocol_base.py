@@ -61,7 +61,7 @@ class ProtTomoBase:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                      'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
-        coord3DSet.setVolumes(volSet)
+        coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
     def _createSetOfTomograms(self, suffix=''):
@@ -78,6 +78,10 @@ class ProtTomoBase:
         classes.setImages(subTomograms)
 
         return classes
+
+    def _createSetOfMeshes(self, suffix=''):
+        return self._createSet(tomo.objects.SetOfMeshes,
+                                'meshes%s.sqlite', suffix)
 
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.

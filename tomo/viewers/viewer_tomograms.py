@@ -39,7 +39,7 @@ import pwem.viewers as viewers
 from pwem.emlib.image import ImageHandler
 
 
-from ..protocols import ProtImportTomograms, ProtImportSubTomograms
+from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
