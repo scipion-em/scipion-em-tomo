@@ -249,7 +249,8 @@ class MeshesTreeProvider(TreeProvider):
     def getObjectInfo(self, obj):
         if isinstance(obj, tomo.objects.Mesh):
             meshName = 'Mesh %d' % obj.getObjId()
-            return {'key': meshName, 'parent': self._parentDict.get(obj.getObjId(), None),
+            tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
+            return {'key': tomoName + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
                     'text': meshName, 'values': (1)}
         elif isinstance(obj, tomo.objects.Tomogram):
             tomoName = pwutils.removeBaseExt(obj.getFileName())
@@ -277,11 +278,12 @@ class MeshesTreeProvider(TreeProvider):
     def _getChilds(self, obj):
         childs = []
         for idg in range(obj.getNumMeshes()):
+            id_dict = len(self._parentDict) + 1
             aux_obj = obj.clone()
-            aux_obj.setObjId(idg + 1)
+            aux_obj.setObjId(id_dict)
             aux_obj.group = idg
             childs.append(aux_obj)
-            self._parentDict[aux_obj.getObjId()] = self.tomoList[obj.getObjId() - 1]
+            self._parentDict[id_dict] = self.tomoList[obj.getObjId() - 1]
         return childs
 
 class TomogramsDialog(ToolbarListDialog):
