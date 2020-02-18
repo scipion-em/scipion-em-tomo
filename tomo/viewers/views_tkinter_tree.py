@@ -279,6 +279,7 @@ class MeshesTreeProvider(TreeProvider):
         for idg in range(obj.getNumMeshes()):
             aux_obj = obj.clone()
             aux_obj.setObjId(idg + 1)
+            aux_obj.group = idg
             childs.append(aux_obj)
             self._parentDict[aux_obj.getObjId()] = self.tomoList[obj.getObjId() - 1]
         return childs
@@ -309,6 +310,8 @@ class TomogramsDialog(ToolbarListDialog):
         self.tree.update()
         if self.proc.isAlive():
             self.after(1000, self.refresh_gui)
+        else:
+            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e.getVolume()
@@ -317,6 +320,7 @@ class TomogramsDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui)
 
     def doubleClickViewer(self, e=None):
+        self.mesh = e
         self.tomo = e.getVolume()
         self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
         self.proc.start()
@@ -484,10 +488,16 @@ class TomogramsDialog(ToolbarListDialog):
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
+        mesh_group = self.mesh.getMesh()[self.mesh.group]
+        group = np.ones((1, len(mesh_group))) * (self.mesh.group + 1)
+        meshFile = 'mesh.txt'
+        np.savetxt(os.path.join(path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
+
         macro = r"""path = "%s";
     file = "%s"
+    meshFile = "%s"
     
-    outPath = path + file + ".txt";
+    outPath = path + meshFile;
     
     // --------- Load SetOfMeshes ---------
     if (File.exists(outPath)){
@@ -598,7 +608,7 @@ class TomogramsDialog(ToolbarListDialog):
     lastJump = lastIndexOf(string, "\n");
     File.append(substring(string, 0, lastJump), outPath);
     }
-    """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
+    """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0], meshFile)
         macroFid = open(macroPath, 'w')
         macroFid.write(macro)
         macroFid.close()
