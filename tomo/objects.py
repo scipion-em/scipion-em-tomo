@@ -153,8 +153,7 @@ class TiltSeries(TiltSeriesBase):
                     ih.applyTransform(inputFile=str(index + 1) + '@' + inputFilePath,
                                       outputFile=str(index + 1) + '@' + outputFilePath,
                                       transformMatrix=transformArray,
-                                      shape=(ti.getXDim(), ti.getYDim()),
-                                      borderAverage=True)
+                                      shape=(ti.getXDim(), ti.getYDim()))
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
