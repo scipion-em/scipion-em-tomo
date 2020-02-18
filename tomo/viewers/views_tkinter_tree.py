@@ -250,8 +250,8 @@ class MeshesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.Mesh):
             meshName = 'Mesh %d' % obj.getObjId()
             tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
-            return {'key': tomoName + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
-                    'text': meshName, 'values': (1)}
+            return {'key': tomoName + '-' + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
+                    'text': meshName, 'values': ('')}
         elif isinstance(obj, tomo.objects.Tomogram):
             tomoName = pwutils.removeBaseExt(obj.getFileName())
             numMeshes = self.meshList[obj.getObjId() - 1].getNumMeshes()
@@ -348,19 +348,22 @@ class TomogramsDialog(ToolbarListDialog):
     groups = loadMeshFile(outPath);
     numMeshes = roiManager("count");
     emptyOutFile(outPath);
-    editMeshes(groups, numMeshes, outPath);
+    group = editMeshes(groups, numMeshes, outPath);
+    group = group + 1;
     }
     else{
     emptyOutFile(outPath);
+    group = 1;
     }
     
     // --------- Draw new Meshes and save them ---------
     while (newClass == "Yes") {
     roiManager("Reset");
-    group = classDialog();
+    //group = classDialog();
     waitForRoi();
     saveMeshes(group, outPath);
     newClass = newClassDialog();
+    group = group + 1;
     }
     
     // --------- Close ImageJ ---------
@@ -466,10 +469,13 @@ class TomogramsDialog(ToolbarListDialog):
     getSelectionCoordinates(xpoints, ypoints);
     for (j = 0; j < xpoints.length; j++) {
     string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + classVect[i] + "\n";
+    groupEnd = classVect[i];
     }
     }
     lastJump = lastIndexOf(string, "\n");
     File.append(substring(string, 0, lastJump), outPath);
+    
+    return groupEnd;
     }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
         macroFid = open(macroPath, 'w')
