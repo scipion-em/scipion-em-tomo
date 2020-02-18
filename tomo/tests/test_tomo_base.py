@@ -26,7 +26,7 @@
 
 import os
 
-import pyworkflow as pw
+import pyworkflow.utils as pwutils
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pwem import Domain
 from pwem.objects import CTFModel
@@ -61,7 +61,7 @@ class TestTomoBase(BaseTest):
 
     def _create_tiltseries(self, tiltSeriesClass):
         setFn = self.getOutputPath('%s.sqlite' % tiltSeriesClass.__name__)
-        pw.utils.cleanPath(setFn)
+        pwutils.cleanPath(setFn)
 
         testSet = tiltSeriesClass(filename=setFn)
 
@@ -224,7 +224,7 @@ class TestTomoImportTomograms(BaseTest):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
-        cls.tomogram = cls.dataset.getFile('tomo2')
+        cls.tomogram = cls.dataset.getFile('*.em')
 
     def _runImportTomograms(self):
         protImport = self.newProtocol(
