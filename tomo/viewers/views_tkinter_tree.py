@@ -314,7 +314,7 @@ class TomogramsDialog(ToolbarListDialog):
             pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
 
     def doubleClickOnTomogram(self, e=None):
-        self.tomo = e.getVolume()
+        self.tomo = e
         self.proc = threading.Thread(target=self.lanchIJForTomogram, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)
