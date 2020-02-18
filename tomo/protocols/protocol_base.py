@@ -61,7 +61,7 @@ class ProtTomoBase:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                      'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
-        coord3DSet.setVolumes(volSet)
+        coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
     def _createSetOfTomograms(self, suffix=''):
@@ -78,6 +78,10 @@ class ProtTomoBase:
         classes.setImages(subTomograms)
 
         return classes
+
+    def _createSetOfMeshes(self, suffix=''):
+        return self._createSet(tomo.objects.SetOfMeshes,
+                                'meshes%s.sqlite', suffix)
 
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
@@ -285,15 +289,15 @@ class ProtTomoImportAcquisition:
         return tomo.objects.TomoAcquisition(**acquisitionParams)
 
     def _summary(self, summary, setOfObject):
-        for object in setOfObject:
-            if object.hasAcquisition():
-                summary.append(u"File: %s" % object.getFileName())
-                summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
+        for obj in setOfObject:
+            if obj.hasAcquisition():
+                summary.append(u"File: %s" % obj.getFileName())
+                summary.append(u"Acquisition angle max: *%0.2f*" % obj.getAcquisition().getAngleMax())
 
-                summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
-                if object.getAcquisition().getStep():
-                    summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
-                if object.getAcquisition().getAngleAxis1():
-                    summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
-                if object.getAcquisition().getAngleAxis2():
-                    summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
+                summary.append(u"Acquisition angle min: *%0.2f*" % obj.getAcquisition().getAngleMin())
+                if obj.getAcquisition().getStep():
+                    summary.append(u"Step: *%d*" % obj.getAcquisition().getStep())
+                if obj.getAcquisition().getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % obj.getAcquisition().getAngleAxis1())
+                if obj.getAcquisition().getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % obj.getAcquisition().getAngleAxis2())

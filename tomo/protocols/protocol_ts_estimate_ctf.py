@@ -133,7 +133,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
         else:
             ih.convert(ti, tiFn, emlib.DT_FLOAT)
 
-    def _estimateCtf(self, workingDir, tiFn, tiltImage):
+    def _estimateCtf(self, workingDir, tiFn, tiltImage, *args):
         raise Exception("_estimateCTF function should be implemented!")
 
     def processTiltSeriesStep(self, tsId):
