@@ -305,8 +305,7 @@ class TestTomoSubSetsTomograms(BaseTest):
                             "There was a problem with the aquisition angle min")
 
         # Create a subset with 1 tomograms
-        print(pwutils.magentaStr("\n==> Create the subset 1 of %s" %
-                                 type(protImport).__name__))
+        print(pwutils.magentaStr("\n==> Create the subset 1 of Tomograms"))
         tomoSubset1 = self.newProtocol(emprot.ProtSubSet,
                                       objLabel='subset 1',
                                       chooseAtRandom=True,
@@ -316,8 +315,7 @@ class TestTomoSubSetsTomograms(BaseTest):
         self.launchProtocol(tomoSubset1)
 
         # Create a subset with 2 tomograms
-        print(pwutils.magentaStr("\n==> Create the subset 2 of %s" %
-                                 type(protImport).__name__))
+        print(pwutils.magentaStr("\n==> Create the subset 2 of Tomograms"))
         tomoSubset2 = self.newProtocol(emprot.ProtSubSet,
                                        objLabel='subset 2',
                                        chooseAtRandom=True,
@@ -327,8 +325,7 @@ class TestTomoSubSetsTomograms(BaseTest):
         self.launchProtocol(tomoSubset2)
 
         # Create a subset with 3 tomograms
-        print(pwutils.magentaStr("\n==> Create the subset 3 of %s" %
-                                 type(protImport).__name__))
+        print(pwutils.magentaStr("\n==> Create the subset 3 of Tomograms"))
         tomoSubset3 = self.newProtocol(emprot.ProtSubSet,
                                        objLabel='subset 3',
                                        chooseAtRandom=True,
@@ -356,7 +353,7 @@ class TestTomoSubSetsTomograms(BaseTest):
 
         # Launch intersection subset
         print(pwutils.magentaStr(
-            "\n==> Intersection subsets of %s" % type(protImport).__name__))
+            "\n==> Intersection subsets of Tomograms"))
         label = '%s - %s,%s ' % (tomoSubset3.outputTomograms.getClassName(), 1, 2)
         tomoSubset = self.newProtocol(emprot.ProtSubSet)
         tomoSubset.setObjLabel(label + 'intersection')

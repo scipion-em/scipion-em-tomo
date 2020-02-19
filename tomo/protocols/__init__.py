@@ -35,16 +35,3 @@ from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 
-# Hack to allow creating subsets of Tomograms and Subtomograms from ShowJ
-# We should modify ProtUserSubSet to remove hardcoded methods to create subsets
-# This method/class can be pass as parameter to showj
-# See https://github.com/I2PC/scipion/issues/2036
-emprotocol = pwem.protocols.EMProtocol
-try:
-    setattr(emprotocol, "_createSetOfClassesSubTomograms", ProtTomoBase._createSetOfClassesSubTomograms.__func__)
-    setattr(emprotocol, "_createSetOfSubTomograms", ProtTomoBase._createSetOfSubTomograms.__func__)
-    setattr(emprotocol, "_createSetOfTomograms", ProtTomoBase._createSetOfTomograms.__func__)
-    setattr(emprotocol, "_createSet", ProtTomoBase._createSet.__func__)
-    setattr(emprotocol, "_createSetOfMeshes", ProtTomoBase._createSetOfMeshes.__func__)
-except Exception as e:
-    print("Tomo hacks need a solution. subsets will not work.")
