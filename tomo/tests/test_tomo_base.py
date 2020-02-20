@@ -213,6 +213,165 @@ class TestTomoImportTs(BaseTest):
             self.assertEqual(output.getSize(), 2)
 
 
+class TestTomoSubSetsTs(BaseTest):
+    """This class check if the protocol to import Tilt series, create subsets,
+     join subset and create a intersection of subsets of tomogram
+     works properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.getFile = cls.dataset.getFile('etomo')
+        cls.getFileM = cls.dataset.getFile('empiar')
+
+    def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTsMovies,
+            filesPath=self.getFileM,
+            filesPattern=filesPattern,
+            voltage=300,
+            magnification=105000,
+            sphericalAberration=2.7,
+            amplitudeContrast=0.1,
+            samplingRate=1.35,
+            doseInitial=0,
+            dosePerFrame=0.3)
+        self.launchProtocol(protImport)
+        return protImport
+
+    def _runImportTiltSeries(self):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTs,
+            filesPath=self.getFile,
+            filesPattern='BB{TS}.st',
+            minAngle=-55,
+            maxAngle=65,
+            stepAngle=2,
+            voltage=300,
+            magnification=105000,
+            sphericalAberration=2.7,
+            amplitudeContrast=0.1,
+            samplingRate=1.35,
+            doseInitial=0,
+            dosePerFrame=0.3)
+        self.launchProtocol(protImport)
+        return protImport
+
+    def split(self, tomoSet, n, randomize):
+        """Return a run split protocol over input set tomoSet."""
+
+        pSplit = self.proj.newProtocol(emprot.ProtSplitSet, numberOfSets=n)
+        pSplit.inputSet.set(tomoSet)
+        pSplit.randomize.set(randomize)
+        self.proj.launchProtocol(pSplit, wait=True)
+        return pSplit
+
+    @staticmethod
+    def outputs(p):
+        """Iterator over all the elements in the outputs of protocol p."""
+        for key, output in p.iterOutputAttributes():
+            yield output
+
+    def test_createSubSetOfTs(self):
+        """This class check if the protocol to import tilt series, create subsets,
+             join subset and create a intersection of subsets of tomogram
+             works properly."""
+        print(pwutils.magentaStr("\n==> Importing a Set of TiltSeriesM..."))
+
+        protImport = self._runImportTiltSeriesM()
+        self.assertFalse(protImport.outputTiltSeriesM is None)
+        self.assertEqual(protImport.outputTiltSeriesM.getSize(), 2)
+
+        print(pwutils.magentaStr("\n==> Importing a Set of TiltSeries..."))
+        protImport2 = self._runImportTiltSeries()
+        self.assertFalse(protImport2.outputTiltSeries is None)
+        self.assertEqual(protImport2.outputTiltSeries.getSize(), 2)
+
+        # Create a subset 1 of TiltSeriesM
+        print(pwutils.magentaStr("\n==> Create the subset 1 of TiltSeriesM"))
+        tsSubset1 = self.newProtocol(emprot.ProtSubSet,
+                                       objLabel='subset 1',
+                                       chooseAtRandom=True,
+                                       nElements=1)
+
+        tsSubset1.inputFullSet.set(protImport.outputTiltSeriesM)
+        self.launchProtocol(tsSubset1)
+
+        # Create a subset subset 2 of TiltSeriesM
+        print(pwutils.magentaStr("\n==> Create the subset 2 of TiltSeriesM"))
+        tsSubset2 = self.newProtocol(emprot.ProtSubSet,
+                                       objLabel='subset 2',
+                                       chooseAtRandom=True,
+                                       nElements=1)
+
+        tsSubset2.inputFullSet.set(protImport.outputTiltSeriesM)
+        self.launchProtocol(tsSubset2)
+
+        # Create a subset subset 3 of TiltSeriesM
+        print(pwutils.magentaStr("\n==> Create the subset 3 of TiltSeriesM"))
+        tsSubset3 = self.newProtocol(emprot.ProtSubSet,
+                                       objLabel='subset 3',
+                                       chooseAtRandom=True,
+                                       nElements=2)
+
+        tsSubset3.inputFullSet.set(protImport.outputTiltSeriesM)
+        self.launchProtocol(tsSubset3)
+
+        # create merge protocol
+        print(pwutils.magentaStr("\n==> Join subsets 1 and 2 "))
+        joinTsSets = self.newProtocol(emprot.ProtUnionSet,
+                                       objLabel='join TiltSeriesM sets',
+                                       ignoreExtraAttributes=True)
+        joinTsSets.inputSets.append(tsSubset1.outputTiltSeriesM)
+        joinTsSets.inputSets.append(tsSubset2.outputTiltSeriesM)
+        self.launchProtocol(joinTsSets, wait=True)
+
+        print(pwutils.magentaStr("\n==> Split the subset 3 "))
+
+        tomoSplit1 = self.split(tsSubset3.outputTiltSeriesM, n=2,
+                                randomize=True)
+        tomoSplit2 = self.split(tsSubset3.outputTiltSeriesM, n=1,
+                                randomize=True)
+
+        setFull = random.choice(list(self.outputs(tomoSplit1)))
+        setSub = random.choice(list(self.outputs(tomoSplit2)))
+
+        # Launch intersection subset
+        print(pwutils.magentaStr(
+            "\n==> Intersection subsets of TiltSeriesM"))
+        label = '%s - %s,%s ' % (
+        tsSubset3.outputTiltSeriesM.getClassName(), 1, 2)
+        tsSubset = self.newProtocol(emprot.ProtSubSet)
+        tsSubset.setObjLabel(label + 'intersection')
+        tsSubset.inputFullSet.set(setFull)
+        tsSubset.inputSubSet.set(setSub)
+        self.launchProtocol(tsSubset)
+
+        setFullIds = setFull.getIdSet()
+        setSubIds = setSub.getIdSet()
+
+        # Check intersection
+        outputs = [o for o in self.outputs(tsSubset)]
+        if outputs:
+            outputTs = outputs[0]
+
+            # Check properties
+            self.assertTrue(
+                tsSubset2.outputTiltSeriesM.equalAttributes(outputTs,
+                                                            ignore=[
+                                                                '_mapperPath',
+                                                                '_size'],
+                                                            verbose=True),
+                "Intersection subset attributes are wrong")
+
+            for elem in outputTs:
+                self.assertTrue(elem.getObjId() in setFullIds)
+                self.assertTrue(elem.getObjId() in setSubIds,
+                                'object id %s not in set: %s'
+                                % (elem.getObjId(), setSubIds))
+
+
 class TestTomoImportTomograms(BaseTest):
     """This class check if the protocol to import tomograms works properly."""
     @classmethod
