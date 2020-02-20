@@ -524,52 +524,7 @@ class TomogramsDialog(ToolbarListDialog):
     loadMeshFile(outPath);
     }
     
-    // --------- Functions Definition ---------
-    function classDialog(){
-    Dialog.create("Class Selection");
-    Dialog.addMessage("Determine the group of the labels to be drawn");
-    Dialog.addNumber("Class Group", 1);
-    Dialog.show();
-    return floor(Dialog.getNumber());
-    }
-    
-    function newClassDialog(){
-    choices = newArray("Yes", "No");
-    Dialog.create("Create new class?");
-    Dialog.addChoice("Choice", choices);
-    Dialog.show();
-    return Dialog.getChoice();
-    }
-    
-    function waitForRoi(){
-    waitForUser("Draw the desired ROIs\n\nThen click Ok");
-    wait(50);
-    while(roiManager("count")==0){
-    waitForUser("Draw the desired ROIs\n\nThen click Ok");
-    wait(50);
-    }
-    }
-    
-    function emptyOutFile(outPath){
-    fid = File.open(outPath);
-    File.close(fid);
-    }
-    
-    function saveMeshes(class, outPath){
-    string = "";
-    meshes = roiManager("count");
-    for (i=0; i<meshes; i++){
-    roiManager("select", i);
-    Stack.getPosition(channel, slice, frame);
-    getSelectionCoordinates(xpoints, ypoints);
-    for (j = 0; j < xpoints.length; j++) {
-    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + class + "\n";
-    }
-    }
-    lastJump = lastIndexOf(string, "\n");
-    File.append(substring(string, 0, lastJump), outPath);
-    }
-    
+    // --------- Functions Definition ---------    
     function loadMeshFile(meshPath){
     c = "";
     c = c + toHex(255*random);
@@ -612,21 +567,6 @@ class TomogramsDialog(ToolbarListDialog):
     }
     }
     return groups;
-    }
-    
-    function editMeshes(classVect, numMeshes, outPath){
-    waitForUser("Edit the input ROIs if needed\n\nThen click Ok");
-    string = "";
-    for (i=0; i<numMeshes; i++){
-    roiManager("select", i);
-    Stack.getPosition(channel, slice, frame);
-    getSelectionCoordinates(xpoints, ypoints);
-    for (j = 0; j < xpoints.length; j++) {
-    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + classVect[i] + "\n";
-    }
-    }
-    lastJump = lastIndexOf(string, "\n");
-    File.append(substring(string, 0, lastJump), outPath);
     }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0], meshFile)
         macroFid = open(macroPath, 'w')
