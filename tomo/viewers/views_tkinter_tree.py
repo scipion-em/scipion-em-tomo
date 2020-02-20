@@ -236,12 +236,19 @@ class MeshesTreeProvider(TreeProvider):
 
     def __init__(self, meshList):
         TreeProvider.__init__(self)
+        self._parentDict = {}
         self.meshList = meshList
         self.tomoList = []
+        self.tomo_names = set()
+        id = 1
         for mesh in self.meshList:
             tomo = mesh.getVolume()
-            tomo.setObjId(mesh.getObjId())
-            self.tomoList.append(tomo)
+            if tomo.getFileName() not in self.tomo_names:
+                tomo.setObjId(id)
+                self.tomoList.append(tomo)
+                self.tomo_names.add(tomo.getFileName())
+                id += 1
+        self.tomo_names = list(self.tomo_names)
 
     def getColumns(self):
         return [('Tomogram', 300), ('Number of Mehes', 150)]
@@ -254,7 +261,10 @@ class MeshesTreeProvider(TreeProvider):
                     'text': meshName, 'values': ('')}
         elif isinstance(obj, tomo.objects.Tomogram):
             tomoName = pwutils.removeBaseExt(obj.getFileName())
-            numMeshes = self.meshList[obj.getObjId() - 1].getNumMeshes()
+            numMeshes = 0
+            for mesh in self.meshList:
+                if mesh.getVolume().getFileName() == obj.getFileName():
+                    numMeshes += 1
             return {'key': tomoName, 'parent': None,
                     'text': tomoName, 'values': (numMeshes)}
 
@@ -277,13 +287,10 @@ class MeshesTreeProvider(TreeProvider):
 
     def _getChilds(self, obj):
         childs = []
-        for idg in range(obj.getNumMeshes()):
-            id_dict = len(self._parentDict) + 1
-            aux_obj = obj.clone()
-            aux_obj.setObjId(id_dict)
-            aux_obj.group = idg
-            childs.append(aux_obj)
-            self._parentDict[id_dict] = self.tomoList[obj.getObjId() - 1]
+        childs.append(obj)
+        for idx in range(len(self.tomo_names)):
+            if obj.getVolume().getFileName() == self.tomo_names[idx]:
+                self._parentDict[obj.getObjId()] = self.tomoList[idx]
         return childs
 
 class TomogramsDialog(ToolbarListDialog):
@@ -496,8 +503,8 @@ class TomogramsDialog(ToolbarListDialog):
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
-        mesh_group = self.mesh.getMesh()[self.mesh.group]
-        group = np.ones((1, len(mesh_group))) * (self.mesh.group + 1)
+        mesh_group = self.mesh.getMesh()
+        group = np.ones((1, len(mesh_group))) * self.mesh.getGroup()
         meshFile = 'mesh.txt'
         np.savetxt(os.path.join(path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
 

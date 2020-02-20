@@ -762,16 +762,25 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class Mesh(data.EMObject):
-    def __init__(self, path=None, **kwargs):
+    """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
+    the triangulation of a volume"""
+    def __init__(self, path=None, group=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
         self._volume = None
+        self._group = pwobj.Integer(group)
 
     def getPath(self):
         return self._path.get()
 
     def setPath(self, path):
         self._path.set(path)
+
+    def getGroup(self):
+        return self._group.get()
+
+    def setGroup(self, group):
+        self._group.set(group)
 
     def getMesh(self):
         filePath = self.getPath()
@@ -781,10 +790,7 @@ class Mesh(data.EMObject):
         for idm in numMeshes:
             mesh_group = array[array[:,3] == idm, :]
             mesh.append(mesh_group[:, 0:3])
-        return mesh
-
-    def getNumMeshes(self):
-        return len(self.getMesh())
+        return mesh[self.getGroup() - 1]
 
     def getVolume(self):
         """ Return the tomogram object to which
