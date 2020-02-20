@@ -232,7 +232,7 @@ class TomogramsTreeProvider(TreeProvider):
         tree.tag_configure("done", foreground="green")
 
 class MeshesTreeProvider(TreeProvider):
-    '''Populate tree from SetOfMeshes'''
+    """Populate tree from SetOfMeshes"""
 
     def __init__(self, meshList):
         TreeProvider.__init__(self)
@@ -315,12 +315,16 @@ class TomogramsDialog(ToolbarListDialog):
                                        itemDoubleClick=self.doubleClickOnTomogram,
                                        **kwargs)
 
+    def refresh_gui_viewer(self):
+        if self.proc.isAlive():
+            self.after(1000, self.refresh_gui_viewer)
+        else:
+            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
+
     def refresh_gui(self):
         self.tree.update()
         if self.proc.isAlive():
             self.after(1000, self.refresh_gui)
-        else:
-            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
@@ -333,7 +337,7 @@ class TomogramsDialog(ToolbarListDialog):
         self.tomo = e.getVolume()
         self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
         self.proc.start()
-        self.after(1000, self.refresh_gui)
+        self.after(1000, self.refresh_gui_viewer)
 
     def lanchIJForTomogram(self, path, tomogram):
         macroPath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "AutoSave_ROI.ijm")
