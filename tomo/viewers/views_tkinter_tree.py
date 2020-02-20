@@ -352,11 +352,12 @@ class TomogramsDialog(ToolbarListDialog):
     
     // --------- Load SetOfMeshes ---------
     if (File.exists(outPath)){
+    group = 0;
     groups = loadMeshFile(outPath);
     numMeshes = roiManager("count");
     emptyOutFile(outPath);
-    group = editMeshes(groups, numMeshes, outPath);
-    group = group + 1;
+    aux = editMeshes(groups, numMeshes, outPath);
+    group = group + aux + 1;
     }
     else{
     emptyOutFile(outPath);
