@@ -69,7 +69,7 @@ class TomoDataViewer(pwviewer.Viewer):
 
             tomoProvider = MeshesTreeProvider(meshList)
 
-            path = self.protocol._getExtraPath()
+            path = self.protocol._getTmpPath()
             setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
 
         return views
