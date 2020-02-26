@@ -652,6 +652,12 @@ class SetOfCoordinates3D(data.EMSet):
         filePaths.add(self.getFileName())
         return filePaths
 
+    def getSummary(self):
+        summary = []
+        summary.append("Number of particles picked: %s" % self.getSize())
+        summary.append("Particle size: %s" % self.getBoxSize())
+        return "\n".join(summary)
+
     def __str__(self):
         """ String representation of a set of coordinates. """
         if self._boxSize.hasValue():
@@ -763,7 +769,9 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 class Mesh(data.EMObject):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
-    the triangulation of a volume"""
+    the triangulation of a volume.
+    A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
+    space into planar triangles interconnected that will result in a closed surface."""
     def __init__(self, path=None, group=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
