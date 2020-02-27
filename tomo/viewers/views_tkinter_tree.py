@@ -248,7 +248,8 @@ class MeshesTreeProvider(TreeProvider):
                 self.tomoList.append(tomo)
                 self.tomo_names.add(tomo.getFileName())
                 id += 1
-        self.tomo_names = list(self.tomo_names)
+        self.tomo_names = sorted(list(self.tomo_names), reverse=False)
+        self.tomoList.sort(key=lambda x: x.getFileName(), reverse=False)
 
     def getColumns(self):
         return [('Tomogram', 300), ('Number of Mehes', 150)]
