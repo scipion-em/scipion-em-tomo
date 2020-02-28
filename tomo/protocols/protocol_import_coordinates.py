@@ -59,7 +59,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
-        self.OUTPUT_PREFIX = "outputCoordinates3D"
+        self.OUTPUT_PREFIX = "outputCoordinates"
 
 
     def _defineParams(self, form):
