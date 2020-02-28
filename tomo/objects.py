@@ -29,6 +29,7 @@ import os
 from datetime import datetime
 import threading
 from collections import OrderedDict
+import numpy as np
 
 import pyworkflow.object as pwobj
 import pyworkflow.em.data as data
@@ -651,6 +652,12 @@ class SetOfCoordinates3D(data.EMSet):
         filePaths.add(self.getFileName())
         return filePaths
 
+    def getSummary(self):
+        summary = []
+        summary.append("Number of particles picked: %s" % self.getSize())
+        summary.append("Particle size: %s" % self.getBoxSize())
+        return "\n".join(summary)
+
     def __str__(self):
         """ String representation of a set of coordinates. """
         if self._boxSize.hasValue():
@@ -761,12 +768,15 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class Mesh(data.EMObject):
-    def __init__(self, path=None, files=None, **kwargs):
+    """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
+    the triangulation of a volume.
+    A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
+    space into planar triangles interconnected that will result in a closed surface."""
+    def __init__(self, path=None, group=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
-        self._volumePointer = pwobj.Pointer(objDoStore=False)
-        self._volId = pwobj.Integer()
-        self._volName = pwobj.String()
+        self._volume = None
+        self._group = pwobj.Integer(group)
 
     def getPath(self):
         return self._path.get()
@@ -774,33 +784,31 @@ class Mesh(data.EMObject):
     def setPath(self, path):
         self._path.set(path)
 
+    def getGroup(self):
+        return self._group.get()
+
+    def setGroup(self, group):
+        self._group.set(group)
+
     def getMesh(self):
         filePath = self.getPath()
-        fid = open(filePath, 'r')
-        matrix = [[item for item in line.replace("\n", "").split(',')] for line in fid.readlines()]
-        fid.close()
-        numROIs = list(set([row[len(matrix[0])-1] for row in matrix]))
-        numROIs.sort()
         mesh = []
-        for roi in numROIs:
-            aux = [list(map(int, col[0:3])) for col in matrix if col[-1] == roi]
-            mesh.append(aux)
-        return mesh
-
-    def getMeshDim(self):
-        return len(self.getMesh())
+        array = np.genfromtxt(filePath, delimiter=',')
+        numMeshes = np.unique(array[:,3])
+        for idm in numMeshes:
+            mesh_group = array[array[:,3] == idm, :]
+            mesh.append(mesh_group[:, 0:3])
+        return mesh[self.getGroup() - 1]
 
     def getVolume(self):
         """ Return the tomogram object to which
         this mesh is associated.
         """
-        return self._volumePointer.get()
+        return self._volume
 
     def setVolume(self, volume):
         """ Set the tomogram to which this mesh belongs. """
-        self._volumePointer.set(volume)
-        self._volId.set(volume.getObjId())
-        self._volName.set(volume.getFileName())
+        self._volume = volume
 
     def __str__(self):
         return "Mesh (path=%s)" % self.getPath()
@@ -812,18 +820,7 @@ class SetOfMeshes(data.EMSet):
 
     def __init__(self, *args, **kwargs):
         data.EMSet.__init__(self, *args, **kwargs)
-        self._firstDim = data.ImageDim()
         self._volumesPointer = pwobj.Pointer()
-
-    def _setFirstDim(self, tuple):
-        self._firstDim.set(tuple)
-
-    def append(self, mesh):
-
-        if self.isEmpty():
-            self._setFirstDim((1,1,1))
-
-        data.EMSet.append(self, mesh)
 
     def setVolumes(self, volumes):
         """ Set the tomograms associated with this set of coordinates.
@@ -844,9 +841,5 @@ class SetOfMeshes(data.EMSet):
         """ Redefine iteration to set the acquisition to images. """
         for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
                                  where=where, limit=limit):
-
-            # Set te volume
-            mesh.setVolume(data.Volume(location=(mesh._volId, mesh._volName)))
-
             yield mesh
 

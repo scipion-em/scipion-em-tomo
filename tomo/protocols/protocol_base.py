@@ -107,10 +107,21 @@ class ProtTomoPicking(pwem.ProtImport, ProtTomoBase):
     def _defineParams(self, form):
 
         form.addSection(label='Input')
-        form.addParam('inputTomogram', PointerParam, label="Input Tomogram", important=True,
-                      pointerClass='Tomogram',
+        form.addParam('inputTomograms', PointerParam, label="Input Tomograms", important=True,
+                      pointerClass='SetOfTomograms',
                       help='Select the Tomogram to be used during picking.')
 
+    def _summary(self):
+        summary = []
+        if self.isFinished():
+            summary.append("Output 3D Coordinates not ready yet.")
+
+        if self.getOutputsSize() >= 1:
+            for key, output in self.iterOutputAttributes():
+                summary.append("*%s:* \n %s " % (key, output.getSummary()))
+        else:
+            summary.append(Message.TEXT_NO_OUTPUT_CO)
+        return summary
 
 class ProtTomoImportFiles(pwem.ProtImportFiles, ProtTomoBase):
 
