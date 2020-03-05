@@ -515,11 +515,14 @@ class Coordinate3D(data.EMObject):
     def setZ(self, z):
         self._z.set(z)
 
-    def setMatrix(self, r, p, y):
-        self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
+    def setMatrix(self, matrix):
+        self._eulerMatrix.setMatrix(matrix)
 
     def getMatrix(self):
         return self._eulerMatrix.getMatrix()
+
+    def euler2Matrix(self, r, p, y):
+        self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
     def eulerAngles(self):
         R = self.getMatrix()
