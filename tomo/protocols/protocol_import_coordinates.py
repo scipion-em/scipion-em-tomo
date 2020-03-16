@@ -26,8 +26,10 @@
 # **************************************************************************
 
 import os
+import numpy as np
 from os.path import basename
 
+import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import importFromPlugin
 
@@ -73,6 +75,11 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                             'want to import coordinates. The file names of the tomogram and '
                             'coordinate files must be the same.')
 
+        form.addParam('importAngles', params.BooleanParam,
+                      label='Input angles', default=False,
+                      help='Determine if the coordinates saved have directionality stored as euler angles.\n'
+                           'There should be a file with extension ".ang" that has the same file name as the coordinate files. ')
+
     def _insertAllSteps(self):
         self._insertFunctionStep('importCoordinatesStep',
                                  self.samplingRate.get())
@@ -86,6 +93,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         coordsSet.setBoxSize(self.boxSize.get())
         coordsSet.setSamplingRate(samplingRate)
         coordsSet.setPrecedents(importTomograms)
+        coordList = []
         ci = self.getImportClass()
         for tomo in importTomograms.iterItems():
             tomoName = basename(os.path.splitext(tomo.getFileName())[0])
@@ -94,10 +102,24 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 if tomo is not None and tomoName == fileName:
                     def addCoordinate(coord):
                         coord.setVolume(tomo.clone())
-                        coordsSet.append(coord)
+                        coordList.append(coord)
 
                     # Parse the coordinates in the given format for this micrograph
                     ci.importCoordinates3D(coordFile, addCoordinate)
+
+        if self.importAngles.get():
+            for coordFile, fileId in self.iterFiles():
+                angleFile = pwutils.removeExt(coordFile) + ".ang"
+                angles = np.deg2rad(np.loadtxt(angleFile, delimiter=' '))
+                idc = 0
+                for coord in coordList:
+                    if pwutils.removeBaseExt(coord.getVolName()) == ('import_' + pwutils.removeBaseExt(angleFile)):
+                        coord.euler2Matrix(angles[idc, 0], angles[idc, 1], angles[idc, 2])
+                        coordsSet.append(coord)
+                        idc += 1
+        else:
+            _ = [coordsSet.append(coord) for coord in coordList]
+
 
         args = {}
         args[self.OUTPUT_PREFIX] = coordsSet

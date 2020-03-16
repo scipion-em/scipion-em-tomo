@@ -489,7 +489,7 @@ class Coordinate3D(data.EMObject):
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
         self._volName = pwobj.String()
-        self._eulerMatrix = data.Matrix()
+        self._eulerMatrix = data.Transform()
 
     def getX(self):
         return self._x.get()
