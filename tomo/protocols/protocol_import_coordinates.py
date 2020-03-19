@@ -26,10 +26,8 @@
 # **************************************************************************
 
 import os
-import numpy as np
 from os.path import basename
 
-import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import importFromPlugin
 
@@ -44,17 +42,15 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     _label = 'import set of coordinates 3D'
 
     IMPORT_FROM_AUTO = 0
-    IMPORT_FROM_XMIPP = 1
-    IMPORT_FROM_RELION = 2
-    IMPORT_FROM_EMAN = 3
-    IMPORT_FROM_DOGPICKER = 4
+    IMPORT_FROM_EMAN = 1
+    IMPORT_FROM_DYNAMO = 2
 
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        return ['eman']
+        return ['auto', 'eman', 'dynamo']
 
     def _getDefaultChoice(self):
         return self.IMPORT_FROM_AUTO
@@ -75,11 +71,6 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                             'want to import coordinates. The file names of the tomogram and '
                             'coordinate files must be the same.')
 
-        form.addParam('importAngles', params.BooleanParam,
-                      label='Input angles', default=False,
-                      help='Determine if the coordinates saved have directionality stored as euler angles.\n'
-                           'There should be a file with extension ".ang" that has the same file name as the coordinate files. ')
-
     def _insertAllSteps(self):
         self._insertFunctionStep('importCoordinatesStep',
                                  self.samplingRate.get())
@@ -93,33 +84,20 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         coordsSet.setBoxSize(self.boxSize.get())
         coordsSet.setSamplingRate(samplingRate)
         coordsSet.setPrecedents(importTomograms)
-        coordList = []
         ci = self.getImportClass()
         for tomo in importTomograms.iterItems():
             tomoName = basename(os.path.splitext(tomo.getFileName())[0])
             for coordFile, fileId in self.iterFiles():
                 fileName = "import_" + basename(os.path.splitext(coordFile)[0])
                 if tomo is not None and tomoName == fileName:
-                    def addCoordinate(coord):
-                        coord.setVolume(tomo.clone())
-                        coordList.append(coord)
-
                     # Parse the coordinates in the given format for this micrograph
-                    ci.importCoordinates3D(coordFile, addCoordinate)
-
-        if self.importAngles.get():
-            for coordFile, fileId in self.iterFiles():
-                angleFile = pwutils.removeExt(coordFile) + ".ang"
-                angles = np.deg2rad(np.loadtxt(angleFile, delimiter=' '))
-                idc = 0
-                for coord in coordList:
-                    if pwutils.removeBaseExt(coord.getVolName()) == ('import_' + pwutils.removeBaseExt(angleFile)):
-                        coord.euler2Matrix(angles[idc, 0], angles[idc, 1], angles[idc, 2])
-                        coordsSet.append(coord)
-                        idc += 1
-        else:
-            _ = [coordsSet.append(coord) for coord in coordList]
-
+                    if self.getImportFrom() == self.IMPORT_FROM_EMAN:
+                        def addCoordinate(coord):
+                            coord.setVolume(tomo.clone())
+                            coordsSet.append(coord)
+                        ci.importCoordinates3D(coordFile, addCoordinate)
+                    elif self.getImportFrom() == self.IMPORT_FROM_DYNAMO:
+                        ci(coordFile, coordsSet, tomo.clone())
 
         args = {}
         args[self.OUTPUT_PREFIX] = coordsSet
@@ -168,44 +146,26 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def getFormat(self):
         for coordFile, _ in self.iterFiles():
-            if coordFile.endswith('.pos'):
-                return self.IMPORT_FROM_XMIPP
-            if coordFile.endswith('.star'):
-                return self.IMPORT_FROM_RELION
             if coordFile.endswith('.json') or coordFile.endswith('.txt'):
                 return self.IMPORT_FROM_EMAN
+            if coordFile.endswith('.tbl'):
+                return self.IMPORT_FROM_DYNAMO
         return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """
-        filesPath = self.filesPath.get()
         importFrom = self.getImportFrom()
 
-        if importFrom == self.IMPORT_FROM_XMIPP:
-            XmippImport = importFromPlugin('xmipp3.convert', 'XmippImport',
-                                           'Xmipp is needed to import .xmd files',
-                                           doRaise=True)
-            return XmippImport(self, filesPath)
-
-        elif importFrom == self.IMPORT_FROM_RELION:
-            RelionImport = importFromPlugin('relion.convert', 'RelionImport',
-                                            errorMsg='Relion is needed to import .star files',
-                                            doRaise=True)
-            return RelionImport(self, filesPath)
-
-        elif importFrom == self.IMPORT_FROM_EMAN:
+        if importFrom == self.IMPORT_FROM_EMAN:
             EmanImport = importFromPlugin('eman2.convert', 'EmanImport',
                                           errorMsg='Eman is needed to import .json or '
                                                    '.box files',
                                           doRaise=True)
             return EmanImport(self, None)
 
-        elif importFrom == self.IMPORT_FROM_DOGPICKER:
-            DogpickerImport = importFromPlugin('appion.convert', 'DogpickerImport',
-                                               errorMsg='appion plugin is needed to import '
-                                                        'dogpicker files',
-                                               doRaise=True)
-            return DogpickerImport(self)
+        elif importFrom == self.IMPORT_FROM_DYNAMO:
+            readDynCoord = importFromPlugin("dynamo.convert.convert", "readDynCoord")
+            return readDynCoord
         else:
             self.importFilePath = ''
             return None
