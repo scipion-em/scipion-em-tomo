@@ -26,7 +26,7 @@
 
 import pwem
 
-from .protocol_base import ProtTomoBase, ProtTomoPicking
+from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
