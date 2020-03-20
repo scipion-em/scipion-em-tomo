@@ -393,7 +393,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                              "There was a problem with tomogram output")
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
                                  filesPath=self.dataset.getPath(),
                                  importTomograms=protImportTomogram.outputTomograms,
                                  filesPattern=pattern, boxSize=32,
@@ -418,7 +418,16 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertTrue(output2.getSize() == 5)
         self.assertTrue(output2.getBoxSize() == 32)
         self.assertTrue(output2.getSamplingRate() == 5.5)
-        return output, output2
+
+        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.tbl')
+        output3 = getattr(protCoordinates2, 'outputCoordinates', None)
+        self.assertTrue(output2,
+                             "There was a problem with coordinates 3d output")
+        self.assertTrue(output2.getSize() == 5)
+        self.assertTrue(output2.getBoxSize() == 32)
+        self.assertTrue(output2.getSamplingRate() == 5.5)
+
+        return output, output2, output3
 
 
 class TestTomoPreprocessing(BaseTest):
