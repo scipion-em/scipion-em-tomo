@@ -27,9 +27,9 @@
 import os
 
 import pyworkflow as pw
-import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
+from pwem import emlib
 
 from .protocol_ts_base import ProtTsProcess
 
@@ -124,16 +124,16 @@ class ProtTsEstimateCTF(ProtTsProcess):
         """
         downFactor = self.ctfDownFactor.get()
 
-        ih = pw.em.ImageHandler()
+        ih = emlib.image.ImageHandler()
 
         if downFactor != 1:
             # Replace extension by 'mrc' because there are some formats
             # that cannot be written (such as dm3)
             ih.scaleFourier(ti, tiFn, downFactor)
         else:
-            ih.convert(ti, tiFn, pw.em.DT_FLOAT)
+            ih.convert(ti, tiFn, emlib.DT_FLOAT)
 
-    def _estimateCtf(self, workingDir, tiFn, tiltImage):
+    def _estimateCtf(self, workingDir, tiFn, tiltImage, *args):
         raise Exception("_estimateCTF function should be implemented!")
 
     def processTiltSeriesStep(self, tsId):
@@ -203,4 +203,3 @@ class ProtTsEstimateCTF(ProtTsProcess):
 
     def getTiPrefix(self, ti):
         return '%s_%03d' % (ti.getTsId(), ti.getObjId())
-

@@ -29,11 +29,11 @@ import os
 from os.path import basename
 
 import pyworkflow.protocol.params as params
-from pyworkflow.utils import importFromPlugin
+from pyworkflow.plugin import Domain
+
+from ..objects import SetOfCoordinates3D
 
 from .protocol_base import ProtTomoImportFiles
-
-from tomo.objects import SetOfCoordinates3D
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -131,9 +131,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
         else:
-            baseFileName="import_" + basename(fileName).split(":")[0]
+            baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
 
@@ -157,18 +157,15 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         importFrom = self.getImportFrom()
 
         if importFrom == self.IMPORT_FROM_EMAN:
-            EmanImport = importFromPlugin('eman2.convert', 'EmanImport',
+            EmanImport = Domain.importFromPlugin('eman2.convert', 'EmanImport',
                                           errorMsg='Eman is needed to import .json or '
                                                    '.box files',
                                           doRaise=True)
             return EmanImport(self, None)
 
         elif importFrom == self.IMPORT_FROM_DYNAMO:
-            readDynCoord = importFromPlugin("dynamo.convert.convert", "readDynCoord")
+            readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
             return readDynCoord
         else:
             self.importFilePath = ''
             return None
-
-
-

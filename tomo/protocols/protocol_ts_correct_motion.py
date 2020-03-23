@@ -27,11 +27,11 @@
 import os
 
 import pyworkflow as pw
-import pyworkflow.em as pwem
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
+from pwem.emlib.image import ImageHandler
 
-from tomo.objects import TiltSeries, TiltImage
+from ..objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
 
 
@@ -100,7 +100,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     # --------------------------- STEPS functions ----------------------------
     def convertInputStep(self, inputId):
         inputTs = self.inputTiltSeriesM.get()
-        ih = pwem.ImageHandler()
+        ih = ImageHandler()
 
         def _convert(path, tmpFn):
             if path:
@@ -130,7 +130,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         tiList = self._tsDict.getTiList(tsId)
         tiList.sort(key=lambda ti: ti.getTiltAngle())
 
-        ih = pwem.ImageHandler()
+        ih = ImageHandler()
 
         tsFn = self._getOutputTiltSeriesPath(ts)
         tsFnDW = self._getOutputTiltSeriesPath(ts, '_DW')
@@ -252,7 +252,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ Simple add all frames and divide by its number. """
-        ih = pwem.ImageHandler()
+        ih = ImageHandler()
         sumImg = ih.createImage()
         img = ih.createImage()
 
@@ -268,4 +268,3 @@ class ProtTsAverage(ProtTsCorrectMotion):
         # sumImg.inplaceDivide(float(n))
         outputFn = self._getOutputTiltImagePaths(tiltImageM)[0]
         sumImg.write(outputFn)
-

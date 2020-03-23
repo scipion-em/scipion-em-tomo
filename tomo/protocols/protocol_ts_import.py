@@ -33,17 +33,17 @@ from collections import OrderedDict
 import numpy as np
 
 import pyworkflow as pw
-import pyworkflow.em as pwem
-from pyworkflow.em.convert import ImageHandler
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
+from pwem.emlib.image import ImageHandler
+from pwem.protocols import ProtImport
 
 import tomo.convert
 from .protocol_base import ProtTomoBase
 
 
-class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
+class ProtImportTsBase(ProtImport, ProtTomoBase):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
     """
     IMPORT_FROM_FILES = 0
@@ -222,7 +222,7 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
             if self._existingTs:
                 outputSet.enableAppend()
 
-            for ts, tiltSeriesList in matchingFiles.iteritems():
+            for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
 
                 if len(self._tiltAngleList) != len(tiltSeriesList):
@@ -376,7 +376,7 @@ class ProtImportTsBase(pwem.ProtImport, ProtTomoBase):
 
         def _addMany(fileList, f, m):
             """ Add many 'files' (when angles in header or mdoc) to the list. """
-            _, _, _, n = pwem.ImageHandler().getDimensions(f)
+            _, _, _, n = ImageHandler().getDimensions(f)
 
             anglesFrom = self.getEnumText('anglesFrom')
 

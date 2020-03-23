@@ -24,8 +24,8 @@
 # *
 # **************************************************************************
 
-import pyworkflow.em.viewers.views as views
-import pyworkflow.em.viewers.showj as showj
+import pwem.viewers.views as views
+import pwem.viewers.showj as showj
 
 
 class ClassesSubTomogramsView(views.Classes3DView):
@@ -36,4 +36,4 @@ class ClassesSubTomogramsView(views.Classes3DView):
                              showj.MODE: 'metadata'}
         defaultViewParams.update(viewParams)
         views.Classes3DView.__init__(self, project, inputid, path, other,
-                             defaultViewParams, **kwargs)
+                                     defaultViewParams, **kwargs)

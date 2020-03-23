@@ -33,9 +33,8 @@ import numpy as np
 import math
 
 import pyworkflow.object as pwobj
-import pyworkflow.em.data as data
-import pyworkflow.utils as pwutils
-from pyworkflow.em.convert.transformations import euler_matrix
+import pwem.objects.data as data
+from pwem.convert.transformations import euler_matrix
 
 
 class TiltImageBase:
@@ -333,7 +332,7 @@ class TiltSeriesDict:
         return self.__dict[tsId][1]
 
     def getTiList(self, tsId):
-        return self.getTiDict(tsId).values()
+        return list(self.getTiDict(tsId).values())
 
     def __iter__(self):
         for ts, d in self.__dict.values():
@@ -470,7 +469,7 @@ class SetOfTomograms(data.SetOfVolumes):
     EXPOSE_ITEMS = True
 
     def __init__(self, *args, **kwargs):
-        data.SetOfVolumes.__init__(self, *args, **kwargs)
+        data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
 
     def updateDim(self):
@@ -620,12 +619,12 @@ class SetOfCoordinates3D(data.EMSet):
         self._boxSize.set(boxSize)
 
     def getSamplingRate(self):
-       """ Return the sampling rate of the particles. """
-       return self._samplingRate.get()
+        """ Return the sampling rate of the particles. """
+        return self._samplingRate.get()
 
     def setSamplingRate(self, sampling):
-       """ Set the sampling rate of the particles. """
-       self._samplingRate.set(sampling)
+        """ Set the sampling rate of the particles. """
+        self._samplingRate.set(sampling)
 
     def iterVolumes(self):
         """ Iterate over the objects set associated with this
@@ -655,7 +654,7 @@ class SetOfCoordinates3D(data.EMSet):
 
         # Iterate over all coordinates if micId is None,
         # otherwise use micId to filter the where selection
-        coordWhere = '1' if volId is None else '_volId=%d' % volId
+        coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere):
             yield coord

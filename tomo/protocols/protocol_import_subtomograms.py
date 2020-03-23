@@ -29,14 +29,15 @@
 
 from os.path import abspath, basename
 
-from pyworkflow.em import ImageHandler
-from pyworkflow.em.data import Transform
+from pwem.emlib.image import ImageHandler
+from pwem.objects import Transform
 from pyworkflow.protocol.params import PointerParam, EnumParam, PathParam
 from pyworkflow.utils.path import createAbsLink, copyFile
-from pyworkflow.utils import importFromPlugin
+from pwem import Domain
+
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
-from tomo.objects import SubTomogram
+from ..objects import SubTomogram
 
 
 class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -77,6 +78,15 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                             'subtomograms were extracted.')
 
         ProtTomoImportAcquisition._defineParams(self, form)
+
+
+    def _getImportChoices(self):
+        """ Return a list of possible choices
+        from which the import can be done.
+        (usually packages formats such as: xmipp3, eman2, relion...etc.
+        """
+        return ['eman2']
+
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importSubTomogramsStep',
@@ -171,7 +181,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         if importFrom == self.IMPORT_FROM_EMAN:
             pass  # TODO: read .hdf5 header (EMAN)
         if importFrom == self.IMPORT_FROM_DYNAMO:
-            readDynTable = importFromPlugin("dynamo.convert.convert", "readDynTable")
+            readDynTable = Domain.importFromPlugin("dynamo.convert.convert", "readDynTable")
             readDynTable(self, subtomo)
 
     def _openMetadataFile(self):
@@ -226,8 +236,8 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName="import_" + basename(fileName).split(".")[0] + ".%s"%extension
+            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s"%extension
         else:
-            baseFileName="import_" + basename(fileName).split(":")[0]
+            baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
