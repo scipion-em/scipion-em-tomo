@@ -32,6 +32,7 @@ from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.plugin import Domain
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
+import pyworkflow.config as conf
 
 import pyworkflow.viewer as pwviewer
 
@@ -338,7 +339,7 @@ class TomogramsDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui_viewer)
 
     def lanchIJForTomogram(self, path, tomogram):
-        macroPath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "AutoSave_ROI.ijm")
+        macroPath = os.path.join(conf.Config.SCIPION_TMP, "AutoSave_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
@@ -502,7 +503,7 @@ class TomogramsDialog(ToolbarListDialog):
         runJavaIJapp(4, app, args).wait()
 
     def lanchIJForViewing(self, path, tomogram):
-        macroPath = os.path.join(os.environ.get("SCIPION_HOME"), "software", "tmp", "View_ROI.ijm")
+        macroPath = os.path.join(conf.Config.SCIPION_TMP, "View_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
