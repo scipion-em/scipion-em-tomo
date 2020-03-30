@@ -792,9 +792,10 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
 
+
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to an specific Tilt-series."""
-    def __init__(self, tsId=None, fileName=None, modelName = None, **kwargs):
+    def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = pwobj.String(tsId)
         self._fileName = pwobj.String(fileName)
@@ -848,4 +849,3 @@ class SetOfLandmarkModels(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-
