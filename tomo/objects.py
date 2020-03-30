@@ -30,9 +30,11 @@ from datetime import datetime
 import threading
 from collections import OrderedDict
 import numpy as np
+import math
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
+from pwem.convert.transformations import euler_matrix
 
 
 class TiltImageBase:
@@ -486,6 +488,7 @@ class Coordinate3D(data.EMObject):
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
         self._volName = pwobj.String()
+        self._eulerMatrix = data.Transform()
 
     def getX(self):
         return self._x.get()
@@ -510,6 +513,31 @@ class Coordinate3D(data.EMObject):
 
     def setZ(self, z):
         self._z.set(z)
+
+    def setMatrix(self, matrix):
+        self._eulerMatrix.setMatrix(matrix)
+
+    def getMatrix(self):
+        return self._eulerMatrix.getMatrix()
+
+    def euler2Matrix(self, r, p, y):
+        self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
+
+    def eulerAngles(self):
+        R = self.getMatrix()
+        sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+        singular = sy < 1e-6
+        if not singular:
+            x = math.atan2(R[2, 1], R[2, 2])
+            y = math.atan2(-R[2, 0], sy)
+            z = math.atan2(R[1, 0], R[0, 0])
+
+        else:
+            x = math.atan2(-R[1, 2], R[1, 1])
+            y = math.atan2(-R[2, 0], sy)
+            z = 0
+
+        return np.array([x, y, z])
 
     def scale(self, factor):
         """ Scale x, y and z coordinates by a given factor.

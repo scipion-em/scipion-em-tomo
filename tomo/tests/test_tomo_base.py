@@ -819,7 +819,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('tomo1')
 
-    def _runTomoImportSetOfCoordinates(self, pattern):
+    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=self.tomogram,
                                               samplingRate=5)
@@ -832,7 +832,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                              "There was a problem with tomogram output")
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                 objLabel='Import from %s - %s' %(program, ext),
+                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
                                  filesPath=self.dataset.getPath(),
                                  importTomograms=protImportTomogram.outputTomograms,
                                  filesPattern=pattern, boxSize=32,
@@ -842,7 +843,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         return protImportCoordinates3d
 
     def test_import_set_of_coordinates_3D(self):
-        protCoordinates = self._runTomoImportSetOfCoordinates('*.json')
+        protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertTrue(output,
                              "There was a problem with coordinates 3d output")
@@ -850,14 +851,23 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertTrue(output.getBoxSize() == 32)
         self.assertTrue(output.getSamplingRate() == 5.5)
 
-        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt')
+        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt', 'EMAN', 'TXT')
         output2 = getattr(protCoordinates2, 'outputCoordinates', None)
         self.assertTrue(output2,
                              "There was a problem with coordinates 3d output")
         self.assertTrue(output2.getSize() == 5)
         self.assertTrue(output2.getBoxSize() == 32)
         self.assertTrue(output2.getSamplingRate() == 5.5)
-        return output, output2
+
+        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
+        output3 = getattr(protCoordinates2, 'outputCoordinates', None)
+        self.assertTrue(output2,
+                             "There was a problem with coordinates 3d output")
+        self.assertTrue(output2.getSize() == 5)
+        self.assertTrue(output2.getBoxSize() == 32)
+        self.assertTrue(output2.getSamplingRate() == 5.5)
+
+        return output, output2, output3
 
 
 class TestTomoPreprocessing(BaseTest):

@@ -42,17 +42,15 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     _label = 'import set of coordinates 3D'
 
     IMPORT_FROM_AUTO = 0
-    IMPORT_FROM_XMIPP = 1
-    IMPORT_FROM_RELION = 2
-    IMPORT_FROM_EMAN = 3
-    IMPORT_FROM_DOGPICKER = 4
+    IMPORT_FROM_EMAN = 1
+    IMPORT_FROM_DYNAMO = 2
 
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        return ['eman']
+        return ['auto', 'eman', 'dynamo']
 
     def _getDefaultChoice(self):
         return self.IMPORT_FROM_AUTO
@@ -92,12 +90,14 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             for coordFile, fileId in self.iterFiles():
                 fileName = "import_" + basename(os.path.splitext(coordFile)[0])
                 if tomo is not None and tomoName == fileName:
-                    def addCoordinate(coord):
-                        coord.setVolume(tomo.clone())
-                        coordsSet.append(coord)
-
                     # Parse the coordinates in the given format for this micrograph
-                    ci.importCoordinates3D(coordFile, addCoordinate)
+                    if self.getImportFrom() == self.IMPORT_FROM_EMAN:
+                        def addCoordinate(coord):
+                            coord.setVolume(tomo.clone())
+                            coordsSet.append(coord)
+                        ci.importCoordinates3D(coordFile, addCoordinate)
+                    elif self.getImportFrom() == self.IMPORT_FROM_DYNAMO:
+                        ci(coordFile, coordsSet, tomo.clone())
 
         args = {}
         args[self.OUTPUT_PREFIX] = coordsSet
@@ -146,44 +146,26 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def getFormat(self):
         for coordFile, _ in self.iterFiles():
-            if coordFile.endswith('.pos'):
-                return self.IMPORT_FROM_XMIPP
-            if coordFile.endswith('.star'):
-                return self.IMPORT_FROM_RELION
             if coordFile.endswith('.json') or coordFile.endswith('.txt'):
                 return self.IMPORT_FROM_EMAN
+            if coordFile.endswith('.tbl'):
+                return self.IMPORT_FROM_DYNAMO
         return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """
-        filesPath = self.filesPath.get()
         importFrom = self.getImportFrom()
 
-        if importFrom == self.IMPORT_FROM_XMIPP:
-            XmippImport = Domain.importFromPlugin('xmipp3.convert', 'XmippImport',
-                                                  'Xmipp is needed to import .xmd files',
-                                                  doRaise=True)
-            return XmippImport(self, filesPath)
-
-        elif importFrom == self.IMPORT_FROM_RELION:
-            RelionImport = Domain.importFromPlugin('relion.convert', 'RelionImport',
-                                                   errorMsg='Relion is needed to import .star files',
-                                                   doRaise=True)
-            return RelionImport(self, filesPath)
-
-        elif importFrom == self.IMPORT_FROM_EMAN:
+        if importFrom == self.IMPORT_FROM_EMAN:
             EmanImport = Domain.importFromPlugin('eman2.convert', 'EmanImport',
-                                                 errorMsg='Eman is needed to import .json or '
-                                                          '.box files',
-                                                 doRaise=True)
+                                          errorMsg='Eman is needed to import .json or '
+                                                   '.box files',
+                                          doRaise=True)
             return EmanImport(self, None)
 
-        elif importFrom == self.IMPORT_FROM_DOGPICKER:
-            DogpickerImport = Domain.importFromPlugin('appion.convert', 'DogpickerImport',
-                                                      errorMsg='appion plugin is needed to import '
-                                                               'dogpicker files',
-                                                      doRaise=True)
-            return DogpickerImport(self)
+        elif importFrom == self.IMPORT_FROM_DYNAMO:
+            readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
+            return readDynCoord
         else:
             self.importFilePath = ''
             return None
