@@ -34,6 +34,7 @@ import numpy as np
 import pyworkflow.object as pwobj
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
+import pwem.emlib as emlib
 from pwem.emlib.image import ImageHandler
 
 
@@ -136,12 +137,15 @@ class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
     def applyTransform(self, outputFilePath):
+        """To mrc file"""
+        ih = ImageHandler()
         inputFilePath = self.getFirstItem().getLocation()[1]
+        #base, _ = os.path.splitext(self.getFirstItem().getLocation()[1])
+        #inputFilePath = base + '.mrcs'
         newStack = True
         if self.getFirstItem().hasTransform():
             for index, ti in enumerate(self):
                 if ti.hasTransform():
-                    ih = ImageHandler()
                     if newStack:
                         ih.createEmptyImage(fnOut=outputFilePath,
                                             xDim=ti.getXDim(),
@@ -150,12 +154,28 @@ class TiltSeries(TiltSeriesBase):
                         newStack = False
                     transform = ti.getTransform().getMatrix()
                     transformArray = np.array(transform)
-                    ih.applyTransform(inputFile=str(index + 1) + '@' + inputFilePath,
+                    ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
                                       outputFile=str(index + 1) + '@' + outputFilePath,
                                       transformMatrix=transformArray,
                                       shape=(ti.getXDim(), ti.getYDim()))
+
+                    """no funciona
+                    ih.createEmptyImage(fnOut=outputFilePath,
+                                        xDim=ti.getXDim(),
+                                        yDim=ti.getYDim(),
+                                        nDim=self.getSize())
+                    
+                    im = ih.read(str(index + 1) + '@' +outputFilePathMRC)
+                    im.convert2DataType(emlib.DT_INT)
+                    im.write(str(index + 1) + '@' +outputFilePath)
+                    """
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+
+            #im = ih.read(outputFilePathMRC)
+            #imOut = emlib.Image()
+            #ih.convert(im, imOut, dataType=emlib.DT_INT)
+
         else:
             path.createLink(self.getFirstItem().getLocation()[1], outputFilePath)
 
