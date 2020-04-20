@@ -32,6 +32,7 @@ from collections import OrderedDict
 import numpy as np
 import math
 
+from pyworkflow.object import Integer
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
@@ -703,6 +704,7 @@ class SubTomogram(data.Volume):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._coordinate = None
+        self._volId = Integer()
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -723,6 +725,20 @@ class SubTomogram(data.Volume):
         return self._acquisition is not None and \
                self._acquisition.getAngleMin() is not None and \
                self._acquisition.getAngleMax() is not None
+
+    def getVolId(self):
+        """ Return the micrograph id if the coordinate is not None.
+        or have set the _micId property.
+        """
+        if self._volId.hasValue():
+            return self._volId.get()
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolId()
+
+        return None
+
+    def setVolId(self, volId):
+        self._volId.set(volId)
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
