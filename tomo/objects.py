@@ -867,14 +867,12 @@ class LandmarkModel(data.EMObject):
             writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
             if mode == "w":
                 writer.writeheader()
-            with open(self.getFileName(), 'a') as f:
-                writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
-                writer.writerow({'xCoor': xCoor,
-                                 'yCoor': yCoor,
-                                 'tiltIm': tiltIm,
-                                 'chainId': chainId,
-                                 'xResid': xResid,
-                                 'yResid': yResid})
+            writer.writerow({'xCoor': xCoor,
+                             'yCoor': yCoor,
+                             'tiltIm': tiltIm,
+                             'chainId': chainId,
+                             'xResid': xResid,
+                             'yResid': yResid})
 
 
 class SetOfLandmarkModels(data.EMSet):
