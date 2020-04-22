@@ -137,12 +137,10 @@ class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
     def applyTransform(self, outputFilePath):
-        """To mrc file"""
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getLocation()[1]
-        #base, _ = os.path.splitext(self.getFirstItem().getLocation()[1])
-        #inputFilePath = base + '.mrcs'
         newStack = True
+        # TODO: Handle output tilt-series datatype format
         if self.getFirstItem().hasTransform():
             for index, ti in enumerate(self):
                 if ti.hasTransform():
@@ -158,24 +156,8 @@ class TiltSeries(TiltSeriesBase):
                                       outputFile=str(index + 1) + '@' + outputFilePath,
                                       transformMatrix=transformArray,
                                       shape=(ti.getXDim(), ti.getYDim()))
-
-                    """no funciona
-                    ih.createEmptyImage(fnOut=outputFilePath,
-                                        xDim=ti.getXDim(),
-                                        yDim=ti.getYDim(),
-                                        nDim=self.getSize())
-                    
-                    im = ih.read(str(index + 1) + '@' +outputFilePathMRC)
-                    im.convert2DataType(emlib.DT_INT)
-                    im.write(str(index + 1) + '@' +outputFilePath)
-                    """
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
-
-            #im = ih.read(outputFilePathMRC)
-            #imOut = emlib.Image()
-            #ih.convert(im, imOut, dataType=emlib.DT_INT)
-
         else:
             path.createLink(self.getFirstItem().getLocation()[1], outputFilePath)
 
