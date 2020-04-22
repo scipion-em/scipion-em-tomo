@@ -31,6 +31,7 @@ import threading
 from collections import OrderedDict
 import numpy as np
 import math
+import csv
 
 import pyworkflow.object as pwobj
 import pyworkflow.utils.path as path
@@ -126,6 +127,8 @@ class TiltSeriesBase(data.SetOfImages):
         return self._samplingRate.get() * 1e-4 * mag
 
     def generateTltFile(self, tltFilePath, reverse=False):
+        """Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order"""
         angleList = []
         for ti in self:
             angleList.append(ti.getTiltAngle())
@@ -161,7 +164,7 @@ class TiltSeries(TiltSeriesBase):
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
-            path.createLink(self.getFirstItem().getLocation()[1], outputFilePath)
+            path.createLink(self.getFirstItem().getFileName(), outputFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -856,21 +859,16 @@ class LandmarkModel(data.EMObject):
         self._modelName = pwobj.String(modelName)
 
     def addLandmark(self, xCoor, yCoor,  tiltIm, chainId, xResid, yResid):
-        import csv
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
-        if os.path.exists(self.getFileName()):
+
+        mode = "a" if os.path.exists(self.getFileName()) else "w"
+
+        with open(self.getFileName(), mode) as f:
+            writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
+            if mode == "w":
+                writer.writeheader()
             with open(self.getFileName(), 'a') as f:
                 writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
-                writer.writerow({'xCoor': xCoor,
-                                 'yCoor': yCoor,
-                                 'tiltIm': tiltIm,
-                                 'chainId': chainId,
-                                 'xResid': xResid,
-                                 'yResid': yResid})
-        else:
-            with open(self.getFileName(), 'w') as f:
-                writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
-                writer.writeheader()
                 writer.writerow({'xCoor': xCoor,
                                  'yCoor': yCoor,
                                  'tiltIm': tiltIm,
