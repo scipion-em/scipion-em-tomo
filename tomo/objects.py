@@ -143,7 +143,7 @@ class TiltSeries(TiltSeriesBase):
 
     def applyTransform(self, outputFilePath):
         ih = ImageHandler()
-        inputFilePath = self.getFirstItem().getLocation()[1]
+        inputFilePath = self.getFirstItem().getFileName()
         newStack = True
         # TODO: Handle output tilt-series datatype format
         if self.getFirstItem().hasTransform():
@@ -164,7 +164,7 @@ class TiltSeries(TiltSeriesBase):
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
-            path.createLink(self.getFirstItem().getFileName(), outputFilePath)
+            path.createLink(inputFilePath, outputFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
