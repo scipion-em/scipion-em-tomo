@@ -24,7 +24,9 @@
 # *
 # **************************************************************************
 
-import os, threading
+import glob
+import os
+import threading
 import numpy as np
 
 from pwem.viewers import showj
@@ -200,7 +202,14 @@ class TomogramsTreeProvider(TreeProvider):
         elif self._mode == 'json':
             tomogramName = os.path.basename(tomo.getFileName())
             tomogramName = os.path.splitext(tomogramName)[0]
-            filePath = os.path.join(self._path, 'extra-%s_info.json' % tomogramName)
+
+            outFile = '*%s_info.json' % pwutils.removeBaseExt(tomogramName.split("__")[0])
+            pattern = os.path.join(self._path, outFile)
+            files = glob.glob(pattern)
+
+            filePath = ''
+            if files:
+                filePath = files[0]
 
         if not os.path.isfile(filePath):
             return {'key': tomogramName, 'parent': None,
