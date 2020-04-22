@@ -30,10 +30,12 @@ from datetime import datetime
 import threading
 from collections import OrderedDict
 import numpy as np
+import math
 
 import pyworkflow.object as pwobj
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
+from pwem.convert.transformations import euler_matrix
 import pwem.emlib as emlib
 from pwem.emlib.image import ImageHandler
 
@@ -367,7 +369,7 @@ class TiltSeriesDict:
         return self.__dict[tsId][1]
 
     def getTiList(self, tsId):
-        return self.getTiDict(tsId).values()
+        return list(self.getTiDict(tsId).values())
 
     def __iter__(self):
         for ts, d in self.__dict.values():
@@ -504,7 +506,7 @@ class SetOfTomograms(data.SetOfVolumes):
     EXPOSE_ITEMS = True
 
     def __init__(self, *args, **kwargs):
-        data.SetOfVolumes.__init__(self, *args, **kwargs)
+        data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
 
     def updateDim(self):
@@ -523,6 +525,7 @@ class Coordinate3D(data.EMObject):
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
         self._volName = pwobj.String()
+        self._eulerMatrix = data.Transform()
 
     def getX(self):
         return self._x.get()
@@ -547,6 +550,31 @@ class Coordinate3D(data.EMObject):
 
     def setZ(self, z):
         self._z.set(z)
+
+    def setMatrix(self, matrix):
+        self._eulerMatrix.setMatrix(matrix)
+
+    def getMatrix(self):
+        return self._eulerMatrix.getMatrix()
+
+    def euler2Matrix(self, r, p, y):
+        self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
+
+    def eulerAngles(self):
+        R = self.getMatrix()
+        sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+        singular = sy < 1e-6
+        if not singular:
+            x = math.atan2(R[2, 1], R[2, 2])
+            y = math.atan2(-R[2, 0], sy)
+            z = math.atan2(R[1, 0], R[0, 0])
+
+        else:
+            x = math.atan2(-R[1, 2], R[1, 1])
+            y = math.atan2(-R[2, 0], sy)
+            z = 0
+
+        return np.array([x, y, z])
 
     def scale(self, factor):
         """ Scale x, y and z coordinates by a given factor.
@@ -687,6 +715,12 @@ class SetOfCoordinates3D(data.EMSet):
         filePaths = set()
         filePaths.add(self.getFileName())
         return filePaths
+
+    def getSummary(self):
+        summary = []
+        summary.append("Number of particles picked: %s" % self.getSize())
+        summary.append("Particle size: %s" % self.getBoxSize())
+        return "\n".join(summary)
 
     def __str__(self):
         """ String representation of a set of coordinates. """
@@ -851,3 +885,81 @@ class SetOfLandmarkModels(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+
+
+class Mesh(data.EMObject):
+    """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
+    the triangulation of a volume.
+    A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
+    space into planar triangles interconnected that will result in a closed surface."""
+    def __init__(self, path=None, group=None, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._path = pwobj.String(path)
+        self._volume = None
+        self._group = pwobj.Integer(group)
+
+    def getPath(self):
+        return self._path.get()
+
+    def setPath(self, path):
+        self._path.set(path)
+
+    def getGroup(self):
+        return self._group.get()
+
+    def setGroup(self, group):
+        self._group.set(group)
+
+    def getMesh(self):
+        filePath = self.getPath()
+        mesh = []
+        array = np.genfromtxt(filePath, delimiter=',')
+        numMeshes = np.unique(array[:,3])
+        for idm in numMeshes:
+            mesh_group = array[array[:,3] == idm, :]
+            mesh.append(mesh_group[:, 0:3])
+        return mesh[self.getGroup() - 1]
+
+    def getVolume(self):
+        """ Return the tomogram object to which
+        this mesh is associated.
+        """
+        return self._volume
+
+    def setVolume(self, volume):
+        """ Set the tomogram to which this mesh belongs. """
+        self._volume = volume
+
+    def __str__(self):
+        return "Mesh (path=%s)" % self.getPath()
+
+
+class SetOfMeshes(data.EMSet):
+    """ Store a series of meshes. """
+    ITEM_TYPE = Mesh
+
+    def __init__(self, *args, **kwargs):
+        data.EMSet.__init__(self, *args, **kwargs)
+        self._volumesPointer = pwobj.Pointer()
+
+    def setVolumes(self, volumes):
+        """ Set the tomograms associated with this set of coordinates.
+        Params:
+            tomograms: Either a SetOfTomograms object or a pointer to it.
+        """
+        if volumes.isPointer():
+            self._volumesPointer.copy(volumes)
+        else:
+            self._volumesPointer.set(volumes)
+
+    def getVolumes(self):
+        """ Returns the SetOfTomograms associated with
+        this SetOfCoordinates"""
+        return self._volumesPointer.get()
+
+    def iterItems(self, orderBy='id', direction='ASC', where='1', limit=None):
+        """ Redefine iteration to set the acquisition to images. """
+        for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
+                                 where=where, limit=limit):
+            yield mesh
+

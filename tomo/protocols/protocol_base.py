@@ -82,6 +82,10 @@ class ProtTomoBase:
     def _createSetOfLandmarkModels(self, suffix=''):
         return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
 
+    def _createSetOfMeshes(self, suffix=''):
+        return self._createSet(tomo.objects.SetOfMeshes,
+                                'meshes%s.sqlite', suffix)
+
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
         For example: output3DCoordinates7.
@@ -108,10 +112,21 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
     def _defineParams(self, form):
 
         form.addSection(label='Input')
-        form.addParam('inputTomogram', PointerParam, label="Input Tomogram", important=True,
-                      pointerClass='Tomogram',
+        form.addParam('inputTomograms', PointerParam, label="Input Tomograms", important=True,
+                      pointerClass='SetOfTomograms',
                       help='Select the Tomogram to be used during picking.')
 
+    def _summary(self):
+        summary = []
+        if self.isFinished():
+            summary.append("Output 3D Coordinates not ready yet.")
+
+        if self.getOutputsSize() >= 1:
+            for key, output in self.iterOutputAttributes():
+                summary.append("*%s:* \n %s " % (key, output.getSummary()))
+        else:
+            summary.append(Message.TEXT_NO_OUTPUT_CO)
+        return summary
 
 class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
 
@@ -288,15 +303,15 @@ class ProtTomoImportAcquisition:
         return tomo.objects.TomoAcquisition(**acquisitionParams)
 
     def _summary(self, summary, setOfObject):
-        for object in setOfObject:
-            if object.hasAcquisition():
-                summary.append(u"File: %s" % object.getFileName())
-                summary.append(u"Acquisition angle max: *%0.2f*" % object.getAcquisition().getAngleMax())
+        for obj in setOfObject:
+            if obj.hasAcquisition():
+                summary.append(u"File: %s" % obj.getFileName())
+                summary.append(u"Acquisition angle max: *%0.2f*" % obj.getAcquisition().getAngleMax())
 
-                summary.append(u"Acquisition angle min: *%0.2f*" % object.getAcquisition().getAngleMin())
-                if object.getAcquisition().getStep():
-                    summary.append(u"Step: *%d*" % object.getAcquisition().getStep())
-                if object.getAcquisition().getAngleAxis1():
-                    summary.append(u"Angle axis 1: *%0.2f*" % object.getAcquisition().getAngleAxis1())
-                if object.getAcquisition().getAngleAxis2():
-                    summary.append(u"Angle axis 2: *%0.2f*" % object.getAcquisition().getAngleAxis2())
+                summary.append(u"Acquisition angle min: *%0.2f*" % obj.getAcquisition().getAngleMin())
+                if obj.getAcquisition().getStep():
+                    summary.append(u"Step: *%d*" % obj.getAcquisition().getStep())
+                if obj.getAcquisition().getAngleAxis1():
+                    summary.append(u"Angle axis 1: *%0.2f*" % obj.getAcquisition().getAngleAxis1())
+                if obj.getAcquisition().getAngleAxis2():
+                    summary.append(u"Angle axis 2: *%0.2f*" % obj.getAcquisition().getAngleAxis2())

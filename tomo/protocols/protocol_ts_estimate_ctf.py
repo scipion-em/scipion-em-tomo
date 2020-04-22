@@ -29,7 +29,7 @@ import os
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.properties import Message
-from pwem.emlib.image import ImageHandler, DT_FLOAT
+from pwem import emlib
 
 from .protocol_ts_base import ProtTsProcess
 
@@ -40,63 +40,18 @@ class ProtTsEstimateCTF(ProtTsProcess):
     """
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_CTF_ESTI)
+        """ Define input parameters from this program into the given form. """
+        form.addSection(label='Input')
         form.addParam('inputTiltSeries', params.PointerParam, important=True,
                       pointerClass='SetOfTiltSeries',
-                      label=Message.LABEL_INPUT_MIC)
-        form.addParam('ctfDownFactor', params.FloatParam, default=1.,
-                      label='CTF Downsampling factor',
-                      #condition='not recalculate',
-                      help='Set to 1 for no downsampling. Non-integer downsample '
-                           'factors are possible. This downsampling is only used '
-                           'for estimating the CTF and it does not affect any '
-                           'further calculation. Ideally the estimation of the '
-                           'CTF is optimal when the Thon rings are not too '
-                           'concentrated at the origin (too small to be seen) '
-                           'and not occupying the whole power spectrum (since '
-                           'this downsampling might entail aliasing).')
+                      label='Input tilt series')
 
         self._defineProcessParams(form)
+        self._defineStreamingParams(form)
 
-        line = form.addLine('Resolution',
-                            #condition='not recalculate',
-                            help='Give a value in digital frequency '
-                                 '(i.e. between 0.0 and 0.5). These cut-offs '
-                                 'prevent the typical peak at the center of the'
-                                 ' PSD and high-resolution terms where only '
-                                 'noise exists, to interfere with CTF '
-                                 'estimation. The default lowest value is 0.05 '
-                                 'but for micrographs with a very fine sampling '
-                                 'this may be lowered towards 0. The default '
-                                 'highest value is 0.35, but it should be '
-                                 'increased for micrographs with signals '
-                                 'extending beyond this value. However, if '
-                                 'your micrographs extend further than 0.35, '
-                                 'you should consider sampling them at a finer '
-                                 'rate.')
-        line.addParam('lowRes', params.FloatParam, default=0.05, label='Lowest')
-        line.addParam('highRes', params.FloatParam, default=0.35, label='Highest')
-        line = form.addLine('Defocus search range (microns)',
-                            #condition='not recalculate',
-                            expertLevel=params.LEVEL_ADVANCED,
-                            help='Select _minimum_ and _maximum_ values for '
-                                 'defocus search range (in microns). Underfocus'
-                                 ' is represented by a positive number.')
-        line.addParam('minDefocus', params.FloatParam, default=0.25,
-                      label='Min')
-        line.addParam('maxDefocus', params.FloatParam, default=4.,
-                      label='Max')
-
-        form.addParam('windowSize', params.IntParam, default=256,
-                      expertLevel=params.LEVEL_ADVANCED,
-                      label='Window size',
-                      #condition='not recalculate',
-                      help='The PSD is estimated from small patches of this '
-                           'size. Bigger patches allow identifying more '
-                           'details. However, since there are fewer windows, '
-                           'estimations are noisier.')
-
-        form.addParallelSection(threads=2, mpi=1)
+    def _defineProcessParams(self, form):
+        """ Should be implemented in subclasses. """
+        pass
 
     # --------------------------- STEPS functions ----------------------------
 
@@ -112,7 +67,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
         # Call the current estimation of CTF that is implemented in subclasses
         self._estimateCtf(workingDir, tiFnMrc, ti, *args)
 
-        if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
+        if not pw.utils.envVarOn(pw.SCIPION_DEBUG_NOCLEAN):
             pw.utils.cleanPath(workingDir)
 
         ti.setCTF(self.getCtf(ti))
@@ -120,24 +75,26 @@ class ProtTsEstimateCTF(ProtTsProcess):
     def _convertInputTi(self, ti, tiFn):
         """ This function will convert the input tilt-image
         taking into account the downFactor.
-        It can be overriden in subclasses if another behaviour is required.
+        It can be overwritten in subclasses if another behaviour is required.
         """
         downFactor = self.ctfDownFactor.get()
+        ih = emlib.image.ImageHandler()
 
-        ih = ImageHandler()
+        if not ih.existsLocation(ti):
+            raise Exception("Missing input file: %s" % ti)
 
         if downFactor != 1:
             # Replace extension by 'mrc' because there are some formats
             # that cannot be written (such as dm3)
             ih.scaleFourier(ti, tiFn, downFactor)
         else:
-            ih.convert(ti, tiFn, DT_FLOAT)
+            ih.convert(ti, tiFn, emlib.DT_FLOAT)
 
-    def _estimateCtf(self, workingDir, tiFn, tiltImage):
+    def _estimateCtf(self, workingDir, tiFn, tiltImage, *args):
         raise Exception("_estimateCTF function should be implemented!")
 
     def processTiltSeriesStep(self, tsId):
-        """ Step called after all CTF are estimated for a given tiltseries. """
+        """ Step called after all CTF are estimated for a given tilt series. """
         self._tsDict.setFinished(tsId)
 
     # --------------------------- INFO functions ------------------------------
@@ -172,15 +129,18 @@ class ProtTsEstimateCTF(ProtTsProcess):
                         'windowSize': self.windowSize.get(),
                         'lowRes': self.lowRes.get(),
                         'highRes': self.highRes.get(),
-                        # Convert from microns to Angstroms
-                        'minDefocus': self.minDefocus.get() * 1e+4,
-                        'maxDefocus': self.maxDefocus.get() * 1e+4
+                        'minDefocus': self.minDefocus.get(),
+                        'maxDefocus': self.maxDefocus.get()
                         }
 
     def getCtfParamsDict(self):
         """ Return a copy of the global params dict,
         to avoid overwriting values. """
         return self._params
+
+    def getCtf(self, ti):
+        """ Should be implemented in subclasses. """
+        pass
 
     # ----- Some internal functions ---------
     def getTiRoot(self, tim):

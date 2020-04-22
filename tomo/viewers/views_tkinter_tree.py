@@ -24,10 +24,21 @@
 # *
 # **************************************************************************
 
+import glob
+import os
+import threading
+import numpy as np
+
+from pwem.viewers import showj
+from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui.tree import TreeProvider
-from pyworkflow.gui.dialog import ListDialog
 from pyworkflow.plugin import Domain
+from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
+import pyworkflow.config as conf
+
 import pyworkflow.viewer as pwviewer
+
+import pyworkflow.utils as pwutils
 
 import tomo.objects
 
@@ -169,3 +180,412 @@ class TiltSeriesDialogView(pwviewer.View):
 
     def show(self):
         dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider)
+
+
+class TomogramsTreeProvider(TreeProvider):
+    """ Populate Tree from SetOfTomograms. """
+
+    def __init__(self, tomoList, path, mode):
+        TreeProvider.__init__(self)
+        self.tomoList = tomoList
+        self._path = path
+        self._mode = mode
+
+    def getColumns(self):
+        return [('Tomogram', 300), ('status', 150)]
+
+    def getObjectInfo(self, tomo):
+        if self._mode == 'txt':
+            tomogramName = os.path.basename(tomo.getFileName())
+            tomogramName = os.path.splitext(tomogramName)[0]
+            filePath = os.path.join(self._path, tomogramName + ".txt")
+        elif self._mode == 'json':
+            tomogramName = os.path.basename(tomo.getFileName())
+            tomogramName = os.path.splitext(tomogramName)[0]
+
+            outFile = '*%s_info.json' % pwutils.removeBaseExt(tomogramName.split("__")[0])
+            pattern = os.path.join(self._path, outFile)
+            files = glob.glob(pattern)
+
+            filePath = ''
+            if files:
+                filePath = files[0]
+
+        if not os.path.isfile(filePath):
+            return {'key': tomogramName, 'parent': None,
+                    'text': tomogramName, 'values': ("TODO"),
+                    'tags': ("pending")}
+        else:
+            return {'key': tomogramName, 'parent': None,
+                    'text': tomogramName, 'values': ("DONE"),
+                    'tags': ("done")}
+
+    def getObjectPreview(self, obj):
+        return (None, None)
+
+    def getObjectActions(self, obj):
+        return []
+
+    def _getObjectList(self):
+        """Retrieve the object list"""
+        return self.tomoList
+
+    def getObjects(self):
+        objList = self._getObjectList()
+        return objList
+
+    def configureTags(self, tree):
+        tree.tag_configure("pending", foreground="red")
+        tree.tag_configure("done", foreground="green")
+
+class MeshesTreeProvider(TreeProvider):
+    """Populate tree from SetOfMeshes"""
+
+    def __init__(self, meshList):
+        TreeProvider.__init__(self)
+        self._parentDict = {}
+        self.meshList = meshList
+        self.tomoList = []
+        self.tomo_names = set()
+        id = 1
+        for mesh in self.meshList:
+            tomo = mesh.getVolume()
+            if tomo.getFileName() not in self.tomo_names:
+                tomo.setObjId(id)
+                self.tomoList.append(tomo)
+                self.tomo_names.add(tomo.getFileName())
+                id += 1
+        self.tomo_names = sorted(list(self.tomo_names), reverse=False)
+        self.tomoList.sort(key=lambda x: x.getFileName(), reverse=False)
+
+    def getColumns(self):
+        return [('Tomogram', 300), ('Number of Mehes', 150)]
+
+    def getObjectInfo(self, obj):
+        if isinstance(obj, tomo.objects.Mesh):
+            meshName = 'Mesh %d' % obj.getObjId()
+            tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
+            return {'key': tomoName + '-' + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
+                    'text': meshName, 'values': ('')}
+        elif isinstance(obj, tomo.objects.Tomogram):
+            tomoName = pwutils.removeBaseExt(obj.getFileName())
+            numMeshes = 0
+            for mesh in self.meshList:
+                if mesh.getVolume().getFileName() == obj.getFileName():
+                    numMeshes += 1
+            return {'key': tomoName, 'parent': None,
+                    'text': tomoName, 'values': (numMeshes)}
+
+    def getObjectActions(self, mesh):
+        return []
+
+    def _getObjectList(self):
+        """Retrieve the object list"""
+        return self.tomoList
+
+    def getObjects(self):
+        objList = self._getObjectList()
+        self._parentDict = {}
+        childs = []
+        for obj in self.meshList:
+            childs += self._getChilds(obj)
+        objList += childs
+
+        return objList
+
+    def _getChilds(self, obj):
+        childs = []
+        childs.append(obj)
+        for idx in range(len(self.tomo_names)):
+            if obj.getVolume().getFileName() == self.tomo_names[idx]:
+                self._parentDict[obj.getObjId()] = self.tomoList[idx]
+        return childs
+
+class TomogramsDialog(ToolbarListDialog):
+    """
+    This class extend from ListDialog to allow calling
+    an ImageJ subprocess from a list of Tomograms.
+    """
+
+    def __init__(self, parent, viewer, **kwargs):
+        self.path = kwargs.get("path", None)
+        self.provider = kwargs.get("provider", None)
+        if viewer:
+            ToolbarListDialog.__init__(self, parent,
+                                       "Tomogram List",
+                                       allowsEmptySelection=False,
+                                       itemDoubleClick=self.doubleClickViewer,
+                                       **kwargs)
+        else:
+            ToolbarListDialog.__init__(self, parent,
+                                       "Tomogram List",
+                                       allowsEmptySelection=False,
+                                       itemDoubleClick=self.doubleClickOnTomogram,
+                                       **kwargs)
+
+    def refresh_gui_viewer(self):
+        if self.proc.isAlive():
+            self.after(1000, self.refresh_gui_viewer)
+        else:
+            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
+
+    def refresh_gui(self):
+        self.tree.update()
+        if self.proc.isAlive():
+            self.after(1000, self.refresh_gui)
+
+    def doubleClickOnTomogram(self, e=None):
+        self.tomo = e
+        self.proc = threading.Thread(target=self.lanchIJForTomogram, args=(self.path, self.tomo,))
+        self.proc.start()
+        self.after(1000, self.refresh_gui)
+
+    def doubleClickViewer(self, e=None):
+        self.mesh = e
+        self.tomo = e.getVolume()
+        self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
+        self.proc.start()
+        self.after(1000, self.refresh_gui_viewer)
+
+    def lanchIJForTomogram(self, path, tomogram):
+        macroPath = os.path.join(conf.Config.SCIPION_TMP, "AutoSave_ROI.ijm")
+        tomogramFile = tomogram.getFileName()
+        tomogramName = os.path.basename(tomogramFile)
+
+        macro = r"""path = "%s";
+    file = "%s"
+    
+    // --------- Initialize Roi Manager ---------
+    roiManager("Draw");
+    setTool("polygon");
+    
+    newClass = "Yes";
+    outPath = path + file + ".txt";
+    
+    // --------- Load SetOfMeshes ---------
+    if (File.exists(outPath)){
+    group = 0;
+    groups = loadMeshFile(outPath);
+    numMeshes = roiManager("count");
+    emptyOutFile(outPath);
+    aux = editMeshes(groups, numMeshes, outPath);
+    group = group + aux + 1;
+    }
+    else{
+    emptyOutFile(outPath);
+    group = 1;
+    }
+    
+    // --------- Draw new Meshes and save them ---------
+    while (newClass == "Yes") {
+    roiManager("Reset");
+    //group = classDialog();
+    waitForRoi();
+    saveMeshes(group, outPath);
+    newClass = newClassDialog();
+    group = group + 1;
+    }
+    
+    // --------- Close ImageJ ---------
+    run("Quit");
+    
+    
+    // --------- Functions Definition ---------
+    function classDialog(){
+    Dialog.create("Class Selection");
+    Dialog.addMessage("Determine the group of the labels to be drawn");
+    Dialog.addNumber("Class Group", 1);
+    Dialog.show();
+    return floor(Dialog.getNumber());
+    }
+    
+    function newClassDialog(){
+    choices = newArray("Yes", "No");
+    Dialog.create("Create new class?");
+    Dialog.addChoice("Choice", choices);
+    Dialog.show();
+    return Dialog.getChoice();
+    }
+    
+    function waitForRoi(){
+    waitForUser("Draw the desired ROIs\n\nThen click Ok");
+    wait(50);
+    while(roiManager("count")==0){
+    waitForUser("Draw the desired ROIs\n\nThen click Ok");
+    wait(50);
+    }
+    }
+    
+    function emptyOutFile(outPath){
+    fid = File.open(outPath);
+    File.close(fid);
+    }
+    
+    function saveMeshes(class, outPath){
+    string = "";
+    meshes = roiManager("count");
+    for (i=0; i<meshes; i++){
+    roiManager("select", i);
+    Stack.getPosition(channel, slice, frame);
+    getSelectionCoordinates(xpoints, ypoints);
+    for (j = 0; j < xpoints.length; j++) {
+    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + class + "\n";
+    }
+    }
+    lastJump = lastIndexOf(string, "\n");
+    File.append(substring(string, 0, lastJump), outPath);
+    }
+    
+    function loadMeshFile(meshPath){
+    c = "";
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    contents = split(File.openAsString(meshPath), "\n");
+    xpoints = newArray();
+    ypoints = newArray();
+    groups = newArray();
+    for (idx=0; idx < contents.length; idx++){
+    values = split(contents[idx], ",");
+    if (idx+1 < contents.length){
+    valuesNext = split(contents[idx+1], ",");
+    }
+    else{
+    valuesNext =  newArray(-1,-1,-1,-1);
+    }
+    xpoints = Array.concat(xpoints, values[0]);
+    ypoints = Array.concat(ypoints, values[1]);
+    if (values[2] != valuesNext[2]){
+    xpoints = Array.concat(xpoints, xpoints[0]);
+    ypoints = Array.concat(ypoints, ypoints[0]);
+    groups = Array.concat(groups, values[3]);
+    Stack.setSlice(values[2]);
+    makeSelection("polyline", xpoints, ypoints);
+    Roi.setName("Class " + values[3]);
+    Roi.setStrokeWidth(5);
+    roiManager("add");
+    count = roiManager("count");
+    roiManager("select", count-1);
+    roiManager("Set Color", c);
+    if (values[3] != valuesNext[3]){
+    c = "";
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    }
+    xpoints = newArray();
+    ypoints = newArray();
+    }
+    }
+    return groups;
+    }
+    
+    function editMeshes(classVect, numMeshes, outPath){
+    waitForUser("Edit the input ROIs if needed\n\nThen click Ok");
+    string = "";
+    for (i=0; i<numMeshes; i++){
+    roiManager("select", i);
+    Stack.getPosition(channel, slice, frame);
+    getSelectionCoordinates(xpoints, ypoints);
+    for (j = 0; j < xpoints.length; j++) {
+    string = string + "" + xpoints[j] + "," + ypoints[j] + "," + slice + "," + classVect[i] + "\n";
+    groupEnd = classVect[i];
+    }
+    }
+    lastJump = lastIndexOf(string, "\n");
+    File.append(substring(string, 0, lastJump), outPath);
+    
+    return groupEnd;
+    }
+    """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
+        macroFid = open(macroPath, 'w')
+        macroFid.write(macro)
+        macroFid.close()
+
+        args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        viewParams = {showj.ZOOM: 50}
+        for key, value in viewParams.items():
+            args = "%s --%s %s" % (args, key, value)
+
+        app = "xmipp.ij.commons.XmippImageJ"
+
+        runJavaIJapp(4, app, args).wait()
+
+    def lanchIJForViewing(self, path, tomogram):
+        macroPath = os.path.join(conf.Config.SCIPION_TMP, "View_ROI.ijm")
+        tomogramFile = tomogram.getFileName()
+        tomogramName = os.path.basename(tomogramFile)
+
+        mesh_group = self.mesh.getMesh()
+        group = np.ones((1, len(mesh_group))) * self.mesh.getGroup()
+        meshFile = 'mesh.txt'
+        np.savetxt(os.path.join(path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
+
+        macro = r"""path = "%s";
+    file = "%s"
+    meshFile = "%s"
+    
+    outPath = path + meshFile;
+    
+    // --------- Load SetOfMeshes ---------
+    if (File.exists(outPath)){
+    loadMeshFile(outPath);
+    }
+    
+    // --------- Functions Definition ---------    
+    function loadMeshFile(meshPath){
+    c = "";
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    contents = split(File.openAsString(meshPath), "\n");
+    xpoints = newArray();
+    ypoints = newArray();
+    groups = newArray();
+    for (idx=0; idx < contents.length; idx++){
+    values = split(contents[idx], ",");
+    if (idx+1 < contents.length){
+    valuesNext = split(contents[idx+1], ",");
+    }
+    else{
+    valuesNext =  newArray(-1,-1,-1,-1);
+    }
+    xpoints = Array.concat(xpoints, values[0]);
+    ypoints = Array.concat(ypoints, values[1]);
+    if (values[2] != valuesNext[2]){
+    xpoints = Array.concat(xpoints, xpoints[0]);
+    ypoints = Array.concat(ypoints, ypoints[0]);
+    groups = Array.concat(groups, values[3]);
+    Stack.setSlice(values[2]);
+    makeSelection("polyline", xpoints, ypoints);
+    Roi.setName("Class " + values[3]);
+    Roi.setStrokeWidth(5);
+    roiManager("add");
+    count = roiManager("count");
+    roiManager("select", count-1);
+    roiManager("Set Color", c);
+    if (values[3] != valuesNext[3]){
+    c = "";
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    c = c + toHex(255*random);
+    }
+    xpoints = newArray();
+    ypoints = newArray();
+    }
+    }
+    return groups;
+    }
+    """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0], meshFile)
+        macroFid = open(macroPath, 'w')
+        macroFid.write(macro)
+        macroFid.close()
+
+        args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        viewParams = {showj.ZOOM: 50}
+        for key, value in viewParams.items():
+            args = "%s --%s %s" % (args, key, value)
+
+        app = "xmipp.ij.commons.XmippImageJ"
+
+        runJavaIJapp(4, app, args).wait()

@@ -36,10 +36,10 @@ from distutils.spawn import find_executable
 import pyworkflow.protocol.params as params
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pwem.viewers as viewers
-from pwem.convert import ImageHandler
+from pwem.emlib.image import ImageHandler
 
 
-from ..protocols import ProtImportTomograms, ProtImportSubTomograms
+from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
