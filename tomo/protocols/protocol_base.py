@@ -79,6 +79,9 @@ class ProtTomoBase:
 
         return classes
 
+    def _createSetOfLandmarkModels(self, suffix=''):
+        return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
+
     def _createSetOfMeshes(self, suffix=''):
         return self._createSet(tomo.objects.SetOfMeshes,
                                 'meshes%s.sqlite', suffix)

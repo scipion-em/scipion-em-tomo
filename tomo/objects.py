@@ -31,10 +31,14 @@ import threading
 from collections import OrderedDict
 import numpy as np
 import math
+import csv
 
 import pyworkflow.object as pwobj
+import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
+import pwem.emlib as emlib
+from pwem.emlib.image import ImageHandler
 
 
 class TiltImageBase:
@@ -122,9 +126,45 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
+    def generateTltFile(self, tltFilePath, reverse=False):
+        """Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order"""
+        angleList = []
+        for ti in self:
+            angleList.append(ti.getTiltAngle())
+        if reverse:
+            angleList.reverse()
+        with open(tltFilePath, 'w') as f:
+            f.writelines("%s\n" % angle for angle in angleList)
+
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
+
+    def applyTransform(self, outputFilePath):
+        ih = ImageHandler()
+        inputFilePath = self.getFirstItem().getFileName()
+        newStack = True
+        # TODO: Handle output tilt-series datatype format
+        if self.getFirstItem().hasTransform():
+            for index, ti in enumerate(self):
+                if ti.hasTransform():
+                    if newStack:
+                        ih.createEmptyImage(fnOut=outputFilePath,
+                                            xDim=ti.getXDim(),
+                                            yDim=ti.getYDim(),
+                                            nDim=self.getSize())
+                        newStack = False
+                    transform = ti.getTransform().getMatrix()
+                    transformArray = np.array(transform)
+                    ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                      outputFile=str(index + 1) + '@' + outputFilePath,
+                                      transformMatrix=transformArray,
+                                      shape=(ti.getXDim(), ti.getYDim()))
+                else:
+                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        else:
+            path.createLink(inputFilePath, outputFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -791,7 +831,56 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
 
-    pass
+
+class LandmarkModel(data.EMObject):
+    """Represents the set of landmarks belonging to an specific Tilt-series."""
+    def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._tsId = pwobj.String(tsId)
+        self._fileName = pwobj.String(fileName)
+        self._modelName = pwobj.String(modelName)
+
+    def getTsId(self):
+        return str(self._tsId)
+
+    def getFileName(self):
+        return str(self._fileName)
+
+    def getModelName(self):
+        return str(self._modelName)
+
+    def setTsId(self, tsId):
+        self._tsId = pwobj.String(tsId)
+
+    def setFileName(self, fileName):
+        self._fileName = pwobj.String(fileName)
+
+    def setModelName(self, modelName):
+        self._modelName = pwobj.String(modelName)
+
+    def addLandmark(self, xCoor, yCoor,  tiltIm, chainId, xResid, yResid):
+        fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
+
+        mode = "a" if os.path.exists(self.getFileName()) else "w"
+
+        with open(self.getFileName(), mode) as f:
+            writer = csv.DictWriter(f, delimiter='\t', fieldnames=fieldNames)
+            if mode == "w":
+                writer.writeheader()
+            writer.writerow({'xCoor': xCoor,
+                             'yCoor': yCoor,
+                             'tiltIm': tiltIm,
+                             'chainId': chainId,
+                             'xResid': xResid,
+                             'yResid': yResid})
+
+
+class SetOfLandmarkModels(data.EMSet):
+    """Represents a class that groups a set of landmark models."""
+    ITEM_TYPE = LandmarkModel
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
 
 
 class Mesh(data.EMObject):
