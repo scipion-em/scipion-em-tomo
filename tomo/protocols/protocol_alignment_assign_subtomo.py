@@ -24,12 +24,10 @@
 # *
 # **************************************************************************
 
-
 from pyworkflow.protocol.params import PointerParam
-from tomo.protocols import ProtTomoBase
+from pwem.protocols import EMProtocol
 
-
-class ProtAlignmentAssignSubtomo(ProtTomoBase):
+class ProtAlignmentAssignSubtomo(EMProtocol):
     """ Assign the alignment calculated for a set of subtomograms to another set.
     Both sets should have same pixel size (A/px).
     The subtomograms with the alignment can also be a subset of a bigger set.
@@ -40,8 +38,7 @@ class ProtAlignmentAssignSubtomo(ProtTomoBase):
         form.addSection(label='Input')
         form.addParam('inputSubtomos', PointerParam, pointerClass='SetOfSubTomograms', label='Input subtomograms',
                       help='Select the subtomograms that you want to update the new alignment.')
-        form.addParam('inputAlignment', PointerParam, pointerClass='SetOfSubTomograms',
-                      label="Input alignments",
+        form.addParam('inputAlignment', PointerParam, pointerClass='SetOfSubTomograms', label="Input alignments",
                       help='Select the subtomograms with alignment to be apply to the other particles.')
 
     # --------------------------- INSERT steps functions --------------------------
@@ -52,7 +49,7 @@ class ProtAlignmentAssignSubtomo(ProtTomoBase):
     def createOutputStep(self):
         inputSubtomos = self.inputSubtomos.get()
         inputAlignment = self.inputAlignment.get()
-        outputSubtomos = self._createSetOfSubTomograms()
+        outputSubtomos = inputSubtomos.create(self._getPath())
         outputSubtomos.copyInfo(inputSubtomos)
         outputSubtomos.setAlignment(inputAlignment.getAlignment())
         outputSubtomos.copyItems(inputSubtomos, updateItemCallback=self._updateItem)
@@ -94,17 +91,8 @@ class ProtAlignmentAssignSubtomo(ProtTomoBase):
         return methods
 
     def _validate(self):
-        # check that input set of aligned particles do have 3D alignment
-        errors = []
-        inputAlignmentSet = self.inputAlignment.get()
-        if not inputAlignmentSet.hasAlignment():
-            errors.append("Input alignment set should contains some kind of alignment (2D, 3D or Projection).")
-        else:
-            # Just for consistency, check that the subtomograms really contains Transform object
-            first = inputAlignmentSet.getFirstItem()
-            alignment = first.getTransform()
-            if alignment is None:
-                errors.append('Inconsistency detected in *Input alignment* !!!')
-                errors.append('It has alignment: _%s_, but the alignment is missing!!!' %
-                              inputAlignmentSet.getAlignment())
-        return errors
+        validateMsgs = []
+        for subtomo in self.inputAlignment.get().iterItems():
+            if not subtomo.hasTransform():
+                validateMsgs.append('Please provide subtomograms which have transformation matrix in "inputAlignment".')
+        return validateMsgs

@@ -980,8 +980,8 @@ class TestTomoAssignAlignment(BaseTest):
     def _assignAlignment(self):
         protImport2, protMltomo = self._runPreviousProtocols()
         assign = self.newProtocol(tomo.protocols.ProtAlignmentAssignSubtomo,
-                                 inputSubtomograms=protMltomo.outputSubtomograms,
-                                 inputAlignment=protImport2.outputSubTomograms)
+                                 inputSubtomos=protImport2.outputSubTomograms,
+                                 inputAlignment=protMltomo.outputSubtomograms)
         self.launchProtocol(assign)
         self.assertIsNotNone(assign.outputSubtomograms,
                              "There was a problem with subtomograms output")
