@@ -38,7 +38,7 @@ class ProtAlignmentAssignSubtomo(EMProtocol):
         form.addSection(label='Input')
         form.addParam('inputSubtomos', PointerParam, pointerClass='SetOfSubTomograms', label='Input subtomograms',
                       help='Select the subtomograms that you want to update the new alignment.')
-        form.addParam('inputAlignment', PointerParam, pointerClass='SetOfSubTomograms', label="Input alignments",
+        form.addParam('inputAlignment', PointerParam, pointerClass='SetOfSubTomograms', label="Aligned subtomograms",
                       help='Select the subtomograms with alignment to be apply to the other particles.')
 
     # --------------------------- INSERT steps functions --------------------------
