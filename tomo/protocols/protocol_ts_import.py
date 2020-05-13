@@ -225,13 +225,13 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
 
-                if len(self._tiltAngleList) != len(tiltSeriesList):
-                    if incompleteTs:
-                        raise Exception("More than one tilt-series seems "
-                                        "incomplete regarding the expected "
-                                        "number of tilt images.")
-                    incompleteTs = True
-                    continue
+                # if len(self._tiltAngleList) != len(tiltSeriesList):
+                #     if incompleteTs:
+                #         raise Exception("More than one tilt-series seems "
+                #                         "incomplete regarding the expected "
+                #                         "number of tilt images.")
+                #     incompleteTs = True
+                #     continue
 
                 tsObj = tsClass(tsId=ts)
                 # we need this to set mapper before adding any item
@@ -376,19 +376,19 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         def _addMany(fileList, f, m):
             """ Add many 'files' (when angles in header or mdoc) to the list. """
-            _, _, _, n = ImageHandler().getDimensions(f)
+            # _, _, _, n = ImageHandler().getDimensions(f)
 
             anglesFrom = self.getEnumText('anglesFrom')
 
             if anglesFrom == self.ANGLES_FROM_HEADER:
                 angles = tomo.convert.getAnglesFromHeader(f)
             elif anglesFrom == self.ANGLES_FROM_MDOC:
-                mdocFn = f + '.mdoc'
+                mdocFn = os.path.splitext(f)[0] + '.mdoc'
                 if not os.path.exists(mdocFn):
                     raise Exception("Missing angles file: %s" % mdocFn)
                 angles = tomo.convert.getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
-                tltFn = f + '.tlt'
+                tltFn = os.path.splitext(f)[0] + '.tlt'
                 if not os.path.exists(tltFn):
                     raise Exception("Missing angles file: %s" % tltFn)
                 angles = tomo.convert.getAnglesFromTlt(tltFn)
@@ -406,7 +406,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         # the user the need to specify {TS}
         if len(filePaths) == 1 and not self.isInStreaming():
             f = filePaths[0]
-            ts = pwutils.removeBaseExt(f)
+            ts = pwutils.removeBaseExt(f)  # Base name without extension
             matchingFiles[ts] = []
             _addMany(matchingFiles[ts], f, None)
         else:
