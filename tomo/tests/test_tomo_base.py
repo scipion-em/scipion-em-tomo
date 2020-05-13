@@ -553,6 +553,7 @@ class TestTomoImportSubTomograms(BaseTest):
          cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
          cls.table = cls.dataset.getFile('initial.tbl')
          cls.path = cls.dataset.getPath()
+         cls.subtomos = cls.dataset.getFile('basename.hdf')
 
     def _runImportSubTomograms(self):
 
@@ -570,8 +571,7 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImportCoordinates3d)
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.path,
-                                      filesPattern='*.hdf',
+                                      filesPath=self.subtomos,
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -594,8 +594,7 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImportCoordinates3d)
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.path,
-                                      filesPattern='*.hdf',
+                                      filesPath=self.subtomos,
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -603,8 +602,7 @@ class TestTomoImportSubTomograms(BaseTest):
 
     def _runImportDynSubTomograms(self):
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.path,
-                                      filesPattern='*.hdf',
+                                      filesPath=self.subtomos,
                                       samplingRate=1.35,
                                       importFrom=2,
                                       tablePath=self.table)
