@@ -943,5 +943,54 @@ class TestTomoPreprocessing(BaseTest):
         self.launchProtocol(protImodAuto)
 
 
+class TestTomoAssignAlignment(BaseTest):
+    """This class check if the protocol assign alignments for subtomograms works properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+
+    def _runPreviousProtocols(self):
+        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                      filesPath=self.setOfSubtomograms,
+                                      samplingRate=5)
+        self.launchProtocol(protImport)
+        protImport2 = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                      filesPath=self.setOfSubtomograms,
+                                      samplingRate=5)
+        self.launchProtocol(protImport2)
+        from xmipp2.protocols import Xmipp2ProtMLTomo
+        protMltomo = self.newProtocol(Xmipp2ProtMLTomo,
+                                      inputVolumes=protImport.outputSubTomograms,
+                                      randomInitialization=True,
+                                      numberOfReferences=1,
+                                      numberOfIters=3,
+                                      angularSampling=30)
+        self.launchProtocol(protMltomo)
+        self.assertIsNotNone(protMltomo.outputSubtomograms,
+                         "There was a problem with SetOfSubtomogram output")
+        self.assertIsNotNone(protMltomo.outputClassesSubtomo,
+                         "There was a problem with SetOfSubtomogram output")
+        return protImport2, protMltomo
+
+    def _assignAlignment(self):
+        protImport2, protMltomo = self._runPreviousProtocols()
+        assign = self.newProtocol(tomo.protocols.ProtAlignmentAssignSubtomo,
+                                 inputSubtomos=protImport2.outputSubTomograms,
+                                 inputAlignment=protMltomo.outputSubtomograms)
+        self.launchProtocol(assign)
+        self.assertIsNotNone(assign.outputSubtomograms,
+                             "There was a problem with subtomograms output")
+        return assign
+
+    def test_assignAlignment(self):
+        assign = self._assignAlignment()
+        self.assertTrue(getattr(assign, 'outputSubtomograms'))
+        self.assertTrue(assign.outputSubtomograms.getFirstItem().hasTransform())
+        return assign
+
+
 if __name__ == 'main':
     pass
