@@ -169,19 +169,13 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep('importStep', self._pattern,
-                                 self.voltage.get(),
-                                 self.sphericalAberration.get(),
-                                 self.amplitudeContrast.get(),
-                                 self.magnification.get())
+        self._insertFunctionStep('importStep')
 
     # -------------------------- STEPS functions -------------------------------
-    def importStep(self, pattern, voltage, sphericalAberration,
-                         amplitudeContrast, magnification):
+    def importStep(self):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self._initialize()
         self.info("Using glob pattern: '%s'" % self._globPattern)
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
@@ -215,7 +209,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             time.sleep(3)  # wait 3 seconds before check for new files
             someNew = False  # Check if some new TS has been found
             someAdded = False  # Check if some new were added
-            incompleteTs = False  # Check if there are incomplete TS
+            # incompleteTs = False  # Check if there are incomplete TS
 
             matchingFiles = self.getMatchingFiles(fileTimeOut=fileTimeout)
 
@@ -284,7 +278,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
-        errors = []
+        # errors = []
         self._initialize()
         try:
             matching = self.getMatchingFiles()
