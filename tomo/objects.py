@@ -618,7 +618,7 @@ class Coordinate3D(data.EMObject):
 
     def setBoxSize(self, boxSize):
         self._boxSize = boxSize
-    
+
     def getBoxSize(self):
         return self._boxSize
 
