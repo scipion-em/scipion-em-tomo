@@ -616,6 +616,12 @@ class Coordinate3D(data.EMObject):
         self.setObjId(coord.getObjId())
         self.setBoxSize(coord.getBoxSize())
 
+    def setBoxSize(self, boxSize):
+        self._boxSize = boxSize
+    
+    def getBoxSize(self):
+        return self._boxSize
+
     def getVolId(self):
         return self._volId.get()
 
