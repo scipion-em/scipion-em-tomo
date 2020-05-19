@@ -79,8 +79,6 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         def appendCoordFromSubTomo(subTomo, boxSize):
             coord = subTomo.getCoordinate3D()
             tomoKey = coord.getVolId()
-            # import time
-            # time.sleep(10)
             tomo = inTomos[tomoKey]
 
             if tomo is None:
