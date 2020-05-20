@@ -703,6 +703,7 @@ class SetOfCoordinates3D(data.EMSet):
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere):
+            coord.setVolume(self.getPrecedents().__getitem__(coord.getVolId()))
             yield coord
 
     def getPrecedents(self):
@@ -742,6 +743,12 @@ class SetOfCoordinates3D(data.EMSet):
                                      boxStr, self._appendStreamState())
 
         return s
+
+    def __getitem__(self, itemId):
+        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        coord = data.EMSet.__getitem__(self, itemId)
+        coord.setVolume(self.getPrecedents().__getitem__(coord.getVolId()))
+        return coord
 
 
 class SubTomogram(data.Volume):
@@ -897,8 +904,10 @@ class Mesh(data.EMObject):
     def __init__(self, path=None, group=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
-        self._volume = None
+        self._volumePointer = pwobj.Pointer(objDoStore=False)
         self._group = pwobj.Integer(group)
+        self._volId = pwobj.Integer()
+        self._volName = pwobj.String()
 
     def getPath(self):
         return self._path.get()
@@ -926,11 +935,25 @@ class Mesh(data.EMObject):
         """ Return the tomogram object to which
         this mesh is associated.
         """
-        return self._volume
+        return self._volumePointer.get()
 
     def setVolume(self, volume):
         """ Set the tomogram to which this mesh belongs. """
-        self._volume = volume
+        self._volumePointer.set(volume)
+        self._volId.set(volume.getObjId())
+        self._volName.set(volume.getFileName())
+
+    def setVolName(self, volName):
+        self._volName.set(volName)
+
+    def getVolName(self):
+        return self._volName.get()
+
+    def getVolId(self):
+        return self._volId.get()
+
+    def setVolId(self, volId):
+        self._volId.set(volId)
 
     def __str__(self):
         return "Mesh (path=%s)" % self.getPath()
@@ -963,5 +986,12 @@ class SetOfMeshes(data.EMSet):
         """ Redefine iteration to set the acquisition to images. """
         for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
                                  where=where, limit=limit):
+            mesh.setVolume(self.getVolumes().__getitem__(mesh.getVolId()))
             yield mesh
+
+    def __getitem__(self, itemId):
+        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        mesh = data.EMSet.__getitem__(self, itemId)
+        mesh.setVolume(self.getVolumes().__getitem__(mesh.getVolId()))
+        return mesh
 
