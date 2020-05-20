@@ -48,17 +48,17 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
-        form.addParam('SubTomograms', params.PointerParam,
+        form.addParam('inputSubTomos', params.PointerParam,
                       pointerClass='SetOfSubTomograms',
-                      label='Input Subtomograms', important=True,
+                      label='Subtomograms', important=True,
                       help='Select the subtomograms from which you want\n'
                            'to extract the coordinates. The coordinate belonging to '
                            'each subtomogram should be already associated to an initial '
                            'tomogram.')
 
-        form.addParam('Tomograms', params.PointerParam,
+        form.addParam('inputTomos', params.PointerParam,
                       pointerClass='SetOfTomograms',
-                      label='Input Tomograms', important=True,
+                      label='Tomograms', important=True,
                       help='Select the tomograms to which you want to\n'
                            'associate the coordinates from the subtomograms.')
 
@@ -114,8 +114,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
     def createOutputStep(self):
         self._defineOutputs(outputCoordinates3D=self.outputCoords)
-        self._defineSourceRelation(self.SubTomograms, self.outputCoords)
-        self._defineSourceRelation(self.Tomograms, self.outputCoords)
+        self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
+        self._defineSourceRelation(self.inputTomos, self.outputCoords)
 
     # ------------- UTILS functions ----------------
     def getSuffix(self, suffix):
@@ -125,10 +125,10 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         return self._getPath("coordinates%s.sqlite" % self.getSuffix(suffix))
 
     def getInputTomos(self):
-        return self.Tomograms.get()
+        return self.inputTomos.get()
 
     def getInputSubTomos(self):
-        return self.SubTomograms.get()
+        return self.inputSubTomos.get()
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
