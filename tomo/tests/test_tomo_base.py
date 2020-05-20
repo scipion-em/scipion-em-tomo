@@ -992,5 +992,59 @@ class TestTomoAssignAlignment(BaseTest):
         return assign
 
 
+class TestTomoExtractCoordinates(BaseTest):
+    '''This class checks if the protocol extract coordinates from subtomograms works properly'''
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.tomogram1 = cls.dataset.getFile('tomo1')
+        cls.tomogram2 = cls.dataset.getFile('tomo2')
+        cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+        cls.subtomos = cls.dataset.getFile('basename.hdf')
+        cls.path = cls.dataset.getPath()
+
+    def _runExtractCoordinates(self):
+        protImportTomogram1 = self.newProtocol(tomo.protocols.ProtImportTomograms,
+                                              filesPath=self.tomogram1,
+                                              samplingRate=5)
+        self.launchProtocol(protImportTomogram1)
+
+        protImportTomogram2 = self.newProtocol(tomo.protocols.ProtImportTomograms,
+                                              filesPath=self.tomogram2,
+                                              samplingRate=5)
+        self.launchProtocol(protImportTomogram2)
+
+        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
+                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   filesPath=self.coords3D,
+                                                   importTomograms=protImportTomogram1.outputTomograms,
+                                                   filesPattern='', boxSize=32,
+                                                   samplingRate=5)
+        self.launchProtocol(protImportCoordinates3d)
+
+        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                      filesPath=self.subtomos,
+                                      samplingRate=1.35,
+                                      importCoordinates=protImportCoordinates3d.outputCoordinates)
+        self.launchProtocol(protImport)
+
+        protExtract = self.newProtocol(tomo.protocols.ProtTomoExtractCoords,
+                                       inputSubTomos=protImport.outputSubTomograms,
+                                       inputTomos=protImportTomogram2.outputTomograms)
+        self.launchProtocol(protExtract)
+
+        return protExtract
+
+    def test_extractCoordinates(self):
+        coords = self._runExtractCoordinates()
+        self.assertTrue(getattr(coords, 'outputCoordinates3D'))
+        self.assertTrue(coords.outputCoordinates3D.getSamplingRate(), 5.0)
+        self.assertTrue(coords.outputCoordinates3D.getBoxSize(), 8)
+        self.assertTrue(coords.outputCoordinates3D.getSize(), 4)
+        return coords
+
+
 if __name__ == 'main':
     pass

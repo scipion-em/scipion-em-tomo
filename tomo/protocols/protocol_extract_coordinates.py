@@ -75,6 +75,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         suffix = ''
         self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
+        self.outputCoords.setSamplingRate(inTomos.getSamplingRate())
 
         def appendCoordFromSubTomo(subTomo, boxSize):
             coord = subTomo.getCoordinate3D()
@@ -101,7 +102,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         self.outputCoords.setBoxSize(boxSize)
 
     def createOutputStep(self):
-        self._defineOutputs(outputCoordinates=self.outputCoords)
+        self._defineOutputs(outputCoordinates3D=self.outputCoords)
         self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
         self._defineSourceRelation(self.inputTomos, self.outputCoords)
 
