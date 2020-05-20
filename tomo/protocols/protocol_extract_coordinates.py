@@ -135,13 +135,11 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         return summary
 
     def _methods(self):
-        # No much to add to summary information
         return self._summary()
 
     def _validate(self):
         """ The function of this hook is to add some validation before the
         protocol is launched to be executed. It should return a list of errors.
-        If the list is empty the protocol can be executed.
         """
         errors = []
         inputSubTomos = self.getInputSubTomos()
