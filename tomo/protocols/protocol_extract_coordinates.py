@@ -48,17 +48,25 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
-        form.addParam('inputSubTomos', params.PointerParam,
+        form.addParam('SubTomograms', params.PointerParam,
                       pointerClass='SetOfSubTomograms',
                       label='Input Subtomograms', important=True,
                       help='Select the subtomograms from which you want\n'
-                           'to extract the coordinates.')
+                           'to extract the coordinates. The coordinate belonging to '
+                           'each subtomogram should be already associated to an initial '
+                           'tomogram.')
 
-        form.addParam('inputTomos', params.PointerParam,
+        form.addParam('Tomograms', params.PointerParam,
                       pointerClass='SetOfTomograms',
                       label='Input Tomograms', important=True,
                       help='Select the tomograms to which you want to\n'
                            'associate the coordinates from the subtomograms.')
+
+        form.addParam('boxSize', params.IntParam,
+                      allowsNull=True, expertLevel=params.LEVEL_ADVANCED, label='Box Size',
+                      help='Determine the box size of the extracted coordinates. By default, '
+                           'the program assigns the box size directly from the coordinates '
+                           'associated to the subtomograms.')
 
         form.addParallelSection(threads=0, mpi=0)
 
@@ -95,7 +103,10 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 self.outputCoords.append(newCoord)
 
         newCoord = Coordinate3D()
-        boxSize = inSubTomos.getXDim() * scale
+        if self.boxSize.get() is None:
+            boxSize = inSubTomos.getXDim() * scale
+        else:
+            boxSize = self.boxSize.get()
         for subTomo in inSubTomos:
             appendCoordFromSubTomo(subTomo, boxSize)
 
@@ -103,8 +114,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
     def createOutputStep(self):
         self._defineOutputs(outputCoordinates3D=self.outputCoords)
-        self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
-        self._defineSourceRelation(self.inputTomos, self.outputCoords)
+        self._defineSourceRelation(self.SubTomograms, self.outputCoords)
+        self._defineSourceRelation(self.Tomograms, self.outputCoords)
 
     # ------------- UTILS functions ----------------
     def getSuffix(self, suffix):
@@ -114,10 +125,10 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         return self._getPath("coordinates%s.sqlite" % self.getSuffix(suffix))
 
     def getInputTomos(self):
-        return self.inputTomos.get()
+        return self.Tomograms.get()
 
     def getInputSubTomos(self):
-        return self.inputSubTomos.get()
+        return self.SubTomograms.get()
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):

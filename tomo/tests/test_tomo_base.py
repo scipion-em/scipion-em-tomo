@@ -1031,8 +1031,8 @@ class TestTomoExtractCoordinates(BaseTest):
         self.launchProtocol(protImport)
 
         protExtract = self.newProtocol(tomo.protocols.ProtTomoExtractCoords,
-                                       inputSubTomos=protImport.outputSubTomograms,
-                                       inputTomos=protImportTomogram2.outputTomograms)
+                                       SubTomograms=protImport.outputSubTomograms,
+                                       Tomograms=protImportTomogram2.outputTomograms)
         self.launchProtocol(protExtract)
 
         return protExtract
