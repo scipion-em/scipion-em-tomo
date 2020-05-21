@@ -944,9 +944,6 @@ class Mesh(data.EMObject):
     def getVolId(self):
         return self._volId.get()
 
-    def setVolId(self, volId):
-        self._volId.set(volId)
-
     def __str__(self):
         return "Mesh (path=%s)" % self.getPath()
 
