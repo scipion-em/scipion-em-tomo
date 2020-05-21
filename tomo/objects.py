@@ -703,7 +703,7 @@ class SetOfCoordinates3D(data.EMSet):
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere):
-            coord.setVolume(self.getPrecedents().__getitem__(coord.getVolId()))
+            coord.setVolume(self.getPrecedents()[coord.getVolId()])
             yield coord
 
     def getPrecedents(self):
@@ -747,7 +747,7 @@ class SetOfCoordinates3D(data.EMSet):
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
         coord = data.EMSet.__getitem__(self, itemId)
-        coord.setVolume(self.getPrecedents().__getitem__(coord.getVolId()))
+        coord.setVolume(self.getPrecedents()[coord.getVolId()])
         return coord
 
 
@@ -986,12 +986,12 @@ class SetOfMeshes(data.EMSet):
         """ Redefine iteration to set the acquisition to images. """
         for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
                                  where=where, limit=limit):
-            mesh.setVolume(self.getVolumes().__getitem__(mesh.getVolId()))
+            mesh.setVolume(self.getVolumes()[mesh.getVolId()])
             yield mesh
 
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
         mesh = data.EMSet.__getitem__(self, itemId)
-        mesh.setVolume(self.getVolumes().__getitem__(mesh.getVolId()))
+        mesh.setVolume(self.getVolumes()[mesh.getVolId()])
         return mesh
 
