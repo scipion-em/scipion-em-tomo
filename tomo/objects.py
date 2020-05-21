@@ -907,7 +907,6 @@ class Mesh(data.EMObject):
         self._volumePointer = pwobj.Pointer(objDoStore=False)
         self._group = pwobj.Integer(group)
         self._volId = pwobj.Integer()
-        self._volName = pwobj.String()
 
     def getPath(self):
         return self._path.get()
@@ -941,13 +940,6 @@ class Mesh(data.EMObject):
         """ Set the tomogram to which this mesh belongs. """
         self._volumePointer.set(volume)
         self._volId.set(volume.getObjId())
-        self._volName.set(volume.getFileName())
-
-    def setVolName(self, volName):
-        self._volName.set(volName)
-
-    def getVolName(self):
-        return self._volName.get()
 
     def getVolId(self):
         return self._volId.get()
