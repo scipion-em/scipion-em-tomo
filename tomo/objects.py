@@ -758,6 +758,7 @@ class SubTomogram(data.Volume):
         self._acquisition = None
         self._coordinate = None
         self._volId = Integer()
+        self._volName = pwobj.String()
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -780,8 +781,8 @@ class SubTomogram(data.Volume):
                self._acquisition.getAngleMax() is not None
 
     def getVolId(self):
-        """ Return the micrograph id if the coordinate is not None.
-        or have set the _micId property.
+        """ Return the tomogram id if the coordinate is not None.
+        or have set the _volId property.
         """
         if self._volId.hasValue():
             return self._volId.get()
@@ -792,6 +793,19 @@ class SubTomogram(data.Volume):
 
     def setVolId(self, volId):
         self._volId.set(volId)
+
+    def getVolName(self):
+        """ Return the tomogram filename if the coordinate is not None.
+        or have set the _volName property.
+        """
+        if self._volId.hasValue():
+            return self._volId.get()
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolId()
+        return self._volName.get()
+
+    def setVolName(self, volName):
+        self._volName.set(volName)
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
