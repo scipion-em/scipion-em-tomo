@@ -113,9 +113,9 @@ class TiltSeriesBase(data.SetOfImages):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-    def clone(self):
+    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
         clone = self.getClass()()
-        clone.copy(self, ignoreAttrs=['_mapperPath', '_size'])
+        clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
 
     def close(self):
