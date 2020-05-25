@@ -70,12 +70,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                       help='Select dynamo table (.tbl) to link dynamo metadata to the subtomograms that will be '
                            'imported to Scipion. ')
 
-        form.addParam('importCoordinates', PointerParam,
-                      pointerClass='SetOfCoordinates3D',
-                      allowsNull=True,
-                      label='Input coordinates 3D',
-                      help='Select the coordinates for which the '
-                            'subtomograms were extracted.')
+        # form.addParam('importCoordinates', PointerParam,
+        #               pointerClass='SetOfCoordinates3D',
+        #               allowsNull=True,
+        #               label='Input coordinates 3D',
+        #               help='Select the coordinates for which the '
+        #                     'subtomograms were extracted.')
 
         ProtTomoImportAcquisition._defineParams(self, form)
 
@@ -109,11 +109,11 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         self._openMetadataFile()  # Open the metadata file associated to the software used
 
-        if self.importCoordinates.get():
-            self.coords = []
-            for coord3D in self.importCoordinates.get().iterCoordinates():
-                self.coords.append(coord3D.clone())
-            self.subtomoSet.setCoordinates3D(self.importCoordinates)
+        # if self.importCoordinates.get():
+        #     self.coords = []
+        #     for coord3D in self.importCoordinates.get().iterCoordinates():
+        #         self.coords.append(coord3D.clone())
+        #     self.subtomoSet.setCoordinates3D(self.importCoordinates)
 
         self._parseAcquisitionData()
         for fileName, fileId in self.iterFiles():
@@ -159,7 +159,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             subtomo.setLocation(index, newFileName)
 
         subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-        self._setCoordinates3D(subtomo)
+        # self._setCoordinates3D(subtomo)
 
         self._importMetadata(subtomo)  # Select the import function from the software used
 
@@ -191,12 +191,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self._defineOutputs(outputSubTomograms=self.subtomoSet)
 
     # --------------------------- INFO functions ------------------------------
-    def _setCoordinates3D(self, subtomo):
-        if self.importCoordinates.get():
-            if len(self.coords) < 1:
-                raise Exception("Coordinates 3D and subtomograms should have the same size")
-            else:
-                subtomo.setCoordinate3D(self.coords.pop(0))
+    # def _setCoordinates3D(self, subtomo):
+    #     if self.importCoordinates.get():
+    #         if len(self.coords) < 1:
+    #             raise Exception("Coordinates 3D and subtomograms should have the same size")
+    #         else:
+    #             subtomo.setCoordinate3D(self.coords.pop(0))
 
     def _hasOutput(self):
         return self.hasAttribute('outputSubTomograms')
