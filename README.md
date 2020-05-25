@@ -39,7 +39,7 @@ To check the installation, simply run one of the following Scipion tests:
  A complete list of tests can also be seen by executing ``scipion test tomo.tests.test_tomo_base``
 
 ### Pre-requisites
-* Use scipion v2.0.0
+* Use scipion v3.0.0
 * Use scipion-em-tomo from branch 'tomo' (see previous section for a possible setup)
 * TestTomoPreprocessing test requires gctf and imod plugins to work properly. If these plugins cannot be found the test will not be executed. For this test to succeed one available GPU is needed, more GPUs can be defined defining the var SCIPION_TEST_GPULIST (e.g export SCIPION_TEST_GPULIST='0 1' )
 

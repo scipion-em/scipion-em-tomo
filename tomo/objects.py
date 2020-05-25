@@ -33,6 +33,7 @@ import numpy as np
 import math
 import csv
 
+from pyworkflow.object import Integer
 import pyworkflow.object as pwobj
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
@@ -616,6 +617,12 @@ class Coordinate3D(data.EMObject):
         self.setObjId(coord.getObjId())
         self.setBoxSize(coord.getBoxSize())
 
+    def setBoxSize(self, boxSize):
+        self._boxSize = boxSize
+
+    def getBoxSize(self):
+        return self._boxSize
+
     def getVolId(self):
         return self._volId.get()
 
@@ -697,6 +704,7 @@ class SetOfCoordinates3D(data.EMSet):
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere):
+            coord.setVolume(self.getPrecedents()[coord.getVolId()])
             yield coord
 
     def getPrecedents(self):
@@ -737,12 +745,20 @@ class SetOfCoordinates3D(data.EMSet):
 
         return s
 
+    def __getitem__(self, itemId):
+        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        coord = data.EMSet.__getitem__(self, itemId)
+        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        return coord
+
 
 class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._coordinate = None
+        self._volId = Integer()
+        self._volName = pwobj.String()
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -763,6 +779,33 @@ class SubTomogram(data.Volume):
         return self._acquisition is not None and \
                self._acquisition.getAngleMin() is not None and \
                self._acquisition.getAngleMax() is not None
+
+    def getVolId(self):
+        """ Return the tomogram id if the coordinate is not None.
+        or have set the _volId property.
+        """
+        if self._volId.hasValue():
+            return self._volId.get()
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolId()
+
+        return None
+
+    def setVolId(self, volId):
+        self._volId.set(volId)
+
+    def getVolName(self):
+        """ Return the tomogram filename if the coordinate is not None.
+        or have set the _volName property.
+        """
+        if self._volId.hasValue():
+            return self._volId.get()
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolId()
+        return self._volName.get()
+
+    def setVolName(self, volName):
+        self._volName.set(volName)
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
@@ -891,8 +934,9 @@ class Mesh(data.EMObject):
     def __init__(self, path=None, group=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
-        self._volume = None
+        self._volumePointer = pwobj.Pointer(objDoStore=False)
         self._group = pwobj.Integer(group)
+        self._volId = pwobj.Integer()
 
     def getPath(self):
         return self._path.get()
@@ -920,11 +964,15 @@ class Mesh(data.EMObject):
         """ Return the tomogram object to which
         this mesh is associated.
         """
-        return self._volume
+        return self._volumePointer.get()
 
     def setVolume(self, volume):
         """ Set the tomogram to which this mesh belongs. """
-        self._volume = volume
+        self._volumePointer.set(volume)
+        self._volId.set(volume.getObjId())
+
+    def getVolId(self):
+        return self._volId.get()
 
     def __str__(self):
         return "Mesh (path=%s)" % self.getPath()
@@ -957,5 +1005,12 @@ class SetOfMeshes(data.EMSet):
         """ Redefine iteration to set the acquisition to images. """
         for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
                                  where=where, limit=limit):
+            mesh.setVolume(self.getVolumes()[mesh.getVolId()])
             yield mesh
+
+    def __getitem__(self, itemId):
+        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        mesh = data.EMSet.__getitem__(self, itemId)
+        mesh.setVolume(self.getVolumes()[mesh.getVolId()])
+        return mesh
 
