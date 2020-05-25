@@ -219,14 +219,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
 
-                # if len(self._tiltAngleList) != len(tiltSeriesList):
-                #     if incompleteTs:
-                #         raise Exception("More than one tilt-series seems "
-                #                         "incomplete regarding the expected "
-                #                         "number of tilt images.")
-                #     incompleteTs = True
-                #     continue
-
                 tsObj = tsClass(tsId=ts)
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
@@ -278,7 +270,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
-        # errors = []
         self._initialize()
         try:
             matching = self.getMatchingFiles()
