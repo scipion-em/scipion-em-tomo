@@ -49,7 +49,6 @@ class ProtAssignTomo2Subtomo(EMProtocol):
     # --------------------------- STEPS functions --------------------------------------------
     def createOutputStep(self):
         inputSubtomos = self.inputSubtomos.get()
-        inputTomos = self.inputTomos.get()
         outputSubtomos = inputSubtomos.create(self._getPath())
         outputSubtomos.copyInfo(inputSubtomos)
         outputSubtomos.copyItems(inputSubtomos, updateItemCallback=self._updateItem)
@@ -61,12 +60,8 @@ class ProtAssignTomo2Subtomo(EMProtocol):
     def _updateItem(self, item, row):
         inputTomos = self.inputTomos.get()
         for tomo in inputTomos:
-            # get just the filename but not the path
             tomoName = removeExt(tomo.getBaseName())
-            print("-------tomoName-----", tomoName)
-            print("-------SubtomoName-----", item.getFileName())
             if tomoName in item.getFileName():
-                print("-------ifTrue-----")
                 item.setVolName(tomoName)
                 item.setVolId(tomo.getObjId())
 
