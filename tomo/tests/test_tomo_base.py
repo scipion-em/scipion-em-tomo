@@ -991,6 +991,46 @@ class TestTomoAssignAlignment(BaseTest):
         self.assertTrue(assign.outputSubtomograms.getFirstItem().hasTransform())
         return assign
 
+class TestTomoAssignTomo2Subtomo(BaseTest):
+    """This class check if the protocol assign tomograms to subtomograms works properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+        cls.setOfTomograms = cls.dataset.getFile('*.em')
+
+    def _runPreviousProtocols(self):
+        protImportTomo = self.newProtocol(tomo.protocols.ProtImportTomograms,
+                                        filesPath=self.setOfTomograms,
+                                        filesPattern='',
+                                        acquisitionAngleMax=40,
+                                        acquisitionAngleMin=-40,
+                                        samplingRate=1.35)
+        self.launchProtocol(protImportTomo)
+        protImportSubtomo = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                              filesPath=self.setOfSubtomograms,
+                                              samplingRate=5)
+        self.launchProtocol(protImportSubtomo)
+        return protImportTomo, protImportSubtomo
+
+    def _assignTomos2subtomos(self):
+        protImportTomo, protImportSubtomo = self._runPreviousProtocols()
+        tomo2subtomo = self.newProtocol(tomo.protocols.ProtAssignTomo2Subtomo,
+                                 inputSubtomos=protImportSubtomo.outputSubTomograms,
+                                 inputTomos=protImportTomo.outputTomograms)
+        self.launchProtocol(tomo2subtomo)
+        self.assertIsNotNone(tomo2subtomo.outputSubtomograms,
+                             "There was a problem with subtomograms output")
+        return tomo2subtomo
+
+    def test_assignTomos2subtomos(self):
+        tomo2subtomo = self._assignTomos2subtomos()
+        self.assertTrue(getattr(tomo2subtomo, 'outputSubtomograms'))
+        self.assertFalse(tomo2subtomo.outputSubtomograms.getFirstItem().getVolName())
+        return tomo2subtomo
+
 
 if __name__ == 'main':
     pass
