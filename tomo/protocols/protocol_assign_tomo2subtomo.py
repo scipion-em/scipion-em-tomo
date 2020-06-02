@@ -48,6 +48,10 @@ class ProtAssignTomo2Subtomo(EMProtocol):
 
     # --------------------------- STEPS functions --------------------------------------------
     def createOutputStep(self):
+        self.tomoDict = {}
+        inputTomos = self.inputTomos.get()
+        for tomo in inputTomos:
+            self.tomoDict[tomo.getBaseName()] = tomo.getObjId()
         inputSubtomos = self.inputSubtomos.get()
         outputSubtomos = inputSubtomos.create(self._getPath())
         outputSubtomos.copyInfo(inputSubtomos)
@@ -58,12 +62,11 @@ class ProtAssignTomo2Subtomo(EMProtocol):
 
     # --------------------------- UTILS functions --------------------------------------------
     def _updateItem(self, item, row):
-        inputTomos = self.inputTomos.get()
-        for tomo in inputTomos:
-            tomoName = removeExt(tomo.getBaseName())
-            if tomoName in item.getFileName():
+        for tomoName in self.tomoDict:
+            if removeExt(tomoName) in item.getFileName():
                 item.setVolName(tomoName)
-                item.setVolId(tomo.getObjId())
+                item.setVolId(self.tomoDict.get(tomoName))
+                break
 
     # --------------------------- INFO functions --------------------------------------------
     def _summary(self):
