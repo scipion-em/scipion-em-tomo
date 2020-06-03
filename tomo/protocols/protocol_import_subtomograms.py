@@ -31,10 +31,7 @@ from os.path import abspath, basename
 
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.protocol.params import PointerParam, EnumParam, PathParam
-from pyworkflow.utils.path import createAbsLink, copyFile
-from pwem import Domain
-
+from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from ..objects import SubTomogram
@@ -47,7 +44,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     IMPORT_FROM_AUTO = 0
     IMPORT_FROM_EMAN = 1
-    IMPORT_FROM_DYNAMO = 2
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
@@ -57,18 +53,13 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        return [' ', 'Eman', 'Dynamo']
+        return [' ', 'Eman']
 
     def _getDefaultChoice(self):
         return self.IMPORT_FROM_AUTO
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
-
-        form.addParam('tablePath', PathParam,
-                      label="Dynamo table file:", allowsNull=True, condition='importFrom == 2',
-                      help='Select dynamo table (.tbl) to link dynamo metadata to the subtomograms that will be '
-                           'imported to Scipion. ')
 
         # form.addParam('importCoordinates', PointerParam,
         #               pointerClass='SetOfCoordinates3D',
@@ -171,21 +162,12 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         importFrom = self.importFrom.get()
         if importFrom == self.IMPORT_FROM_EMAN:
             pass  # TODO: read .hdf5 header (EMAN)
-        if importFrom == self.IMPORT_FROM_DYNAMO:
-            readDynTable = Domain.importFromPlugin("dynamo.convert.convert", "readDynTable")
-            readDynTable(self, subtomo)
 
     def _openMetadataFile(self):
         importFrom = self.importFrom.get()
-        if importFrom == self.IMPORT_FROM_DYNAMO:
-            dynTable = self._getExtraPath('dynamo_table.tbl')
-            copyFile(self.tablePath.get(), dynTable)
-            self.fhTable = open(dynTable, 'r')
 
     def _closeMetadataFile(self):
         importFrom = self.importFrom.get()
-        if importFrom == self.IMPORT_FROM_DYNAMO:
-            self.fhTable.close()
 
     def createOutput(self):
         self._defineOutputs(outputSubTomograms=self.subtomoSet)

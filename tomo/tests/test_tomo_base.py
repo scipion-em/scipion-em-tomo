@@ -600,15 +600,6 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _runImportDynSubTomograms(self):
-        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.subtomos,
-                                      samplingRate=1.35,
-                                      importFrom=2,
-                                      tablePath=self.table)
-        self.launchProtocol(protImport)
-        return protImport
-
     def test_import_sub_tomograms(self):
          protImport = self._runImportSubTomograms()
          output = getattr(protImport, 'outputSubTomograms', None)
@@ -642,23 +633,6 @@ class TestTomoImportSubTomograms(BaseTest):
          #         self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
 
          return output2
-
-    def test_import_dynamo_subtomograms(self):
-         protImport = self._runImportDynSubTomograms()
-         output = getattr(protImport, 'outputSubTomograms', None)
-         self.assertTrue(output.getSamplingRate() == 1.35)
-         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-         self.assertTrue(output.getDim()[0] == 32)
-         self.assertTrue(output.getDim()[1] == 32)
-         self.assertTrue(output.getDim()[2] == 32)
-         # Metada from dynamo table:
-         self.assertTrue(output.getFirstItem().getObjId() == 4)
-         self.assertTrue(output.getFirstItem().getClassId() == 1)
-         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
-         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
-         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
-         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
 
 
 class TestTomoSubSetsSubTomograms(BaseTest):
