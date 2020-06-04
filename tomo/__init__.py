@@ -27,7 +27,7 @@
 import pwem
 
 
-_logo = ""
+_logo = "icon.gif"
 _references = []
 
 
