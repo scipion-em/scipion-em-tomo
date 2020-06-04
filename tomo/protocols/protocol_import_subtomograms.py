@@ -42,21 +42,8 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     _outputClassName = 'SetOfSubTomograms'
     _label = 'import subtomograms'
 
-    IMPORT_FROM_AUTO = 0
-    IMPORT_FROM_EMAN = 1
-
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
-
-    def _getImportChoices(self):
-        """ Return a list of possible choices
-        from which the import can be done.
-        (usually packages formats such as: xmipp3, eman2, relion...etc.
-        """
-        return [' ', 'Eman']
-
-    def _getDefaultChoice(self):
-        return self.IMPORT_FROM_AUTO
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
@@ -98,8 +85,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self.subtomoSet = self._createSetOfSubTomograms()
         self.subtomoSet.setSamplingRate(samplingRate)
 
-        self._openMetadataFile()  # Open the metadata file associated to the software used
-
         # if self.importCoordinates.get():
         #     self.coords = []
         #     for coord3D in self.importCoordinates.get().iterCoordinates():
@@ -139,8 +124,6 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 for index in range(1, n+1):
                     self._addSubtomogram(subtomo, fileName, newFileName, index=index)
 
-        self._closeMetadataFile()  # Close the metadata file associated to the software used
-
     def _addSubtomogram(self, subtomo, fileName, newFileName, index=None):
         """ adds a subtomogram to a set """
         subtomo.cleanObjId()
@@ -151,23 +134,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
         # self._setCoordinates3D(subtomo)
-
-        self._importMetadata(subtomo)  # Select the import function from the software used
-
         self.subtomoSet.append(subtomo)
-
-    def _importMetadata(self, subtomo):
-
-        # TODO: This is a temporal solution to add different import functions from different plugins
-        importFrom = self.importFrom.get()
-        if importFrom == self.IMPORT_FROM_EMAN:
-            pass  # TODO: read .hdf5 header (EMAN)
-
-    def _openMetadataFile(self):
-        importFrom = self.importFrom.get()
-
-    def _closeMetadataFile(self):
-        importFrom = self.importFrom.get()
 
     def createOutput(self):
         self._defineOutputs(outputSubTomograms=self.subtomoSet)
