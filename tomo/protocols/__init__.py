@@ -36,3 +36,4 @@ from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 from .protocol_alignment_assign_subtomo import ProtAlignmentAssignSubtomo
 from .protocol_extract_coordinates import ProtTomoExtractCoords
+from .protocol_assign_tomo2subtomo import ProtAssignTomo2Subtomo

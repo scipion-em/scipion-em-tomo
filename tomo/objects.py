@@ -33,6 +33,7 @@ import numpy as np
 import math
 import csv
 
+from pyworkflow.object import Integer
 import pyworkflow.object as pwobj
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
@@ -113,9 +114,9 @@ class TiltSeriesBase(data.SetOfImages):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-    def clone(self):
+    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
         clone = self.getClass()()
-        clone.copy(self, ignoreAttrs=['_mapperPath', '_size'])
+        clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
 
     def close(self):
@@ -753,6 +754,8 @@ class SubTomogram(data.Volume):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._coordinate = None
+        self._volId = Integer()
+        self._volName = pwobj.String()
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -773,6 +776,33 @@ class SubTomogram(data.Volume):
         return self._acquisition is not None and \
                self._acquisition.getAngleMin() is not None and \
                self._acquisition.getAngleMax() is not None
+
+    def getVolId(self):
+        """ Return the tomogram id if the coordinate is not None.
+        or have set the _volId property.
+        """
+        if self._volId.hasValue():
+            return self._volId.get()
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolId()
+
+        return None
+
+    def setVolId(self, volId):
+        self._volId.set(volId)
+
+    def getVolName(self):
+        """ Return the tomogram filename if the coordinate is not None.
+        or have set the _volName property.
+        """
+        if self._volId.hasValue():
+            return self._volId.get()
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolId()
+        return self._volName.get()
+
+    def setVolName(self, volName):
+        self._volName.set(volName)
 
 
 class SetOfSubTomograms(data.SetOfVolumes):

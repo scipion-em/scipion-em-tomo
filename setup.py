@@ -67,12 +67,12 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='3.0.0',  # Required
+    version='3.0.1',  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#summary
-    description='Plugin to use Tomo programs within the Scipion framework',  # Required
+    description='Plugin to use electron tomography software within the Scipion framework',  # Required
 
     # This is an optional longer description of your project that represents
     # the body of text which users will see when they visit PyPI.
@@ -92,7 +92,7 @@ setup(
 
     # This should be your name or the name of the organization which owns the
     # project.
-    author='J.M. De la Rosa',  # Optional
+    author='J.M. De la Rosa, Estrella Fernandez, David Herreros, Adrian Quintana',  # Optional
 
     # This should be a valid email address corresponding to the author listed
     # above.
@@ -165,7 +165,7 @@ setup(
     # MANIFEST.in as well.
     # include_package_data=True,
     package_data={  # Optional
-       'tomo': ['protocols.conf'],
+       'tomo': ['icon.gif', 'protocols.conf'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
