@@ -624,6 +624,9 @@ class Coordinate3D(data.EMObject):
     def getVolId(self):
         return self._volId.get()
 
+    def setVolId(self, volId):
+        self._volId.set(volId)
+
     def invertY(self):
         if not self.getVolume() is None:
             dims = self.getVolume().getDim()
