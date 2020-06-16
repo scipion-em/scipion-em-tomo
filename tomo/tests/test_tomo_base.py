@@ -900,18 +900,18 @@ class TestTomoPreprocessing(BaseTest):
         )
         self.launchProtocol(protGctf)
 
-        # -------- Basic alignment and reconstruction with IMOD ------
-        protImodAuto = self.newProtocol(
-            imod.protocols.ProtImodAuto3D,
-            inputTiltSeries=protGctf.outputTiltSeries,
-            excludeList=1,
-            rotationAngle=90,
-            zWidth=400,
-            useRaptor=True,
-            markersDiameter=20,
-            markersNumber=20
-        )
-        self.launchProtocol(protImodAuto)
+        # # -------- Basic alignment and reconstruction with IMOD ------
+        # protImodAuto = self.newProtocol(
+        #     imod.protocols.ProtImodAuto3D,
+        #     inputTiltSeries=protGctf.outputTiltSeries,
+        #     excludeList=1,
+        #     rotationAngle=90,
+        #     zWidth=400,
+        #     useRaptor=True,
+        #     markersDiameter=20,
+        #     markersNumber=20
+        # )
+        # self.launchProtocol(protImodAuto)
 
 
 class TestTomoAssignAlignment(BaseTest):
