@@ -698,10 +698,7 @@ class TestTomoSubSetsSubTomograms(BaseTest):
         self.assertTrue(protImport.outputSubTomograms.getDim()[0] == 32)
         self.assertTrue(protImport.outputSubTomograms.getDim()[1] == 32)
         self.assertTrue(protImport.outputSubTomograms.getDim()[2] == 32)
-        self.assertTrue(protImport.outputSubTomograms.getFirstItem().getCoordinate3D().getX() == 314)
-        self.assertTrue(protImport.outputSubTomograms.getFirstItem().getCoordinate3D().getY() == 350)
-        self.assertTrue(protImport.outputSubTomograms.getFirstItem().getCoordinate3D().getZ() == 256)
-        self.assertIsNotNone(protImport.outputSubTomograms,
+        self.assertSetSize(protImport.outputSubTomograms, 62,
                              "There was a problem with Import SubTomograms protocol")
 
         # Create a subset with 1 tomograms
