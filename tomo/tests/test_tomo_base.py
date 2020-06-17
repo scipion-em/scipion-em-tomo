@@ -600,15 +600,6 @@ class TestTomoImportSubTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _runImportDynSubTomograms(self):
-        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.subtomos,
-                                      samplingRate=1.35,
-                                      importFrom=2,
-                                      tablePath=self.table)
-        self.launchProtocol(protImport)
-        return protImport
-
     def test_import_sub_tomograms(self):
          protImport = self._runImportSubTomograms()
          output = getattr(protImport, 'outputSubTomograms', None)
@@ -642,23 +633,6 @@ class TestTomoImportSubTomograms(BaseTest):
          #         self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
 
          return output2
-
-    def test_import_dynamo_subtomograms(self):
-         protImport = self._runImportDynSubTomograms()
-         output = getattr(protImport, 'outputSubTomograms', None)
-         self.assertTrue(output.getSamplingRate() == 1.35)
-         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-         self.assertTrue(output.getDim()[0] == 32)
-         self.assertTrue(output.getDim()[1] == 32)
-         self.assertTrue(output.getDim()[2] == 32)
-         # Metada from dynamo table:
-         self.assertTrue(output.getFirstItem().getObjId() == 4)
-         self.assertTrue(output.getFirstItem().getClassId() == 1)
-         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMin() == -60)
-         self.assertTrue(output.getFirstItem().getAcquisition().getAngleMax() == 60)
-         self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 175)
-         self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 134)
-         self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 115)
 
 
 class TestTomoSubSetsSubTomograms(BaseTest):
@@ -724,10 +698,7 @@ class TestTomoSubSetsSubTomograms(BaseTest):
         self.assertTrue(protImport.outputSubTomograms.getDim()[0] == 32)
         self.assertTrue(protImport.outputSubTomograms.getDim()[1] == 32)
         self.assertTrue(protImport.outputSubTomograms.getDim()[2] == 32)
-        self.assertTrue(protImport.outputSubTomograms.getFirstItem().getCoordinate3D().getX() == 314)
-        self.assertTrue(protImport.outputSubTomograms.getFirstItem().getCoordinate3D().getY() == 350)
-        self.assertTrue(protImport.outputSubTomograms.getFirstItem().getCoordinate3D().getZ() == 256)
-        self.assertIsNotNone(protImport.outputSubTomograms,
+        self.assertSetSize(protImport.outputSubTomograms, 62,
                              "There was a problem with Import SubTomograms protocol")
 
         # Create a subset with 1 tomograms
@@ -929,18 +900,18 @@ class TestTomoPreprocessing(BaseTest):
         )
         self.launchProtocol(protGctf)
 
-        # -------- Basic alignment and reconstruction with IMOD ------
-        protImodAuto = self.newProtocol(
-            imod.protocols.ProtImodAuto3D,
-            inputTiltSeries=protGctf.outputTiltSeries,
-            excludeList=1,
-            rotationAngle=90,
-            zWidth=400,
-            useRaptor=True,
-            markersDiameter=20,
-            markersNumber=20
-        )
-        self.launchProtocol(protImodAuto)
+        # # -------- Basic alignment and reconstruction with IMOD ------
+        # protImodAuto = self.newProtocol(
+        #     imod.protocols.ProtImodAuto3D,
+        #     inputTiltSeries=protGctf.outputTiltSeries,
+        #     excludeList=1,
+        #     rotationAngle=90,
+        #     zWidth=400,
+        #     useRaptor=True,
+        #     markersDiameter=20,
+        #     markersNumber=20
+        # )
+        # self.launchProtocol(protImodAuto)
 
 
 class TestTomoAssignAlignment(BaseTest):
@@ -990,6 +961,46 @@ class TestTomoAssignAlignment(BaseTest):
         self.assertTrue(getattr(assign, 'outputSubtomograms'))
         self.assertTrue(assign.outputSubtomograms.getFirstItem().hasTransform())
         return assign
+
+class TestTomoAssignTomo2Subtomo(BaseTest):
+    """This class check if the protocol assign tomograms to subtomograms works properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+        cls.setOfTomograms = cls.dataset.getFile('*.em')
+
+    def _runPreviousProtocols(self):
+        protImportTomo = self.newProtocol(tomo.protocols.ProtImportTomograms,
+                                        filesPath=self.setOfTomograms,
+                                        filesPattern='',
+                                        acquisitionAngleMax=40,
+                                        acquisitionAngleMin=-40,
+                                        samplingRate=1.35)
+        self.launchProtocol(protImportTomo)
+        protImportSubtomo = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                              filesPath=self.setOfSubtomograms,
+                                              samplingRate=5)
+        self.launchProtocol(protImportSubtomo)
+        return protImportTomo, protImportSubtomo
+
+    def _assignTomos2subtomos(self):
+        protImportTomo, protImportSubtomo = self._runPreviousProtocols()
+        tomo2subtomo = self.newProtocol(tomo.protocols.ProtAssignTomo2Subtomo,
+                                 inputSubtomos=protImportSubtomo.outputSubTomograms,
+                                 inputTomos=protImportTomo.outputTomograms)
+        self.launchProtocol(tomo2subtomo)
+        self.assertIsNotNone(tomo2subtomo.outputSubtomograms,
+                             "There was a problem with subtomograms output")
+        return tomo2subtomo
+
+    def test_assignTomos2subtomos(self):
+        tomo2subtomo = self._assignTomos2subtomos()
+        self.assertTrue(getattr(tomo2subtomo, 'outputSubtomograms'))
+        self.assertFalse(tomo2subtomo.outputSubtomograms.getFirstItem().getVolName())
+        return tomo2subtomo
 
 
 if __name__ == 'main':
