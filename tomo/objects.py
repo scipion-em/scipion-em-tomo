@@ -733,6 +733,13 @@ class SetOfCoordinates3D(data.EMSet):
         summary.append("Particle size: %s" % self.getBoxSize())
         return "\n".join(summary)
 
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but not _mapperPath or _size
+        from other set of objects to current one.
+        """
+        self.setBoxSize(other.getBoxSize())
+        self.setSamplingRate(other.getSamplingRate())
+
     def __str__(self):
         """ String representation of a set of coordinates. """
         if self._boxSize.hasValue():
