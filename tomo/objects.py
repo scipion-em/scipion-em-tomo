@@ -528,7 +528,6 @@ class Coordinate3D(data.EMObject):
         self._y = pwobj.Integer(kwargs.get('y', None))
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
-        self._volName = pwobj.String()
         self._eulerMatrix = data.Transform()
 
     def getX(self):
@@ -609,7 +608,6 @@ class Coordinate3D(data.EMObject):
         """ Set the micrograph to which this coordinate belongs. """
         self._volumePointer.set(volume)
         self._volId.set(volume.getObjId())
-        self._volName.set(volume.getFileName())
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
@@ -636,11 +634,8 @@ class Coordinate3D(data.EMObject):
             self.setY(height - self.getY())
         # else: error TODO
 
-    def setVolName(self, volName):
-        self._volName.set(volName)
-
     def getVolName(self):
-        return self._volName.get()
+        return self.getVolume().getFileName()
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -744,6 +739,11 @@ class SetOfCoordinates3D(data.EMSet):
                                      boxStr, self._appendStreamState())
 
         return s
+
+    def getFirstItem(self):
+        coord = data.EMSet.getFirstItem(self)
+        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        return coord
 
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
