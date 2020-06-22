@@ -798,10 +798,10 @@ class SubTomogram(data.Volume):
         """ Return the tomogram filename if the coordinate is not None.
         or have set the _volName property.
         """
-        if self._volId.hasValue():
-            return self._volId.get()
+        if self._volName.hasValue():
+            return self._volName.get()
         if self.hasCoordinate3D():
-            return self.getCoordinate3D().getVolId()
+            return self.getCoordinate3D().getVolName()
         return self._volName.get()
 
     def setVolName(self, volName):
