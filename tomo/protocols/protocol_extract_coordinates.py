@@ -139,9 +139,9 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         summary.append(u'Input tomograms pixel size: *%0.3f* (Å/px)' % ps2)
         summary.append('Scaling coordinates by a factor of *%0.3f*' % (ps1 / ps2))
 
-        if hasattr(self, 'outputCoordinates'):
+        if hasattr(self, 'outputCoordinates3D'):
             summary.append('Output coordinates: *%d*'
-                           % self.outputCoordinates.getSize())
+                           % self.outputCoordinates3D.getSize())
 
         return summary
 
