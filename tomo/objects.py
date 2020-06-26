@@ -739,6 +739,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         self.setBoxSize(other.getBoxSize())
         self.setSamplingRate(other.getSamplingRate())
+        self.setPrecedents(other.getPrecedents())
 
     def __str__(self):
         """ String representation of a set of coordinates. """
