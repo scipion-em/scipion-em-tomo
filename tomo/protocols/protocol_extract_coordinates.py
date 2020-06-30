@@ -27,6 +27,8 @@
 
 import pyworkflow.protocol.params as params
 
+import pyworkflow.utils as pwutils
+
 from .protocol_base import ProtTomoPicking
 
 from ..objects import Coordinate3D
@@ -80,6 +82,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         inSubTomos = self.getInputSubTomos()
         scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
         print("Scaling coordinates by a factor *%0.2f*" % scale)
+        filesTomo = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomos.iterItems()]
 
         suffix = ''
         self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
@@ -91,7 +94,16 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             tomo = inTomos[tomoKey]
 
             if tomo is None:
-                print("Skipping subtomogram, key %s not found" % tomoKey)
+                print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
+                idx = filesTomo.index(pwutils.removeBaseExt(subTomo.getVolName()))
+                if idx is not None:
+                    x, y, z = coord.getPosition()
+                    newCoord.setPosition(x * scale, y * scale, z * scale)
+
+                    newCoord.setVolume(inTomos[idx])
+                    newCoord.setBoxSize(boxSize)
+                    newCoord.setMatrix(coord.getMatrix())
+                    self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
                 x, y, z = coord.getPosition()
