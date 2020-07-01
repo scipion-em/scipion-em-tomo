@@ -95,12 +95,16 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
             if tomo is None:
                 print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
-                idx = filesTomo.index(pwutils.removeBaseExt(subTomo.getVolName()))
+                try:
+                    idx = filesTomo.index("import_" + pwutils.removeBaseExt(subTomo.getVolName()))
+                except:
+                    idx = None
                 if idx is not None:
                     x, y, z = coord.getPosition()
+                    newCoord.copyObjId(subTomo)
                     newCoord.setPosition(x * scale, y * scale, z * scale)
 
-                    newCoord.setVolume(inTomos[idx])
+                    newCoord.setVolume(inTomos[idx+1])
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(coord.getMatrix())
                     self.outputCoords.append(newCoord)
