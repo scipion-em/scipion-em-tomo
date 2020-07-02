@@ -25,6 +25,8 @@
 # *
 # **************************************************************************
 
+import numpy as np
+
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
@@ -106,7 +108,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
                     newCoord.setVolume(inTomos[idx+1])
                     newCoord.setBoxSize(boxSize)
-                    newCoord.setMatrix(coord.getMatrix())
+                    newCoord.setMatrix(checkMatrix(subTomo, coord))
                     self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
@@ -115,8 +117,18 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
                 newCoord.setVolume(tomo)
                 newCoord.setBoxSize(boxSize)
-                newCoord.setMatrix(coord.getMatrix())
+                newCoord.setMatrix(checkMatrix(subTomo, coord))
                 self.outputCoords.append(newCoord)
+
+        def checkMatrix(subTomo, coord):
+            transform_subTomo = subTomo.getTransform().getMatrix()
+            transform_coordinate = coord.getMatrix()
+            if not np.allclose(transform_coordinate, np.eye(transform_coordinate.shape[0])):
+                return transform_coordinate
+            elif not np.allclose(transform_subTomo, np.eye(transform_subTomo.shape[0])):
+                return transform_subTomo
+            else:
+                return np.eye(transform_subTomo.shape[0])
 
         newCoord = Coordinate3D()
         if self.boxSize.get() is None:
