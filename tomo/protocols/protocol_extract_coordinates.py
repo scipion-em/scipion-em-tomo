@@ -25,7 +25,11 @@
 # *
 # **************************************************************************
 
+import numpy as np
+
 import pyworkflow.protocol.params as params
+
+import pyworkflow.utils as pwutils
 
 from .protocol_base import ProtTomoPicking
 
@@ -80,6 +84,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         inSubTomos = self.getInputSubTomos()
         scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
         print("Scaling coordinates by a factor *%0.2f*" % scale)
+        filesTomo = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomos.iterItems()]
 
         suffix = ''
         self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
@@ -91,7 +96,20 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             tomo = inTomos[tomoKey]
 
             if tomo is None:
-                print("Skipping subtomogram, key %s not found" % tomoKey)
+                print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
+                try:
+                    idx = filesTomo.index("import_" + pwutils.removeBaseExt(subTomo.getVolName()))
+                except:
+                    idx = None
+                if idx is not None:
+                    x, y, z = coord.getPosition()
+                    newCoord.copyObjId(subTomo)
+                    newCoord.setPosition(x * scale, y * scale, z * scale)
+
+                    newCoord.setVolume(inTomos[idx+1])
+                    newCoord.setBoxSize(boxSize)
+                    newCoord.setMatrix(checkMatrix(subTomo, coord))
+                    self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
                 x, y, z = coord.getPosition()
@@ -99,8 +117,18 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
                 newCoord.setVolume(tomo)
                 newCoord.setBoxSize(boxSize)
-                newCoord.setMatrix(coord.getMatrix())
+                newCoord.setMatrix(checkMatrix(subTomo, coord))
                 self.outputCoords.append(newCoord)
+
+        def checkMatrix(subTomo, coord):
+            transform_subTomo = subTomo.getTransform().getMatrix()
+            transform_coordinate = coord.getMatrix()
+            if not np.allclose(transform_coordinate, np.eye(transform_coordinate.shape[0])):
+                return transform_coordinate
+            elif not np.allclose(transform_subTomo, np.eye(transform_subTomo.shape[0])):
+                return transform_subTomo
+            else:
+                return np.eye(transform_subTomo.shape[0])
 
         newCoord = Coordinate3D()
         if self.boxSize.get() is None:
