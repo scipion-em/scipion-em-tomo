@@ -102,7 +102,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             tomo.setOrigin(origin)  # read origin from form
 
-            newFileName = _getUniqueFileName(self.getPattern(), fileName)
+            newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
 
             # newFileName = abspath(self._getVolumeFileName(newFileName))
 
