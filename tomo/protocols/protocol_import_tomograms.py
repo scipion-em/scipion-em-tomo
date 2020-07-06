@@ -108,16 +108,16 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
-            createAbsLink(fileName, abspath(newFileName))
+            createAbsLink(fileName, abspath(self._getExtraPath(newFileName)))
             if n == 1:
                 tomo.cleanObjId()
-                tomo.setFileName(newFileName)
+                tomo.setFileName(self._getExtraPath(newFileName))
                 tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 tomoSet.append(tomo)
             else:
                 for index in range(1, n+1):
                     tomo.cleanObjId()
-                    tomo.setLocation(index, newFileName)
+                    tomo.setLocation(index, self._getExtraPath(newFileName))
                     tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
