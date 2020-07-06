@@ -35,6 +35,7 @@ from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from ..objects import SubTomogram
+from ..utils import _getUniqueFileName
 
 
 class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -112,7 +113,8 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             subtomo.setOrigin(origin)  # read origin from form
 
-            newFileName = abspath(self._getVolumeFileName(fileName))
+            newFileName = _getUniqueFileName(self.getPattern(), fileName)
+            # newFileName = abspath(self._getVolumeFileName(fileName))
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
