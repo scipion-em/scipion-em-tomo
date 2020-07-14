@@ -96,8 +96,9 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         for fileName, fileId in self.iterFiles():
 
             x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.mrc') or fileName.endswith('.map'):
+            if fileName.endswith('.map'):
                 fileName += ':mrc'
+            if fileName.endswith('.mrc') or fileName.endswith(':mrc'):
                 if z == 1 and n != 1:
                     zDim = n
                     n = 1
