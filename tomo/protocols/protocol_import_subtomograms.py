@@ -119,7 +119,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
-            createAbsLink(fileName, self._getExtraPath(newFileName)) # TODO: Aqui relativo y en tomograms absoluto?
+            createAbsLink(fileName, self._getExtraPath(newFileName))
 
             if n == 1:
                 self._addSubtomogram(subtomo, self._getExtraPath(fileName),
