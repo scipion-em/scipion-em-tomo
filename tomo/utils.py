@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
 # *
-# * [1] SciLifeLab, Stockholm University
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -24,19 +25,17 @@
 # *
 # **************************************************************************
 
-import pwem
+import os, re
 
-__version__ = '3.0.4'
-_logo = "icon.gif"
-_references = []
+import pyworkflow.utils as pwutils
 
 
-class Plugin(pwem.Plugin):
-    @classmethod
-    def _defineVariables(cls):
-        pass
+def _getUniqueFileName(pattern, filename, filePaths=None):
+ if filePaths is None:
+     filePaths = [re.split(r'[$*#?]', pattern)[0]]
 
-    @classmethod
-    def getEnviron(cls):
-        return None
+ commPath = pwutils.commonPath(filePaths)
+ return filename.replace(commPath + "/", "").replace("/", "_")
 
+def _matchFileNames(originalName, importName):
+ return os.path.basename(importName) in originalName

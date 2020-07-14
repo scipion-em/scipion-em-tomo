@@ -35,6 +35,7 @@ from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from ..objects import Tomogram
+from ..utils import _getUniqueFileName
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -101,22 +102,22 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             tomo.setOrigin(origin)  # read origin from form
 
-            newFileName = self._getUniqueFileName(fileName)
+            newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
 
-            newFileName = abspath(self._getVolumeFileName(newFileName))
+            # newFileName = abspath(self._getVolumeFileName(newFileName))
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
-            createAbsLink(fileName, newFileName)
+            createAbsLink(fileName, abspath(self._getExtraPath(newFileName)))
             if n == 1:
                 tomo.cleanObjId()
-                tomo.setFileName(newFileName)
+                tomo.setFileName(self._getExtraPath(newFileName))
                 tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 tomoSet.append(tomo)
             else:
                 for index in range(1, n+1):
                     tomo.cleanObjId()
-                    tomo.setLocation(index, newFileName)
+                    tomo.setLocation(index, self._getExtraPath(newFileName))
                     tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
@@ -163,11 +164,3 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
-
-    def _getUniqueFileName(self, filename, filePaths=None):
-        if filePaths is None:
-            filePaths = [re.split(r'[$*#?]', self.getPattern())[0]]
-
-        commPath = pwutils.commonPath(filePaths)
-        return filename.replace(commPath + "/", "").replace("/", "_")
-

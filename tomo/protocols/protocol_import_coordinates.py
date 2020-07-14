@@ -88,7 +88,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         for tomo in importTomograms.iterItems():
             tomoName = basename(os.path.splitext(tomo.getFileName())[0])
             for coordFile, fileId in self.iterFiles():
-                fileName = "import_" + basename(os.path.splitext(coordFile)[0])
+                fileName = basename(os.path.splitext(coordFile)[0])
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
                     if self.getImportFrom() == self.IMPORT_FROM_EMAN:
