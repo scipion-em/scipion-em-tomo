@@ -151,7 +151,8 @@ class ViewerProtImportTomograms(ProtocolViewer):
         sampling, setOfObjects = self._createSetOfObjects()
 
         viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
-        view = self.objectView(setOfObjects, viewParams=viewParams)
+        view = viewers.views.ObjectView(self._project, setOfObjects.strId(),
+                                        setOfObjects.getFileName(), viewParams=viewParams)
         view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
 
         return [view]

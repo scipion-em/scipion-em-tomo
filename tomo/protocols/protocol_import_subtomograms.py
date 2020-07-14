@@ -35,6 +35,7 @@ from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from ..objects import SubTomogram
+from ..utils import _getUniqueFileName
 
 
 class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -95,8 +96,9 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         for fileName, fileId in self.iterFiles():
 
             x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.mrc') or fileName.endswith('.map'):
+            if fileName.endswith('.map'):
                 fileName += ':mrc'
+            if fileName.endswith('.mrc') or fileName.endswith(':mrc'):
                 if z == 1 and n != 1:
                     zDim = n
                     n = 1
@@ -112,17 +114,20 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             subtomo.setOrigin(origin)  # read origin from form
 
-            newFileName = abspath(self._getVolumeFileName(fileName))
+            newFileName = _getUniqueFileName(self.getPattern(), fileName)
+            # newFileName = abspath(self._getVolumeFileName(fileName))
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
-            createAbsLink(fileName, newFileName)
+            createAbsLink(fileName, self._getExtraPath(newFileName))
 
             if n == 1:
-                self._addSubtomogram(subtomo, fileName, newFileName)
+                self._addSubtomogram(subtomo, self._getExtraPath(fileName),
+                                     self._getExtraPath(newFileName))
             else:
                 for index in range(1, n+1):
-                    self._addSubtomogram(subtomo, fileName, newFileName, index=index)
+                    self._addSubtomogram(subtomo, self._getExtraPath(fileName),
+                                         self._getExtraPath(newFileName), index=index)
 
     def _addSubtomogram(self, subtomo, fileName, newFileName, index=None):
         """ adds a subtomogram to a set """
