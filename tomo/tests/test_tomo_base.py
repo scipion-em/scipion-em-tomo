@@ -572,6 +572,7 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
+                                      filesPattern="*name.hdf5",
                                       samplingRate=1.35)
                                       # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -595,6 +596,7 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
+                                      filesPattern="base*.hdf5",
                                       samplingRate=1.35)
                                       # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -667,7 +669,7 @@ class TestTomoSubSetsSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.path,
-                                      filesPattern='*.hdf',
+                                      filesPattern='base*.hdf',
                                       samplingRate=1.35,
                                       importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -698,7 +700,7 @@ class TestTomoSubSetsSubTomograms(BaseTest):
         self.assertTrue(protImport.outputSubTomograms.getDim()[0] == 32)
         self.assertTrue(protImport.outputSubTomograms.getDim()[1] == 32)
         self.assertTrue(protImport.outputSubTomograms.getDim()[2] == 32)
-        self.assertSetSize(protImport.outputSubTomograms, 62,
+        self.assertSetSize(protImport.outputSubTomograms, 4,
                              "There was a problem with Import SubTomograms protocol")
 
         # Create a subset with 1 tomograms
