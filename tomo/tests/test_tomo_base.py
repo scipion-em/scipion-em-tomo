@@ -572,7 +572,6 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
-                                      filesPattern="*name.hdf5",
                                       samplingRate=1.35)
                                       # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
@@ -596,7 +595,6 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
-                                      filesPattern="base*.hdf5",
                                       samplingRate=1.35)
                                       # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
