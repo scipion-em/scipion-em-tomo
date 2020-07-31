@@ -34,24 +34,25 @@ import os
 from distutils.spawn import find_executable
 
 import pyworkflow.protocol.params as params
+from pwem.viewers import EmProtocolViewer, ChimeraView
 from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
 import pwem.viewers as viewers
 from pwem.emlib.image import ImageHandler
 
 
-from tomo.protocols import ProtImportTomograms, ProtImportSubTomograms
+from tomo.protocols import ProtImportTomograms, \
+    ProtImportSubTomograms
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
 
 
-class ViewerProtImportTomograms(ProtocolViewer):
-    """ Wrapper to visualize different type of objects
-    with the Xmipp program xmipp_showj. """
-
-    _label = 'viewer input tomogram'
-    _targets = [ProtImportTomograms, ProtImportSubTomograms]
+class ViewerProtImportTomograms(EmProtocolViewer):
+    """ Wrapper to visualize tomo objects
+    with default viewers such as xmipp/showj and chimera. """
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
+    _targets = [ProtImportTomograms, ProtImportSubTomograms]
+    _label = 'viewer input tomogram'
 
     def _defineParams(self, form):
         form.addSection(label='Visualization of input tomograms')
@@ -66,12 +67,12 @@ class ViewerProtImportTomograms(ProtocolViewer):
                            'a system of coordinates is shown'
                       )
 
-    def visualize(self, obj, **args):
-        views = self._showTomogramsSlices()
-        if views:
-            for v in views:
-                v.show()
-
+#    def visualize(self, obj, **args):
+#        views = self._showTomogramsSlices()
+#        if views:
+#            for v in views:
+#                v.show()
+#
     def _getVisualizeDict(self):
         return {
             'displayTomo': self._showTomograms,
@@ -106,13 +107,13 @@ class ViewerProtImportTomograms(ProtocolViewer):
 
     def _showTomogramsChimera(self):
         """ Create a chimera script to visualize selected tomograms. """
-        tmpFileNameCMD = self.protocol._getTmpPath("chimera.cmd")
+        tmpFileNameCMD = self.protocol._getTmpPath("chimera.cxc")
         f = open(tmpFileNameCMD, "w")
         sampling, _setOfObjects = self._createSetOfObjects()
-        count = 0  # first model in chimera is a tomogram
+        count = 1  # first model in chimera is a tomogram
 
         if len(_setOfObjects) == 1:
-            count = 1  # first model in chimera is the bild file
+            count = 2  # first model in chimera is the bild file
             # if we have a single tomogram then create axis
             # as bild file. Chimera must read the bild file first
             # otherwise system of coordinates will not
@@ -134,7 +135,7 @@ class ViewerProtImportTomograms(ProtocolViewer):
             if localTomo.endswith("stk"):
                 self.showError("Extension .stk is not supported")
             f.write("open %s\n" % localTomo)
-            f.write("volume#%d style surface voxelSize %f\n" %
+            f.write("volume #%d style surface voxelSize %f\n" %
                     (count, sampling))
             count += 1
 
@@ -142,9 +143,10 @@ class ViewerProtImportTomograms(ProtocolViewer):
             f.write('tile\n')
         else:
             x, y, z = tomo.getShiftsFromOrigin()
-            f.write("volume#1 origin %0.2f,%0.2f,%0.2f\n" % (x, y, z))
+            f.write("volume #2 origin %0.2f,%0.2f,%0.2f\n" % (x, y, z))
         f.close()
-        return [viewers.viewer_chimera.ChimeraView(tmpFileNameCMD)]
+        view = ChimeraView(tmpFileNameCMD)
+        return [view]
 
     def _showTomogramsSlices(self):
         # Write an sqlite with all tomograms selected for visualization.
