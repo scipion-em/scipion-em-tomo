@@ -128,8 +128,13 @@ class ViewerProtImportTomograms(EmProtocolViewer):
             f.write("open %s\n" % tmpFileNameBILD)
             f.write("cofr 0,0,0\n")  # set center of coordinates
             count = 1  # skip first model because is not a 3D map
-
+        oldFileName = ""
         for tomo in _setOfObjects:
+            fileName = tomo.getFileName()
+            if fileName == oldFileName:
+                continue
+            else:
+                oldFileName = fileName
             localTomo = os.path.abspath(ImageHandler.removeFileType(
                 tomo.getFileName()))
             if localTomo.endswith("stk"):
