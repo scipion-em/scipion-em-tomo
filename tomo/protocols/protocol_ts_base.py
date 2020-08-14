@@ -129,19 +129,41 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
 
         # Call the sub-class method to update the output
         self._updateOutputSet(outputSet, tsIdList)
-
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
+        if self.splitEvenOdd:
+            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_OPEN)
+            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_OPEN)
+
         if self._createOutput:
-            outputSet.updateDim()
-            self._defineOutputs(**{self._getOutputName(): outputSet})
-            self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+            if self.splitEvenOdd:
+                outputSet.updateDim()
+                self.outputSetEven.updateDim()
+                self.outputSetOdd.updateDim()
+                self._defineOutputs(**{self._getOutputName(): outputSet,
+                                       self._getOutputNameEven(): self.outputSetEven,
+                                       self._getOutputNameOdd(): self.outputSetOdd})
+                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetEven)
+                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetOdd)
+            else:
+                outputSet.updateDim()
+                self._defineOutputs(**{self._getOutputName(): outputSet})
+                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
             self._createOutput = False
         else:
             outputSet.write()
             self._store(outputSet)
+            if self.splitEvenOdd:
+                self.outputSetEven.write()
+                self._store(self.outputSetEven)
+                self.outputSetOdd.write()
+                self._store(self.outputSetOdd)
 
         outputSet.close()
+        if self.splitEvenOdd:
+            self.outputSetEven.close()
+            self.outputSetOdd.close()
 
         if self._tsDict.allDone():
             self._coStep.setStatus(STATUS_NEW)
@@ -151,6 +173,16 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         outputSet.setStreamState(outputSet.STREAM_CLOSED)
         outputSet.write()
         self._store(outputSet)
+
+        if self.splitEvenOdd:
+            # Even
+            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_CLOSED)
+            self.outputSetEven.write()
+            self._store(self.outputSetEven)
+            # Odd
+            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_CLOSED)
+            self.outputSetOdd.write()
+            self._store(self.outputSetOdd)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
@@ -179,14 +211,26 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         """
         return 'outputTiltSeries'
 
+    def _getOutputNameEven(self):
+        return 'outputTiltSeriesEven'
+
+    def _getOutputNameOdd(self):
+        return 'outputTiltSeriesOdd'
+
     def _getOutputSet(self):
         return getattr(self, self._getOutputName(), None)
 
-    def _createOutputSet(self):
+    def _getOutputSetEven(self):
+        return getattr(self, self._getOutputNameEven(), None)
+
+    def _getOutputSetOdd(self):
+        return getattr(self, self._getOutputNameOdd(), None)
+
+    def _createOutputSet(self, suffix=''):
         """ Method to create the output set.
         By default will a SetOfTiltSeries, but can be re-defined in subclasses.
         """
-        outputSet = self._createSetOfTiltSeries()
+        outputSet = self._createSetOfTiltSeries(suffix=suffix)
         outputSet.copyInfo(self._getInputTs())
         return outputSet
 

@@ -168,6 +168,17 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
+        # JORGE
+        import os
+        fname = "/home/jjimenez/Desktop/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        import time
+        time.sleep(10)
+        # JORGE_END
         self._initialize()
         self._insertFunctionStep('importStep')
 
@@ -176,6 +187,17 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
+        # JORGE
+        import os
+        fname = "/home/jjimenez/Desktop/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        import time
+        time.sleep(10)
+        # JORGE_END
         self.info("Using glob pattern: '%s'" % self._globPattern)
         self.info("Using regex pattern: '%s'" % self._regexPattern)
 
