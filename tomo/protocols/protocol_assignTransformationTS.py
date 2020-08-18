@@ -68,7 +68,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
 
     # --------------------------- STEPS functions ----------------------------
-    def generateOutputStackStep(self, tsObjId):
+    def assignTransformationMatricesStep(self, tsObjId):
         outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
         ts = self.assignTransformSetOfTiltSeries.get()[tsObjId]
