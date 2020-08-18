@@ -71,11 +71,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def generateOutputStackStep(self, tsObjId):
         outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
-        ts = self.inputSetOfTiltSeries.get()[tsObjId]
+        ts = self.assignTransformSetOfTiltSeries.get()[tsObjId]
         tsId = ts.getTsId()
-
-        extraPrefix = self._getExtraPath(tsId)
-        tmpPrefix = self._getTmpPath(tsId)
 
         newTs = tomoObj.TiltSeries(tsId=tsId)
         newTs.copyInfo(ts)
@@ -84,9 +81,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         for index, tiltImage in enumerate(ts):
             newTi = tomoObj.TiltImage()
             newTi.copyInfo(tiltImage, copyId=True)
-            newTi.setLocation(index + 1, (os.path.join(extraPrefix, '%s.st' % tsId)))
-            if self.binning > 1:
-                newTi.setSamplingRate(tiltImage.getSamplingRate() * int(self.binning.get()))
+            newTi.setLocation(tiltImage.getLocation())
+            newTi.setTransform(tiltImage.getTransform()s)
             newTs.append(newTi)
 
         ih = ImageHandler()
