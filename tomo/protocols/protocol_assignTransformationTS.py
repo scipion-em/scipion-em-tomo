@@ -52,12 +52,14 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
+                      help='Set of tilt-series from which transformation matrices will be obtained.',
                       label='Input set of tilt-series')
 
         form.addParam('assignTransformSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
+                      help='Set of tilt-series on which transformation matrices will be assigned.',
                       label='Assign transformation set of tilt-series')
 
     # -------------------------- INSERT steps functions ---------------------
@@ -67,7 +69,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions ----------------------------
     def generateOutputStackStep(self, tsObjId):
-        outputInterpolatedSetOfTiltSeries = self.getOutputInterpolatedSetOfTiltSeries()
+        outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
         ts = self.inputSetOfTiltSeries.get()[tsObjId]
         tsId = ts.getTsId()
@@ -75,27 +77,9 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         extraPrefix = self._getExtraPath(tsId)
         tmpPrefix = self._getTmpPath(tsId)
 
-        if ts.getFirstItem().hasTransform():
-            paramsAlignment = {
-                'input': os.path.join(tmpPrefix, '%s.st' % tsId),
-                'output': os.path.join(extraPrefix, '%s.st' % tsId),
-                'xform': os.path.join(extraPrefix, "%s.prexg" % tsId),
-                'bin': int(self.binning.get()),
-                'imagebinned': 1.0}
-
-            argsAlignment = "-input %(input)s " \
-                            "-output %(output)s " \
-                            "-xform %(xform)s " \
-                            "-bin %(bin)d " \
-                            "-imagebinned %(imagebinned)s"
-            Plugin.runImod(self, 'newstack', argsAlignment % paramsAlignment)
-
         newTs = tomoObj.TiltSeries(tsId=tsId)
         newTs.copyInfo(ts)
-        outputInterpolatedSetOfTiltSeries.append(newTs)
-
-        if self.binning > 1:
-            newTs.setSamplingRate(ts.getSamplingRate() * int(self.binning.get()))
+        outputAssignedTransformSetOfTiltSeries.append(newTs)
 
         for index, tiltImage in enumerate(ts):
             newTi = tomoObj.TiltImage()
@@ -110,24 +94,21 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         newTs.setDim((x, y, z))
         newTs.write()
 
-        outputInterpolatedSetOfTiltSeries.update(newTs)
-        outputInterpolatedSetOfTiltSeries.updateDim()
-        outputInterpolatedSetOfTiltSeries.write()
+        outputAssignedTransformSetOfTiltSeries.update(newTs)
+        outputAssignedTransformSetOfTiltSeries.updateDim()
+        outputAssignedTransformSetOfTiltSeries.write()
         self._store()
 
     # --------------------------- UTILS functions ----------------------------
-    def getOutputInterpolatedSetOfTiltSeries(self):
-        if not hasattr(self, "outputInterpolatedSetOfTiltSeries"):
-            outputInterpolatedSetOfTiltSeries = self._createSetOfTiltSeries(suffix='Interpolated')
-            outputInterpolatedSetOfTiltSeries.copyInfo(self.inputSetOfTiltSeries.get())
-            outputInterpolatedSetOfTiltSeries.setDim(self.inputSetOfTiltSeries.get().getDim())
-            if self.binning > 1:
-                samplingRate = self.inputSetOfTiltSeries.get().getSamplingRate()
-                samplingRate *= self.binning.get()
-                outputInterpolatedSetOfTiltSeries.setSamplingRate(samplingRate)
-            self._defineOutputs(outputInterpolatedSetOfTiltSeries=outputInterpolatedSetOfTiltSeries)
-            self._defineSourceRelation(self.inputSetOfTiltSeries, outputInterpolatedSetOfTiltSeries)
-        return self.outputInterpolatedSetOfTiltSeries
+    def getOutputAssignedTransformSetOfTiltSeries(self):
+        if not hasattr(self, "outputAssignedTransformSetOfTiltSeries"):
+            outputAssignedTransformSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AssignedTransform')
+            outputAssignedTransformSetOfTiltSeries.copyInfo(self.inputSetOfTiltSeries.get())
+            outputAssignedTransformSetOfTiltSeries.setDim(self.inputSetOfTiltSeries.get().getDim())
+
+            self._defineOutputs(outputAssignedTransformSetOfTiltSeries=outputAssignedTransformSetOfTiltSeries)
+            self._defineSourceRelation(self.inputSetOfTiltSeries, outputAssignedTransformSetOfTiltSeries)
+        return self.outputAssignedTransformSetOfTiltSeries
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
@@ -151,20 +132,19 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        if hasattr(self, 'outputInterpolatedSetOfTiltSeries'):
-            summary.append("Input Tilt-Series: %d.\nInterpolations applied: %d.\n"
+        if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
+            summary.append("Input Tilt-Series: %d.\nTransformation matrices assigned: %d.\n"
                            % (self.inputSetOfTiltSeries.get().getSize(),
-                              self.outputInterpolatedSetOfTiltSeries.getSize()))
+                              self.outputAssignedTransformSetOfTiltSeries.getSize()))
         else:
             summary.append("Output classes not ready yet.")
         return summary
 
     def _methods(self):
         methods = []
-        if hasattr(self, 'outputInterpolatedSetOfTiltSeries'):
-            methods.append("The interpolation has been computed for %d "
-                           "Tilt-series using the IMOD newstack program.\n"
-                           % (self.outputInterpolatedSetOfTiltSeries.getSize()))
+        if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
+            methods.append("The transformation matrix has been assigned to %d Tilt-series from the input set.\n"
+                           % (self.outputAssignedTransformSetOfTiltSeries.getSize()))
         else:
             methods.append("Output classes not ready yet.")
         return methods
