@@ -37,9 +37,7 @@ from pwem.emlib.image import ImageHandler
 
 class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     """
-    Compute the interpolated tilt-series from its transform matrix.
-    More info:
-        https://bio3D.colorado.edu/imod/doc/etomoTutorial.html
+    Assign the transformation matrices from an input set of tilt-series to a target one.
     """
 
     _label = 'Tilt-series assign alignment'
