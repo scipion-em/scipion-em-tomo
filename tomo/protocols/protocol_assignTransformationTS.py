@@ -58,13 +58,12 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
-                      label='Input set of tilt-series')
+                      label='Assign transformation set of tilt-series')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         for ts in self.inputSetOfTiltSeries.get():
             self._insertFunctionStep('convertInputStep', ts.getObjId())
-            self._insertFunctionStep('generateTransformFileStep', ts.getObjId())
             self._insertFunctionStep('generateOutputStackStep', ts.getObjId())
 
     # --------------------------- STEPS functions ----------------------------
@@ -80,17 +79,6 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
         """Create link to input stack"""
         path.createLink(inputTsFileName, outputTsFileName)
-
-    def generateTransformFileStep(self, tsObjId):
-        ts = self.inputSetOfTiltSeries.get()[tsObjId]
-        tsId = ts.getTsId()
-        extraPrefix = self._getExtraPath(tsId)
-        if not ts.getFirstItem().hasTransform():
-            inputTsFilePath = ts.getFirstItem().getLocation()[1]
-            outputTsFilePath = os.path.join(extraPrefix, '%s.st' % tsId)
-            path.createLink(inputTsFilePath, outputTsFilePath)
-        else:
-            utils.formatTransformFile(ts, os.path.join(extraPrefix, "%s.prexg" % tsId))
 
     def generateOutputStackStep(self, tsObjId):
         outputInterpolatedSetOfTiltSeries = self.getOutputInterpolatedSetOfTiltSeries()
@@ -160,9 +148,18 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         validateMsgs = []
 
         for ts in self.inputSetOfTiltSeries.get():
-            if not ts.getFirstItem().getFirstItem().hasCTF():
+            if not ts.getFirstItem().hasTransform():
                 validateMsgs = "Some tilt-series from the input set of tilt-series does not have a transformation " \
-                               "matrix assigned"
+                               "matrix assigned."
+
+            if ts.getSize() != self.assignTransformSetOfTiltSeries.get()[ts.getObjId()].getSize():
+                validateMsgs = "Some tilt-series from the input set of tilt-series and its target in the assign " \
+                               "transfomration set of tilt-series size's do not match. Every input tilt-series and " \
+                               "its target must have the same number of elements" \
+
+        if self.inputSetOfTiltSeries.get().getSize() != self.assignTransformSetOfTiltSeries.get().getSize():
+            validateMsgs = "Both input sets of tilt-series size's do not match. Both sets must have the same number " \
+                           "of elements."
 
         return validateMsgs
 
