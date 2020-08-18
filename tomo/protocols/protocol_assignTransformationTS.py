@@ -82,7 +82,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             newTi = tomoObj.TiltImage()
             newTi.copyInfo(tiltImage, copyId=True)
             newTi.setLocation(tiltImage.getLocation())
-            newTi.setTransform(tiltImage.getTransform()s)
+            newTi.setTransform(tiltImage.getTransform())
             newTs.append(newTi)
 
         ih = ImageHandler()
