@@ -36,14 +36,14 @@ from imod import Plugin
 from pwem.emlib.image import ImageHandler
 
 
-class XmippProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
+class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     """
     Compute the interpolated tilt-series from its transform matrix.
     More info:
         https://bio3D.colorado.edu/imod/doc/etomoTutorial.html
     """
 
-    _label = 'assign alignment tilt-series'
+    _label = 'Tilt-series assign alignment'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
