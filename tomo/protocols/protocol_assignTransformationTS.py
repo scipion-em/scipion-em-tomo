@@ -26,13 +26,12 @@
 
 import os
 import numpy as np
-import imod.utils as utils
+import itertools
 import pyworkflow.protocol.params as params
 import pyworkflow.utils.path as path
 from pwem.protocols import EMProtocol
 import tomo.objects as tomoObj
 from tomo.protocols import ProtTomoBase
-from imod import Plugin
 from pwem.emlib.image import ImageHandler
 
 
@@ -72,17 +71,18 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
         ts = self.assignTransformSetOfTiltSeries.get()[tsObjId]
+        tsTM = self.inputSetOfTiltSeries.get()[tsObjId]
         tsId = ts.getTsId()
 
         newTs = tomoObj.TiltSeries(tsId=tsId)
         newTs.copyInfo(ts)
         outputAssignedTransformSetOfTiltSeries.append(newTs)
 
-        for index, tiltImage in enumerate(ts):
+        for tiltImage, tiltImageTM in zip(ts, tsTM):
             newTi = tomoObj.TiltImage()
             newTi.copyInfo(tiltImage, copyId=True)
             newTi.setLocation(tiltImage.getLocation())
-            newTi.setTransform(tiltImage.getTransform())
+            newTi.setTransform(tiltImageTM.getTransform())
             newTs.append(newTi)
 
         ih = ImageHandler()
