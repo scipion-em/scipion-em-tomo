@@ -37,11 +37,6 @@ from pwem.emlib.image import ImageHandler
 from ..objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
 
-# Data type code
-EVEN = 'even'
-ODD = 'odd'
-ALL = 'all'
-
 
 class ProtTsCorrectMotion(ProtTsProcess):
     """
@@ -241,14 +236,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 ts.append(tiOut)
 
             outputSet.update(ts)
-
-    def _getTsDict(self, data):
-        if data == ALL:
-            return self._tsDict
-        elif data == EVEN:
-            return self._tsDictEven
-        else:
-            return self._tsDictOdd
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
