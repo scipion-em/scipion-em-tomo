@@ -142,15 +142,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
 
-    # def processTiltSeriesAllStep(self, tsId):
-    #     self.processTiltSeriesStep(tsId, self._getTsDict(ALL))
-
-    # def processTiltSeriesEvenStep(self, tsId):
-    #     self.processTiltSeriesStep(tsId, self._getTsDict(EVEN))
-    #
-    # def processTiltSeriesOddStep(self, tsId):
-    #     self.processTiltSeriesStep(tsId, self._getTsDict(ODD))
-
     def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
         ts = self._tsDict.getTs(tsId)
@@ -258,22 +249,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
             return self._tsDictEven
         else:
             return self._tsDictOdd
-
-    # def _updateOutputSet(self, outputSet, tsIdList, data=ALL):
-    #     """ Override this method to convert the TiltSeriesM into TiltSeries.
-    #     """
-    #     tsDict = self._getTsDict(data)
-    #
-    #     for tsId in tsIdList:
-    #         ts = TiltSeries()
-    #         ts.copyInfo(tsDict.getTs(tsId), copyId=True)
-    #         outputSet.append(ts)
-    #         for ti in tsDict.getTiList(tsId):
-    #             tiOut = TiltImage(location=ti.getLocation())
-    #             tiOut.copyInfo(ti, copyId=True)
-    #             ts.append(tiOut)
-    #
-    #         outputSet.update(ts)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
