@@ -202,10 +202,11 @@ class ProtTsCorrectMotion(ProtTsProcess):
     def _saveStack(path, data, pixel_spacing):
         mrc = mrcfile.open(path, mode='w+')
         mrc.set_data(data)
+        mrc.voxel_size = pixel_spacing
         mrc.close()
-        cmd = ["alterheader", "-del", "{0},{0},{0}".format(pixel_spacing), path]
-        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        result.check_returncode()
+        # cmd = ["alterheader", "-del", "{0},{0},{0}".format(pixel_spacing), path]
+        # result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # result.check_returncode()
 
     def _genEvenOddTiltImages(self, tsFn, sRate):
         aligned_stack = mrcfile.open(tsFn, permissive=True)
