@@ -131,12 +131,12 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         self._updateOutputSet(outputSet, tsIdList)
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
-        if self.splitEvenOdd:
+        if self._doSplitEvenOdd():
             self.outputSetEven.setStreamState(self.outputSetEven.STREAM_OPEN)
             self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_OPEN)
 
         if self._createOutput:
-            if self.splitEvenOdd:
+            if self._doSplitEvenOdd():
                 outputSet.updateDim()
                 self.outputSetEven.updateDim()
                 self.outputSetOdd.updateDim()
@@ -154,14 +154,14 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         else:
             outputSet.write()
             self._store(outputSet)
-            if self.splitEvenOdd:
+            if self._doSplitEvenOdd():
                 self.outputSetEven.write()
                 self._store(self.outputSetEven)
                 self.outputSetOdd.write()
                 self._store(self.outputSetOdd)
 
         outputSet.close()
-        if self.splitEvenOdd:
+        if self._doSplitEvenOdd():
             self.outputSetEven.close()
             self.outputSetOdd.close()
 
@@ -174,7 +174,7 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         outputSet.write()
         self._store(outputSet)
 
-        if self.splitEvenOdd:
+        if self._doSplitEvenOdd():
             # Even
             self.outputSetEven.setStreamState(self.outputSetEven.STREAM_CLOSED)
             self.outputSetEven.write()

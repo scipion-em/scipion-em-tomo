@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 import os
-import subprocess
 import mrcfile
 import numpy as np
 
@@ -127,7 +126,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         self._processTiltImageM(workingFolder, tiltImageM, *args)
 
         alignedFrameStack = self._getExtraPath(removeBaseExt(tiltImageM.getFileName()) + '_aligned_movie.mrcs')
-        if self.splitEvenOdd:
+        if self._doSplitEvenOdd():
             self.tsMList.append(tiltImageM)  # Store the corresponding tsImM to use its data later in the even/odd TS
             self._genEvenOddTiltImages(alignedFrameStack, tiltImageM.getSamplingRate())
 
@@ -163,7 +162,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         self._tsDict.setFinished(tsId)
 
-        if self.splitEvenOdd:
+        if self._doSplitEvenOdd():
             acq = ts.getAcquisition()
             sRate = ts.getSamplingRate()
             # Even
