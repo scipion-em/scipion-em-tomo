@@ -48,6 +48,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     or the cropping options (region of interest)
     """
 
+    # Attributes used for even/odd frames splitting if requested
     evenAvgFrameList = []
     oddAvgFrameList = []
     tsMList = []
@@ -209,6 +210,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
         # result.check_returncode()
 
     def _genEvenOddTiltImages(self, tsFn, sRate):
+        """Even/odd frame splitting requires all frames (per tilt angle) movie saving
+        because the frames are extracted form the whole stack. Then they're saved as an averaged
+        image per angle, and finally the even and odd frames tilt series can be generated."""
+
         aligned_stack = mrcfile.open(tsFn, permissive=True)
         pathBaseName = self._getExtraPath(removeBaseExt(tsFn).replace('movie', ''))
         evenName = pathBaseName + 'even.mrcs'
