@@ -69,17 +69,25 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         form.addParam('filesPattern', params.StringParam,
                       label='Pattern',
                       help="Pattern of the tilt series\n\n"
-                           "The pattern can contain standard wildcards such as\n"
-                           "*, ?, etc.\n\n"
-                           "It should also contains the following special tags:"
-                           "   {TS}: tilt series identifier "
-                           "         (can be any UNIQUE part of the path).\n"
-                           "   {TO}: acq order"
-                           "         (an integer value, important for dose).\n"
-                           "   {TA}: tilt angle"
-                           "         (positive or negative float value).\n\n"
+                           "The pattern can contain standard wildcards such as *, ?, etc.\n\n"
+                           "It should also contains the following special tags:\n"
+                           "   {TS}: tilt series identifier, which can be any UNIQUE part of the path.\n"
+                           "   {TO}: acquisition order, an integer value (important for dose).\n"
+                           "   {TA}: tilt angle, a positive or negative float value.\n\n"
                            "Examples:\n"
-                           "")
+                           "To import a set of image stacks (tilt-series or tilt-series movies) as: \n"
+                           "TiltSeries_a_001_0.0.mrc\n"
+                           "TiltSeries_a_002_3.0.mrc\n"
+                           "TiltSeries_a_003_-3.0.mrc\n"
+                           "...\n"
+                           "TiltSeries_b_001_0.0.mrc\n"
+                           "TiltSeries_b_002_3.0.mrc\n"
+                           "TiltSeries_b_003_-3.0.mrc\n"
+                           "...\n"
+                           "The pattern TiltSeries_{TS}_{TO}_{TA}.mrc will identify:\n"
+                           "{TS} as a, b, ...\n"
+                           "{TO} as 001, 002, 003, ...\n"
+                           "{TA} as 0.0, 3.0, -3.0, ...\n")
         self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
