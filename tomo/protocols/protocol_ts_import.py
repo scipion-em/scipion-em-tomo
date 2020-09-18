@@ -528,7 +528,7 @@ class ProtImportTs(ProtImportTsBase):
                             'It can be defined by range: Min, Max, Step '
                             'or from image header, or from complementary'
                             'mdoc or tlt files (should have the same filename '
-                            'plus the .mdoc or .tlt extension).')
+                            'but with the .mdoc or .tlt extension).')
 
         line = group.addLine('Tilt angular range',
                              condition='anglesFrom==0',  # ANGLES_FROM_RANGE
