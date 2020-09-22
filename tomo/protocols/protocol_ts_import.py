@@ -72,7 +72,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                       help="Pattern of the tilt series\n\n"
                            "The pattern can contain standard wildcards such as *, ?, etc.\n\n"
                            "It should also contains the following special tags:\n"
-                           "   {TS}: tilt series identifier, which can be any UNIQUE part of the path.\n"
+                           "   {TS}: tilt series identifier, which can be any UNIQUE part of the path. This must be an "
+                           "alpha-numeric sequence (avoid symbols as -) that can not start with a number.\n"
                            "   {TO}: acquisition order, an integer value (important for dose).\n"
                            "   {TA}: tilt angle, a positive or negative float value.\n\n"
                            "Examples:\n"
@@ -240,7 +241,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     except OperationalError as e:
 
                         raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
-                                        "(avoid - symbol) that may not start by a number." % ts)
+                                        "(avoid symbols as -) that can not start with a number." % ts)
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
                 someAdded = True

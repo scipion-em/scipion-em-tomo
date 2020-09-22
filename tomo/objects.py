@@ -86,6 +86,16 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.copyInfo(self, other)
         TiltImageBase.copyInfo(self, other, copyId=copyId)
 
+    def parseFileName(self, suffix=""):
+        """
+        This method returns the filename of the Tilt-Image adding a specified suffix.
+        :param suffix: String to be added at the end of the location path (before extension)
+        :return: String containing the parsed filename with the specified suffix
+        """
+        fileName = os.path.basename(self.getFileName())
+        fileName, fileExtension = os.path.splitext(fileName)
+        return fileName + suffix + fileExtension
+
 
 class TiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
