@@ -112,13 +112,6 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         Params:
             :param tsIdList: list of ids of finished tasks.
         """
-
-        _doSplitEvenOdd = getattr(self, '_doSplitEvenOdd', None)
-        if callable(_doSplitEvenOdd):
-            self._doSplitEvenOdd = self._doSplitEvenOdd()
-        else:
-            self._doSplitEvenOdd = False
-
         # Flag to check the first time we save output
         self._createOutput = getattr(self, '_createOutput', True)
 
@@ -138,39 +131,16 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         self._updateOutputSet(outputSet, tsIdList)
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
-        if self._doSplitEvenOdd:
-            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_OPEN)
-            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_OPEN)
-
         if self._createOutput:
-            if self._doSplitEvenOdd:
-                outputSet.updateDim()
-                self.outputSetEven.updateDim()
-                self.outputSetOdd.updateDim()
-                self._defineOutputs(**{self._getOutputName(): outputSet,
-                                       self._getOutputNameEven(): self.outputSetEven,
-                                       self._getOutputNameOdd(): self.outputSetOdd})
-                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
-                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetEven)
-                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetOdd)
-            else:
-                outputSet.updateDim()
-                self._defineOutputs(**{self._getOutputName(): outputSet})
-                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+            outputSet.updateDim()
+            self._defineOutputs(**{self._getOutputName(): outputSet})
+            self._defineSourceRelation(self._getInputTsPointer(), outputSet)
             self._createOutput = False
         else:
             outputSet.write()
             self._store(outputSet)
-            if self._doSplitEvenOdd:
-                self.outputSetEven.write()
-                self._store(self.outputSetEven)
-                self.outputSetOdd.write()
-                self._store(self.outputSetOdd)
 
         outputSet.close()
-        if self._doSplitEvenOdd:
-            self.outputSetEven.close()
-            self.outputSetOdd.close()
 
         if self._tsDict.allDone():
             self._coStep.setStatus(STATUS_NEW)
@@ -180,16 +150,6 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         outputSet.setStreamState(outputSet.STREAM_CLOSED)
         outputSet.write()
         self._store(outputSet)
-
-        if self._doSplitEvenOdd:
-            # Even
-            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_CLOSED)
-            self.outputSetEven.write()
-            self._store(self.outputSetEven)
-            # Odd
-            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_CLOSED)
-            self.outputSetOdd.write()
-            self._store(self.outputSetOdd)
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
@@ -218,20 +178,8 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         """
         return 'outputTiltSeries'
 
-    def _getOutputNameEven(self):
-        return 'outputTiltSeriesEven'
-
-    def _getOutputNameOdd(self):
-        return 'outputTiltSeriesOdd'
-
     def _getOutputSet(self):
         return getattr(self, self._getOutputName(), None)
-
-    def _getOutputSetEven(self):
-        return getattr(self, self._getOutputNameEven(), None)
-
-    def _getOutputSetOdd(self):
-        return getattr(self, self._getOutputNameOdd(), None)
 
     def _createOutputSet(self, suffix=''):
         """ Method to create the output set.

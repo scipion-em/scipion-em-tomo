@@ -36,6 +36,9 @@ from pwem.emlib.image import ImageHandler
 from ..objects import TiltSeries, TiltImage
 from .protocol_ts_base import ProtTsProcess
 
+OUTPUT_TILT_SERIES_ODD = 'outputTiltSeriesOdd'
+OUTPUT_TILT_SERIES_EVEN = 'outputTiltSeriesEven'
+
 
 class ProtTsCorrectMotion(ProtTsProcess):
     """
@@ -51,6 +54,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
     evenAvgFrameList = []
     oddAvgFrameList = []
     tsMList = []
+
+    # Even / odd functionality
+    evenOddCapable = False
     outputSetEven = None
     outputSetOdd = None
 
@@ -105,6 +111,15 @@ class ProtTsCorrectMotion(ProtTsProcess):
         line.addParam('cropDimX', params.IntParam, default=0, label='X')
         line.addParam('cropDimY', params.IntParam, default=0, label='Y')
 
+        if self.evenOddCapable:
+            form.addParam('splitEvenOdd', params.BooleanParam,
+                           default=False,
+                           label='Split & sum odd/even frames?',
+                           expertLevel=params.LEVEL_ADVANCED,
+                           help='(Used for denoising data preparation). If set to Yes, 2 additional movies/tilt '
+                               'series will be generated, one generated from the even frames and the other from the '
+                               'odd ones using the same alignment for the whole stack of frames.')
+
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ----------------------------
@@ -119,14 +134,21 @@ class ProtTsCorrectMotion(ProtTsProcess):
         _convert(inputTs.getGain(), 'gain.mrc')
         _convert(inputTs.getDark(), 'dark.mrc')
 
+    def _doSplitEvenOdd(self):
+        """ Returns if even/odd stuff has to be done"""
+        if not self.evenOddCapable:
+            return False
+        else:
+            return self.splitEvenOdd.get()
+
     def processTiltImageStep(self, tsId, tiltImageId, *args):
         tiltImageM = self._tsDict.getTi(tsId, tiltImageId)
         workingFolder = self.__getTiltImageMWorkingFolder(tiltImageM)
         pw.utils.makePath(workingFolder)
         self._processTiltImageM(workingFolder, tiltImageM, *args)
 
-        alignedFrameStack = self._getExtraPath(removeBaseExt(tiltImageM.getFileName()) + '_aligned_movie.mrcs')
         if self._doSplitEvenOdd():
+            alignedFrameStack = self._getExtraPath(removeBaseExt(tiltImageM.getFileName()) + '_aligned_movie.mrcs')
             self.tsMList.append(tiltImageM)  # Store the corresponding tsImM to use its data later in the even/odd TS
             self._genEvenOddTiltImages(alignedFrameStack, tiltImageM.getSamplingRate())
 
@@ -150,6 +172,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         tsFn = self._getOutputTiltSeriesPath(ts)
         tsFnDW = self._getOutputTiltSeriesPath(ts, '_DW')
 
+        # Merge all micrographs from the same tilt images in a single "mrcs" stack file
         for i, ti in enumerate(tiList):
             tiFn, tiFnDW = self._getOutputTiltImagePaths(ti)
             newLocation = (i+1, tsFn)
@@ -162,6 +185,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         self._tsDict.setFinished(tsId)
 
+        # Even and odd stuff
         if self._doSplitEvenOdd():
             acq = ts.getAcquisition()
             sRate = ts.getSamplingRate()
@@ -204,19 +228,16 @@ class ProtTsCorrectMotion(ProtTsProcess):
         mrc.set_data(data)
         mrc.voxel_size = pixel_spacing
         mrc.close()
-        # cmd = ["alterheader", "-del", "{0},{0},{0}".format(pixel_spacing), path]
-        # result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # result.check_returncode()
 
-    def _genEvenOddTiltImages(self, tsFn, sRate):
+    def _genEvenOddTiltImages(self, alignedMovieFn, sRate):
         """Even/odd frame splitting requires all frames (per tilt angle) movie saving
         because the frames are extracted form the whole stack. Then they're saved as an averaged
         image per angle, and finally the even and odd frames tilt series can be generated."""
 
-        aligned_stack = mrcfile.open(tsFn, permissive=True)
-        pathBaseName = self._getExtraPath(removeBaseExt(tsFn).replace('movie', ''))
-        evenName = pathBaseName + 'even.mrcs'
-        oddName = pathBaseName + 'odd.mrcs'
+        aligned_stack = mrcfile.open(alignedMovieFn, permissive=True)
+        pathBaseName = self._getExtraPath(removeBaseExt(alignedMovieFn).replace('movie', ''))
+        evenName = pathBaseName + 'even.mrc'
+        oddName = pathBaseName + 'odd.mrc'
         # Even TS
         self._saveStack(evenName, np.sum(aligned_stack.data[::2], axis=0), sRate)
         # Odd TS
@@ -225,8 +246,85 @@ class ProtTsCorrectMotion(ProtTsProcess):
         self.evenAvgFrameList.append(evenName)
         self.oddAvgFrameList.append(oddName)
         # Remove stack file if the user didn't ask to save them
-        if not self.doSaveMovie:
-            os.remove(tsFn)
+        if not self.doSaveMovie.get():
+            print("Removing %s" % alignedMovieFn)
+            os.remove(alignedMovieFn)
+
+    def createOutputStep(self):
+        """" Overwrites the parent method to allow te creation of odd and even outputs"""
+        ProtTsProcess.createOutputStep(self)
+
+        if self._doSplitEvenOdd():
+            # Even
+            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_CLOSED)
+            self.outputSetEven.write()
+            self._store(self.outputSetEven)
+            # Odd
+            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_CLOSED)
+            self.outputSetOdd.write()
+            self._store(self.outputSetOdd)
+
+    def _updateOutput(self, tsIdList):
+        """ Update the output set with the finished Tilt-series.
+        Params:
+            :param tsIdList: list of ids of finished tasks.
+        """
+
+        # Flag to check the first time we save output
+        self._createOutput = getattr(self, '_createOutput', True)
+
+        outputSet = self._getOutputSet()
+
+        if outputSet is None:
+            # Special case just to update the outputSet status
+            # but it only makes sense when there is outputSet
+            if not tsIdList:
+                return
+            outputSet = self._createOutputSet()
+        else:
+            outputSet.enableAppend()
+            self._createOutput = False
+
+        # Call the sub-class method to update the output
+        self._updateOutputSet(outputSet, tsIdList)
+        outputSet.setStreamState(outputSet.STREAM_OPEN)
+
+        if self._doSplitEvenOdd():
+            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_OPEN)
+            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_OPEN)
+
+        if self._createOutput:
+            if self._doSplitEvenOdd():
+                outputSet.updateDim()
+                self.outputSetEven.updateDim()
+                self.outputSetOdd.updateDim()
+                self._defineOutputs(**{self._getOutputName(): outputSet,
+                                       OUTPUT_TILT_SERIES_EVEN: self.outputSetEven,
+                                       OUTPUT_TILT_SERIES_ODD: self.outputSetOdd})
+                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetEven)
+                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetOdd)
+            else:
+                outputSet.updateDim()
+                self._defineOutputs(**{self._getOutputName(): outputSet})
+                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+            self._createOutput = False
+        else:
+            outputSet.write()
+            self._store(outputSet)
+            if self._doSplitEvenOdd():
+                self.outputSetEven.write()
+                self._store(self.outputSetEven)
+                self.outputSetOdd.write()
+                self._store(self.outputSetOdd)
+
+        outputSet.close()
+        if self._doSplitEvenOdd():
+            self.outputSetEven.close()
+            self.outputSetOdd.close()
+
+        if self._tsDict.allDone():
+            self._coStep.setStatus(params.STATUS_NEW)
 
     def _updateOutputSet(self, outputSet, tsIdList):
         """ Override this method to convert the TiltSeriesM into TiltSeries.
