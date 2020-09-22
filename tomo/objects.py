@@ -96,6 +96,16 @@ class TiltImage(data.Image, TiltImageBase):
         fileName, fileExtension = os.path.splitext(fileName)
         return fileName + suffix + fileExtension
 
+    def parseFileExtension(self, extension=""):
+        """
+        This method retunr the filename of the Tilt-Image changing its extension.
+        :param extension: String containing the new extension of the filename
+        :return: String containing the parsed filename with the new extension
+        """
+        fileName = os.path.basename(self.getFileName())
+        fileName, _ = os.path.splitext(fileName)
+        return fileName + extension
+
 
 class TiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
