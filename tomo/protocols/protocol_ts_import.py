@@ -31,6 +31,7 @@ import time
 from datetime import timedelta, datetime
 from collections import OrderedDict
 import numpy as np
+from sqlite3 import OperationalError
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
@@ -232,10 +233,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 outputSet.append(tsObj)
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
-                    tsObj.append(tiClass(location=f,
-                                         acquisitionOrder=to,
-                                         tiltAngle=ta))
+                    try:
+                        tsObj.append(tiClass(location=f,
+                                             acquisitionOrder=to,
+                                             tiltAngle=ta))
+                    except OperationalError as e:
 
+                        raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
+                                        "(avoid - symbol) that may not start by a number." % ts)
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
                 someAdded = True
@@ -329,7 +334,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             return p
 
         self._regexPattern = _replace(self._pattern.replace('*', '(.*)'),
-                                      '(?P<TS>.*)', '(?P<TO>\d+)',
+                                      '(?P<TS>.*)',
+                                      '(?P<TO>\d+)',
                                       '(?P<TA>[+-]?\d+(\.\d+)?)')
         self._regex = re.compile(self._regexPattern)
         self._globPattern = _replace(self._pattern, '*', '*', '*')
