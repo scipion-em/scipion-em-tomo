@@ -207,16 +207,28 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
+            # Merge all micrographs from the same tilt images in a single "mrcs" stack file
+            counter = 1
             for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):
                 ta = tsImM.getTiltAngle()
                 # Even
                 tsImEven = tiClass(location=fileEven, tiltAngle=ta)
                 tsImEven.setSamplingRate(sRate)
                 tsObjEven.append(tsImEven)
+                newLocationEven = (counter, self._getExtraPath(tsImM.getTsId() + '_even.mrcs'))
+                ih.convert(fileEven, newLocationEven)
+                tsImEven.setLocation(newLocationEven)
+                pw.utils.cleanPath(fileEven)
                 # Odd
                 tsImOdd = tiClass(location=fileOdd, iltAngle=ta)
                 tsImOdd.setSamplingRate(sRate)
                 tsObjOdd.append(tsImOdd)
+                newLocationOdd = (counter, self._getExtraPath(tsImM.getTsId() + '_odd.mrcs'))
+                ih.convert(fileOdd, newLocationOdd)
+                tsImOdd.setLocation(newLocationOdd)
+                pw.utils.cleanPath(fileOdd)
+
+                counter += 1
 
             # update items and size info
             self.outputSetEven.update(tsObjEven)
