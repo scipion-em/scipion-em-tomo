@@ -161,6 +161,23 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
+
+        def mergeTiltImage(suffix, tsObject, alignedTIFile):
+            """
+
+            :param suffix: even or odd suffix for the new merged mrcs
+            :param tsObject: TiltSeries to add the new Image to
+            :param alignedTIFile: Computed aligned file (Micrograph for the movie)
+            :return:
+            """
+            tsImg = tiClass(location=alignedTIFile, tiltAngle=ta)
+            tsImg.setSamplingRate(sRate)
+            newLocation = (counter, self._getExtraPath(tsImM.getTsId() + suffix))
+            ih.convert(alignedTIFile, newLocation)
+            tsImg.setLocation(newLocation)
+            tsObject.append(tsImg)
+            pw.utils.cleanPath(alignedTIFile)
+
         ts = self._tsDict.getTs(tsId)
         ts.setDim([])
 
@@ -212,21 +229,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
             for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):
                 ta = tsImM.getTiltAngle()
                 # Even
-                tsImEven = tiClass(location=fileEven, tiltAngle=ta)
-                tsImEven.setSamplingRate(sRate)
-                tsObjEven.append(tsImEven)
-                newLocationEven = (counter, self._getExtraPath(tsImM.getTsId() + '_even.mrcs'))
-                ih.convert(fileEven, newLocationEven)
-                tsImEven.setLocation(newLocationEven)
-                pw.utils.cleanPath(fileEven)
+                mergeTiltImage('_even.mrcs', tsObjEven, fileEven)
                 # Odd
-                tsImOdd = tiClass(location=fileOdd, iltAngle=ta)
-                tsImOdd.setSamplingRate(sRate)
-                tsObjOdd.append(tsImOdd)
-                newLocationOdd = (counter, self._getExtraPath(tsImM.getTsId() + '_odd.mrcs'))
-                ih.convert(fileOdd, newLocationOdd)
-                tsImOdd.setLocation(newLocationOdd)
-                pw.utils.cleanPath(fileOdd)
+                mergeTiltImage('_odd.mrcs', tsObjOdd, fileOdd)
 
                 counter += 1
 
