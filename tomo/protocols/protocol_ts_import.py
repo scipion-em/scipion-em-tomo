@@ -353,7 +353,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             let's add a prefix if it is not the case
             """
             tsId = match.group('TS')
-            return 'TS_%s' % tsId if tsId[0].isdigit() else tsId
+            return tsId
 
         def _addOne(fileList, f, m):
             """ Add one file matching to the list. """

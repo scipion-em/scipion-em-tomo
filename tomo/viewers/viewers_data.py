@@ -26,9 +26,14 @@
 
 import pyworkflow.viewer as pwviewer
 from pwem.viewers import ObjectView
+from pyworkflow.protocol import LabelParam
 
 from .views import ClassesSubTomogramsView
 import tomo.objects
+from tomo.protocols import ProtTsCorrectMotion
+
+SERIES_EVEN = "outputTiltSeriesEven"
+SERIES_ODD = "outputTiltSeriesOdd"
 
 
 class TomoDataViewer(pwviewer.Viewer):
@@ -76,3 +81,67 @@ class TomoDataViewer(pwviewer.Viewer):
             setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
 
         return views
+
+class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
+    """ Wrapper to visualize outputs of tilt series motion correction protocols
+    """
+
+    _label = 'Tilt series motion correction viewer'
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [
+        ProtTsCorrectMotion
+    ]
+
+    def _defineParams(self, form):
+            form.addSection(label='Visualization of tilt series')
+            form.addParam('displayFullTiltSeries', LabelParam,
+                          label='Display f*ull* frame aligned tilt series',
+                          help='Shows full frames aligned set of tilt series'
+                          )
+            if self.hasEvenSet():
+                form.addParam('displayEvenTiltSeries', LabelParam,
+                          label='Display *even* frames aligned tilt series',
+                          help='Shows even frames aligned set of tilt series'
+                          )
+
+            if self.hasOddSet():
+                form.addParam('displayOddTiltSeries', LabelParam,
+                          label='Display *odd* frames aligned tilt series',
+                          help='Shows even frames aligned set of tilt series'
+                          )
+
+    def hasEvenSet(self):
+        return hasattr(self.protocol, SERIES_EVEN)
+
+    def hasOddSet(self):
+        return hasattr(self.protocol, SERIES_ODD)
+
+    def getEvenSet(self):
+        return getattr(self.protocol, SERIES_EVEN)
+
+    def getOddSet(self):
+        return getattr(self.protocol, SERIES_ODD)
+
+    def _displayEvenTiltSeries(self, param=None):
+        return self._visualize(self.getEvenSet())
+
+    def _displayOddTiltSeries(self, param=None):
+        return self._visualize(self.getOddSet())
+
+    def _displayFullTiltSeries(self, param=None):
+        return self._visualize(self.protocol.outputTiltSeries)
+
+    def _getVisualizeDict(self):
+        return {
+            'displayFullTiltSeries': self._displayFullTiltSeries,
+            'displayEvenTiltSeries': self._displayEvenTiltSeries,
+            'displayOddTiltSeries': self._displayOddTiltSeries,
+        }
+
+    def _visualize(self, setOfTiltSeries):
+
+        from .views_tkinter_tree import TiltSeriesDialogView
+        setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
+
+        return [setTsView]
+
