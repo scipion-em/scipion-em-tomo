@@ -129,7 +129,6 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
 
         # Call the sub-class method to update the output
         self._updateOutputSet(outputSet, tsIdList)
-
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
         if self._createOutput:
@@ -182,11 +181,11 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
     def _getOutputSet(self):
         return getattr(self, self._getOutputName(), None)
 
-    def _createOutputSet(self):
+    def _createOutputSet(self, suffix=''):
         """ Method to create the output set.
         By default will a SetOfTiltSeries, but can be re-defined in subclasses.
         """
-        outputSet = self._createSetOfTiltSeries()
+        outputSet = self._createSetOfTiltSeries(suffix=suffix)
         outputSet.copyInfo(self._getInputTs())
         return outputSet
 

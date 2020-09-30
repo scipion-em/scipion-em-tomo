@@ -24,5 +24,5 @@
 # *
 # **************************************************************************
 
-from tomo.viewers.viewers_data import TomoDataViewer
-from tomo.viewers.viewer_tomograms import ViewerProtImportTomograms
+from .viewers_data import TomoDataViewer, TSMotionCorrectionViewer
+from .viewer_tomograms import ViewerProtImportTomograms

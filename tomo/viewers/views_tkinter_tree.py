@@ -48,9 +48,10 @@ class TiltSeriesTreeProvider(TreeProvider):
     prepare the columns/rows models required by the TreeDialog GUI.
     """
     COL_TS = 'Tilt Series'
-    COL_TI = 'Info / Path'
-    COL_TI_ID = 'Acq. Order'
-    COL_TI_ANGLE = 'Tilt Angle'
+    COL_TI = 'Path'
+    COL_TI_IX = 'Index'
+    COL_TI_ID = 'Order'
+    COL_TI_ANGLE = 'Angle'
     COL_TI_DEFOCUS_U = 'Defocus'
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
@@ -94,9 +95,10 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getColumns(self):
         cols = [
             (self.COL_TS, 100),
-            (self.COL_TI_ID, 80),
-            (self.COL_TI_ANGLE, 80),
-            (self.COL_TI, 400),
+            (self.COL_TI_ID, 50),
+            (self.COL_TI_ANGLE, 50),
+            (self.COL_TI_IX, 50),
+            (self.COL_TI,400),
         ]
 
         if self._hasCtf:
@@ -124,7 +126,9 @@ class TiltSeriesTreeProvider(TreeProvider):
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, obj.getObjId())
             text = ''
-            values = [objId, obj.getTiltAngle(), str(obj.getLocation())]
+            values = [objId, obj.getTiltAngle(),
+                      str(obj.getLocation()[0]),
+                      str(obj.getLocation()[1])]
             if self._hasCtf:
                 values.insert(2, "%.03f" % obj.getCTF().getDefocusU())
             opened = False
