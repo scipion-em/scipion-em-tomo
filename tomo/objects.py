@@ -220,7 +220,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def copyItems(self, inputTs,
                   orderByTs='id', updateTsCallback=None,
-                  orderByTi='id', updateTiCallback=None):
+                  orderByTi='id', updateTiCallback=None,
+                  skipDisabled=True):
         """ Copy items (TiltSeries and TiltImages) from the input Set.
          Params:
             inputTs: input TiltSeries (or movies) from where to copy elements.
@@ -228,8 +229,11 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             updateTsCallback: optional callback after TiltSeries is created
             orderByTi: optional orderBy value for iterating over TiltImages
             updateTiCallback: optional callback after TiltImage is created
+            skipDisabled:  skip disabled items or not (default) .
         """
         for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
+            if skipDisabled and not ts.isEnabled():
+                continue
             tsOut = self.ITEM_TYPE()
             tsOut.copyInfo(ts)
             tsOut.copyObjId(ts)
@@ -237,6 +241,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 updateTsCallback(i, ts, tsOut)
             self.append(tsOut)
             for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
+                if skipDisabled and not ti.isEnabled():
+                    continue
                 tiOut = tsOut.ITEM_TYPE()
                 tiOut.copyInfo(ti)
                 tiOut.copyObjId(ti)
@@ -254,10 +260,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
+    
+    def appendFromSet(self, other):
+        """ Implements the appendFromSet to be able to make subsets"""
+        self.copyItems(other, skipDisabled=True)
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
+    FILE_TEMPLATE_NAME = "SetOfTiltSeries%s.sqlite"
 
 
 class TiltImageM(data.Movie, TiltImageBase):
