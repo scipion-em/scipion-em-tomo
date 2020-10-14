@@ -34,7 +34,7 @@ import os
 from math import sqrt
 import numpy as np
 
-from pyworkflow.object import Set, String, Pointer
+from pyworkflow.object import Set, Pointer
 import pyworkflow.protocol.params as params
 from pyworkflow.protocol.constants import *
 from pyworkflow.utils import getFiles, removeBaseExt, moveFile
@@ -151,23 +151,23 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
                     self.processedTomos.update([self.getTomoId(fn)])
 
         streamClosed = []
-        readyMics = None
-        allMics = set()
+        readyTomos = None
+        allTomos = set()
         for coordSet in self.inputCoordinates:
             currentPickTomos, isSetClosed = getReadyTomos(coordSet.get())
             streamClosed.append(isSetClosed)
-            if not readyMics:  # first time
-                readyMics = currentPickTomos
+            if not readyTomos:  # first time
+                readyTomos = currentPickTomos
             else:  # available mics are those ready for all pickers
-                readyMics.intersection_update(currentPickTomos)
-            allMics = allMics.union(currentPickTomos)
+                readyTomos.intersection_update(currentPickTomos)
+            allTomos = allTomos.union(currentPickTomos)
 
         self.streamClosed = all(streamClosed)
         if self.streamClosed:
             # for non streaming do all and in the last iteration of streaming do the rest
-            newTomoIds = allMics.difference(self.checkedTomos)
+            newTomoIds = allTomos.difference(self.checkedTomos)
         else:  # for streaming processing, only go for the ready mics in all pickers
-            newTomoIds = readyMics.difference(self.checkedTomos)
+            newTomoIds = readyTomos.difference(self.checkedTomos)
 
         if newTomoIds:
             self.checkedTomos.update(newTomoIds)
