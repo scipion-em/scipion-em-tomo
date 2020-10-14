@@ -37,10 +37,10 @@ import numpy as np
 from pyworkflow.object import Set, String, Pointer
 import pyworkflow.protocol.params as params
 from pyworkflow.protocol.constants import *
-from pwem.objects import SetOfCoordinates, Coordinate
 from pyworkflow.utils import getFiles, removeBaseExt, moveFile
 
 from tomo.protocols import ProtTomoPicking
+from tomo.objects import SetOfCoordinates3D, Coordinate3D
 
 PICK_MODE_LARGER = 0
 PICK_MODE_EQUAL = 1
@@ -154,13 +154,13 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         readyMics = None
         allMics = set()
         for coordSet in self.inputCoordinates:
-            currentPickMics, isSetClosed = getReadyMics(coordSet.get())
+            currentPickTomos, isSetClosed = getReadyTomos(coordSet.get())
             streamClosed.append(isSetClosed)
             if not readyMics:  # first time
-                readyMics = currentPickMics
+                readyMics = currentPickTomos
             else:  # available mics are those ready for all pickers
-                readyMics.intersection_update(currentPickMics)
-            allMics = allMics.union(currentPickMics)
+                readyMics.intersection_update(currentPickTomos)
+            allMics = allMics.union(currentPickTomos)
 
         self.streamClosed = all(streamClosed)
         if self.streamClosed:
@@ -189,18 +189,18 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
 
         newFiles = getFiles(self._getTmpPath())
         if newFiles or self.finished:  # when finished to close the output set
-            outSet = self._loadOutputSet(SetOfCoordinates, 'coordinates.sqlite')
+            outSet = self._loadOutputSet(SetOfCoordinates3D, 'coordinates.sqlite')
 
             for fnTmp in newFiles:
                 coords = np.loadtxt(fnTmp)
                 moveFile(fnTmp, self._getExtraPath())
-                if coords.size == 2:  # special case with only one coordinate
+                if coords.size == 3:  # special case with only one coordinate
                     coords = [coords]
                 for coord in coords:
-                    newCoord = Coordinate()
-                    micrographs = self.getMainInput().getMicrographs()
-                    newCoord.setMicrograph(micrographs[self.getTomoId(fnTmp)])
-                    newCoord.setPosition(coord[0], coord[1])
+                    newCoord = Coordinate3D()
+                    tomograms = self.getMainInput().getPrecedents()
+                    newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
+                    newCoord.setPosition(coord[0], coord[1], coord[2])
                     outSet.append(newCoord)
 
             firstTime = not self.hasAttribute(self.outputName)
@@ -232,8 +232,8 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         #inMicsPointer = Pointer(self.getMapper().getParent(
         #                                    self.getMainInput().getMicrographs()),
         #                                    extended='outputMicrographs')
-        inMicsPointer = Pointer(self.getMainInput().getMicrographs())
-        outputSet.setMicrographs(inMicsPointer)
+        inTomosPointer = Pointer(self.getMainInput().getPrecedents())
+        outputSet.setPrecedents(inTomosPointer)
 
         return outputSet
 
@@ -261,7 +261,7 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
                         self._getTmpPath('%s%s.txt' % (self.FN_PREFIX, tomoId)),
                         self._getExtraPath('jaccard.txt'), self.mode.get())
 
-        self.processedMics.update([tomoId])
+        self.processedTomos.update([tomoId])
 
     def _validate(self):
 
@@ -386,12 +386,11 @@ def consensusWorker(coords, consensus, consensusRadius, posFn, jaccFn=None,
         np.savetxt(posFn, consensusCoords)
 
 
-def getReadyMics(coordSet):
-    coorSet = SetOfCoordinates(filename=coordSet.getFileName())
-    coorSet._xmippMd = String()
+def getReadyTomos(coordSet):
+    coorSet = SetOfCoordinates3D(filename=coordSet.getFileName())
     coorSet.loadAllProperties()
     setClosed = coorSet.isStreamClosed()
     coorSet.close()
-    currentPickMics = {micAgg["_micId"] for micAgg in
-                       coordSet.aggregate(["MAX"], "_micId", ["_micId"])}
-    return currentPickMics, setClosed
+    currentPickTomos = {tomoAgg["_volId"] for tomoAgg in
+                        coordSet.aggregate(["MAX"], "_volId", ["_volId"])}
+    return currentPickTomos, setClosed
