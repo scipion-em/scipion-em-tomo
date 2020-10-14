@@ -69,7 +69,7 @@ class ProtTomoPickingRemoveDuplicates(ProtTomoConsensusPicking):
         for tomo in tomos:
             stepId = self._insertFunctionStep("removeDuplicatesStep",
                                               tomo.getObjId(),
-                                              tomo.getMicName(),
+                                              tomo.getFileName(),
                                               prerequisites=[])
             deps.append(stepId)
         return deps
