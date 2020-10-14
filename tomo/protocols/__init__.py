@@ -38,3 +38,4 @@ from .protocol_alignment_assign_subtomo import ProtAlignmentAssignSubtomo
 from .protocol_extract_coordinates import ProtTomoExtractCoords
 from .protocol_assign_tomo2subtomo import ProtAssignTomo2Subtomo
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
+from .protocol_particle_pick_consensus import ProtTomoConsensusPicking
