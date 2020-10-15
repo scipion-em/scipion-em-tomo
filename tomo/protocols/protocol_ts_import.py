@@ -31,6 +31,7 @@ import time
 from datetime import timedelta, datetime
 from collections import OrderedDict
 import numpy as np
+from sqlite3 import OperationalError
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
@@ -69,17 +70,26 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         form.addParam('filesPattern', params.StringParam,
                       label='Pattern',
                       help="Pattern of the tilt series\n\n"
-                           "The pattern can contain standard wildcards such as\n"
-                           "*, ?, etc.\n\n"
-                           "It should also contains the following special tags:"
-                           "   {TS}: tilt series identifier "
-                           "         (can be any UNIQUE part of the path).\n"
-                           "   {TO}: acq order"
-                           "         (an integer value, important for dose).\n"
-                           "   {TA}: tilt angle"
-                           "         (positive or negative float value).\n\n"
+                           "The pattern can contain standard wildcards such as *, ?, etc.\n\n"
+                           "It should also contains the following special tags:\n"
+                           "   {TS}: tilt series identifier, which can be any UNIQUE part of the path. This must be an "
+                           "alpha-numeric sequence (avoid symbols as -) that can not start with a number.\n"
+                           "   {TO}: acquisition order, an integer value (important for dose).\n"
+                           "   {TA}: tilt angle, a positive or negative float value.\n\n"
                            "Examples:\n"
-                           "")
+                           "To import a set of image stacks (tilt-series or tilt-series movies) as: \n"
+                           "TiltSeries_a_001_0.0.mrc\n"
+                           "TiltSeries_a_002_3.0.mrc\n"
+                           "TiltSeries_a_003_-3.0.mrc\n"
+                           "...\n"
+                           "TiltSeries_b_001_0.0.mrc\n"
+                           "TiltSeries_b_002_3.0.mrc\n"
+                           "TiltSeries_b_003_-3.0.mrc\n"
+                           "...\n"
+                           "The pattern TiltSeries_{TS}_{TO}_{TA}.mrc will identify:\n"
+                           "{TS} as a, b, ...\n"
+                           "{TO} as 001, 002, 003, ...\n"
+                           "{TA} as 0.0, 3.0, -3.0, ...\n")
         self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
@@ -224,10 +234,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 outputSet.append(tsObj)
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
-                    tsObj.append(tiClass(location=f,
-                                         acquisitionOrder=to,
-                                         tiltAngle=ta))
+                    try:
+                        tsObj.append(tiClass(location=f,
+                                             acquisitionOrder=to,
+                                             tiltAngle=ta))
+                    except OperationalError as e:
 
+                        raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
+                                        "(avoid symbols as -) that can not start with a number." % ts)
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
                 someAdded = True
@@ -321,7 +335,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             return p
 
         self._regexPattern = _replace(self._pattern.replace('*', '(.*)'),
-                                      '(?P<TS>.*)', '(?P<TO>\d+)',
+                                      '(?P<TS>.*)',
+                                      '(?P<TO>\d+)',
                                       '(?P<TA>[+-]?\d+(\.\d+)?)')
         self._regex = re.compile(self._regexPattern)
         self._globPattern = _replace(self._pattern, '*', '*', '*')
@@ -520,7 +535,7 @@ class ProtImportTs(ProtImportTsBase):
                             'It can be defined by range: Min, Max, Step '
                             'or from image header, or from complementary'
                             'mdoc or tlt files (should have the same filename '
-                            'plus the .mdoc or .tlt extension).')
+                            'but with the .mdoc or .tlt extension).')
 
         line = group.addLine('Tilt angular range',
                              condition='anglesFrom==0',  # ANGLES_FROM_RANGE
