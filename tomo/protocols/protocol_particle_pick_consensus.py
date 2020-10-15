@@ -228,6 +228,7 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
             outputSet = SetClass(filename=setFile)
             outputSet.setStreamState(outputSet.STREAM_OPEN)
             outputSet.setBoxSize(self.getMainInput().getBoxSize())
+            outputSet.setSamplingRate(self.getMainInput().getSamplingRate())
 
         #inMicsPointer = Pointer(self.getMapper().getParent(
         #                                    self.getMainInput().getMicrographs()),
