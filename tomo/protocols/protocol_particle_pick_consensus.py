@@ -85,12 +85,14 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
                            "are presumed to correspond to the same particle")
         form.addParam('consensus', params.IntParam, default=-1,
                       label="Consensus",
-                      help="How many times need a particle to be selected to "
-                           "be considered as a consensus particle.\n"
+                      help="This parameter can take values from 1 to total number of inputs (being "
+                           "-1 a special case).\n"
                            "*Set to -1* to indicate that it needs to be selected "
                            "by all algorithms: *AND* operation.\n"
                            "*Set to 1* to indicate that it suffices that only "
-                           "1 algorithm selects the particle: *OR* operation.")
+                           "1 algorithm selects the particle: *OR* operation.\n"
+                           "Any other value will determine how many times need a particle"
+                           " to be selected to be considered as a consensus particle.")
         form.addParam('mode', params.EnumParam, label='Consensus mode',
                       choices=['>=', '='], default=PICK_MODE_LARGER,
                       expertLevel=LEVEL_ADVANCED,
