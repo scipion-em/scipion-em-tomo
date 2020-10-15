@@ -1052,6 +1052,8 @@ class TestTomoPickingConsenus(BaseTest):
         coords = []
         coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.txt'))
         coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.txt'))
+
+        # AND + >=
         protConsensus = self._runTomoPickingConsensus(coords, -1, 0)
         output = getattr(protConsensus, 'consensusCoordinates', None)
         self.assertTrue(output,
@@ -1059,6 +1061,33 @@ class TestTomoPickingConsenus(BaseTest):
         self.assertTrue(output.getSize() == 5)
         self.assertTrue(output.getBoxSize() == 32)
         self.assertTrue(output.getSamplingRate() == 5)
+
+        # AND + =
+        # protConsensus = self._runTomoPickingConsensus(coords, -1, 1)
+        # output = getattr(protConsensus, 'consensusCoordinates', None)
+        # self.assertTrue(output,
+        #                      "There was a problem with consenus output")
+        # self.assertTrue(output.getSize() == 5)
+        # self.assertTrue(output.getBoxSize() == 32)
+        # self.assertTrue(output.getSamplingRate() == 5)
+
+        # OR + >=
+        # protConsensus = self._runTomoPickingConsensus(coords, 1, 0)
+        # output = getattr(protConsensus, 'consensusCoordinates', None)
+        # self.assertTrue(output,
+        #                      "There was a problem with consenus output")
+        # self.assertTrue(output.getSize() == 5)
+        # self.assertTrue(output.getBoxSize() == 32)
+        # self.assertTrue(output.getSamplingRate() == 5)
+
+        # OR + =
+        # protConsensus = self._runTomoPickingConsensus(coords, 1, 1)
+        # output = getattr(protConsensus, 'consensusCoordinates', None)
+        # self.assertTrue(output,
+        #                      "There was a problem with consenus output")
+        # self.assertTrue(output.getSize() == 5)
+        # self.assertTrue(output.getBoxSize() == 32)
+        # self.assertTrue(output.getSamplingRate() == 5)
 
         return output
 
