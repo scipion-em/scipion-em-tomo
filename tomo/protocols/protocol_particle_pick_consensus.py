@@ -94,6 +94,7 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         form.addParam('mode', params.EnumParam, label='Consensus mode',
                       choices=['>=', '='], default=PICK_MODE_LARGER,
                       expertLevel=LEVEL_ADVANCED,
+                      display=params.EnumParam.DISPLAY_HLIST,
                       help='If the number of votes to progress to the output '
                            'must be either (=) strictly speaking equals to '
                            'the consensus number or (>=) at least equals.')
