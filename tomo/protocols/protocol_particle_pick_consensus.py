@@ -37,7 +37,7 @@ import numpy as np
 from pyworkflow.object import Set, Pointer
 import pyworkflow.protocol.params as params
 from pyworkflow.protocol.constants import *
-from pyworkflow.utils import getFiles, removeBaseExt, moveFile
+from pyworkflow.utils import getFiles, removeBaseExt, moveFile, removeExt
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D, Coordinate3D
@@ -195,16 +195,19 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
             outSet = self._loadOutputSet(SetOfCoordinates3D, 'coordinates.sqlite')
 
             for fnTmp in newFiles:
-                coords = np.loadtxt(fnTmp)
-                moveFile(fnTmp, self._getExtraPath())
-                if coords.size == 3:  # special case with only one coordinate
-                    coords = [coords]
-                for coord in coords:
-                    newCoord = Coordinate3D()
-                    tomograms = self.getMainInput().getPrecedents()
-                    newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
-                    newCoord.setPosition(coord[0], coord[1], coord[2])
-                    outSet.append(newCoord)
+                if not fnTmp.endswith('_ids.txt'):
+                    coords = np.loadtxt(fnTmp)
+                    coords_ids = np.loadtxt(removeExt(fnTmp) + '_ids.txt', dtype=int)
+                    moveFile(fnTmp, self._getExtraPath())
+                    if coords.size == 3:  # special case with only one coordinate
+                        coords = [coords]
+                    for idx, coord in enumerate(coords):
+                        newCoord = Coordinate3D()
+                        tomograms = self.getMainInput().getPrecedents()
+                        newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
+                        newCoord.setPosition(coord[0], coord[1], coord[2])
+                        newCoord.setMatrix(self.inputCoordinates[coords_ids[idx, 0]].get()[int(coords_ids[idx, 1])].getMatrix())
+                        outSet.append(newCoord)
 
             firstTime = not self.hasAttribute(self.outputName)
             self._updateOutputSet(self.outputName, outSet, streamMode)
@@ -254,14 +257,19 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
 
         # Get all coordinates for this tomogram
         coords = []
+        coords_ids = []
         for idx, coordinates in enumerate(self.inputCoordinates):
             coordArray = np.asarray([x.getPosition() for x in
                                      coordinates.get().iterCoordinates(tomoId)],
                                      dtype=float)
+            idArray = np.asarray([x.getObjId() for x in
+                                  coordinates.get().iterCoordinates(tomoId)],
+                                  dtype=int)
             coordArray *= float(self.sampligRates[idx]) / float(self.sampligRates[0])
             coords.append(np.asarray(coordArray, dtype=int))
+            coords_ids.append(np.asarray(idArray, dtype=int))
 
-        consensusWorker(coords, self.consensus.get(), self.consensusRadius.get(),
+        consensusWorker(coords, coords_ids, self.consensus.get(), self.consensusRadius.get(),
                         self._getTmpPath('%s%s.txt' % (self.FN_PREFIX, tomoId)),
                         self._getExtraPath('jaccard.txt'), self.mode.get())
 
@@ -304,7 +312,7 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         return int(removeBaseExt(fn).lstrip(self.FN_PREFIX))
 
 
-def consensusWorker(coords, consensus, consensusRadius, posFn, jaccFn=None,
+def consensusWorker(coords, coords_ids, consensus, consensusRadius, posFn, jaccFn=None,
                     mode=PICK_MODE_LARGER):
     """ Worker for calculate the consensus of N picking algorithms of
           M_n coordinates each one.
@@ -326,6 +334,7 @@ def consensusWorker(coords, consensus, consensusRadius, posFn, jaccFn=None,
     Ninputs = len(coords)
     Ncoords = sum([x.shape[0] for x in coords])
     allCoords = np.zeros([Ncoords, 3])
+    allCoords_ids = np.asarray([[idx, item] for idx, ids in enumerate(coords_ids) for item in ids])
     votes = np.zeros(Ncoords)
 
     inAllMicrographs = consensus <= 0 or consensus >= Ninputs
@@ -371,8 +380,10 @@ def consensusWorker(coords, consensus, consensusRadius, posFn, jaccFn=None,
 
     if mode==PICK_MODE_LARGER:
         consensusCoords = allCoords[votes >= consensus, :]
+        consensusIds = allCoords_ids[votes >= consensus, :]
     else:
         consensusCoords = allCoords[votes == consensus, :]
+        consensusIds = allCoords_ids[votes == consensus, :]
 
     try:
         if jaccFn:
@@ -388,6 +399,7 @@ def consensusWorker(coords, consensus, consensusRadius, posFn, jaccFn=None,
     # are some coordinates (size > 0)
     if consensusCoords.size:
         np.savetxt(posFn, consensusCoords)
+        np.savetxt(removeExt(posFn) + '_ids.txt', consensusIds, fmt='%d')
 
 
 def getReadyTomos(coordSet):
