@@ -198,6 +198,7 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
             for fnTmp in newFiles:
                 if not fnTmp.endswith('_ids.txt'):
                     coords = np.loadtxt(fnTmp)
+                    normals = triangulateSurface(coords)
                     coords_ids = np.loadtxt(removeExt(fnTmp) + '_ids.txt', dtype=int)
                     moveFile(fnTmp, self._getExtraPath())
                     if coords.size == 3:  # special case with only one coordinate
@@ -207,10 +208,13 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
                         tomograms = self.getMainInput().getPrecedents()
                         newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
                         newCoord.setPosition(coord[0], coord[1], coord[2])
+                        matrix = rotation_matrix_from_vectors(normals[idx], np.array([0, 0, 1]))
                         if isinstance(self.inputCoordinates, list):
-                            newCoord.setMatrix(self.inputCoordinates[coords_ids[idx, 0]].get()[int(coords_ids[idx, 1])].getMatrix())
+                            # newCoord.setMatrix(self.inputCoordinates[coords_ids[idx, 0]].get()[int(coords_ids[idx, 1])].getMatrix())
+                            newCoord.setMatrix(matrix)
                         else:
-                            newCoord.setMatrix(self.getMainInput()[int(coords_ids[idx, 1])].getMatrix())
+                            # newCoord.setMatrix(self.getMainInput()[int(coords_ids[idx, 1])].getMatrix())
+                            newCoord.setMatrix(matrix)
                         outSet.append(newCoord)
 
             firstTime = not self.hasAttribute(self.outputName)
@@ -415,6 +419,7 @@ def getReadyTomos(coordSet):
                         coordSet.aggregate(["MAX"], "_volId", ["_volId"])}
     return currentPickTomos, setClosed
 
+
 def rotation_matrix_from_vectors(vec1, vec2):
     # a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
     a, b = vec1, vec2
@@ -422,11 +427,15 @@ def rotation_matrix_from_vectors(vec1, vec2):
     c = np.dot(a, b)
     s = np.linalg.norm(v)
     if s != 0:
-      kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-      rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
-      return rotation_matrix
+        tr = np.zeros([4, 4])
+        kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
+        tr[0:3, 0:3] = rotation_matrix
+        tr[-1, -1] = 1
+        return tr
     else:
-      return np.eye(3)
+        return np.eye(4)
+
 
 def triangulateSurface(cloud):
     cloud = pv.PolyData(cloud)
