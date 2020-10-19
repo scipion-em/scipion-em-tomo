@@ -206,7 +206,10 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
                         tomograms = self.getMainInput().getPrecedents()
                         newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
                         newCoord.setPosition(coord[0], coord[1], coord[2])
-                        newCoord.setMatrix(self.inputCoordinates[coords_ids[idx, 0]].get()[int(coords_ids[idx, 1])].getMatrix())
+                        if isinstance(self.inputCoordinates, list):
+                            newCoord.setMatrix(self.inputCoordinates[coords_ids[idx, 0]].get()[int(coords_ids[idx, 1])].getMatrix())
+                        else:
+                            newCoord.setMatrix(self.getMainInput()[int(coords_ids[idx, 1])].getMatrix())
                         outSet.append(newCoord)
 
             firstTime = not self.hasAttribute(self.outputName)
@@ -233,12 +236,12 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         else:
             outputSet = SetClass(filename=setFile)
             outputSet.setStreamState(outputSet.STREAM_OPEN)
-            outputSet.setBoxSize(self.getMainInput().getBoxSize())
-            outputSet.setSamplingRate(self.getMainInput().getSamplingRate())
 
         #inMicsPointer = Pointer(self.getMapper().getParent(
         #                                    self.getMainInput().getMicrographs()),
         #                                    extended='outputMicrographs')
+        outputSet.setBoxSize(self.getMainInput().getBoxSize())
+        outputSet.setSamplingRate(self.getMainInput().getSamplingRate())
         inTomosPointer = Pointer(self.getMainInput().getPrecedents())
         outputSet.setPrecedents(inTomosPointer)
 
