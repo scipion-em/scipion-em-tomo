@@ -33,12 +33,13 @@ import os
 
 from math import sqrt
 import numpy as np
-import pyvista as pv
 
 from pyworkflow.object import Set, Pointer
 import pyworkflow.protocol.params as params
 from pyworkflow.protocol.constants import *
-from pyworkflow.utils import getFiles, removeBaseExt, moveFile, removeExt
+from pyworkflow.utils import getFiles, removeBaseExt, moveFile
+
+from xmipp3.utils import rotation_matrix_from_vectors, delaunayTriangulation, computeNormals
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D, Coordinate3D
@@ -196,26 +197,23 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
             outSet = self._loadOutputSet(SetOfCoordinates3D, 'coordinates.sqlite')
 
             for fnTmp in newFiles:
-                if not fnTmp.endswith('_ids.txt'):
-                    coords = np.loadtxt(fnTmp)
-                    normals = triangulateSurface(coords)
-                    coords_ids = np.loadtxt(removeExt(fnTmp) + '_ids.txt', dtype=int)
-                    moveFile(fnTmp, self._getExtraPath())
-                    if coords.size == 3:  # special case with only one coordinate
-                        coords = [coords]
-                    for idx, coord in enumerate(coords):
-                        newCoord = Coordinate3D()
-                        tomograms = self.getMainInput().getPrecedents()
-                        newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
-                        newCoord.setPosition(coord[0], coord[1], coord[2])
-                        matrix = rotation_matrix_from_vectors(normals[idx], np.array([0, 0, 1]))
-                        if isinstance(self.inputCoordinates, list):
-                            # newCoord.setMatrix(self.inputCoordinates[coords_ids[idx, 0]].get()[int(coords_ids[idx, 1])].getMatrix())
-                            newCoord.setMatrix(matrix)
-                        else:
-                            # newCoord.setMatrix(self.getMainInput()[int(coords_ids[idx, 1])].getMatrix())
-                            newCoord.setMatrix(matrix)
-                        outSet.append(newCoord)
+                coords = np.loadtxt(fnTmp)
+                shell = delaunayTriangulation(coords)
+                normals = computeNormals(shell)
+                moveFile(fnTmp, self._getExtraPath())
+                if coords.size == 3:  # special case with only one coordinate
+                    coords = [coords]
+                for idx, coord in enumerate(coords):
+                    newCoord = Coordinate3D()
+                    tomograms = self.getMainInput().getPrecedents()
+                    newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
+                    newCoord.setPosition(coord[0], coord[1], coord[2])
+                    matrix = rotation_matrix_from_vectors(normals[idx], np.array([0, 0, 1]))
+                    if isinstance(self.inputCoordinates, list):
+                        newCoord.setMatrix(matrix)
+                    else:
+                        newCoord.setMatrix(matrix)
+                    outSet.append(newCoord)
 
             firstTime = not self.hasAttribute(self.outputName)
             self._updateOutputSet(self.outputName, outSet, streamMode)
@@ -265,19 +263,14 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
 
         # Get all coordinates for this tomogram
         coords = []
-        coords_ids = []
         for idx, coordinates in enumerate(self.inputCoordinates):
             coordArray = np.asarray([x.getPosition() for x in
                                      coordinates.get().iterCoordinates(tomoId)],
                                      dtype=float)
-            idArray = np.asarray([x.getObjId() for x in
-                                  coordinates.get().iterCoordinates(tomoId)],
-                                  dtype=int)
             coordArray *= float(self.sampligRates[idx]) / float(self.sampligRates[0])
             coords.append(np.asarray(coordArray, dtype=int))
-            coords_ids.append(np.asarray(idArray, dtype=int))
 
-        consensusWorker(coords, coords_ids, self.consensus.get(), self.consensusRadius.get(),
+        consensusWorker(coords, self.consensus.get(), self.consensusRadius.get(),
                         self._getTmpPath('%s%s.txt' % (self.FN_PREFIX, tomoId)),
                         self._getExtraPath('jaccard.txt'), self.mode.get())
 
@@ -320,7 +313,7 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         return int(removeBaseExt(fn).lstrip(self.FN_PREFIX))
 
 
-def consensusWorker(coords, coords_ids, consensus, consensusRadius, posFn, jaccFn=None,
+def consensusWorker(coords, consensus, consensusRadius, posFn, jaccFn=None,
                     mode=PICK_MODE_LARGER):
     """ Worker for calculate the consensus of N picking algorithms of
           M_n coordinates each one.
@@ -342,7 +335,6 @@ def consensusWorker(coords, coords_ids, consensus, consensusRadius, posFn, jaccF
     Ninputs = len(coords)
     Ncoords = sum([x.shape[0] for x in coords])
     allCoords = np.zeros([Ncoords, 3])
-    allCoords_ids = np.asarray([[idx, item] for idx, ids in enumerate(coords_ids) for item in ids])
     votes = np.zeros(Ncoords)
 
     inAllMicrographs = consensus <= 0 or consensus >= Ninputs
@@ -388,10 +380,8 @@ def consensusWorker(coords, coords_ids, consensus, consensusRadius, posFn, jaccF
 
     if mode==PICK_MODE_LARGER:
         consensusCoords = allCoords[votes >= consensus, :]
-        consensusIds = allCoords_ids[votes >= consensus, :]
     else:
         consensusCoords = allCoords[votes == consensus, :]
-        consensusIds = allCoords_ids[votes == consensus, :]
 
     try:
         if jaccFn:
@@ -407,7 +397,6 @@ def consensusWorker(coords, coords_ids, consensus, consensusRadius, posFn, jaccF
     # are some coordinates (size > 0)
     if consensusCoords.size:
         np.savetxt(posFn, consensusCoords)
-        np.savetxt(removeExt(posFn) + '_ids.txt', consensusIds, fmt='%d')
 
 
 def getReadyTomos(coordSet):
@@ -418,28 +407,3 @@ def getReadyTomos(coordSet):
     currentPickTomos = {tomoAgg["_volId"] for tomoAgg in
                         coordSet.aggregate(["MAX"], "_volId", ["_volId"])}
     return currentPickTomos, setClosed
-
-
-def rotation_matrix_from_vectors(vec1, vec2):
-    # a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
-    a, b = vec1, vec2
-    v = np.cross(a, b)
-    c = np.dot(a, b)
-    s = np.linalg.norm(v)
-    if s != 0:
-        tr = np.zeros([4, 4])
-        kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-        rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
-        tr[0:3, 0:3] = rotation_matrix
-        tr[-1, -1] = 1
-        return tr
-    else:
-        return np.eye(4)
-
-
-def triangulateSurface(cloud):
-    cloud = pv.PolyData(cloud)
-    mesh = cloud.delaunay_3d()
-    shell = mesh.extract_geometry().triangulate()
-    shell.compute_normals(inplace=True)
-    return shell.point_normals
