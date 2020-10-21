@@ -1008,14 +1008,14 @@ class TestTomoPickingConsenus(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.dataset = DataSet.getDataSet('reliontomo')
         cls.tomogram_1 = cls.dataset.getFile('tomo1')
         cls.tomogram_2 = cls.dataset.getFile('tomo2')
 
     def _importSetOfCoordinates(self, tomoFile, pattern):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=tomoFile,
-                                              samplingRate=5,
+                                              samplingRate=1,
                                               objLabel=pwutils.removeBaseExt(tomoFile))
 
         self.launchProtocol(protImportTomogram)
@@ -1031,63 +1031,64 @@ class TestTomoPickingConsenus(BaseTest):
                                   filesPath=self.dataset.getPath(),
                                   importTomograms=protImportTomogram.outputTomograms,
                                   filesPattern=pattern, boxSize=32,
-                                  samplingRate=5)
+                                  samplingRate=1)
         self.launchProtocol(protImportCoordinates3d)
 
         return getattr(protImportCoordinates3d, 'outputCoordinates', None)
 
-    def _runTomoPickingConsensus(self, coordinates, consensus, mode):
+    def _runTomoPickingConsensus(self, coordinates, consensus, mode, radius=100):
         choices_mode = ['>=', '=']
         choices_consensus = {-1: 'AND', 1: 'OR'}
         protPickingConsensus = self.newProtocol(tomo.protocols.ProtTomoConsensusPicking,
                                                 inputCoordinates=coordinates,
                                                 consensus=consensus,
                                                 mode=mode,
+                                                consensusRadius=radius,
                                                 objLabel='Consenus - ' + choices_consensus[consensus]
-                                                            + ' - ' + choices_mode[mode])
+                                                          + ' - ' + choices_mode[mode])
         self.launchProtocol(protPickingConsensus)
         return protPickingConsensus
 
     def test_picking_consenus(self):
         coords = []
-        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.txt'))
-        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.txt'))
+        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.tbl'))
+        coords.append(self._importSetOfCoordinates(self.tomogram_2, '*.tbl'))
 
         # AND + >=
         protConsensus = self._runTomoPickingConsensus(coords, -1, 0)
         output = getattr(protConsensus, 'consensusCoordinates', None)
         self.assertTrue(output,
                              "There was a problem with consenus output")
-        self.assertTrue(output.getSize() == 5)
+        self.assertTrue(output.getSize() == 20)
         self.assertTrue(output.getBoxSize() == 32)
-        self.assertTrue(output.getSamplingRate() == 5)
+        self.assertTrue(output.getSamplingRate() == 1)
 
         # AND + =
-        # protConsensus = self._runTomoPickingConsensus(coords, -1, 1)
-        # output = getattr(protConsensus, 'consensusCoordinates', None)
-        # self.assertTrue(output,
-        #                      "There was a problem with consenus output")
-        # self.assertTrue(output.getSize() == 5)
-        # self.assertTrue(output.getBoxSize() == 32)
-        # self.assertTrue(output.getSamplingRate() == 5)
+        protConsensus = self._runTomoPickingConsensus(coords, -1, 1, radius=50)
+        output = getattr(protConsensus, 'consensusCoordinates', None)
+        self.assertTrue(output,
+                             "There was a problem with consenus output")
+        self.assertTrue(output.getSize() == 5)
+        self.assertTrue(output.getBoxSize() == 32)
+        self.assertTrue(output.getSamplingRate() == 1)
 
         # OR + >=
-        # protConsensus = self._runTomoPickingConsensus(coords, 1, 0)
-        # output = getattr(protConsensus, 'consensusCoordinates', None)
-        # self.assertTrue(output,
-        #                      "There was a problem with consenus output")
-        # self.assertTrue(output.getSize() == 5)
-        # self.assertTrue(output.getBoxSize() == 32)
-        # self.assertTrue(output.getSamplingRate() == 5)
+        protConsensus = self._runTomoPickingConsensus(coords, 1, 0)
+        output = getattr(protConsensus, 'consensusCoordinates', None)
+        self.assertTrue(output,
+                             "There was a problem with consenus output")
+        self.assertTrue(output.getSize() == 83)
+        self.assertTrue(output.getBoxSize() == 32)
+        self.assertTrue(output.getSamplingRate() == 1)
 
         # OR + =
-        # protConsensus = self._runTomoPickingConsensus(coords, 1, 1)
-        # output = getattr(protConsensus, 'consensusCoordinates', None)
-        # self.assertTrue(output,
-        #                      "There was a problem with consenus output")
-        # self.assertTrue(output.getSize() == 5)
-        # self.assertTrue(output.getBoxSize() == 32)
-        # self.assertTrue(output.getSamplingRate() == 5)
+        protConsensus = self._runTomoPickingConsensus(coords, 1, 1)
+        output = getattr(protConsensus, 'consensusCoordinates', None)
+        self.assertTrue(output,
+                             "There was a problem with consenus output")
+        self.assertTrue(output.getSize() == 63)
+        self.assertTrue(output.getBoxSize() == 32)
+        self.assertTrue(output.getSamplingRate() == 1)
 
         return output
 
