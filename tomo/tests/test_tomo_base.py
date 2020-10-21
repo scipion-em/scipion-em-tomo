@@ -1036,14 +1036,14 @@ class TestTomoPickingConsenus(BaseTest):
 
         return getattr(protImportCoordinates3d, 'outputCoordinates', None)
 
-    def _runTomoPickingConsensus(self, coordinates, consensus, mode):
+    def _runTomoPickingConsensus(self, coordinates, consensus, mode, radius=100):
         choices_mode = ['>=', '=']
         choices_consensus = {-1: 'AND', 1: 'OR'}
         protPickingConsensus = self.newProtocol(tomo.protocols.ProtTomoConsensusPicking,
                                                 inputCoordinates=coordinates,
                                                 consensus=consensus,
                                                 mode=mode,
-                                                consensusRadius=100,
+                                                consensusRadius=radius,
                                                 objLabel='Consenus - ' + choices_consensus[consensus]
                                                           + ' - ' + choices_mode[mode])
         self.launchProtocol(protPickingConsensus)
@@ -1064,11 +1064,11 @@ class TestTomoPickingConsenus(BaseTest):
         self.assertTrue(output.getSamplingRate() == 1)
 
         # AND + =
-        protConsensus = self._runTomoPickingConsensus(coords, -1, 1)
+        protConsensus = self._runTomoPickingConsensus(coords, -1, 1, radius=50)
         output = getattr(protConsensus, 'consensusCoordinates', None)
         self.assertTrue(output,
                              "There was a problem with consenus output")
-        self.assertTrue(output.getSize() == 3)
+        self.assertTrue(output.getSize() == 5)
         self.assertTrue(output.getBoxSize() == 32)
         self.assertTrue(output.getSamplingRate() == 1)
 
