@@ -39,6 +39,8 @@ import pyworkflow.protocol.params as params
 from pyworkflow.protocol.constants import *
 from pyworkflow.utils import getFiles, removeBaseExt, moveFile
 
+from xmipp3.utils import rotation_matrix_from_vectors, delaunayTriangulation, computeNormals
+
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D, Coordinate3D
 
@@ -196,14 +198,21 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
 
             for fnTmp in newFiles:
                 coords = np.loadtxt(fnTmp)
+                shell = delaunayTriangulation(coords)
+                normals = computeNormals(shell)
                 moveFile(fnTmp, self._getExtraPath())
                 if coords.size == 3:  # special case with only one coordinate
                     coords = [coords]
-                for coord in coords:
+                for idx, coord in enumerate(coords):
                     newCoord = Coordinate3D()
                     tomograms = self.getMainInput().getPrecedents()
                     newCoord.setVolume(tomograms[self.getTomoId(fnTmp)])
                     newCoord.setPosition(coord[0], coord[1], coord[2])
+                    matrix = rotation_matrix_from_vectors(normals[idx], np.array([0, 0, 1]))
+                    if isinstance(self.inputCoordinates, list):
+                        newCoord.setMatrix(matrix)
+                    else:
+                        newCoord.setMatrix(matrix)
                     outSet.append(newCoord)
 
             firstTime = not self.hasAttribute(self.outputName)
@@ -230,12 +239,12 @@ class ProtTomoConsensusPicking(ProtTomoPicking):
         else:
             outputSet = SetClass(filename=setFile)
             outputSet.setStreamState(outputSet.STREAM_OPEN)
-            outputSet.setBoxSize(self.getMainInput().getBoxSize())
-            outputSet.setSamplingRate(self.getMainInput().getSamplingRate())
 
         #inMicsPointer = Pointer(self.getMapper().getParent(
         #                                    self.getMainInput().getMicrographs()),
         #                                    extended='outputMicrographs')
+        outputSet.setBoxSize(self.getMainInput().getBoxSize())
+        outputSet.setSamplingRate(self.getMainInput().getSamplingRate())
         inTomosPointer = Pointer(self.getMainInput().getPrecedents())
         outputSet.setPrecedents(inTomosPointer)
 
