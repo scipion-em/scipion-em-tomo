@@ -26,6 +26,8 @@
 # **************************************************************************
 
 import os, re
+import pyvista as pv
+import numpy as np
 
 import pyworkflow.utils as pwutils
 
@@ -39,3 +41,29 @@ def _getUniqueFileName(pattern, filename, filePaths=None):
 
 def _matchFileNames(originalName, importName):
  return os.path.basename(importName) in originalName
+
+def rotation_matrix_from_vectors(vec1, vec2):
+    # a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
+    a, b = vec1, vec2
+    v = np.cross(a, b)
+    c = np.dot(a, b)
+    s = np.linalg.norm(v)
+    if s != 0:
+        tr = np.zeros([4, 4])
+        kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
+        tr[0:3, 0:3] = rotation_matrix
+        tr[-1, -1] = 1
+        return tr
+    else:
+        return np.eye(4)
+
+def delaunayTriangulation(cloud):
+    cloud = pv.PolyData(cloud)
+    mesh = cloud.delaunay_3d()
+    shell = mesh.extract_geometry().triangulate()
+    return shell
+
+def computeNormals(triangulation):
+    triangulation.compute_normals(inplace=True)
+    return triangulation.point_normals
