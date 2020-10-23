@@ -1099,7 +1099,7 @@ class TestTomoPickingRemoveDuplicates(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.dataset = DataSet.getDataSet('reliontomo')
         cls.tomogram_1 = cls.dataset.getFile('tomo1')
         cls.tomogram_2 = cls.dataset.getFile('tomo2')
 
@@ -1141,16 +1141,16 @@ class TestTomoPickingRemoveDuplicates(BaseTest):
         self.launchProtocol(protPickingConsensus)
         return protPickingConsensus
 
-    def test_picking_consenus(self):
+    def test_picking_remove_duplicates(self):
         coords = []
-        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.txt'))
-        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.txt'))
+        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.tbl'))
+        coords.append(self._importSetOfCoordinates(self.tomogram_1, '*.tbl'))
         all_coords = self._joinSets(coords)
         protRemoveDuplicates = self._runTomoPickingRemoveDuplicates(all_coords)
         output = getattr(protRemoveDuplicates, 'outputCoordinates', None)
         self.assertTrue(output,
                              "There was a problem with consenus output")
-        self.assertTrue(output.getSize() == 5)
+        self.assertTrue(output.getSize() == 63)
         self.assertTrue(output.getBoxSize() == 32)
         self.assertTrue(output.getSamplingRate() == 5)
 

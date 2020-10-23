@@ -93,7 +93,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         def appendCoordFromSubTomo(subTomo, boxSize):
             coord = subTomo.getCoordinate3D()
-            tomoKey = coord.getVolId()
+            tomoKey = coord.getVolId()  # FIXME: Cambiar a subTomo.getVolId()?
             tomo = inTomos[tomoKey]
 
             if tomo is None:
@@ -107,7 +107,10 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                     newCoord.copyObjId(subTomo)
                     newCoord.setPosition(x * scale, y * scale, z * scale)
 
-                    newCoord.setVolume(inTomos[idx+1])
+                    if len(filesTomo) == 1:
+                        newCoord.setVolume(inTomos.getFirstItem())
+                    else:
+                        newCoord.setVolume(inTomos[idx+1])
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
                     self.outputCoords.append(newCoord)

@@ -39,7 +39,7 @@ import pyworkflow.protocol.params as params
 from pyworkflow.protocol.constants import *
 from pyworkflow.utils import getFiles, removeBaseExt, moveFile
 
-from xmipp3.utils import rotation_matrix_from_vectors, delaunayTriangulation, computeNormals
+from ..utils import rotation_matrix_from_vectors, delaunayTriangulation, computeNormals
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D, Coordinate3D
