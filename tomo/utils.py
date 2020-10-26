@@ -58,10 +58,20 @@ def rotation_matrix_from_vectors(vec1, vec2):
     else:
         return np.eye(4)
 
-def delaunayTriangulation(cloud):
-    cloud = pv.PolyData(cloud)
-    mesh = cloud.delaunay_3d()
+def delaunayTriangulation(cloud, adjustCloud=True):
+    cloud_pv = pv.PolyData(cloud)
+    mesh = cloud_pv.delaunay_3d()
     shell = mesh.extract_geometry().triangulate()
+
+    # If points lie outside the shell, they are readjusted to compute their normals
+    if adjustCloud:
+        shell.subdivide(4, inplace=True)
+        areZero = np.where((shell.point_normals == (0, 0, 0)).all(axis=1))
+        points = np.asarray(shell.points)
+        points[areZero] = np.array((0, 0, 0))
+        newCoords = np.asarray([points[np.argmin(np.linalg.norm(points - point, axis=1))]
+                                for point in cloud])
+        shell = delaunayTriangulation(newCoords, adjustCloud=False)
     return shell
 
 def computeNormals(triangulation):
