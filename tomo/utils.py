@@ -68,7 +68,8 @@ def delaunayTriangulation(cloud, adjustCloud=True):
         shell.subdivide(4, inplace=True)
         areZero = np.where((shell.point_normals == (0, 0, 0)).all(axis=1))
         points = np.asarray(shell.points)
-        points[areZero] = np.array((0, 0, 0))
+        # points[areZero] = np.array((0, 0, 0))
+        points = np.delete(points, areZero, axis=0)
         newCoords = np.asarray([points[np.argmin(np.linalg.norm(points - point, axis=1))]
                                 for point in cloud])
         shell = delaunayTriangulation(newCoords, adjustCloud=False)
@@ -76,4 +77,31 @@ def delaunayTriangulation(cloud, adjustCloud=True):
 
 def computeNormals(triangulation):
     triangulation.compute_normals(inplace=True)
-    return triangulation.point_normals
+    normals = triangulation.point_normals
+    points = triangulation.points
+
+    # Check if coordinates are repeated (due to neighbour search) and copy the normal
+    # so it is not (0,0,0)
+    for i in range(len(points)):  # generate pairs
+        for j in range(i + 1, len(points)):
+            if np.array_equal(points[i], points[j]):  # compare rows
+                normals[j] = normals[i]
+            else:
+                pass
+
+    # Sometimes, points may be redundant to the mesh
+    # Assign the closest normal to them
+    areZero = np.where((normals == (0, 0, 0)).all(axis=1))
+    redundant = points[areZero]
+    points = np.delete(points, areZero, axis=0)
+    ngNormals = np.asarray([np.argmin(np.linalg.norm(points - point, axis=1))
+                            for point in redundant])
+    normals[areZero] = normals[ngNormals]
+
+    return normals
+
+def normalFromMatrix(transformation):
+    rotation = transformation[:3, :3]
+    axis = np.array([0, 0, 1])
+    normal = np.linalg.inv(rotation).dot(axis)
+    return normal
