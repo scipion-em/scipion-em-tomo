@@ -31,6 +31,7 @@ import os
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
+from pyworkflow.object import Integer
 
 from .protocol_base import ProtTomoPicking
 
@@ -113,6 +114,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                         newCoord.setVolume(inTomos[idx+1])
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
+                    if hasattr(coord, '_vesicleId'):
+                        newCoord._vesicleId = Integer(coord._vesicleId)
                     self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
