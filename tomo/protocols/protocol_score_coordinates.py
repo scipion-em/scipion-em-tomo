@@ -26,6 +26,8 @@
 # *
 # **************************************************************************
 
+import numpy as np
+
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
@@ -62,19 +64,29 @@ class ProtTomoScoreCoordinates(ProtTomoPicking):
                       help='Distance expressed in pixels')
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('computeParams')
+        coordinates = self.inputCoordinates.get()
+        self._insertFunctionStep('computeParams', coordinates)
 
-    def computeParams(self):
+    def computeParams(self, coordinates):
         import time
         time.sleep(10)
-        self.cloud = []
-        self.normals = []
+        tomos = coordinates.getPrecedents()
+        tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
+        vesicleIds = set([coord._vesicleId.get() for coord in coordinates.iterCoordinates()])
+        axis = np.array([0, 0, 1])
+        tomo_vesicles = {tomoField: {'vesicles': [], 'normals': []}
+                         for tomoField in tomoNames}
 
-        inputCoords = self.inputCoordinates.get()
-        tomos = inputCoords.getPrecedents()
-        tomo_vesicles = {pwutils.removeBaseExt(tomo.getFileName()): []
-                         for tomo in tomos}
-
-        for tomo in tomos.iterItems():
-            for coord in inputCoords.iterCoordinates(volume=tomo):
-                pass
+        for idt, tomo in enumerate(tomos.iterItems()):
+            for idv in vesicleIds:
+                vesicle = []
+                normals = []
+                for coord in coordinates.iterCoordinates(volume=tomo):
+                    if coord._vesicleId == idv:
+                        vesicle.append(coord.getPosition())
+                        trMat = coord.getMatrix()
+                        rotMat = np.linalg.inv(trMat[:3, :3])
+                        normals.append(rotMat.dot(axis))
+                tomo_vesicles[tomoNames[idt]]['vesicles'].append(np.asarray(vesicle))
+                tomo_vesicles[tomoNames[idt]]['normals'].append(np.asarray(normals))
+        print('Done')
