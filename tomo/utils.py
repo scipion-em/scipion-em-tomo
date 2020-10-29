@@ -85,22 +85,15 @@ def fit_ellipsoid(x, y, z):
     #     Ax^2 + By^2 + Cz^2 + 2Dxy + 2Exz + 2Fyz + 2Gx + 2Hy + 2Iz + J = 0
     # chi2: residual sum of squared errors(chi^2), in the coordinate frame in which the ellipsoid is a unit sphere
 
-    D = np.array([x*x + y*y - 2*z*z, x*x + z*z - 2*y*y, 2*x*y, 2*x*z, 2*y*z, 2*x, 2*y, 2*z, 1 + 0*x])  # fxc = 9x10
-    D = D.transpose()  # fxc = 10x9
+    D = np.array([x*x + y*y - 2*z*z, x*x + z*z - 2*y*y, 2*x*y, 2*x*z, 2*y*z, 2*x, 2*y, 2*z, 1 + 0*x])
+    D = D.transpose()
 
     # Solve the normal system of equations
-    d2 = x*x + y*y + z*z  # The RHS of the llsq problem (y's) ; fxc = 1x10
-    cD = D.conj().transpose()  # fxc = 9x10
-    a = cD @ D  # fxc = 9x9
-    b = cD @ d2  # fxc = 9x1
-    u = np.linalg.lstsq(a, b, rcond=None)[0]  # Solution to the normal equations ; fxc = 9x1
-
-    # print("-----D----", D)   # fxc = 10x9
-    # print("-----d2----", d2) # fxc = 1x10
-    # print("-----cD----", cD) # fxc = 9x10
-    # print("-----a----", a)   # fxc = 9x9
-    # print("-----b----", b)   # fxc = 9x1
-    # print("-----u----", u)   # fxc = 9x1
+    d2 = x*x + y*y + z*z  # The RHS of the llsq problem (y's)
+    cD = D.conj().transpose()
+    a = cD @ D
+    b = cD @ d2
+    u = np.linalg.lstsq(a, b, rcond=None)[0]  # Solution to the normal equations
 
     # Find the ellipsoid parameters
     # Convert back to the conventional algebraic form
@@ -145,3 +138,89 @@ def fit_ellipsoid(x, y, z):
         v = -np.sign(v[-1]) * v
 
     return center, radii, v, evecs, chi2
+
+
+def generatePointCloud(algDesc, v, tomoDim):
+    # xgrid = np.linspace(0, tomoDim[0], tomoDim[0], dtype=int)
+    # ygrid = np.linspace(0, tomoDim[1], tomoDim[1], dtype=int)
+    # zgrid = np.linspace(0, tomoDim[2], tomoDim[2], dtype=int)
+
+    xgrid = np.linspace(0, tomoDim[0], 100, dtype=int)
+    ygrid = np.linspace(0, tomoDim[1], 100, dtype=int)
+    zgrid = np.linspace(0, tomoDim[2], 100, dtype=int)
+
+    pointCloud = []
+    epsilon = 1e-5
+
+    # if 'x*x' in algDesc:
+    print('-v: ', v)
+    if abs(v[0]) > epsilon:
+        print('X2')  # x2 from algDesc for z, y values
+        for z in zgrid:
+            for y in ygrid:
+                A = v[0]
+                B = (2*v[3]*y) + (2*v[4]*z) + (2*v[6])
+                C = (v[1]*y*y) + (v[2]*z*z) + (2*v[5]*y*z) + (2*v[7]*y) + (2*v[8]*z) + v[9]
+                D = B*B - (4*A*C)
+                if D > 0:
+                    sqrtD = np.sqrt(D)
+                    x1 = ((-1)*B + sqrtD) / 2*A
+                    x2 = ((-1)*B - sqrtD) / 2*A
+                    if x1 > epsilon:
+                        pointCloud.append([x1, y, z])
+                    if x2 > epsilon:
+                        pointCloud.append([x2, y, z])
+
+    # elif 'x' in algDesc:
+    elif abs(v[3]) > epsilon or abs(v[4]) > epsilon or abs(v[6]) > epsilon:
+        print('X')  # x from algDesc for z, y values
+        for z in zgrid:
+            for y in ygrid:
+                A = (2*v[3]*y) + (2*v[4]*z) + (2*v[6])
+                B = v[1]*y*y + v[2]*z*z + 2*v[5]*y*z + 2*v[7]*y + 2*v[8]*z + v[9]
+                x = (-1)*B/A
+                pointCloud.append([x, y, z])
+
+    # elif 'y*y' in algDesc:
+    elif abs(v[1]) > epsilon in algDesc:
+        print('Y2')  # y2 from algDesc for z values, x=0
+        for z in zgrid:
+            A = v[1]
+            B = (2*v[5]*z) + (2*v[7])
+            C = (v[2]*z*z) + (2*v[8]*z) + v[9]
+            D = B*B - (4*A*C)
+            if D > 0:
+                sqrtD = np.sqrt(D)
+                y1 = ((-1)*B + sqrtD) / 2*A
+                y2 = ((-1)*B - sqrtD) / 2*A
+                if y1 > epsilon:
+                    pointCloud.append([0, y1, z])
+                if y2 > epsilon:
+                    pointCloud.append([0, y2, z])
+
+    # elif 'y' in algDesc:
+    elif abs(v[5]) > epsilon or abs(v[7]) > epsilon:
+        print('Y')  # y from algDesc for z values, x=0
+        for z in zgrid:
+            A = (2*v[5]*z) + (2*v[7])
+            B = (v[2]*z*z) + (2*v[8]*z) + v[9]
+            y = (-1)*B/A
+            pointCloud.append([0, y, z])
+
+    # elif 'z*z' in algDesc:
+    elif abs(v[2]) > epsilon:
+        print('Z2')  # if algDesc with z2 = 0 for z values, x=y=0
+        for z in zgrid:
+            result = v[2]*z*z + 2*v[8]*z + v[9]
+            if result == 0:
+                pointCloud.append([0, 0, z])
+
+    # elif 'z' in algDesc:
+    elif abs(v[8]) > epsilon:
+        print('Z')  # if algDesc with z = 0 for z values, x=y=0
+        for z in zgrid:
+            result = 2*v[8]*z + v[9]
+            if result == 0:
+                pointCloud.append([0, 0, z])
+
+    return pointCloud
