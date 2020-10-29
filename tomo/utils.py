@@ -116,3 +116,25 @@ def normalFromMatrix(transformation):
     axis = np.array([0, 0, 1])
     normal = np.linalg.inv(rotation).dot(axis)
     return normal
+
+def extractVesicles(coordinates):
+    tomos = coordinates.getPrecedents()
+    tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
+    vesicleIds = set([coord._vesicleId.get() for coord in coordinates.iterCoordinates()])
+    axis = np.array([0, 0, 1])
+    tomo_vesicles = {tomoField: {'vesicles': [], 'normals': []}
+                     for tomoField in tomoNames}
+
+    for idt, tomo in enumerate(tomos.iterItems()):
+        for idv in vesicleIds:
+            vesicle = []
+            normals = []
+            for coord in coordinates.iterCoordinates(volume=tomo):
+                if coord._vesicleId == idv:
+                    vesicle.append(coord.getPosition())
+                    trMat = coord.getMatrix()
+                    rotMat = np.linalg.inv(trMat[:3, :3])
+                    normals.append(rotMat.dot(axis))
+            tomo_vesicles[tomoNames[idt]]['vesicles'].append(np.asarray(vesicle))
+            tomo_vesicles[tomoNames[idt]]['normals'].append(np.asarray(normals))
+    return tomo_vesicles
