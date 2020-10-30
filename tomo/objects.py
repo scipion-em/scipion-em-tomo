@@ -1039,19 +1039,96 @@ class SetOfMeshes(data.EMSet):
         return mesh
 
 
-class CTFModelTomo(EMObject):
+class CTFModelTomo(data.EMObject):
     """ Represents a generic CTF model for a tilt-image. """
 
     def __init__(self, **kwargs):
-        EMObject.__init__(self, **kwargs)
+        data.EMObject.__init__(self, **kwargs)
         self._defocusU = Float(kwargs.get('defocusU', None))
         self._defocusV = Float(kwargs.get('defocusV', None))
         self._defocusAngle = Float(kwargs.get('defocusAngle', None))
         self._defocusRatio = Float()
-        self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
-        self._defocusRatio = Float()
+        # self._tiltImage = None
+        # self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
         self._psdFile = String()
-        self._micObj = None
-        self._resolution = Float()
-        self._fitQuality = Float()
+        # self._micObj = None
+        # self._resolution = Float()
+        # self._fitQuality = Float()
+
+        self.standardize()
+
+    def getDefocusU(self):
+        return self._defocusU.get()
+
+    def setDefocusU(self, value):
+        self._defocusU.set(value)
+
+    def getDefocusV(self):
+        return self._defocusV.get()
+
+    def setDefocusV(self, value):
+        self._defocusV.set(value)
+
+    def getDefocusAngle(self):
+        return self._defocusAngle.get()
+
+    def setDefocusAngle(self, value):
+        self._defocusAngle.set(value)
+
+    def getDefocusRatio(self):
+        return self._defocusRatio.get()
+
+    def getPsdFile(self):
+        return self._psdFile.get()
+
+    def setPsdFile(self, value):
+        self._psdFile.set(value)
+
+    # def getTiltImage(self):
+    #     return self._tiltImage
+    #
+    # def setTiltImage(self, value):
+    #     self._tiltImage = value
+
+    def standardize(self):
+        """ Modify defocusU, defocusV and defocusAngle to conform the EMX standard:
+        defocusU > defocusV, 0 <= defocusAngle < 180 and the defocus angle is between x-axis and defocusU. Also
+        determine the defocusRatio(defocusU/defocusV).
+
+        For more details see:
+        http://i2pc.cnb.csic.es/emx/LoadDictionaryFormat.htm?type=Convention#ctf
+        """
+
+        # Check if no astigmatism has been estimated (only one defocus estimation calculated)
+        if self._defocusU is None or self._defocusV is None:
+            if self._defocusU is None:
+                self.setDefocusU(self._defocusV)
+            else:
+                self.setDefocusV(self._defocusU)
+
+            self.setDefocusAngle(90.)
+
+        else:
+            if self._defocusV > self._defocusU:
+                self._defocusV.swap(self._defocusU)
+                self._defocusAngle.sum(90.)
+
+        if self._defocusAngle >= 180.:
+            self._defocusAngle.sum(-180.)
+
+        elif self._defocusAngle < 0.:
+            self._defocusAngle.sum(180.)
+
+        # At this point defocusU is always greater than defocusV
+        # following the EMX standard
+        self._defocusRatio.set(self.getDefocusU()/self.getDefocusV())
+
+
+class CTFModelSeriesTomo(data.EMSet):
+    """ Represents a set of CTF models belonging to the same tilt-series. """
+    ITEM_TYPE = CTFModelTomo
+
+    def __init__(self):
+        EMSet.__init__(self, **kwargs)
+        self._tiltSeriesPointer = Pointer()
 
