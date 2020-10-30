@@ -29,6 +29,7 @@
 import os, re
 import pyvista as pv
 import numpy as np
+from scipy.spatial import cKDTree
 
 import pyworkflow.utils as pwutils
 
@@ -40,10 +41,8 @@ def _getUniqueFileName(pattern, filename, filePaths=None):
  commPath = pwutils.commonPath(filePaths)
  return filename.replace(commPath + "/", "").replace("/", "_")
 
-
 def _matchFileNames(originalName, importName):
  return os.path.basename(importName) in originalName
-
 
 def rotation_matrix_from_vectors(vec1, vec2):
     # a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
@@ -61,17 +60,86 @@ def rotation_matrix_from_vectors(vec1, vec2):
     else:
         return np.eye(4)
 
-
-def delaunayTriangulation(cloud):
-    cloud = pv.PolyData(cloud)
-    mesh = cloud.delaunay_3d()
+def delaunayTriangulation(cloud, adjustCloud=True):
+    cloud_pv = pv.PolyData(cloud)
+    cloud_pv.GlobalWarningDisplayOff()
+    mesh = cloud_pv.delaunay_3d()
     shell = mesh.extract_geometry().triangulate()
-    return shell
 
+    # If points lie outside the shell, they are readjusted to compute their normals
+    if adjustCloud:
+        shell.subdivide(4, inplace=True)
+        areZero = np.where((shell.point_normals == (0, 0, 0)).all(axis=1))
+        points = np.asarray(shell.points)
+        # points[areZero] = np.array((0, 0, 0))
+        points = np.delete(points, areZero, axis=0)
+        tree = cKDTree(points, leafsize=100)
+        _, idc = tree.query(cloud)
+        newCoords = points[idc]
+        # newCoords = np.asarray([points[np.argmin(np.linalg.norm(points - point, axis=1))]
+        #                         for point in cloud])
+        shell = delaunayTriangulation(newCoords, adjustCloud=False)
+    return shell
 
 def computeNormals(triangulation):
     triangulation.compute_normals(inplace=True)
-    return triangulation.point_normals
+    normals = triangulation.point_normals
+    points = triangulation.points
+
+    # Check if coordinates are repeated (due to neighbour search) and copy the normal
+    # so it is not (0,0,0)
+    _, unique_indices, unique_inverse = np.unique(points, return_index=True, return_inverse=True, axis=0)
+    unique_normals = normals[unique_indices]
+    normals = unique_normals[unique_inverse]
+
+    # NOT USED
+    # for i in range(len(points)):  # generate pairs
+    #     for j in range(i + 1, len(points)):
+    #         if np.array_equal(points[i], points[j]):  # compare rows
+    #             normals[j] = normals[i]
+    #         else:
+    #             pass
+
+    # Sometimes, points may be redundant to the mesh
+    # Assign the closest normal to them
+    # Poosible cKDTree?
+    areZero = np.where((normals == (0, 0, 0)).all(axis=1))
+    redundant = points[areZero]
+    points = np.delete(points, areZero, axis=0)
+    ngNormals = np.asarray([np.argmin(np.linalg.norm(points - point, axis=1))
+                            for point in redundant])
+    normals[areZero] = normals[ngNormals]
+
+    return normals
+
+def normalFromMatrix(transformation):
+    rotation = transformation[:3, :3]
+    axis = np.array([0, 0, 1])
+    normal = np.linalg.inv(rotation).dot(axis)
+    return normal
+
+def extractVesicles(coordinates):
+    tomos = coordinates.getPrecedents()
+    tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
+    vesicleIds = set([coord._vesicleId.get() for coord in coordinates.iterCoordinates()])
+    tomo_vesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
+                     for tomoField in tomoNames}
+
+    for idt, tomo in enumerate(tomos.iterItems()):
+        for idv in vesicleIds:
+            vesicle = []
+            normals = []
+            ids = []
+            for coord in coordinates.iterCoordinates(volume=tomo):
+                if coord._vesicleId == idv:
+                    vesicle.append(coord.getPosition())
+                    trMat = coord.getMatrix()
+                    normals.append(normalFromMatrix(trMat))
+                    ids.append(coord.getObjId())
+            tomo_vesicles[tomoNames[idt]]['vesicles'].append(np.asarray(vesicle))
+            tomo_vesicles[tomoNames[idt]]['normals'].append(np.asarray(normals))
+            tomo_vesicles[tomoNames[idt]]['ids'].append(np.asarray(ids))
+    return tomo_vesicles
 
 
 def fit_ellipsoid(x, y, z):

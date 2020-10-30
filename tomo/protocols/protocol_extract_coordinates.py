@@ -31,6 +31,7 @@ import os
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
+from pyworkflow.object import Integer
 
 from .protocol_base import ProtTomoPicking
 
@@ -85,7 +86,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         inSubTomos = self.getInputSubTomos()
         scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
         print("Scaling coordinates by a factor *%0.2f*" % scale)
-        filesTomo = [os.path.basename(tomo.getFileName()) for tomo in inTomos.iterItems()]
+        filesTomo = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomos.iterItems()]
 
         suffix = ''
         self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
@@ -99,7 +100,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             if tomo is None:
                 print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
                 try:
-                    idx = filesTomo.index(os.path.basename(subTomo.getVolName()))
+                    idx = filesTomo.index(pwutils.removeBaseExt(subTomo.getVolName()))
                 except:
                     idx = None
                 if idx is not None:
@@ -113,6 +114,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                         newCoord.setVolume(inTomos[idx+1])
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
+                    if hasattr(coord, '_vesicleId'):
+                        newCoord._vesicleId = Integer(coord._vesicleId)
                     self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
