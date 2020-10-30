@@ -40,4 +40,3 @@ from .protocol_assign_tomo2subtomo import ProtAssignTomo2Subtomo
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
 from .protocol_particle_pick_consensus import ProtTomoConsensusPicking
 from .protocol_particle_pick_remove_duplicates import ProtTomoPickingRemoveDuplicates
-from .protocol_score_coordinates import ProtTomoScoreCoordinates
