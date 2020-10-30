@@ -1137,7 +1137,7 @@ class CTFModelSeriesTomo(data.EMSet):
         return self._tiltSeriesPointer.get()
 
     def setTiltSeries(self, tiltSeries):
-        """ Set the tilt-series from which this CTFs were estimated.
+        """ Set the tilt-series from which this CTF model series were estimated.
         Params:
             tiltSeries: Either a TiltSeries object or a pointer to it.
         """
@@ -1145,4 +1145,27 @@ class CTFModelSeriesTomo(data.EMSet):
             self._tiltSeriesPointer.copy(tiltSeries)
         else:
             self._tiltSeriesPointer.set(tiltSeries)
+
+
+class SetOfCTFModelSeriesTomo(data.EMSet):
+    """ Represents a set of CTF model series belonging to the same set of tilt-series. """
+    ITEM_TYPE = CTFModelSeriesTomo
+
+    def __init__(self):
+        data.EMSet.__init__(self, **kwargs)
+        self._setOfTiltSeriesPointer = Pointer()
+
+    def getSetOfTiltSeries(self):
+        """ Return the set of tilt-series associated with this set of CTF model series. """
+        return self._setOfTiltSeriesPointer.get()
+
+    def setSetOfTiltSeries(self, setOfTiltSeries):
+        """ Set the set of tilt-series from which this set of CTF model series were estimated.
+        Params:
+            setOfTiltSeries: Either a SetOfTiltSeries object or a pointer to it.
+        """
+        if setOfTiltSeries.isPointer():
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+        else:
+            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
