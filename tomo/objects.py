@@ -1038,3 +1038,20 @@ class SetOfMeshes(data.EMSet):
         mesh.setVolume(self.getVolumes()[mesh.getVolId()])
         return mesh
 
+
+class CTFModelTomo(EMObject):
+    """ Represents a generic CTF model for a tilt-image. """
+
+    def __init__(self, **kwargs):
+        EMObject.__init__(self, **kwargs)
+        self._defocusU = Float(kwargs.get('defocusU', None))
+        self._defocusV = Float(kwargs.get('defocusV', None))
+        self._defocusAngle = Float(kwargs.get('defocusAngle', None))
+        self._defocusRatio = Float()
+        self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
+        self._defocusRatio = Float()
+        self._psdFile = String()
+        self._micObj = None
+        self._resolution = Float()
+        self._fitQuality = Float()
+
