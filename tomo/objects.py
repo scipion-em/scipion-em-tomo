@@ -900,7 +900,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class LandmarkModel(data.EMObject):
-    """Represents the set of landmarks belonging to an specific Tilt-series."""
+    """Represents the set of landmarks belonging to an specific tilt-series."""
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = pwobj.String(tsId)
