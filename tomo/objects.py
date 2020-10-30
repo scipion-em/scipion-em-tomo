@@ -1129,6 +1129,20 @@ class CTFModelSeriesTomo(data.EMSet):
     ITEM_TYPE = CTFModelTomo
 
     def __init__(self):
-        EMSet.__init__(self, **kwargs)
+        data.EMSet.__init__(self, **kwargs)
         self._tiltSeriesPointer = Pointer()
+
+    def getTiltSeries(self):
+        """ Return the tilt-series associated with this CTF model series. """
+        return self._tiltSeriesPointer.get()
+
+    def setTiltSeries(self, tiltSeries):
+        """ Set the tilt-series from which this CTFs were estimated.
+        Params:
+            tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+        if tiltSeries.isPointer():
+            self._tiltSeriesPointer.copy(tiltSeries)
+        else:
+            self._tiltSeriesPointer.set(tiltSeries)
 
