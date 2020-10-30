@@ -2,6 +2,7 @@
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# *              Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -140,87 +141,165 @@ def fit_ellipsoid(x, y, z):
     return center, radii, v, evecs, chi2
 
 
-def generatePointCloud(algDesc, v, tomoDim):
-    # xgrid = np.linspace(0, tomoDim[0], tomoDim[0], dtype=int)
-    # ygrid = np.linspace(0, tomoDim[1], tomoDim[1], dtype=int)
-    # zgrid = np.linspace(0, tomoDim[2], tomoDim[2], dtype=int)
-
-    xgrid = np.linspace(0, tomoDim[0], 100, dtype=int)
-    ygrid = np.linspace(0, tomoDim[1], 100, dtype=int)
-    zgrid = np.linspace(0, tomoDim[2], 100, dtype=int)
+def generatePointCloud(v, tomoDim):
+    ygrid = np.linspace(0, 1, 100, dtype=float)
+    zgrid = np.linspace(0, 1, 100, dtype=float)
 
     pointCloud = []
-    epsilon = 1e-5
+    epsilon = 1e-6
 
-    # if 'x*x' in algDesc:
-    print('-v: ', v)
+    # a*x*x + b*y*y + c*z*z + 2*d*x*y + 2*e*x*z + 2*f*y*z + 2*g*x + 2*h*y + 2*i*z + j = 0
+
     if abs(v[0]) > epsilon:
-        print('X2')  # x2 from algDesc for z, y values
+        v = v/v[0]
+        a = 1
+        b = v[1]
+        c = v[2]
+        d = v[3]
+        e = v[4]
+        f = v[5]
+        g = v[6]
+        h = v[7]
+        i = v[8]
+        j = v[9]
+        print('X2')
         for z in zgrid:
             for y in ygrid:
-                A = v[0]
-                B = (2*v[3]*y) + (2*v[4]*z) + (2*v[6])
-                C = (v[1]*y*y) + (v[2]*z*z) + (2*v[5]*y*z) + (2*v[7]*y) + (2*v[8]*z) + v[9]
+                A = a
+                B = (2*d*y) + (2*e*z) + (2*g)
+                C = (b*y*y) + (c*z*z) + (2*f*y*z) + (2*h*y) + (2*i*z) + j
                 D = B*B - (4*A*C)
+                if D == 0:
+                    x = (-1)*B / 2*A
+                    pointCloud.append([int(x * tomoDim[0]), int(y * tomoDim[1]), int(z * tomoDim[2])])
                 if D > 0:
                     sqrtD = np.sqrt(D)
                     x1 = ((-1)*B + sqrtD) / 2*A
                     x2 = ((-1)*B - sqrtD) / 2*A
-                    if x1 > epsilon:
-                        pointCloud.append([x1, y, z])
-                    if x2 > epsilon:
-                        pointCloud.append([x2, y, z])
+                    pointCloud.append([int(x1*tomoDim[0]), int(y*tomoDim[1]), int(z*tomoDim[2])])
+                    pointCloud.append([int(x2*tomoDim[0]), int(y*tomoDim[1]), int(z*tomoDim[2])])
 
-    # elif 'x' in algDesc:
-    elif abs(v[3]) > epsilon or abs(v[4]) > epsilon or abs(v[6]) > epsilon:
-        print('X')  # x from algDesc for z, y values
+    elif abs(v[3]) > epsilon:
+        v = v/v[3]
+        b = v[1]
+        c = v[2]
+        d = 1
+        e = v[4]
+        f = v[5]
+        g = v[6]
+        h = v[7]
+        i = v[8]
+        j = v[9]
+        print('X')
         for z in zgrid:
             for y in ygrid:
-                A = (2*v[3]*y) + (2*v[4]*z) + (2*v[6])
-                B = v[1]*y*y + v[2]*z*z + 2*v[5]*y*z + 2*v[7]*y + 2*v[8]*z + v[9]
+                A = (2*d*y) + (2*e*z) + (2*g)
+                B = b*y*y + c*z*z + 2*f*y*z + 2*h*y + 2*i*z + j
                 x = (-1)*B/A
-                pointCloud.append([x, y, z])
+                pointCloud.append([int(x * tomoDim[0]), int(y * tomoDim[1]), int(z * tomoDim[2])])
 
-    # elif 'y*y' in algDesc:
-    elif abs(v[1]) > epsilon in algDesc:
-        print('Y2')  # y2 from algDesc for z values, x=0
+    elif abs(v[4]) > epsilon:
+        v = v / v[4]
+        b = v[1]
+        c = v[2]
+        e = 1
+        f = v[5]
+        g = v[6]
+        h = v[7]
+        i = v[8]
+        j = v[9]
+        print('X')
         for z in zgrid:
-            A = v[1]
-            B = (2*v[5]*z) + (2*v[7])
-            C = (v[2]*z*z) + (2*v[8]*z) + v[9]
+            for y in ygrid:
+                A = (2*e*z) + (2*g)
+                B = b * y * y + c * z * z + 2 * f * y * z + 2 * h * y + 2 * i * z + j
+                x = (-1) * B / A
+                pointCloud.append([int(x * tomoDim[0]), int(y * tomoDim[1]), int(z * tomoDim[2])])
+
+    elif abs(v[6]) > epsilon:
+        v = v / v[6]
+        b = v[1]
+        c = v[2]
+        f = v[5]
+        g = 1
+        h = v[7]
+        i = v[8]
+        j = v[9]
+        print('X')
+        for z in zgrid:
+            for y in ygrid:
+                A = 2*g
+                B = b * y * y + c * z * z + 2 * f * y * z + 2 * h * y + 2 * i * z + j
+                x = (-1) * B / A
+                pointCloud.append([int(x * tomoDim[0]), int(y * tomoDim[1]), int(z * tomoDim[2])])
+
+    elif abs(v[1]) > epsilon:
+        v = v / v[1]
+        b = 1
+        c = v[2]
+        f = v[5]
+        h = v[7]
+        i = v[8]
+        j = v[9]
+        print('Y2')
+        for z in zgrid:
+            A = b
+            B = (2*f*z) + (2*h)
+            C = (c*z*z) + (2*i*z) + j
             D = B*B - (4*A*C)
             if D > 0:
                 sqrtD = np.sqrt(D)
                 y1 = ((-1)*B + sqrtD) / 2*A
                 y2 = ((-1)*B - sqrtD) / 2*A
-                if y1 > epsilon:
-                    pointCloud.append([0, y1, z])
-                if y2 > epsilon:
-                    pointCloud.append([0, y2, z])
+                pointCloud.append([0, int(y1 * tomoDim[1]), int(z * tomoDim[2])])
+                pointCloud.append([0, int(y2 * tomoDim[1]), int(z * tomoDim[2])])
 
-    # elif 'y' in algDesc:
-    elif abs(v[5]) > epsilon or abs(v[7]) > epsilon:
-        print('Y')  # y from algDesc for z values, x=0
+    elif abs(v[5]) > epsilon:
+        v = v / v[5]
+        c = v[2]
+        f = 1
+        h = v[7]
+        i = v[8]
+        j = v[9]
+        print('Y')
         for z in zgrid:
-            A = (2*v[5]*z) + (2*v[7])
-            B = (v[2]*z*z) + (2*v[8]*z) + v[9]
+            A = (2*f*z) + (2*h)
+            B = (c*z*z) + (2*i*z) + j
             y = (-1)*B/A
-            pointCloud.append([0, y, z])
+            pointCloud.append([0, int(y * tomoDim[1]), int(z * tomoDim[2])])
 
-    # elif 'z*z' in algDesc:
+    elif abs(v[7]) > epsilon:
+        v = v / v[7]
+        c = v[2]
+        h = 1
+        i = v[8]
+        j = v[9]
+        print('Y')
+        for z in zgrid:
+            A = 2 * h
+            B = (c * z * z) + (2 * i * z) + j
+            y = (-1) * B / A
+            pointCloud.append([0, int(y * tomoDim[1]), int(z * tomoDim[2])])
+
     elif abs(v[2]) > epsilon:
+        v = v / v[2]
+        c = 1
+        i = v[8]
+        j = v[9]
         print('Z2')  # if algDesc with z2 = 0 for z values, x=y=0
         for z in zgrid:
-            result = v[2]*z*z + 2*v[8]*z + v[9]
+            result = c*z*z + 2*i*z + j
             if result == 0:
-                pointCloud.append([0, 0, z])
+                pointCloud.append([0, 0, int(z * tomoDim[2])])
 
-    # elif 'z' in algDesc:
     elif abs(v[8]) > epsilon:
+        v = v / v[8]
+        i = 1
+        j = v[9]
         print('Z')  # if algDesc with z = 0 for z values, x=y=0
         for z in zgrid:
-            result = 2*v[8]*z + v[9]
+            result = 2*i*z + j
             if result == 0:
-                pointCloud.append([0, 0, z])
+                pointCloud.append([0, 0, int(z * tomoDim[2])])
 
     return pointCloud
