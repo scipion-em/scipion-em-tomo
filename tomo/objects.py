@@ -1028,12 +1028,12 @@ class SetOfMeshes(data.EMSet):
     def iterItems(self, orderBy='id', direction='ASC', where='1', limit=None):
         """ Redefine iteration to set the acquisition to images. """
         for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
-                                 where=where, limit=limit):
+                                         where=where, limit=limit):
             mesh.setVolume(self.getVolumes()[mesh.getVolId()])
             yield mesh
 
     def __getitem__(self, itemId):
-        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        """ Add a pointer to a Tomogram before returning the Coordinate3D """
         mesh = data.EMSet.__getitem__(self, itemId)
         mesh.setVolume(self.getVolumes()[mesh.getVolId()])
         return mesh
