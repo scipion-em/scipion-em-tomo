@@ -43,6 +43,12 @@ def _getUniqueFileName(pattern, filename, filePaths=None):
 def _matchFileNames(originalName, importName):
  return os.path.basename(importName) in originalName
 
+def normalFromMatrix(transformation):
+    rotation = transformation[:3, :3]
+    axis = np.array([0, 0, 1])
+    normal = np.linalg.inv(rotation).dot(axis)
+    return normal
+
 def extractVesicles(coordinates):
     tomos = coordinates.getPrecedents()
     tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
