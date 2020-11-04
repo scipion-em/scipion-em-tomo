@@ -1,4 +1,3 @@
 mrcfile
 scipion-em
-pyvista
 deepLearningToolkit
