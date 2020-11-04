@@ -1044,12 +1044,12 @@ class CTFModelTomo(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
-        self._defocusU = Float(kwargs.get('defocusU', None))
-        self._defocusV = Float(kwargs.get('defocusV', None))
-        self._defocusAngle = Float(kwargs.get('defocusAngle', None))
-        self._defocusRatio = Float()
-        self._index = Integer()
-        self._psdFile = String()
+        self._defocusU = pwobj.List(kwargs.get('defocusU', None))
+        self._defocusV = pwobj.List(kwargs.get('defocusV', None))
+        self._defocusAngle = pwobj.List(kwargs.get('defocusAngle', None))
+        self._defocusRatio = pwobj.List()
+        self._index = pwobj.Integer(kwargs.get('index', None))
+        self._psdFile = pwobj.String()
         # self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
         # self._micObj = None
         # self._resolution = Float()
@@ -1061,7 +1061,10 @@ class CTFModelTomo(data.EMObject):
         return self._defocusU.get()
 
     def setDefocusU(self, value):
-        self._defocusU.set(value)
+        if value is pwobj.List:
+            self._defocusU.set(value)
+        else:
+            self._defocusU.set([value])
 
     def getDefocusV(self):
         return self._defocusV.get()
@@ -1099,6 +1102,9 @@ class CTFModelTomo(data.EMObject):
         http://i2pc.cnb.csic.es/emx/LoadDictionaryFormat.htm?type=Convention#ctf
         """
 
+        if len(self._defocusU) != len(self._defocusV) or len(self._defocusU) != len(self._defocusAngle) or len(self._defocusV) != len(self._defocusAngle):
+            raise Exception("Defocus U, defocus V and defocus angle lists length differ")
+
         # Check if no astigmatism has been estimated (only one defocus estimation calculated)
         if self._defocusU is None or self._defocusV is None:
             if self._defocusU is None:
@@ -1128,9 +1134,9 @@ class CTFModelSeriesTomo(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
     ITEM_TYPE = CTFModelTomo
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = Pointer()
+        self._tiltSeriesPointer = pwobj.Pointer()
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """
@@ -1151,9 +1157,9 @@ class SetOfCTFModelSeriesTomo(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
     ITEM_TYPE = CTFModelSeriesTomo
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._setOfTiltSeriesPointer = Pointer()
+        self._setOfTiltSeriesPointer = pwobj.Pointer()
 
     def getSetOfTiltSeries(self):
         """ Return the set of tilt-series associated with this set of CTF model series. """
