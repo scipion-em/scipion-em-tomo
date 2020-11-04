@@ -1096,6 +1096,15 @@ class CTFModelTomo(data.EMObject):
     def getDefocusRatio(self):
         return self._defocusRatio.get()
 
+    def setDefocusRatio(self, value):
+        if value is pwobj.List:
+            self._defocusRatio.set(value)
+        else:
+            self._defocusRatio.set([value])
+
+    def appendDefocusRatio(self, value):
+        self._defocusRatio.append(value)
+
     def getPsdFile(self):
         return self._psdFile.get()
 
@@ -1120,29 +1129,31 @@ class CTFModelTomo(data.EMObject):
         if len(self._defocusU) != len(self._defocusV) or len(self._defocusU) != len(self._defocusAngle) or len(self._defocusV) != len(self._defocusAngle):
             raise Exception("Defocus U, defocus V and defocus angle lists length differ")
 
-        # Check if no astigmatism has been estimated (only one defocus estimation calculated)
-        if self._defocusU is None or self._defocusV is None:
-            if self._defocusU is None:
-                self.setDefocusU(self._defocusV)
+        for i in range(len(self._defocusU)):
+
+            # Check if no astigmatism has been estimated (only one defocus estimation calculated)
+            if self._defocusU[i] is None or self._defocusV[i] is None:
+                if self._defocusU[i] is None:
+                    self.appendDefocusU(self._defocusV[i])
+                else:
+                    self.appendDefocusV(self._defocusU[i])
+
+                self.appendDefocusAngle(90.)
+
             else:
-                self.setDefocusV(self._defocusU)
+                if self._defocusV[i] > self._defocusU[i]:
+                    self._defocusV[i].swap(self._defocusU[i])
+                    self._defocusAngle[i].sum(90.)
 
-            self.setDefocusAngle(90.)
+            if self._defocusAngle[i] >= 180.:
+                self._defocusAngle[i].sum(-180.)
 
-        else:
-            if self._defocusV > self._defocusU:
-                self._defocusV.swap(self._defocusU)
-                self._defocusAngle.sum(90.)
+            elif self._defocusAngle[i] < 0.:
+                self._defocusAngle[i].sum(180.)
 
-        if self._defocusAngle >= 180.:
-            self._defocusAngle.sum(-180.)
-
-        elif self._defocusAngle < 0.:
-            self._defocusAngle.sum(180.)
-
-        # At this point defocusU is always greater than defocusV
-        # following the EMX standard
-        self._defocusRatio.set(self.getDefocusU()/self.getDefocusV())
+            # At this point defocusU is always greater than defocusV
+            # following the EMX standard
+            self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
 
 
 class CTFModelSeriesTomo(data.EMSet):
