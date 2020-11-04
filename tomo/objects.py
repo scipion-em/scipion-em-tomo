@@ -1048,9 +1048,9 @@ class CTFModelTomo(data.EMObject):
         self._defocusV = Float(kwargs.get('defocusV', None))
         self._defocusAngle = Float(kwargs.get('defocusAngle', None))
         self._defocusRatio = Float()
-        # self._tiltImage = None
-        # self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
+        self._index = Integer()
         self._psdFile = String()
+        # self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
         # self._micObj = None
         # self._resolution = Float()
         # self._fitQuality = Float()
@@ -1084,11 +1084,11 @@ class CTFModelTomo(data.EMObject):
     def setPsdFile(self, value):
         self._psdFile.set(value)
 
-    # def getTiltImage(self):
-    #     return self._tiltImage
-    #
-    # def setTiltImage(self, value):
-    #     self._tiltImage = value
+    def getIndex(self):
+        return self._index
+
+    def setIndex(self, value):
+        self._index = value
 
     def standardize(self):
         """ Modify defocusU, defocusV and defocusAngle to conform the EMX standard:
