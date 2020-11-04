@@ -1066,17 +1066,32 @@ class CTFModelTomo(data.EMObject):
         else:
             self._defocusU.set([value])
 
+    def appendDefocusU(self, value):
+        self._defocusU.append(value)
+
     def getDefocusV(self):
         return self._defocusV.get()
 
     def setDefocusV(self, value):
-        self._defocusV.set(value)
+        if value is pwobj.List:
+            self._defocusV.set(value)
+        else:
+            self._defocusV.set([value])
+
+    def appendDefocusV(self, value):
+        self._defocusV.append(value)
 
     def getDefocusAngle(self):
         return self._defocusAngle.get()
 
     def setDefocusAngle(self, value):
-        self._defocusAngle.set(value)
+        if value is pwobj.List:
+            self._defocusAngle.set(value)
+        else:
+            self._defocusAngle.set([value])
+
+    def appendDefocusAngle(self, value):
+        self._defocusAngle.append(value)
 
     def getDefocusRatio(self):
         return self._defocusRatio.get()
