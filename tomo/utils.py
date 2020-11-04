@@ -81,7 +81,7 @@ def delaunayTriangulation(cloud, adjustCloud=True):
         shell = delaunayTriangulation(newCoords, adjustCloud=False)
     return shell
 
-def computeNormals(triangulation):
+def computeNormals(triangulation, associateCoords=False):
     triangulation.compute_normals(inplace=True)
     normals = triangulation.point_normals
     points = triangulation.points
@@ -110,7 +110,10 @@ def computeNormals(triangulation):
                             for point in redundant])
     normals[areZero] = normals[ngNormals]
 
-    return normals
+    if associateCoords:
+        return [(np.asarray(point), np.asarray(normal)) for point, normal in zip(points, normals)]
+    else:
+        return np.asarray(normals)
 
 def normalFromMatrix(transformation):
     rotation = transformation[:3, :3]
