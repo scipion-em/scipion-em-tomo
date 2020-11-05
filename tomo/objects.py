@@ -545,6 +545,7 @@ class Coordinate3D(data.EMObject):
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
         self._eulerMatrix = data.Transform()
+        self._groupId = pwobj.Integer()
 
     def getX(self):
         return self._x.get()
@@ -652,6 +653,15 @@ class Coordinate3D(data.EMObject):
 
     def getVolName(self):
         return self.getVolume().getFileName()
+
+    def getGroupId(self):
+        return self._groupId.get()
+
+    def setGroupId(self, groupId):
+        self._groupId.set(groupId)
+
+    def hasGroupId(self):
+        return self._groupId is not None
 
 
 class SetOfCoordinates3D(data.EMSet):

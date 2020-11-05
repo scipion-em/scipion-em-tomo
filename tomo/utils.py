@@ -124,7 +124,7 @@ def normalFromMatrix(transformation):
 def extractVesicles(coordinates):
     tomos = coordinates.getPrecedents()
     tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
-    vesicleIds = set([coord._vesicleId.get() for coord in coordinates.iterCoordinates()])
+    vesicleIds = set([coord.getGroupId() for coord in coordinates.iterCoordinates()])
     tomo_vesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
                      for tomoField in tomoNames}
 
@@ -134,7 +134,7 @@ def extractVesicles(coordinates):
             normals = []
             ids = []
             for coord in coordinates.iterCoordinates(volume=tomo):
-                if coord._vesicleId == idv:
+                if coord.getGroupId() == idv:
                     vesicle.append(coord.getPosition())
                     trMat = coord.getMatrix()
                     normals.append(normalFromMatrix(trMat))

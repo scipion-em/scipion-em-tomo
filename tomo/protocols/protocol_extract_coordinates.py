@@ -114,8 +114,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                         newCoord.setVolume(inTomos[idx+1])
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
-                    if hasattr(coord, '_vesicleId'):
-                        newCoord._vesicleId = Integer(coord._vesicleId)
+                    if coord.hasGroupId():
+                        newCoord.setGroupId(coord.getGroupId())
                     self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
