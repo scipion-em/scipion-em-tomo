@@ -94,7 +94,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         def appendCoordFromSubTomo(subTomo, boxSize):
             coord = subTomo.getCoordinate3D()
-            tomoKey = coord.getVolId()  # FIXME: Cambiar a subTomo.getVolId()?
+            tomoKey = coord.getVolId()
             tomo = inTomos[tomoKey]
 
             if tomo is None:
