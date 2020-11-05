@@ -38,6 +38,3 @@ from .protocol_alignment_assign_subtomo import ProtAlignmentAssignSubtomo
 from .protocol_extract_coordinates import ProtTomoExtractCoords
 from .protocol_assign_tomo2subtomo import ProtAssignTomo2Subtomo
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
-# These will be moved to the new plugin tht will introduced a pyvista harder installation
-# from .protocol_particle_pick_consensus import ProtTomoConsensusPicking
-# from .protocol_particle_pick_remove_duplicates import ProtTomoPickingRemoveDuplicates

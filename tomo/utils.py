@@ -26,6 +26,7 @@
 # **************************************************************************
 
 import os, re
+import numpy as np
 
 import pyworkflow.utils as pwutils
 
@@ -39,3 +40,32 @@ def _getUniqueFileName(pattern, filename, filePaths=None):
 
 def _matchFileNames(originalName, importName):
  return os.path.basename(importName) in originalName
+
+def normalFromMatrix(transformation):
+    rotation = transformation[:3, :3]
+    axis = np.array([0, 0, 1])
+    normal = np.linalg.inv(rotation).dot(axis)
+    return normal
+
+def extractVesicles(coordinates):
+    tomos = coordinates.getPrecedents()
+    tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
+    vesicleIds = set([coord._vesicleId.get() for coord in coordinates.iterCoordinates()])
+    tomo_vesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
+                     for tomoField in tomoNames}
+
+    for idt, tomo in enumerate(tomos.iterItems()):
+        for idv in vesicleIds:
+            vesicle = []
+            normals = []
+            ids = []
+            for coord in coordinates.iterCoordinates(volume=tomo):
+                if coord._vesicleId == idv:
+                    vesicle.append(coord.getPosition())
+                    trMat = coord.getMatrix()
+                    normals.append(normalFromMatrix(trMat))
+                    ids.append(coord.getObjId())
+            tomo_vesicles[tomoNames[idt]]['vesicles'].append(np.asarray(vesicle))
+            tomo_vesicles[tomoNames[idt]]['normals'].append(np.asarray(normals))
+            tomo_vesicles[tomoNames[idt]]['ids'].append(np.asarray(ids))
+    return tomo_vesicles
