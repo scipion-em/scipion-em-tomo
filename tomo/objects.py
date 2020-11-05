@@ -545,7 +545,7 @@ class Coordinate3D(data.EMObject):
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
         self._eulerMatrix = data.Transform()
-        self._groupId = pwobj.Integer()
+        self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
     def getX(self):
         return self._x.get()
