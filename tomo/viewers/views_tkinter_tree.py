@@ -263,7 +263,7 @@ class MeshesTreeProvider(TreeProvider):
         self.tomoList.sort(key=lambda x: x.getFileName(), reverse=False)
 
     def getColumns(self):
-        return [('Tomogram', 300), ('Number of Mehes', 150)]
+        return [('Tomogram', 300), ('Number of Meshes', 150)]
 
     def getObjectInfo(self, obj):
         if isinstance(obj, tomo.objects.Mesh):
