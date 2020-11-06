@@ -1060,6 +1060,9 @@ class CTFModelTomo(data.EMObject):
     def getDefocusU(self):
         return self._defocusU.get()
 
+    def getDefocusUAverage(self):
+        return np.mean(self.getDefocusU())
+
     def setDefocusU(self, value):
         if value is pwobj.List:
             self._defocusU.set(value)
@@ -1072,6 +1075,9 @@ class CTFModelTomo(data.EMObject):
     def getDefocusV(self):
         return self._defocusV.get()
 
+    def getDefocusVAverage(self):
+        return np.mean(self.getDefocusV())
+
     def setDefocusV(self, value):
         if value is pwobj.List:
             self._defocusV.set(value)
@@ -1083,6 +1089,9 @@ class CTFModelTomo(data.EMObject):
 
     def getDefocusAngle(self):
         return self._defocusAngle.get()
+
+    def getDefocusAngleAverage(self):
+        return np.mean(self.getDefocusAngle())
 
     def setDefocusAngle(self, value):
         if value is pwobj.List:
