@@ -50,7 +50,9 @@ def normalFromMatrix(transformation):
 
 def initDictVesicles(coordinates):
     tomos = coordinates.getPrecedents()
-    tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
+    volIds = coordinates.aggregate(["MAX"], "_volId", ["_volId"])
+    volIds = [d['_volId'] for d in volIds]
+    tomoNames = [pwutils.removeBaseExt(tomos[volId].getFileName()) for volId in volIds]
     dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
                      for tomoField in tomoNames}
     return dictVesicles, tomoNames
