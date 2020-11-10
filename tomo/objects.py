@@ -1039,6 +1039,9 @@ class SetOfMeshes(data.EMSet):
         return mesh
 
 
+# class CTFBaseModel (heredar SPA -> anhadir metodos de geometria)
+# no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
+# series f(name)
 class CTFModelTomo(data.EMObject):
     """ Represents a generic CTF model for a tilt-image. """
 
