@@ -59,19 +59,20 @@ def extractVesicles(coordinates, dictVesicles, tomoName):
     tomoId = list(dictVesicles.keys()).index(tomoName) + 1
     groupIds = coordinates.aggregate(["MAX"], "_volId", ["_groupId", "_volId"])
     groupIds = [d['_groupId'] for d in groupIds if d['_volId'] == tomoId]
-    for idv in groupIds:
-        vesicle = []
-        normals = []
-        ids = []
-        for coord in coordinates.iterCoordinates(volume=coordinates.getPrecedents()[tomoId]):
-            if coord.getGroupId() == idv:
-                vesicle.append(coord.getPosition())
-                trMat = coord.getMatrix()
-                normals.append(normalFromMatrix(trMat))
-                ids.append(coord.getObjId())
-        dictVesicles[tomoName]['vesicles'].append(np.asarray(vesicle))
-        dictVesicles[tomoName]['normals'].append(np.asarray(normals))
-        dictVesicles[tomoName]['ids'].append(np.asarray(ids))
+    if not dictVesicles[tomoName]['vesicles']:
+        for idv in groupIds:
+            vesicle = []
+            normals = []
+            ids = []
+            for coord in coordinates.iterCoordinates(volume=coordinates.getPrecedents()[tomoId]):
+                if coord.getGroupId() == idv:
+                    vesicle.append(coord.getPosition())
+                    trMat = coord.getMatrix()
+                    normals.append(normalFromMatrix(trMat))
+                    ids.append(coord.getObjId())
+            dictVesicles[tomoName]['vesicles'].append(np.asarray(vesicle))
+            dictVesicles[tomoName]['normals'].append(np.asarray(normals))
+            dictVesicles[tomoName]['ids'].append(np.asarray(ids))
     return dictVesicles
 
 
