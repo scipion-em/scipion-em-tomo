@@ -1042,44 +1042,34 @@ class SetOfMeshes(data.EMSet):
 # class CTFBaseModel (heredar SPA -> anhadir metodos de geometria)
 # no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
 # series f(name)
-class CTFModelTomo(data.EMObject):
+class CTFModelTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
 
     def __init__(self, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
-        self._defocusU = pwobj.List(kwargs.get('defocusU', None))
-        self._defocusV = pwobj.List(kwargs.get('defocusV', None))
-        self._defocusAngle = pwobj.List(kwargs.get('defocusAngle', None))
-        self._defocusRatio = pwobj.List()
+        data.CTFModel.__init__(self, **kwargs)
+        self._defocusUList = pwobj.List(kwargs.get('defocusUList', None))
+        self._defocusVList = pwobj.List(kwargs.get('defocusVList', None))
+        self._defocusAngleList = pwobj.List(kwargs.get('defocusAngleList', None))
+        self._defocusRatioList = pwobj.List()
         self._index = pwobj.Integer(kwargs.get('index', None))
         self._psdFile = pwobj.String()
-        # self._phaseShift = Float(kwargs['phaseShift']) if 'phaseShift' in kwargs else None
-        # self._micObj = None
-        # self._resolution = Float()
-        # self._fitQuality = Float()
 
         self.standardize()
 
-    def getDefocusU(self):
-        return self._defocusU.get()
+    def getDefocusUList(self):
+        return self._defocusUList.get()
 
     def getDefocusUAverage(self):
-        return np.mean(self.getDefocusU())
+        return np.mean(self.getDefocusUList())
 
-    def setDefocusU(self, value):
-        if value is pwobj.List:
-            self._defocusU.set(value)
-        else:
-            self._defocusU.set([value])
+    def appendDefocusUList(self, value):
+        self._defocusUList.append(value)
 
-    def appendDefocusU(self, value):
-        self._defocusU.append(value)
-
-    def getDefocusV(self):
-        return self._defocusV.get()
+    def getDefocusVList(self):
+        return self._defocusVList.get()
 
     def getDefocusVAverage(self):
-        return np.mean(self.getDefocusV())
+        return np.mean(self.getDefocusVList())
 
     def setDefocusV(self, value):
         if value is pwobj.List:
