@@ -78,7 +78,7 @@ class TomoDataViewer(pwviewer.Viewer):
             meshList = []
             for item in obj.iterItems():
                 mesh = item.clone()
-                mesh.setVolume(item.getVolume())
+                mesh.setVolume(item.getVolume().clone())
                 meshList.append(mesh)
 
             tomoProvider = MeshesTreeProvider(meshList)
