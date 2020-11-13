@@ -48,28 +48,34 @@ def normalFromMatrix(transformation):
     normal = np.linalg.inv(rotation).dot(axis)
     return normal
 
-def extractVesicles(coordinates):
+def initDictVesicles(coordinates):
     tomos = coordinates.getPrecedents()
-    tomoNames = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in tomos]
-    vesicleIds = set([coord.getGroupId() for coord in coordinates.iterCoordinates()])
-    tomo_vesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
+    volIds = coordinates.aggregate(["MAX"], "_volId", ["_volId"])
+    volIds = [d['_volId'] for d in volIds]
+    tomoNames = [pwutils.removeBaseExt(tomos[volId].getFileName()) for volId in volIds]
+    dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
                      for tomoField in tomoNames}
+    return dictVesicles, tomoNames
 
-    for idt, tomo in enumerate(tomos.iterItems()):
-        for idv in vesicleIds:
+def extractVesicles(coordinates, dictVesicles, tomoName):
+    tomoId = list(dictVesicles.keys()).index(tomoName) + 1
+    groupIds = coordinates.aggregate(["MAX"], "_volId", ["_groupId", "_volId"])
+    groupIds = [d['_groupId'] for d in groupIds if d['_volId'] == tomoId]
+    if not dictVesicles[tomoName]['vesicles']:
+        for idv in groupIds:
             vesicle = []
             normals = []
             ids = []
-            for coord in coordinates.iterCoordinates(volume=tomo):
+            for coord in coordinates.iterCoordinates(volume=coordinates.getPrecedents()[tomoId]):
                 if coord.getGroupId() == idv:
                     vesicle.append(coord.getPosition())
                     trMat = coord.getMatrix()
                     normals.append(normalFromMatrix(trMat))
                     ids.append(coord.getObjId())
-            tomo_vesicles[tomoNames[idt]]['vesicles'].append(np.asarray(vesicle))
-            tomo_vesicles[tomoNames[idt]]['normals'].append(np.asarray(normals))
-            tomo_vesicles[tomoNames[idt]]['ids'].append(np.asarray(ids))
-    return tomo_vesicles
+            dictVesicles[tomoName]['vesicles'].append(np.asarray(vesicle))
+            dictVesicles[tomoName]['normals'].append(np.asarray(normals))
+            dictVesicles[tomoName]['ids'].append(np.asarray(ids))
+    return dictVesicles
 
 
 def fit_ellipsoid(x, y, z):
