@@ -1054,7 +1054,7 @@ class CTFModelTomo(data.CTFModel):
         self._index = pwobj.Integer(kwargs.get('index', None))
         self._psdFile = pwobj.String()
 
-        self.standardize()
+        # self.standardize()
 
     def getDefocusUList(self):
         return self._defocusUList.get()
