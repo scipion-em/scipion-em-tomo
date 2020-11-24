@@ -1158,7 +1158,7 @@ class CTFModelTomo(data.CTFModel):
             self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
 
 
-class CTFModelSeriesTomo(data.EMSet):
+class CTFModelTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
     ITEM_TYPE = CTFModelTomo
 
@@ -1181,9 +1181,9 @@ class CTFModelSeriesTomo(data.EMSet):
             self._tiltSeriesPointer.set(tiltSeries)
 
 
-class SetOfCTFModelSeriesTomo(data.EMSet):
+class SetOfCTFModelTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
-    ITEM_TYPE = CTFModelSeriesTomo
+    ITEM_TYPE = CTFModelTomoSeries
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
