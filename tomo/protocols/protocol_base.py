@@ -90,6 +90,11 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfMeshes,
                                 'meshes%s.sqlite', suffix)
 
+    def _createSetOfCTFModelSeries(self, suffix=''):
+        return self._createSet(tomo.objects.SetOfCTFModelTomoSeries,
+                                'CTFmodels%s.sqlite', suffix)
+
+
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
         For example: output3DCoordinates7.
