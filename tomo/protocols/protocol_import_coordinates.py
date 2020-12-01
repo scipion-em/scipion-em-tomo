@@ -28,6 +28,8 @@
 import os
 from os.path import basename
 
+import pyworkflow.utils as pwutils
+
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
 
@@ -136,6 +138,26 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
+
+    def _validate(self):
+        errors = []
+        if not list(self.iterFiles()):
+            errors.append('No files matching the pattern %s were found.' % self.getPattern())
+        else:
+            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+            numberMatches = len(set(tomoFiles) & set(coordFiles))
+            if numberMatches == 0:
+                errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
+                              "relation, the filename of the corresponding tomogram and coordinate "
+                              "files must be equal.")
+            else:
+                print("Warning: Couldn't find a correspondence between all cordinate and tomogram files. "
+                      "In case of unexpected behaviour, check that the filename of the corresponding "
+                      "tomogram and coordinate files are equal and that all tomogram files have an associated "
+                      "coordinate file.")
+
+        return errors
 
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):

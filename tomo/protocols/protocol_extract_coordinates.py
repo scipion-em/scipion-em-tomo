@@ -148,9 +148,16 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         self.outputCoords.setBoxSize(boxSize)
 
     def createOutputStep(self):
-        self._defineOutputs(outputCoordinates3D=self.outputCoords)
-        self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
-        self._defineSourceRelation(self.inputTomos, self.outputCoords)
+        if self.outputCoords.getSize() > 0:
+            self._defineOutputs(outputCoordinates3D=self.outputCoords)
+            self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
+            self._defineSourceRelation(self.inputTomos, self.outputCoords)
+        else:
+            raise Exception("No coordinates were extracted from the input subtomograms probably "
+                            "due to an issue during the association with the new tomograms. In case "
+                            "the association was done by the filename, please, check that the tomograms where "
+                            "subtomograms were extracted and new tomograms have the same file names "
+                            "and try again.")
 
     # ------------- UTILS functions ----------------
     def getSuffix(self, suffix):
