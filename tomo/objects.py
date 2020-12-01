@@ -1047,12 +1047,13 @@ class CTFModelTomo(data.CTFModel):
 
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
+        self._index = pwobj.Integer(kwargs.get('index', None))
+
+        # NO ESTA EN LA CLASE --> AL PROTOCOLO DE IMOD
         self._defocusUList = pwobj.List(kwargs.get('defocusUList', None))
         self._defocusVList = pwobj.List(kwargs.get('defocusVList', None))
         self._defocusAngleList = pwobj.List(kwargs.get('defocusAngleList', None))
         self._defocusRatioList = pwobj.List()
-        self._index = pwobj.Integer(kwargs.get('index', None))
-        self._psdFile = pwobj.String()
 
         # self.standardize()
 
@@ -1158,14 +1159,19 @@ class CTFModelTomo(data.CTFModel):
             self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
 
 
+# quitar "model"
 class CTFModelTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
     ITEM_TYPE = CTFModelTomo
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = pwobj.Pointer()
-        self._estimationRange = pwobj.Integer()
+        self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._estimationRange = pwobj.Integer(kwargs.get('estimationRange', None))
+
+        # CtfModels will always be used inside a SetOfTiltSeries
+        # so, let's do no store the mapper path by default***
+        self._mapperPath.setStore(False)
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """
@@ -1195,18 +1201,45 @@ class SetOfCTFModelTomoSeries(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._setOfTiltSeriesPointer = pwobj.Pointer()
 
-    def getSetOfTiltSeries(self):
-        """ Return the set of tilt-series associated with this set of CTF model series. """
-        return self._setOfTiltSeriesPointer.get()
+    def iterClassItems(self, iterDisabled=False):
+        """ Iterate over the images of a class.
+        Params:
+            iterDisabled: If True, also include the disabled items. """
+        for cls in self.iterItems():
+            if iterDisabled or cls.isEnabled():
+                for img in cls:
+                    if iterDisabled or img.isEnabled():
+                        yield img
 
-    def setSetOfTiltSeries(self, setOfTiltSeries):
-        """ Set the set of tilt-series from which this set of CTF model series were estimated.
-        :param setOfTiltSeries: Either a SetOfTiltSeries object or a pointer to it.
+    def _setItemMapperPath(self, item):
+        """ Set the mapper path of this class according to the mapper
+        path of the SetOfClasses and also the prefix according to class id
         """
-        if setOfTiltSeries.isPointer():
-            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
-        else:
-            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
+        item._mapperPath.set('%s,id%s' % (self.getFileName(), item.getObjId()))
+        item.load()
 
+    def _insertItem(self, item):
+        """ Create the SetOfImages assigned to a class.
+        If the file exists, it will load the Set.
+        """
+        self._setItemMapperPath(item)
+        data.EMSet._insertItem(self, item)
+        item.write(properties=False)  # Set.write(self)
+
+    def __getitem__(self, itemId):
+        """ Setup the mapper classes before returning the item. """
+        classItem = data.EMSet.__getitem__(self, itemId)
+        self._setItemMapperPath(classItem)
+        return classItem
+
+    def getFirstItem(self):
+        classItem = data.EMSet.getFirstItem(self)
+        self._setItemMapperPath(classItem)
+        return classItem
+
+    def iterItems(self, orderBy='id', direction='ASC'):
+        for item in data.EMSet.iterItems(self, orderBy=orderBy,
+                                         direction=direction):
+            self._setItemMapperPath(item)
+            yield item
