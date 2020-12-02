@@ -69,8 +69,11 @@ def initDictVesicles(coordinates):
                          for tomoField in tomoNames}
         return dictVesicles, tomoNames
 
+
 def extractVesicles(coordinates, dictVesicles, tomoName):
-    tomoId = list(dictVesicles.keys()).index(tomoName) + 1
+    # tomoId = list(dictVesicles.keys()).index(tomoName) + 1
+    print("-------------", dictVesicles)
+    tomoId = dictVesicles[tomoName]['volId']
     cls = type(coordinates)
     if issubclass(cls, SetOfCoordinates3D):
         groupIds = coordinates.aggregate(["MAX"], "_volId", ["_groupId", "_volId"])

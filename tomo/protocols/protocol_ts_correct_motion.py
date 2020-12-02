@@ -207,12 +207,16 @@ class ProtTsCorrectMotion(ProtTsProcess):
             acq = ts.getAcquisition()
             sRate = ts.getSamplingRate()
             # Even
-            if not self.outputSetEven:
+            if self.outputSetEven:
+                self.outputSetEven.enableAppend()
+            else:
                 self.outputSetEven = self._createSetOfTiltSeries(suffix='even')
                 self.outputSetEven.setAcquisition(acq)
                 self.outputSetEven.setSamplingRate(sRate)
             # Odd
-            if not self.outputSetOdd:
+            if self.outputSetOdd:
+                self.outputSetOdd.enableAppend()
+            else:
                 self.outputSetOdd = self._createSetOfTiltSeries(suffix='odd')
                 self.outputSetOdd.setAcquisition(acq)
                 self.outputSetOdd.setSamplingRate(sRate)
@@ -238,6 +242,11 @@ class ProtTsCorrectMotion(ProtTsProcess):
             # update items and size info
             self.outputSetEven.update(tsObjEven)
             self.outputSetOdd.update(tsObjOdd)
+
+            # Empty lists for next iteration
+            self.evenAvgFrameList = []
+            self.oddAvgFrameList = []
+            self.tsMList = []
 
     @staticmethod
     def _saveStack(path, data, pixel_spacing):
