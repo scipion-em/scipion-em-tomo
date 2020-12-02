@@ -55,8 +55,8 @@ def initDictVesicles(coordinates):
         volIds = coordinates.aggregate(["MAX"], "_volId", ["_volId"])
         volIds = [d['_volId'] for d in volIds]
         tomoNames = [pwutils.removeBaseExt(tomos[volId].getFileName()) for volId in volIds]
-        dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
-                         for tomoField in tomoNames}
+        dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': [], 'volId': volIds[idt]}
+                         for idt, tomoField in enumerate(tomoNames)}
         return dictVesicles, tomoNames
 
     if issubclass(cls, SetOfSubTomograms):
@@ -71,14 +71,13 @@ def initDictVesicles(coordinates):
 
 
 def extractVesicles(coordinates, dictVesicles, tomoName):
-    # tomoId = list(dictVesicles.keys()).index(tomoName) + 1
-    print("-------------", dictVesicles)
-    tomoId = dictVesicles[tomoName]['volId']
     cls = type(coordinates)
     if issubclass(cls, SetOfCoordinates3D):
+        tomoId = dictVesicles[tomoName]['volId']
         groupIds = coordinates.aggregate(["MAX"], "_volId", ["_groupId", "_volId"])
         groupIds = [d['_groupId'] for d in groupIds if d['_volId'] == tomoId]
     if issubclass(cls, SetOfSubTomograms):
+        tomoId = list(dictVesicles.keys()).index(tomoName) + 1
         groupIds = coordinates.aggregate(["MAX"], "_volId", ["_coordinate._groupId", "_volId"])
         groupIds = [d['_coordinate._groupId'] for d in groupIds if d['_volId'] == tomoId]
     if not dictVesicles[tomoName]['vesicles']:
