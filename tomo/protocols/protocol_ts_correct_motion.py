@@ -172,7 +172,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
             """
             tsImg = tiClass(location=alignedTIFile, tiltAngle=ta)
             tsImg.setSamplingRate(sRate)
-            newLocation = (counter, self._getExtraPath(tsImM.getTsId() + suffix))
+            newLocation = (index, self._getExtraPath(tsImM.getTsId() + suffix))
             ih.convert(alignedTIFile, newLocation)
             tsImg.setLocation(newLocation)
             tsObject.append(tsImg)
@@ -228,10 +228,13 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
-            # Merge all micrographs from the same tilt images in a single "mrcs" stack file
-            counter = 1
-            for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):
+            # Merge all micrographs from the same tilt images in a sorted single "mrcs" stack file,
+            # but keeping the indices the same as in the TS with all the frames for data coherence
+            ind = np.argsort([ti.getTiltAngle() for ti in self.tsMList])
+            counter = 0
+            for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):#zip(evenList, oddList, tsMList):
                 ta = tsImM.getTiltAngle()
+                index = int(np.where(ind == counter)[0]) + 1
                 # Even
                 mergeTiltImage('_even.mrcs', tsObjEven, fileEven)
                 # Odd
