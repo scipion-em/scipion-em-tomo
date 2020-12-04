@@ -1042,7 +1042,7 @@ class SetOfMeshes(data.EMSet):
 # class CTFBaseModel (heredar SPA -> anhadir metodos de geometria)
 # no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
 # series f(name)
-class CTFModelTomo(data.CTFModel):
+class CTFTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
 
     def __init__(self, **kwargs):
@@ -1159,10 +1159,9 @@ class CTFModelTomo(data.CTFModel):
             self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
 
 
-# quitar "model"
-class CTFModelTomoSeries(data.EMSet):
+class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
-    ITEM_TYPE = CTFModelTomo
+    ITEM_TYPE = CTFTomo
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
@@ -1170,7 +1169,7 @@ class CTFModelTomoSeries(data.EMSet):
         self._estimationRange = pwobj.Integer(kwargs.get('estimationRange', None))
 
         # CtfModels will always be used inside a SetOfTiltSeries
-        # so, let's do no store the mapper path by default***
+        # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
     def getTiltSeries(self):
@@ -1195,9 +1194,9 @@ class CTFModelTomoSeries(data.EMSet):
         :param range: Integer of the range size. """
 
 
-class SetOfCTFModelTomoSeries(data.EMSet):
+class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
-    ITEM_TYPE = CTFModelTomoSeries
+    ITEM_TYPE = CTFTomoSeries
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
