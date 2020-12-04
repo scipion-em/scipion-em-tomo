@@ -1039,7 +1039,6 @@ class SetOfMeshes(data.EMSet):
         return mesh
 
 
-# class CTFBaseModel (heredar SPA -> anhadir metodos de geometria)
 # no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
 # series f(name)
 class CTFTomo(data.CTFModel):
@@ -1048,12 +1047,6 @@ class CTFTomo(data.CTFModel):
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
         self._index = pwobj.Integer(kwargs.get('index', None))
-
-        # NO ESTA EN LA CLASE --> AL PROTOCOLO DE IMOD
-        self._defocusUList = pwobj.List(kwargs.get('defocusUList', None))
-        self._defocusVList = pwobj.List(kwargs.get('defocusVList', None))
-        self._defocusAngleList = pwobj.List(kwargs.get('defocusAngleList', None))
-        self._defocusRatioList = pwobj.List()
 
         # self.standardize()
 
@@ -1081,38 +1074,8 @@ class CTFTomo(data.CTFModel):
     def appendDefocusV(self, value):
         self._defocusV.append(value)
 
-    def getDefocusAngle(self):
-        return self._defocusAngle.get()
-
     def getDefocusAngleAverage(self):
         return np.mean(self.getDefocusAngle())
-
-    def setDefocusAngle(self, value):
-        if value is pwobj.List:
-            self._defocusAngle.set(value)
-        else:
-            self._defocusAngle.set([value])
-
-    def appendDefocusAngle(self, value):
-        self._defocusAngle.append(value)
-
-    def getDefocusRatio(self):
-        return self._defocusRatio.get()
-
-    def setDefocusRatio(self, value):
-        if value is pwobj.List:
-            self._defocusRatio.set(value)
-        else:
-            self._defocusRatio.set([value])
-
-    def appendDefocusRatio(self, value):
-        self._defocusRatio.append(value)
-
-    def getPsdFile(self):
-        return self._psdFile.get()
-
-    def setPsdFile(self, value):
-        self._psdFile.set(value)
 
     def getIndex(self):
         return self._index
