@@ -91,7 +91,7 @@ class ProtTomoBase:
                                 'meshes%s.sqlite', suffix)
 
     def _createSetOfCTFSeries(self, suffix=''):
-        return self._createSet(tomo.objects.SetOfCTFModelTomoSeries,
+        return self._createSet(tomo.objects.SetOfCTFTomoSeries,
                                 'CTFmodels%s.sqlite', suffix)
 
 
