@@ -161,10 +161,25 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
         numberMatches = len(set(tomoFiles) & set(coordFiles))
         if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Warning: Couldn't find a correspondence between all cordinate and tomogram files. "
-                            "In case of unexpected behaviour, check that the filename of the corresponding "
-                            "tomogram and coordinate files are equal and that all tomogram files have an associated "
-                            "coordinate file.")
+            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
+                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
+                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
+                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
+                            "- '.txt', '.tbl', '.json').\n")
+            mismatches_coords = set(coordFiles).difference(tomoFiles)
+            if mismatches_coords:
+                warnings.append("The following coordinate files will not be associated to any Tomogram "
+                                "(name without extension):")
+                for file in mismatches_coords:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+            mismatches_tomos = set(tomoFiles).difference(coordFiles)
+            if mismatches_tomos:
+                warnings.append("The following Tomogram files will not be associated to any coordinates "
+                                "(name without extension):")
+                for file in mismatches_tomos:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
         return warnings
 
     # ------------------ UTILS functions --------------------------------------
