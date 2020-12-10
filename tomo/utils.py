@@ -30,6 +30,7 @@ import os, re
 import numpy as np
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D
 import pyworkflow.utils as pwutils
+from tomo.protocols import ProtTomoBase
 
 
 def _getUniqueFileName(pattern, filename, filePaths=None):
@@ -50,36 +51,31 @@ def normalFromMatrix(transformation):
 
 def initDictVesicles(coordinates):
     cls = type(coordinates)
-    if issubclass(cls, SetOfCoordinates3D):
-        tomos = coordinates.getPrecedents()
-        volIds = coordinates.aggregate(["MAX"], "_volId", ["_volId"])
-        volIds = [d['_volId'] for d in volIds]
-        tomoNames = [pwutils.removeBaseExt(tomos[volId].getFileName()) for volId in volIds]
-        dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': [], 'volId': volIds[idt]}
-                         for idt, tomoField in enumerate(tomoNames)}
-        return dictVesicles, tomoNames
+    # if issubclass(cls, SetOfCoordinates3D):
+    tomos = coordinates.getPrecedents()
+    volIds = coordinates.aggregate(["MAX"], "_volId", ["_volId"])
+    volIds = [d['_volId'] for d in volIds]
+    tomoNames = [pwutils.removeBaseExt(tomos[volId].getFileName()) for volId in volIds]
+    dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': [], 'volId': volIds[idt]}
+                     for idt, tomoField in enumerate(tomoNames)}
+    return dictVesicles, tomoNames
 
-    if issubclass(cls, SetOfSubTomograms):
-        volIds = coordinates.aggregate(["MAX"], "_volId", ["_volId"])
-        volIds = [d['_volId'] for d in volIds]
-        tomoNames = []
-        for subtomo in coordinates:
-            tomoNames.append(pwutils.removeBaseExt(subtomo.getVolName()))
-        dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': []}
-                         for tomoField in tomoNames}
-        return dictVesicles, tomoNames
+    # if issubclass(cls, SetOfSubTomograms):
+    #     # volIds = coordinates.aggregate(["MAX"], "_volName", ["_volName"])
+    #     tomoNames = []
+    #     for subtomo in coordinates:
+    #         tomoNames.append(pwutils.removeBaseExt(subtomo.getVolName()))
+    #     dictVesicles = {tomoField: {'vesicles': [], 'normals': [], 'ids': [], 'volName': tomoNames[idt]}
+    #                      for idt, tomoField in enumerate(tomoNames)}
+    #     return dictVesicles, tomoNames
 
 
 def extractVesicles(coordinates, dictVesicles, tomoName):
     cls = type(coordinates)
-    if issubclass(cls, SetOfCoordinates3D):
-        tomoId = dictVesicles[tomoName]['volId']
-        groupIds = coordinates.aggregate(["MAX"], "_volId", ["_groupId", "_volId"])
-        groupIds = [d['_groupId'] for d in groupIds if d['_volId'] == tomoId]
-    if issubclass(cls, SetOfSubTomograms):
-        tomoId = list(dictVesicles.keys()).index(tomoName) + 1
-        groupIds = coordinates.aggregate(["MAX"], "_volId", ["_coordinate._groupId", "_volId"])
-        groupIds = [d['_coordinate._groupId'] for d in groupIds if d['_volId'] == tomoId]
+    # if issubclass(cls, SetOfCoordinates3D):
+    tomoId = dictVesicles[tomoName]['volId']
+    groupIds = coordinates.aggregate(["MAX"], "_volId", ["_groupId", "_volId"])
+    groupIds = [d['_groupId'] for d in groupIds if d['_volId'] == tomoId]
     if not dictVesicles[tomoName]['vesicles']:
         for idv in groupIds:
             vesicle = []
@@ -95,6 +91,28 @@ def extractVesicles(coordinates, dictVesicles, tomoName):
             dictVesicles[tomoName]['normals'].append(np.asarray(normals))
             dictVesicles[tomoName]['ids'].append(np.asarray(ids))
     return dictVesicles
+
+    # if issubclass(cls, SetOfSubTomograms):
+    #     tomoId = list(dictVesicles.keys()).index(tomoName) + 1
+    #     groupIds = coordinates.aggregate(["MAX"], "_volName", ["_coordinate._groupId", "_volName"])
+    #     groupIds = [d['_coordinate._groupId'] for d in groupIds if pwutils.removeBaseExt(d['_volName']) == tomoName]
+    #     # coordinates = ProtTomoBase._createSetOfCoordinates3D(tomoName)
+    #     if not dictVesicles[tomoName]['vesicles']:
+    #         for idv in groupIds:
+    #             vesicle = []
+    #             normals = []
+    #             ids = []
+    #             for subtomo in coordinates:
+    #                 if subtomo.getCoordinate3D().getGroupId() == idv and subtomo.getVolName() == tomoName:
+    #                     vesicle.append(subtomo.getCoordinate3D().getPosition())
+    #                     trMat = subtomo.getCoordinate3D().getMatrix()
+    #                     normals.append(normalFromMatrix(trMat))
+    #                     ids.append(subtomo.getCoordinate3D().getObjId())
+    #             dictVesicles[tomoName]['vesicles'].append(np.asarray(vesicle))
+    #             dictVesicles[tomoName]['normals'].append(np.asarray(normals))
+    #             dictVesicles[tomoName]['ids'].append(np.asarray(ids))
+    #     return dictVesicles
+
 
 
 def fit_ellipsoid(x, y, z):
