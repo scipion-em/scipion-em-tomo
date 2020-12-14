@@ -1121,6 +1121,10 @@ class CTFTomo(data.CTFModel):
             # following the EMX standard
             self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
 
+    def parseImodModel(self):
+        if self.hasAttribute("_defocusUList"):
+            pass
+
 
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
