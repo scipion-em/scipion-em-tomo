@@ -993,7 +993,10 @@ class Mesh(data.EMObject):
         for idm in numMeshes:
             mesh_group = array[array[:,3] == idm, :]
             mesh.append(mesh_group[:, 0:3])
-        return mesh[self.getGroup() - 1]
+        if len(mesh) == 1:
+            return mesh[0]
+        else:
+            return mesh[self.getGroup() - 1]
 
     def getVolume(self):
         """ Return the tomogram object to which
