@@ -117,15 +117,15 @@ class ViewerProtImportTomograms(EmProtocolViewer):
         sampling = setOfObjects.getSamplingRate()
         return sampling, setOfObjects
 
-    def _getTmpFolder(self, fileName):
+    def _getExtraFolder(self, fileName):
         if self._sourceIsOutput():
             return os.path.join(tempfile.mkdtemp(), fileName)
         else:
-            return self.protocol._getTmpPath(fileName)
+            return self.protocol._getExtraPath(fileName)
 
     def _showTomogramsChimera(self):
         """ Create a chimera script to visualize selected tomograms. """
-        tmpFileNameCMD = self._getTmpFolder("chimera.cxc")
+        tmpFileNameCMD = self._getExtraFolder("chimera.cxc")
         f = open(tmpFileNameCMD, "w")
         sampling, _setOfObjects = self._getSetAndSampling()
         count = 1  # first model in chimera is a tomogram
@@ -138,7 +138,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
             # be in the center of the window
 
             dim = _setOfObjects.getDim()[0]
-            tmpFileNameBILD = os.path.abspath(self._getTmpFolder("axis.bild"))
+            tmpFileNameBILD = os.path.abspath(self._getExtraFolder("axis.bild"))
             viewers.viewer_chimera.Chimera.createCoordinateAxisFile(dim,
                                                                     bildFileName=tmpFileNameBILD,
                                                                     sampling=sampling)
