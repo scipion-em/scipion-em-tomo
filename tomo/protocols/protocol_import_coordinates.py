@@ -28,6 +28,8 @@
 import os
 from os.path import basename
 
+import pyworkflow.utils as pwutils
+
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
 
@@ -136,6 +138,49 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
+
+    def _validate(self):
+        errors = []
+        try:
+            next(self.iterFiles())
+        except StopIteration:
+            errors.append('No files matching the pattern %s were found.' % self.getPattern())
+        else:
+            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+            numberMatches = len(set(tomoFiles) & set(coordFiles))
+            if numberMatches == 0:
+                errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
+                              "relation, the filename of the corresponding tomogram and coordinate "
+                              "files must be equal.")
+        return errors
+
+    def _warnings(self):
+        warnings = []
+        tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+        coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+        numberMatches = len(set(tomoFiles) & set(coordFiles))
+        if numberMatches < max(len(tomoFiles), len(coordFiles)):
+            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
+                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
+                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
+                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
+                            "- '.txt', '.tbl', '.json').\n")
+            mismatches_coords = set(coordFiles).difference(tomoFiles)
+            if mismatches_coords:
+                warnings.append("The following coordinate files will not be associated to any Tomogram "
+                                "(name without extension):")
+                for file in mismatches_coords:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+            mismatches_tomos = set(tomoFiles).difference(coordFiles)
+            if mismatches_tomos:
+                warnings.append("The following Tomogram files will not be associated to any coordinates "
+                                "(name without extension):")
+                for file in mismatches_tomos:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+        return warnings
 
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):

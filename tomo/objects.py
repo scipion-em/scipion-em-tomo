@@ -545,6 +545,7 @@ class Coordinate3D(data.EMObject):
         self._z = pwobj.Integer(kwargs.get('z', None))
         self._volId = pwobj.Integer()
         self._eulerMatrix = data.Transform()
+        self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
     def getX(self):
         return self._x.get()
@@ -652,6 +653,15 @@ class Coordinate3D(data.EMObject):
 
     def getVolName(self):
         return self.getVolume().getFileName()
+
+    def getGroupId(self):
+        return self._groupId.get()
+
+    def setGroupId(self, groupId):
+        self._groupId.set(groupId)
+
+    def hasGroupId(self):
+        return self._groupId is not None
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -961,6 +971,7 @@ class Mesh(data.EMObject):
         self._volumePointer = pwobj.Pointer(objDoStore=False)
         self._group = pwobj.Integer(group)
         self._volId = pwobj.Integer()
+        self._description = None  # algebraic description and parameters of fitted mesh
 
     def getPath(self):
         return self._path.get()
@@ -997,6 +1008,15 @@ class Mesh(data.EMObject):
 
     def getVolId(self):
         return self._volId.get()
+
+    def getDescription(self):
+        return self._description
+
+    def setDescription(self, description):
+        self._description = description
+
+    def hasDescription(self):
+        return self._description is not None
 
     def __str__(self):
         return "Mesh (path=%s)" % self.getPath()
@@ -1038,6 +1058,35 @@ class SetOfMeshes(data.EMSet):
         mesh.setVolume(self.getVolumes()[mesh.getVolId()])
         return mesh
 
+
+class Ellipsoid(data.EMObject):
+    """This class represent an ellipsoid"""
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._center = pwobj.String()
+        self._radii = pwobj.String()
+        self._algebraicDesc = pwobj.String()
+
+    def getCenter(self):
+        return self._center.get()
+
+    def setCenter(self, center):
+        self._center.set(center)
+
+    def getRadii(self):
+        return self._radii.get()
+
+    def setRadii(self, radii):
+        self._radii.set(radii)
+
+    def getAlgebraicDesc(self):
+        return self._center.get()
+
+    def setAlgebraicDesc(self, algebraicDesc):
+        self._algebraicDesc.set(algebraicDesc)
+
+    def hasAlgebraicDesc(self):
+        return self._algebraicDesc is not None
 
 # no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
 # series f(name)

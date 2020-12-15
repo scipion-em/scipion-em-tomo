@@ -164,3 +164,13 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
         return self._getExtraPath(baseFileName)
+
+    def _validate(self):
+        errors = []
+        try:
+            next(self.iterFiles())
+        except StopIteration:
+            errors.append('No files matching the pattern %s were found.' % self.getPattern())
+        return errors
+
+

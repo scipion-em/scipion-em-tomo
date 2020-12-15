@@ -172,7 +172,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
             """
             tsImg = tiClass(location=alignedTIFile, tiltAngle=ta)
             tsImg.setSamplingRate(sRate)
-            newLocation = (counter, self._getExtraPath(tsImM.getTsId() + suffix))
+            newLocation = (index, self._getExtraPath(tsImM.getTsId() + suffix))
             ih.convert(alignedTIFile, newLocation)
             tsImg.setLocation(newLocation)
             tsObject.append(tsImg)
@@ -207,12 +207,16 @@ class ProtTsCorrectMotion(ProtTsProcess):
             acq = ts.getAcquisition()
             sRate = ts.getSamplingRate()
             # Even
-            if not self.outputSetEven:
+            if self.outputSetEven:
+                self.outputSetEven.enableAppend()
+            else:
                 self.outputSetEven = self._createSetOfTiltSeries(suffix='even')
                 self.outputSetEven.setAcquisition(acq)
                 self.outputSetEven.setSamplingRate(sRate)
             # Odd
-            if not self.outputSetOdd:
+            if self.outputSetOdd:
+                self.outputSetOdd.enableAppend()
+            else:
                 self.outputSetOdd = self._createSetOfTiltSeries(suffix='odd')
                 self.outputSetOdd.setAcquisition(acq)
                 self.outputSetOdd.setSamplingRate(sRate)
@@ -224,10 +228,13 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
-            # Merge all micrographs from the same tilt images in a single "mrcs" stack file
-            counter = 1
-            for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):
+            # Merge all micrographs from the same tilt images in a sorted single "mrcs" stack file,
+            # but keeping the indices the same as in the TS with all the frames for data coherence
+            ind = np.argsort([ti.getTiltAngle() for ti in self.tsMList])
+            counter = 0
+            for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):#zip(evenList, oddList, tsMList):
                 ta = tsImM.getTiltAngle()
+                index = int(np.where(ind == counter)[0]) + 1
                 # Even
                 mergeTiltImage('_even.mrcs', tsObjEven, fileEven)
                 # Odd
@@ -238,6 +245,11 @@ class ProtTsCorrectMotion(ProtTsProcess):
             # update items and size info
             self.outputSetEven.update(tsObjEven)
             self.outputSetOdd.update(tsObjOdd)
+
+            # Empty lists for next iteration
+            self.evenAvgFrameList = []
+            self.oddAvgFrameList = []
+            self.tsMList = []
 
     @staticmethod
     def _saveStack(path, data, pixel_spacing):
