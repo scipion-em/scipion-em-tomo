@@ -1088,6 +1088,7 @@ class Ellipsoid(data.EMObject):
     def hasAlgebraicDesc(self):
         return self._algebraicDesc is not None
 
+
 # no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
 # series f(name)
 class CTFTomo(data.CTFModel):
