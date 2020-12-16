@@ -1098,7 +1098,12 @@ class CTFTomo(data.CTFModel):
         data.CTFModel.__init__(self, **kwargs)
         self._index = pwobj.Integer(kwargs.get('index', None))
 
-        # self.standardize()
+
+    def getIndex(self):
+        return self._index
+
+    def setIndex(self, value):
+        self._index = value
 
     def getDefocusUList(self):
         return self._defocusUList.get()
@@ -1109,24 +1114,55 @@ class CTFTomo(data.CTFModel):
     def appendDefocusUList(self, value):
         self._defocusUList.append(value)
 
-
     def getDefocusVList(self):
         return self._defocusVList.get()
 
-    def getDefocusVAverage(self):
-        return np.mean(self.getDefocusVList())
+    def setDefocusVList(self, defList):
+        self._defocusVList.set(defList)
 
-    def appendDefocusV(self, value):
-        self._defocusV.append(value)
+    def appendDefocusVList(self, value):
+        self._defocusVList.append(value)
 
-    def getDefocusAngleAverage(self):
-        return np.mean(self.getDefocusAngle())
+    def completeInfoFromList(self):
+        """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided estimation
+        information lists. """
 
-    def getIndex(self):
-        return self._index
+        # Check that at least one list is provided
+        if not (hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList")):
+            raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                            "list information available.")
 
-    def setIndex(self, value):
-        self._index = value
+        #Get the number of provided list (1 or 2)
+        numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusUList")) else 1
+
+        #  No astigmatism is estimated (only one list provided)
+        if numberOfProvidedList == 1:
+            providedList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
+
+            # DefocusAngle is set to 90 degrees
+            self.setDefocusAngle(90)
+
+            # DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list.
+
+            middlePoint = math.trunc(len(providedList) / 2)
+
+            # If the size of the defocus list is even, mean the 2 centre values
+            if len(providedList) % 2 == 0:
+                value = (float(providedList[middlePoint]) + float(providedList[middlePoint - 1])) / 2
+
+                newCTFTomo.setDefocusU(value)
+                newCTFTomo.setDefocusV(value)
+
+            # If the size of defocus estimaition is odd, get the centre value
+            else:
+                value = providedList[middlePoint]
+
+                newCTFTomo.setDefocusU(value)
+                newCTFTomo.setDefocusV(value)
+
+
+
+
 
     def standardize(self):
         """ Modify defocusU, defocusV and defocusAngle to conform the EMX standard:
