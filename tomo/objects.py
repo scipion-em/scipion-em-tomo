@@ -1131,6 +1131,15 @@ class CTFTomo(data.CTFModel):
     def appendDefocusAngleList(self, value):
         self._defocusAngleList.append(value)
 
+    def getPhaseShiftList(self):
+        return self._phaseShiftList.get()
+
+    def setPhaseShiftList(self, defList):
+        self._phaseShiftList.set(defList)
+
+    def appendPhaseShiftList(self, value):
+        self._phaseShiftList.append(value)
+
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
         information lists. """
@@ -1186,8 +1195,7 @@ class CTFTomo(data.CTFModel):
                     len(providedDefocusVList) != len(providedDefocusAngleList):
                 raise Exception("DefocusUList, DefocusVList and DefocusAngleList lenghts must be equal.")
 
-            # DefocusU, DefocusV ande DefocusAngle are set equal to the middle estimation of the list.
-
+            # DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list.
             middlePoint = math.trunc(len(providedDefocusUList) / 2)
 
             # If the size of the defocus list is even, mean the 2 centre values
@@ -1213,11 +1221,34 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(defocusV)
                 self.setDefocusAngle(defocusAngle)
 
+            # Check if phase shift information is also available
+            if hasattr(self, "_phaseShiftList"):
+                providedPhaseSiftList = self.getPhaseShiftList()
+                providedPhaseSiftList = providedPhaseSiftList.split(",")
+
+                # Check that the three list are equally long
+                if len(providedDefocusUList) != len(providedPhaseSiftList):
+                    raise Exception("PhaseShiftList lenght must be equal to DefocusUList, DefocusVList and "
+                                    "DefocusAngleList lenghts.")
+
+                # PhaseShift is set equal to the middle estimation of the list.
+                middlePoint = math.trunc(len(providedDefocusUList) / 2)
+
+                # If the size of the defocus list is even, mean the 2 centre values
+                if len(providedPhaseSiftList) % 2 == 0:
+                    phaseShift = (float(providedPhaseSiftList[middlePoint]) +
+                                float(providedPhaseSiftList[middlePoint - 1])) / 2
+
+                    self.setPhaseShift(phaseShift)
+
+                # If the size of defocus estimaition is odd, get the centre value
+                else:
+                    phaseShift = providedPhaseSiftList[middlePoint]
+
+                    self.setPhaseShift(phaseShift)
 
         # Standarize the input values
         self.standardize()
-
-
 
 
     # def standardize(self):
