@@ -1124,7 +1124,7 @@ class CTFTomo(data.CTFModel):
         self._defocusVList.append(value)
 
     def completeInfoFromList(self):
-        """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided estimation
+        """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
         information lists. """
 
         # Check that at least one list is provided
@@ -1133,11 +1133,12 @@ class CTFTomo(data.CTFModel):
                             "list information available.")
 
         #Get the number of provided list (1 or 2)
-        numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusUList")) else 1
+        numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")) else 1
 
         #  No astigmatism is estimated (only one list provided)
         if numberOfProvidedList == 1:
             providedList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
+            providedList = providedList.split(",")
 
             # DefocusAngle is set to 90 degrees
             self.setDefocusAngle(90)
@@ -1150,15 +1151,15 @@ class CTFTomo(data.CTFModel):
             if len(providedList) % 2 == 0:
                 value = (float(providedList[middlePoint]) + float(providedList[middlePoint - 1])) / 2
 
-                newCTFTomo.setDefocusU(value)
-                newCTFTomo.setDefocusV(value)
+                self.setDefocusU(value)
+                self.setDefocusV(value)
 
             # If the size of defocus estimaition is odd, get the centre value
             else:
                 value = providedList[middlePoint]
 
-                newCTFTomo.setDefocusU(value)
-                newCTFTomo.setDefocusV(value)
+                self.setDefocusU(value)
+                self.setDefocusV(value)
 
 
 
