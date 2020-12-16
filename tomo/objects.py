@@ -1098,7 +1098,6 @@ class CTFTomo(data.CTFModel):
         data.CTFModel.__init__(self, **kwargs)
         self._index = pwobj.Integer(kwargs.get('index', None))
 
-
     def getIndex(self):
         return self._index
 
@@ -1122,6 +1121,15 @@ class CTFTomo(data.CTFModel):
 
     def appendDefocusVList(self, value):
         self._defocusVList.append(value)
+
+    def getDefocusAngleList(self):
+        return self._defocusAngleList.get()
+
+    def setDefocusAngleList(self, defList):
+        self._defocusAngleList.set(defList)
+
+    def appendDefocusAngleList(self, value):
+        self._defocusAngleList.append(value)
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
@@ -1161,51 +1169,94 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusU(value)
                 self.setDefocusV(value)
 
+        # Astigmatism is estimated (two lists are provided)
+        else:
+            providedDefocusUList = self.getDefocusUList()
+            providedDefocusUList = providedDefocusUList.split(",")
 
+            providedDefocusVList = self.getDefocusVList()
+            providedDefocusVList = providedDefocusVList.split(",")
 
+            providedDefocusAngleList = self.getDefocusAngleList()
+            providedDefocusAngleList = providedDefocusAngleList.split(",")
 
+            # Check that the three list are equally long
+            if len(providedDefocusUList) != len(providedDefocusVList) or \
+                    len(providedDefocusUList) != len(providedDefocusAngleList) or \
+                    len(providedDefocusVList) != len(providedDefocusAngleList):
+                raise Exception("DefocusUList, DefocusVList and DefocusAngleList lenghts must be equal.")
 
-    def standardize(self):
-        """ Modify defocusU, defocusV and defocusAngle to conform the EMX standard:
-        defocusU > defocusV, 0 <= defocusAngle < 180 and the defocus angle is between x-axis and defocusU. Also
-        determine the defocusRatio(defocusU/defocusV).
+            # DefocusU, DefocusV ande DefocusAngle are set equal to the middle estimation of the list.
 
-        For more details see:
-        http://i2pc.cnb.csic.es/emx/LoadDictionaryFormat.htm?type=Convention#ctf
-        """
+            middlePoint = math.trunc(len(providedDefocusUList) / 2)
 
-        if len(self._defocusU) != len(self._defocusV) or len(self._defocusU) != len(self._defocusAngle) or len(self._defocusV) != len(self._defocusAngle):
-            raise Exception("Defocus U, defocus V and defocus angle lists length differ")
+            # If the size of the defocus list is even, mean the 2 centre values
+            if len(providedDefocusUList) % 2 == 0:
+                defocusU = (float(providedDefocusUList[middlePoint]) +
+                            float(providedDefocusUList[middlePoint - 1])) / 2
+                defocusV = (float(providedDefocusVList[middlePoint]) +
+                            float(providedDefocusVList[middlePoint - 1])) / 2
+                defocusAngle = (float(providedDefocusAngleList[middlePoint]) +
+                                float(providedDefocusAngleList[middlePoint - 1])) / 2
 
-        for i in range(len(self._defocusU)):
+                self.setDefocusU(defocusU)
+                self.setDefocusV(defocusV)
+                self.setDefocusAngle(defocusAngle)
 
-            # Check if no astigmatism has been estimated (only one defocus estimation calculated)
-            if self._defocusU[i] is None or self._defocusV[i] is None:
-                if self._defocusU[i] is None:
-                    self.appendDefocusU(self._defocusV[i])
-                else:
-                    self.appendDefocusV(self._defocusU[i])
-
-                self.appendDefocusAngle(90.)
-
+            # If the size of defocus estimaition is odd, get the centre value
             else:
-                if self._defocusV[i] > self._defocusU[i]:
-                    self._defocusV[i].swap(self._defocusU[i])
-                    self._defocusAngle[i].sum(90.)
+                defocusU = providedDefocusUList[middlePoint]
+                defocusV = providedDefocusVList[middlePoint]
+                defocusAngle = providedDefocusAngleList[middlePoint]
 
-            if self._defocusAngle[i] >= 180.:
-                self._defocusAngle[i].sum(-180.)
+                self.setDefocusU(defocusU)
+                self.setDefocusV(defocusV)
+                self.setDefocusAngle(defocusAngle)
 
-            elif self._defocusAngle[i] < 0.:
-                self._defocusAngle[i].sum(180.)
 
-            # At this point defocusU is always greater than defocusV
-            # following the EMX standard
-            self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
+        # Standarize the input values
+        self.standardize()
 
-    def parseImodModel(self):
-        if self.hasAttribute("_defocusUList"):
-            pass
+
+
+
+    # def standardize(self):
+    #     """ Modify defocusU, defocusV and defocusAngle to conform the EMX standard:
+    #     defocusU > defocusV, 0 <= defocusAngle < 180 and the defocus angle is between x-axis and defocusU. Also
+    #     determine the defocusRatio(defocusU/defocusV).
+    #
+    #     For more details see:
+    #     http://i2pc.cnb.csic.es/emx/LoadDictionaryFormat.htm?type=Convention#ctf
+    #     """
+    #
+    #     if len(self._defocusU) != len(self._defocusV) or len(self._defocusU) != len(self._defocusAngle) or len(self._defocusV) != len(self._defocusAngle):
+    #         raise Exception("Defocus U, defocus V and defocus angle lists length differ")
+    #
+    #     for i in range(len(self._defocusU)):
+    #
+    #         # Check if no astigmatism has been estimated (only one defocus estimation calculated)
+    #         if self._defocusU[i] is None or self._defocusV[i] is None:
+    #             if self._defocusU[i] is None:
+    #                 self.appendDefocusU(self._defocusV[i])
+    #             else:
+    #                 self.appendDefocusV(self._defocusU[i])
+    #
+    #             self.appendDefocusAngle(90.)
+    #
+    #         else:
+    #             if self._defocusV[i] > self._defocusU[i]:
+    #                 self._defocusV[i].swap(self._defocusU[i])
+    #                 self._defocusAngle[i].sum(90.)
+    #
+    #         if self._defocusAngle[i] >= 180.:
+    #             self._defocusAngle[i].sum(-180.)
+    #
+    #         elif self._defocusAngle[i] < 0.:
+    #             self._defocusAngle[i].sum(180.)
+    #
+    #         # At this point defocusU is always greater than defocusV
+    #         # following the EMX standard
+    #         self.appendDefocusRatio(self.getDefocusU()[i]/self.getDefocusV()[i])
 
 
 class CTFTomoSeries(data.EMSet):
