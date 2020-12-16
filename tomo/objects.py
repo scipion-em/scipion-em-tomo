@@ -1103,23 +1103,18 @@ class CTFTomo(data.CTFModel):
     def getDefocusUList(self):
         return self._defocusUList.get()
 
-    def getDefocusUAverage(self):
-        return np.mean(self.getDefocusUList())
+    def setDefocusUList(self, defList):
+        self._defocusUList.set(defList)
 
     def appendDefocusUList(self, value):
         self._defocusUList.append(value)
+
 
     def getDefocusVList(self):
         return self._defocusVList.get()
 
     def getDefocusVAverage(self):
         return np.mean(self.getDefocusVList())
-
-    def setDefocusV(self, value):
-        if value is pwobj.List:
-            self._defocusV.set(value)
-        else:
-            self._defocusV.set([value])
 
     def appendDefocusV(self, value):
         self._defocusV.append(value)
