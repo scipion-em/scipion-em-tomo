@@ -54,7 +54,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         """ Return a list of possible choices
         from which the import can be done.
         """
-        return ['eman2']
+        return ['emantomo']
 
     def _insertAllSteps(self):
         self._insertFunctionStep('importTomogramsStep',
