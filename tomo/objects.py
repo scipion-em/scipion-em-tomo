@@ -1140,6 +1140,12 @@ class CTFTomo(data.CTFModel):
     def appendPhaseShiftList(self, value):
         self._phaseShiftList.append(value)
 
+    def getDefocusEstimationRange(self):
+        return self._defocusEstimationRange.get()
+
+    def setDefocusEstimationRange(self, range):
+        self._defocusEstimationRange.set(range)
+
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
         information lists. """
