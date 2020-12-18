@@ -1285,6 +1285,32 @@ class CTFTomoSeries(data.EMSet):
         """ Set the tilt-images range size used for estimation.
         :param range: Integer of the range size. """
 
+        self._estimationRange = pwobj.Integer(range)
+
+    def setEstimationRangeFromDefocusList(self):
+        """ Set the tilt-images range size used for estimation from the defocus info list size. """
+
+        range = 0
+
+        for ctfEstimation in self:
+            # Check that at least one list is provided
+            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(ctfEstimation, "_defocusUList")):
+                raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                                "list information available.")
+
+            providedList = ctfEstimation.getDefocusUList() if hasattr(ctfEstimation, "_defocusUList") \
+                else ctfEstimation.getDefocusVList()
+
+            listLenght = len(providedList)
+            if listLenght > range:
+                range = listLenght
+
+        return range
+
+
+
+
+
 
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
