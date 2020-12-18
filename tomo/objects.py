@@ -1277,20 +1277,20 @@ class CTFTomoSeries(data.EMSet):
         else:
             self._tiltSeriesPointer.set(tiltSeries)
 
-    def getEstimationRange(self):
+    def getNumberOfEstimationsInRange(self):
         """ Return the tilt-images range size used for estimation. """
-        return self._estimationRange.get()
+        return self._estimationsInRange.get()
 
-    def setEstimationRange(self, range):
+    def setNumberOfEstimationsInRange(self, estimationRange):
         """ Set the tilt-images range size used for estimation.
-        :param range: Integer of the range size. """
+        :param estimationRange: Integer of the range size. """
 
-        self._estimationRange = pwobj.Integer(range)
+        self._estimationsInRange = pwobj.Integer(estimationRange)
 
-    def setEstimationRangeFromDefocusList(self):
-        """ Set the tilt-images range size used for estimation from the defocus info list size. """
+    def setNumberOfEstimationsInRangeFromDefocusList(self):
+        """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
 
-        range = 0
+        estimationRange = 0
 
         for ctfEstimation in self:
             # Check that at least one list is provided
@@ -1300,16 +1300,14 @@ class CTFTomoSeries(data.EMSet):
 
             providedList = ctfEstimation.getDefocusUList() if hasattr(ctfEstimation, "_defocusUList") \
                 else ctfEstimation.getDefocusVList()
+            providedList = providedList.split(",")
 
             listLenght = len(providedList)
-            if listLenght > range:
-                range = listLenght
 
-        return range
+            if listLenght > estimationRange:
+                estimationRange = listLenght
 
-
-
-
+        self.setNumberOfEstimationsInRange(estimationRange)
 
 
 class SetOfCTFTomoSeries(data.EMSet):
