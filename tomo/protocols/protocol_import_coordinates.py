@@ -202,7 +202,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         importFrom = self.getImportFrom()
 
         if importFrom == self.IMPORT_FROM_EMAN:
-            EmanImport = Domain.importFromPlugin('eman2.convert', 'EmanImport',
+            EmanImport = Domain.importFromPlugin('emantomo.convert', 'EmanTomoImport',
                                           errorMsg='Eman is needed to import .json or '
                                                    '.box files',
                                           doRaise=True)
