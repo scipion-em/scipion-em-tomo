@@ -1140,6 +1140,8 @@ class CTFTomo(data.CTFModel):
     def appendPhaseShiftList(self, value):
         self._phaseShiftList.append(value)
 
+    # TODO: cut on frequency
+
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
         information lists. """
@@ -1157,8 +1159,8 @@ class CTFTomo(data.CTFModel):
             providedList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
             providedList = providedList.split(",")
 
-            # DefocusAngle is set to 90 degrees
-            self.setDefocusAngle(90)
+            # DefocusAngle is set to 0 degrees
+            self.setDefocusAngle(0)
 
             # DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list.
 
@@ -1287,6 +1289,8 @@ class CTFTomoSeries(data.EMSet):
 
         self._estimationsInRange = pwobj.Integer(estimationRange)
 
+    # TODO: cut on frequency
+    
     def setNumberOfEstimationsInRangeFromDefocusList(self):
         """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
 
