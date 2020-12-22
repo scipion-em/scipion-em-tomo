@@ -1144,7 +1144,15 @@ class CTFTomo(data.CTFModel):
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
-        information lists. """
+        information lists.
+
+        Based on the IMOD program ctfphaseflip: "The program  will assign that defocus value to the midpoint of the
+        range of views.  For a view at a given tilt angle, it will find the defocus either by interpolating between
+        two surrounding midpoint angles, if there are such angles, or by taking the nearest defocus value, if the
+        angle is beyond the range of the available midpoint angles. "
+        - From IMOD documentation https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html
+
+        This method will assign as the defocus value and angle the median of the estimation list. """
 
         # Check that at least one list is provided
         if not (hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList")):
