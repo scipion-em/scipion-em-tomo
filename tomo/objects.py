@@ -1151,7 +1151,7 @@ class CTFTomo(data.CTFModel):
             raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
                             "list information available.")
 
-        #Get the number of provided list (1 or 2)
+        # Get the number of provided list (1 or 2)
         numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")) else 1
 
         #  No astigmatism is estimated (only one list provided)
@@ -1163,7 +1163,6 @@ class CTFTomo(data.CTFModel):
             self.setDefocusAngle(0)
 
             # DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list.
-
             middlePoint = math.trunc(len(providedList) / 2)
 
             # If the size of the defocus list is even, mean the 2 centre values
@@ -1290,7 +1289,7 @@ class CTFTomoSeries(data.EMSet):
         self._estimationsInRange = pwobj.Integer(estimationRange)
 
     # TODO: cut on frequency
-    
+
     def setNumberOfEstimationsInRangeFromDefocusList(self):
         """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
 
