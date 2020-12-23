@@ -1140,6 +1140,12 @@ class CTFTomo(data.CTFModel):
     def appendPhaseShiftList(self, value):
         self._phaseShiftList.append(value)
 
+    def hasEstimationInfoAsList(self):
+        if hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList"):
+            return True
+        else:
+            return False
+
     # TODO: cut on frequency
 
     def completeInfoFromList(self):
@@ -1155,7 +1161,7 @@ class CTFTomo(data.CTFModel):
         This method will assign as the defocus value and angle the median of the estimation list. """
 
         # Check that at least one list is provided
-        if not (hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList")):
+        if not self.hasEstimationInfoAsList():
             raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
                             "list information available.")
 
