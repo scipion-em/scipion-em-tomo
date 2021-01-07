@@ -962,6 +962,7 @@ class TestTomoAssignAlignment(BaseTest):
         self.assertTrue(assign.outputSubtomograms.getFirstItem().hasTransform())
         return assign
 
+
 class TestTomoAssignTomo2Subtomo(BaseTest):
     """This class check if the protocol assign tomograms to subtomograms works properly."""
 
@@ -1001,6 +1002,43 @@ class TestTomoAssignTomo2Subtomo(BaseTest):
         self.assertTrue(getattr(tomo2subtomo, 'outputSubtomograms'))
         self.assertFalse(tomo2subtomo.outputSubtomograms.getFirstItem().getVolName())
         return tomo2subtomo
+
+
+class TestSubtomoSplitEvenOdd(BaseTest):
+    """This class check if the protocol split even/odd subtomos works properly."""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+
+    def _runPreviousProtocols(self):
+        protImportSubtomo = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                              filesPath=self.setOfSubtomograms,
+                                              samplingRate=5)
+        self.launchProtocol(protImportSubtomo)
+        return protImportSubtomo
+
+    def _splitSubtomoSet(self):
+        protImportSubtomo = self._runPreviousProtocols()
+        split = self.newProtocol(tomo.protocols.ProtSplitEvenOddSubtomoSet,
+                                 inputSet=protImportSubtomo.outputSubTomograms)
+        self.launchProtocol(split)
+        self.assertIsNotNone(split.outputset_even,
+                             "There was a problem with even subtomograms output")
+        self.assertIsNotNone(split.outputset_odd,
+                             "There was a problem with odd subtomograms output")
+        return split
+
+    def test_split(self):
+        split = self._splitSubtomoSet()
+        self.assertTrue(getattr(split, 'outputset_even'))
+        self.assertTrue(getattr(split, 'outputset_odd'))
+        self.assertTrue(split.outputset_even.getFirstItem().getObjId() % 2 == 0)
+        self.assertTrue(split.outputset_odd.getFirstItem().getObjId() % 2 != 0)
+
+        return split
 
 
 if __name__ == 'main':
