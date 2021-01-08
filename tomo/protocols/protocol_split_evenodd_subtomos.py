@@ -28,22 +28,23 @@
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam
+from tomo.objects import SetOfTomograms
 from tomo.protocols import ProtTomoBase
 
 
-class ProtSplitEvenOddSubtomoSet(EMProtocol, ProtTomoBase):
-    """ Protocol to split even/odd subtomograms.
+class ProtSplitEvenOddTomoSet(EMProtocol, ProtTomoBase):
+    """ Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
     """
-    _label = 'split subtomos even/odd'
+    _label = 'split even/odd'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
 
         form.addParam('inputSet', PointerParam,
-                      pointerClass='SetOfSubTomograms',
-                      label="Set of subtomograms",
-                      help='Select the set of subtomograms that you '
+                      pointerClass='SetOfSubTomograms, SetOfTomograms',
+                      label="Set to split",
+                      help='Select the set of tomograms or subtomograms that you '
                            'want to split in even/odd sets.')
 
     # -------------------------- INSERT steps functions -----------------------
@@ -53,16 +54,21 @@ class ProtSplitEvenOddSubtomoSet(EMProtocol, ProtTomoBase):
     # -------------------------- STEPS functions ------------------------------
     def createOutputStep(self):
         inputSet = self.inputSet.get()
-        evenSet = self._createSetOfSubTomograms(suffix='_even')
+        if isinstance(inputSet.getFirstItem(), SetOfTomograms):
+            evenSet = self._createSetOfTomograms(suffix='_even')
+            oddSet = self._createSetOfTomograms(suffix='_odd')
+        else:
+            evenSet = self._createSetOfSubTomograms(suffix='_even')
+            oddSet = self._createSetOfSubTomograms(suffix='_odd')
+
         evenSet.copyInfo(inputSet)
-        oddSet = self._createSetOfSubTomograms(suffix='_odd')
         oddSet.copyInfo(inputSet)
 
-        for subtomo in inputSet:
-            if subtomo.getObjId() % 2 == 0:
-                evenSet.append(subtomo)
+        for element in inputSet:
+            if element.getObjId() % 2 == 0:
+                evenSet.append(element)
             else:
-                oddSet.append(subtomo)
+                oddSet.append(element)
 
         self._defineOutputs(outputset_even=evenSet)
         self._defineSourceRelation(inputSet, evenSet)
@@ -74,4 +80,4 @@ class ProtSplitEvenOddSubtomoSet(EMProtocol, ProtTomoBase):
         if not self.isFinished():
             return["Output sets not ready yet."]
         else:
-            return["We have split the input subtomogram set in even and odd sets."]
+            return["We have split the input set in even and odd sets."]

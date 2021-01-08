@@ -1004,25 +1004,39 @@ class TestTomoAssignTomo2Subtomo(BaseTest):
         return tomo2subtomo
 
 
-class TestSubtomoSplitEvenOdd(BaseTest):
-    """This class check if the protocol split even/odd subtomos works properly."""
+class TestTomoSplitEvenOdd(BaseTest):
+    """This class check if the protocol split even/odd tomos or subtomos works properly."""
 
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.setOfTomograms = cls.dataset.getFile('*.em')
         cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
 
-    def _runPreviousProtocols(self):
+    def _splitTomoSet(self):
+        protImportTomo = self.newProtocol(tomo.protocols.ProtImportTomograms,
+                                        filesPath=self.setOfTomograms,
+                                        filesPattern='',
+                                        acquisitionAngleMax=40,
+                                        acquisitionAngleMin=-40,
+                                        samplingRate=1.35)
+        self.launchProtocol(protImportTomo)
+        split = self.newProtocol(tomo.protocols.ProtSplitEvenOddTomoSet,
+                                 inputSet=protImportTomo.outputTomograms)
+        self.launchProtocol(split)
+        self.assertIsNotNone(split.outputset_even,
+                             "There was a problem with even tomograms output")
+        self.assertIsNotNone(split.outputset_odd,
+                             "There was a problem with odd tomograms output")
+        return split
+
+    def _splitSubtomoSet(self):
         protImportSubtomo = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                               filesPath=self.setOfSubtomograms,
                                               samplingRate=5)
         self.launchProtocol(protImportSubtomo)
-        return protImportSubtomo
-
-    def _splitSubtomoSet(self):
-        protImportSubtomo = self._runPreviousProtocols()
-        split = self.newProtocol(tomo.protocols.ProtSplitEvenOddSubtomoSet,
+        split = self.newProtocol(tomo.protocols.ProtSplitEvenOddTomoSet,
                                  inputSet=protImportSubtomo.outputSubTomograms)
         self.launchProtocol(split)
         self.assertIsNotNone(split.outputset_even,
@@ -1031,12 +1045,29 @@ class TestSubtomoSplitEvenOdd(BaseTest):
                              "There was a problem with odd subtomograms output")
         return split
 
-    def test_split(self):
+    def test_splitTomos(self):
+        split = self._splitTomoSet()
+        self.assertTrue(getattr(split, 'outputset_even'))
+        self.assertTrue(getattr(split, 'outputset_odd'))
+        self.assertTrue(split.outputset_even.getFirstItem().getObjId() % 2 == 0,
+                        "Elements id in even set of tomos are not even")
+        self.assertTrue(split.outputset_odd.getFirstItem().getObjId() % 2 != 0,
+                        "Elements id in odd set of tomos are not odd")
+        self.assertSetSize(split.outputset_even, 1, "Size of even set of tomos is not correct")
+        self.assertSetSize(split.outputset_odd, 1, "Size of odd set of tomos is not correct")
+
+        return split
+
+    def test_splitSubtomos(self):
         split = self._splitSubtomoSet()
         self.assertTrue(getattr(split, 'outputset_even'))
         self.assertTrue(getattr(split, 'outputset_odd'))
-        self.assertTrue(split.outputset_even.getFirstItem().getObjId() % 2 == 0)
-        self.assertTrue(split.outputset_odd.getFirstItem().getObjId() % 2 != 0)
+        self.assertTrue(split.outputset_even.getFirstItem().getObjId() % 2 == 0,
+                        "Elements id in even set of subtomos are not even")
+        self.assertTrue(split.outputset_odd.getFirstItem().getObjId() % 2 != 0,
+                        "Elements id in odd set of subtomos are not odd")
+        self.assertSetSize(split.outputset_even, 2, "Size of even set of subtomos is not correct")
+        self.assertSetSize(split.outputset_odd, 2, "Size of odd set of subtomos is not correct")
 
         return split
 
