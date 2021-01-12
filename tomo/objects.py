@@ -1141,7 +1141,17 @@ class CTFTomo(data.CTFModel):
         self._phaseShiftList.append(value)
 
     def hasEstimationInfoAsList(self):
+        """ This method checks if the CTFTomo object contains estimation information in the form of a list. """
+
         if hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList"):
+            return True
+        else:
+            return False
+
+    def hasAstigmatismInfoAsList(self):
+        """ This method checks if the CTFTomo object contains astigmatism information in the form of a list. """
+
+        if hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList"):
             return True
         else:
             return False
@@ -1319,7 +1329,7 @@ class CTFTomoSeries(data.EMSet):
                 else ctfEstimation.getDefocusVList()
             providedList = providedList.split(",")
 
-            listLenght = len(providedList)
+            listLenght = len(providedList) - 1
 
             if listLenght > estimationRange:
                 estimationRange = listLenght
