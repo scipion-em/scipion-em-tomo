@@ -34,8 +34,9 @@ import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
 
 from ..objects import SetOfCoordinates3D
-
 from .protocol_base import ProtTomoImportFiles
+from ..convert import TomoImport
+from ..utils import existsPlugin
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -46,13 +47,19 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     IMPORT_FROM_AUTO = 0
     IMPORT_FROM_EMAN = 1
     IMPORT_FROM_DYNAMO = 2
+    IMPORT_FROM_TXT = 3
 
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        return ['auto', 'eman', 'dynamo']
+        importChoices = ['auto', 'txt']
+        if existsPlugin('emantomo'):
+            importChoices.append('eman')
+        if existsPlugin('dynamo'):
+            importChoices.append('dynamo')
+        return importChoices
 
     def _getDefaultChoice(self):
         return self.IMPORT_FROM_AUTO
@@ -93,7 +100,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 fileName = basename(os.path.splitext(coordFile)[0])
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() == self.IMPORT_FROM_EMAN:
+                    if self.getImportFrom() == self.IMPORT_FROM_EMAN or self.getImportFrom() == self.IMPORT_FROM_TXT:
                         def addCoordinate(coord):
                             coord.setVolume(tomo.clone())
                             coordsSet.append(coord)
@@ -160,6 +167,14 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
         coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
         numberMatches = len(set(tomoFiles) & set(coordFiles))
+        if not existsPlugin('emantomo'):
+            warnings.append('Plugin *scipion-em-emantomo* has not being installed. Please, install the Plugin to '
+                            'import Eman related formats (currently supported formats: ".json"). Otherwise, the protocol '
+                            'may have unexpected outputs if Eman files are attempted to be imported.\n')
+        if not existsPlugin('dynamo'):
+            warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
+                            'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
+                            'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
         if numberMatches < max(len(tomoFiles), len(coordFiles)):
             warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
                             "Association is performed in terms of the file name of the Tomograms and the coordinates. "
@@ -191,9 +206,11 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def getFormat(self):
         for coordFile, _ in self.iterFiles():
-            if coordFile.endswith('.json') or coordFile.endswith('.txt'):
+            if coordFile.endswith('.txt'):
+                return self.IMPORT_FROM_TXT
+            if coordFile.endswith('.json') and existsPlugin('emantomo'):
                 return self.IMPORT_FROM_EMAN
-            if coordFile.endswith('.tbl'):
+            if coordFile.endswith('.tbl') and existsPlugin('dynamo'):
                 return self.IMPORT_FROM_DYNAMO
         return -1
 
@@ -211,6 +228,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         elif importFrom == self.IMPORT_FROM_DYNAMO:
             readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
             return readDynCoord
+
+        elif importFrom == self.IMPORT_FROM_TXT:
+            return TomoImport(self)
         else:
             self.importFilePath = ''
             return None

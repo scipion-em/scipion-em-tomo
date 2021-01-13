@@ -26,11 +26,14 @@
 # *
 # **************************************************************************
 
-import os, re
+import os, re, importlib
 import numpy as np
 
 import pyworkflow.utils as pwutils
 
+
+def existsPlugin(plugin):
+    return importlib.util.find_spec(plugin)
 
 def _getUniqueFileName(pattern, filename, filePaths=None):
  if filePaths is None:
