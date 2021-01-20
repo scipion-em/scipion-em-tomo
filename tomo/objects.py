@@ -1396,6 +1396,17 @@ class SetOfCTFTomoSeries(data.EMSet):
     def __getitem__(self, itemId):
         """ Setup the mapper classes before returning the item. """
         classItem = data.EMSet.__getitem__(self, itemId)
+
+        objId = None
+        for tiltSeries in self.getSetOfTiltSeries():
+            if tiltSeries.getTsId() == classItem.getTsId():
+                objId = tiltSeries.getObjId()
+
+        if objId is None:
+            raise ("Could not find tilt-series with tsId = %s" % classItem.getTsId())
+
+        classItem.setTiltSeries(self.getSetOfTiltSeries()[objId])
+
         self._setItemMapperPath(classItem)
         return classItem
 
@@ -1417,29 +1428,7 @@ class SetOfCTFTomoSeries(data.EMSet):
             if objId is None:
                 raise("Could not find tilt-series with tsId = %s" % item.getTsId())
 
-            item.setTiltSeries(self.getSetOfTiltSeries())
+            item.setTiltSeries(self.getSetOfTiltSeries()[objId])
             self._setItemMapperPath(item)
+
             yield item
-
-
-def iterCoordinates(self, volume=None):
-    """ Iterate over the coordinates associated with a tomogram.
-    If tomogram=None, the iteration is performed over the whole
-    set of coordinates.
-    """
-    if volume is None:
-        volId = None
-    elif isinstance(volume, int):
-        volId = volume
-    elif isinstance(volume, data.Volume):
-        volId = volume.getObjId()
-    else:
-        raise Exception('Invalid input micrograph of type %s'
-                        % type(volume))
-    # Iterate over all coordinates if micId is None,
-    # otherwise use micId to filter the where selection
-    coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
-
-    for coord in self.iterItems(where=coordWhere):
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
-        yield coord
