@@ -1282,22 +1282,25 @@ class CTFTomoSeries(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesId = pwobj.Pointer(kwargs.get('tiltSeriesId', None))
+        self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
         self._estimationRange = pwobj.Integer(kwargs.get('estimationRange', None))
 
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
-    def getTiltSeriesId(self):
+    def getTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """
-        return self._tiltSeriesId.get()
+        return self._tiltSeriesPointer.get()
 
-    def setTiltSeriesId(self, tsId):
+    def setTiltSeries(self, tiltSeries):
         """ Set the tilt-series from which this CTF model series were estimated.
-        :param tsId: ID from the associated tilt-series assigned to this estimation.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
         """
-        self._tiltSeriesId.set(tsId)
+        if tiltSeries.isPointer():
+            self._tiltSeriesPointer.copy(tiltSeries)
+        else:
+            self._tiltSeriesPointer.set(tiltSeries)
 
     def getNumberOfEstimationsInRange(self):
         """ Return the tilt-images range size used for estimation. """
@@ -1394,5 +1397,29 @@ class SetOfCTFTomoSeries(data.EMSet):
     def iterItems(self, orderBy='id', direction='ASC'):
         for item in data.EMSet.iterItems(self, orderBy=orderBy,
                                          direction=direction):
+            item.setTiltSeries()
             self._setItemMapperPath(item)
             yield item
+
+
+def iterCoordinates(self, volume=None):
+    """ Iterate over the coordinates associated with a tomogram.
+    If tomogram=None, the iteration is performed over the whole
+    set of coordinates.
+    """
+    if volume is None:
+        volId = None
+    elif isinstance(volume, int):
+        volId = volume
+    elif isinstance(volume, data.Volume):
+        volId = volume.getObjId()
+    else:
+        raise Exception('Invalid input micrograph of type %s'
+                        % type(volume))
+    # Iterate over all coordinates if micId is None,
+    # otherwise use micId to filter the where selection
+    coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
+
+    for coord in self.iterItems(where=coordWhere):
+        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        yield coord
