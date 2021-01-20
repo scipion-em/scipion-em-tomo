@@ -1283,6 +1283,7 @@ class CTFTomoSeries(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._tsId = pwobj.String(kwargs.get('tsId', None))
         self._estimationRange = pwobj.Integer(kwargs.get('estimationRange', None))
 
         # CtfModels will always be used inside a SetOfTiltSeries
@@ -1301,6 +1302,15 @@ class CTFTomoSeries(data.EMSet):
             self._tiltSeriesPointer.copy(tiltSeries)
         else:
             self._tiltSeriesPointer.set(tiltSeries)
+
+    def getTsId(self):
+        """ Get unique TiltSerie ID, usually retrieved from the
+        file pattern provided by the user at the import time.
+        """
+        return self._tsId.get()
+
+    def setTsId(self, value):
+        self._tsId.set(value)
 
     def getNumberOfEstimationsInRange(self):
         """ Return the tilt-images range size used for estimation. """
@@ -1395,9 +1405,19 @@ class SetOfCTFTomoSeries(data.EMSet):
         return classItem
 
     def iterItems(self, orderBy='id', direction='ASC'):
-        for item in data.EMSet.iterItems(self, orderBy=orderBy,
+        for item in data.EMSet.iterItems(self,
+                                         orderBy=orderBy,
                                          direction=direction):
-            item.setTiltSeries()
+
+            objId = None
+            for tiltSeries in self.getSetOfTiltSeries():
+                if tiltSeries.getTsId() == item.getTsId():
+                    objId = tiltSeries.getObjId()
+
+            if objId is None:
+                raise("Could not find tilt-series with tsId = %s" % item.getTsId())
+
+            item.setTiltSeries(self.getSetOfTiltSeries())
             self._setItemMapperPath(item)
             yield item
 
