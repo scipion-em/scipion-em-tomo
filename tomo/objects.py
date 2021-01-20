@@ -1282,25 +1282,22 @@ class CTFTomoSeries(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._tiltSeriesId = pwobj.Pointer(kwargs.get('tiltSeriesId', None))
         self._estimationRange = pwobj.Integer(kwargs.get('estimationRange', None))
 
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
-    def getTiltSeries(self):
+    def getTiltSeriesId(self):
         """ Return the tilt-series associated with this CTF model series. """
-        return self._tiltSeriesPointer.get()
+        return self._tiltSeriesId.get()
 
-    def setTiltSeries(self, tiltSeries):
+    def setTiltSeriesId(self, tsId):
         """ Set the tilt-series from which this CTF model series were estimated.
-        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        :param tsId: ID from the associated tilt-series assigned to this estimation.
         """
-        if tiltSeries.isPointer():
-            self._tiltSeriesPointer.copy(tiltSeries)
-        else:
-            self._tiltSeriesPointer.set(tiltSeries)
+        self._tiltSeriesId.set(tsId)
 
     def getNumberOfEstimationsInRange(self):
         """ Return the tilt-images range size used for estimation. """
@@ -1343,6 +1340,20 @@ class SetOfCTFTomoSeries(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+        self._setOfTiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+
+    def getSetOfTiltSeries(self):
+        """ Return the tilt-series associated with this CTF model series. """
+        return self._setOfTiltSeriesPointer.get()
+
+    def setSetOfTiltSeries(self, setOfTiltSeries):
+        """ Set the tilt-series from which this CTF model series were estimated.
+        :param setOfTiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+        if setOfTiltSeries.isPointer():
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+        else:
+            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
