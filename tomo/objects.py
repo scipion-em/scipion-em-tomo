@@ -1284,7 +1284,6 @@ class CTFTomoSeries(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
         self._tsId = pwobj.String(kwargs.get('tsId', None))
-        self._estimationRange = pwobj.Integer(kwargs.get('estimationRange', None))
 
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
