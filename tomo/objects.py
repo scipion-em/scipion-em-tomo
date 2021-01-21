@@ -677,32 +677,46 @@ class SetOfCoordinates3D(data.EMSet):
         self._samplingRate = pwobj.Float()
         self._precedentsPointer = pwobj.Pointer()
 
+        """ These coordinates specify the location of the origin of coordinates for the set relative to the centre of 
+        the precedent, being the centre of the precedent the pixel located at (xDim/2, yDim/2, zDim/2). Our convention
+        defines that moving towards the bottom of the volume in Z, the left side of the volume in Y and the rear of the 
+        volume in X, is defined as negative."""
         self._originX = pwobj.Integer()
         self._originY = pwobj.Integer()
         self._originZ = pwobj.Integer()
 
     def getOriginX(self):
+        """Return the X coordinate of the origin.
+        """
         return self._originX.get()
 
     def setOriginX(self, originX):
+        """Set the X coordinate of the origin.
+        """
         self._originX.set(originX)
 
     def getOriginY(self):
+        """Return the Y coordinate of the origin.
+        """
         return self._originY.get()
 
     def setOriginY(self, originY):
+        """Set the Y coordinate of the origin.
+        """
         self._originY.set(originY)
 
     def getOriginZ(self):
+        """Return the Z coordinate of the origin.
+        """
         return self._originZ.get()
 
     def setOriginZ(self, originZ):
+        """Set the Z coordinate of the origin.
+        """
         self._originZ.set(originZ)
 
     def getPosition(self):
-        """ Return the position of the coordinate as a (x, y) tuple.
-        mode: select if the position is the center of the box
-        or in the top left corner.
+        """ Return the position of the coordinate as a (x, y, z) tuple.
         """
         return self.getX(), self.getY(), self.getZ()
 
