@@ -1321,6 +1321,37 @@ class CTFTomoSeries(data.EMSet):
 
         self._estimationsInRange = pwobj.Integer(estimationRange)
 
+    def getIMODFormatFile(self):
+        """ Return the format file from which the CTF estimation information has been acquired. This parameter is
+        useful for posterior information and format conversions between IMOD and Scipion. This classification is not
+        coincident with the IMOD one. Possible values:
+            - 0: Simple estimation (no astigmatism, phase shift nor cut-on frequency)
+            - 1: Astigmatism is estimated.
+            - 2: Phase shift is estimated.
+            - 3: Cut-on frequency is estimated.
+            - 4: Astigmatism and phase shift are estimated.
+            - 5: Astigmatism and cut-on frequency are estimated.
+            - 6: Astigmatism, phase shift and cut-on frequency are estimated"""
+
+        return self._IMODFormatFile.get()
+
+    def setIMODFormatFile(self, mode):
+        """ Set the format file from which the CTF estimation information has been acquired.
+        :param mode: Integer of the range size.
+
+        This parameter is
+        useful for posterior information and format conversions between IMOD and Scipion. This classification is not
+        coincident with the IMOD one. Possible values:
+            - 0: Simple estimation (no astigmatism, phase shift nor cut-on frequency)
+            - 1: Astigmatism is estimated.
+            - 2: Phase shift is estimated.
+            - 3: Cut-on frequency is estimated.
+            - 4: Astigmatism and phase shift are estimated.
+            - 5: Astigmatism and cut-on frequency are estimated.
+            - 6: Astigmatism, phase shift and cut-on frequency are estimated. """
+
+        self._IMODFormatFile = pwobj.Integer(mode)
+
     # TODO: cut on frequency
 
     def setNumberOfEstimationsInRangeFromDefocusList(self):
