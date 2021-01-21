@@ -1236,7 +1236,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(defocusV)
                 self.setDefocusAngle(defocusAngle)
 
-            # If the size of defocus estimaition is odd, get the centre value
+            # If the size of defocus estimation is odd, get the centre value
             else:
                 defocusU = providedDefocusUList[middlePoint]
                 defocusV = providedDefocusVList[middlePoint]
