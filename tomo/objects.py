@@ -1196,7 +1196,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusU(value)
                 self.setDefocusV(value)
 
-            # If the size of defocus estimaition is odd, get the centre value
+            # If the size of defocus estimation is odd, get the centre value
             else:
                 value = providedList[middlePoint]
 
@@ -1218,7 +1218,7 @@ class CTFTomo(data.CTFModel):
             if len(providedDefocusUList) != len(providedDefocusVList) or \
                     len(providedDefocusUList) != len(providedDefocusAngleList) or \
                     len(providedDefocusVList) != len(providedDefocusAngleList):
-                raise Exception("DefocusUList, DefocusVList and DefocusAngleList lenghts must be equal.")
+                raise Exception("DefocusUList, DefocusVList and DefocusAngleList lengths must be equal.")
 
             # DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list.
             middlePoint = math.trunc(len(providedDefocusUList) / 2)
@@ -1253,8 +1253,8 @@ class CTFTomo(data.CTFModel):
 
                 # Check that the three list are equally long
                 if len(providedDefocusUList) != len(providedPhaseSiftList):
-                    raise Exception("PhaseShiftList lenght must be equal to DefocusUList, DefocusVList and "
-                                    "DefocusAngleList lenghts.")
+                    raise Exception("PhaseShiftList length must be equal to DefocusUList, DefocusVList and "
+                                    "DefocusAngleList lengths.")
 
                 # PhaseShift is set equal to the middle estimation of the list.
                 middlePoint = math.trunc(len(providedDefocusUList) / 2)
@@ -1266,13 +1266,13 @@ class CTFTomo(data.CTFModel):
 
                     self.setPhaseShift(phaseShift)
 
-                # If the size of defocus estimaition is odd, get the centre value
+                # If the size of defocus estimation is odd, get the centre value
                 else:
                     phaseShift = providedPhaseSiftList[middlePoint]
 
                     self.setPhaseShift(phaseShift)
 
-        # Standarize the input values
+        # Standardize the input values
         self.standardize()
 
 
