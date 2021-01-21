@@ -677,6 +677,35 @@ class SetOfCoordinates3D(data.EMSet):
         self._samplingRate = pwobj.Float()
         self._precedentsPointer = pwobj.Pointer()
 
+        self._originX = pwobj.Integer()
+        self._originY = pwobj.Integer()
+        self._originZ = pwobj.Integer()
+
+    def getOriginX(self):
+        return self._originX.get()
+
+    def setOriginX(self, originX):
+        self._originX.set(originX)
+
+    def getOriginY(self):
+        return self._originY.get()
+
+    def setOriginY(self, originY):
+        self._originY.set(originY)
+
+    def getOriginZ(self):
+        return self._originZ.get()
+
+    def setOriginZ(self, originZ):
+        self._originZ.set(originZ)
+
+    def getPosition(self):
+        """ Return the position of the coordinate as a (x, y) tuple.
+        mode: select if the position is the center of the box
+        or in the top left corner.
+        """
+        return self.getX(), self.getY(), self.getZ()
+
     def getBoxSize(self):
         """ Return the box size of the particles.
         """
