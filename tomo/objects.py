@@ -1304,7 +1304,7 @@ class CTFTomoSeries(data.EMSet):
             self._tiltSeriesPointer.set(tiltSeries)
 
     def getTsId(self):
-        """ Get unique TiltSerie ID, usually retrieved from the
+        """ Get unique TiltSeries ID, usually retrieved from the
         file pattern provided by the user at the import time.
         """
         return self._tsId.get()
@@ -1339,10 +1339,10 @@ class CTFTomoSeries(data.EMSet):
                 else ctfEstimation.getDefocusVList()
             providedList = providedList.split(",")
 
-            listLenght = len(providedList) - 1
+            listLength = len(providedList) - 1
 
-            if listLenght > estimationRange:
-                estimationRange = listLenght
+            if listLength > estimationRange:
+                estimationRange = listLength
 
         self.setNumberOfEstimationsInRange(estimationRange)
 
