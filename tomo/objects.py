@@ -960,7 +960,7 @@ class SetOfLandmarkModels(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
 
 
-class Mesh(Coordinate3D):
+class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
     the triangulation of a volume.
     A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
