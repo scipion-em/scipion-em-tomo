@@ -967,6 +967,16 @@ class MeshPoint(Coordinate3D):
     space into planar triangles interconnected that will result in a closed surface."""
     def __init__(self, **kwargs):
         Coordinate3D.__init__(self, **kwargs)
+        self._description = None  # Algebraic description of fitted mesh
+
+    def getDescription(self):
+        return self._description
+
+    def setDescription(self, description):
+        self._description = description
+
+    def hasDescription(self):
+        return self._description is not None
 
 
 class SetOfMeshes(SetOfCoordinates3D):
@@ -977,7 +987,7 @@ class SetOfMeshes(SetOfCoordinates3D):
 
 
 class Ellipsoid(data.EMObject):
-    """This class represent an ellipsoid"""
+    """This class represent an ellipsoid. This is an instance class of description attribute of object MeshPoint"""
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._center = pwobj.String()
