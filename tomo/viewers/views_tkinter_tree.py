@@ -523,10 +523,6 @@ class TomogramsDialog(ToolbarListDialog):
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
-        # mesh_group = self.mesh.getMesh()
-        # group = np.ones((1, len(mesh_group))) * self.mesh.getGroup()
-        # meshFile = 'mesh.txt'
-        # np.savetxt(os.path.join(path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
         meshFile = getMeshVolFileName(self.tomo.getObjId())
 
         macro = r"""path = "%s";
