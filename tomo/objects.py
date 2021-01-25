@@ -705,7 +705,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume=None):
+    def iterCoordinates(self, volume=None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
         If tomogram=None, the iteration is performed over the whole
         set of coordinates.
@@ -724,7 +724,7 @@ class SetOfCoordinates3D(data.EMSet):
         # otherwise use micId to filter the where selection
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
-        for coord in self.iterItems(where=coordWhere):
+        for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
             coord.setVolume(self.getPrecedents()[coord.getVolId()])
             yield coord
 
@@ -782,7 +782,9 @@ class SetOfCoordinates3D(data.EMSet):
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
         coord = data.EMSet.__getitem__(self, itemId)
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        clone = self.getPrecedents().getClass()()
+        clone.copy(self)
+        coord.setVolume(clone[coord.getVolId()])
         return coord
 
 
@@ -971,6 +973,7 @@ class MeshPoint(Coordinate3D):
 
 class SetOfMeshes(SetOfCoordinates3D):
     """ Store a series of meshes. """
+    ITEM_TYPE = MeshPoint
 
     def __init__(self, **kwargs):
         SetOfCoordinates3D.__init__(self, **kwargs)
