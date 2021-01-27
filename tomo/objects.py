@@ -604,7 +604,7 @@ class Coordinate3D(data.EMObject):
         self._z.multiply(factor)
 
     def getPosition(self):
-        """ Return the position of the coordinate as a (x, y) tuple.
+        """ Return the position of the coordinate as a (x, y, z) tuple.
         mode: select if the position is the center of the box
         or in the top left corner.
         """
@@ -969,7 +969,14 @@ class MeshPoint(Coordinate3D):
     space into planar triangles interconnected that will result in a closed surface."""
     def __init__(self, **kwargs):
         Coordinate3D.__init__(self, **kwargs)
+        self._volName = pwobj.String()
         self._description = None  # Algebraic description of fitted mesh
+
+    def getVolName(self):
+        return self._volName
+
+    def setVolName(self, volName):
+        self._volName.set(volName)
 
     def getDescription(self):
         return self._description
