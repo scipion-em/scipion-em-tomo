@@ -987,6 +987,13 @@ class SetOfMeshes(SetOfCoordinates3D):
 
     def __init__(self, **kwargs):
         SetOfCoordinates3D.__init__(self, **kwargs)
+        self._numberOfMeshes = pwobj.Integer()  # Indicates how many meshes are in the set
+
+    def getNumberOfMeshes(self):
+        return self._numberOfMeshes.get()
+
+    def setNumberOfMeshes(self, n):
+        self._numberOfMeshes.set(n)
 
 
 class Ellipsoid(data.EMObject):
