@@ -577,6 +577,9 @@ class Coordinate3D(data.EMObject):
     def getMatrix(self):
         return self._eulerMatrix.getMatrix()
 
+    def hasTransform(self):
+        return self._eulerMatrix is not None
+
     def euler2Matrix(self, r, p, y):
         self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
