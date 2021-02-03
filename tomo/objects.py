@@ -494,6 +494,32 @@ class TomoAcquisition(data.Acquisition):
         self._angleAxis2.set(value)
 
 
+class TomoMask(data.Volume):
+    """ Object used to represent segmented tomograms/subtomograms
+    """
+    def __init__(self, **kwargs):
+        data.Volume.__init__(self, **kwargs)
+        self._refTomo = pwobj.String()
+
+    def getReferenceTomogram(self):
+        """ Get the reference tomogram for the current mask.
+        """
+        return self._refTomo.get()
+
+    def setReferenceTomogram(self, tomoName):
+        """ Set the reference tomogram for the current mask.
+        """
+        self._refTomo.set(tomoName)
+
+
+class SetOfTomoMasks(data.SetOfVolumes):
+    ITEM_TYPE = TomoMask
+    EXPOSE_ITEMS = True
+
+    def __init__(self, *args, **kwargs):
+        data.SetOfVolumes.__init__(self, **kwargs)
+
+
 class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
