@@ -972,14 +972,14 @@ class MeshPoint(Coordinate3D):
     space into planar triangles interconnected that will result in a closed surface."""
     def __init__(self, **kwargs):
         Coordinate3D.__init__(self, **kwargs)
-        self._volName = pwobj.String()
+        self._volumeName = pwobj.String()
         self._description = None  # Algebraic description of fitted mesh
 
-    def getVolName(self):
-        return self._volName
+    def getVolumeName(self):
+        return self._volumeName
 
-    def setVolName(self, volName):
-        self._volName.set(volName)
+    def setVolumeName(self, volName):
+        self._volumeName.set(volName)
 
     def getDescription(self):
         return self._description
