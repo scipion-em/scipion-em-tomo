@@ -499,17 +499,17 @@ class TomoMask(data.Volume):
     """
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
-        self._refTomo = pwobj.String()
+        self._volName = pwobj.String()
 
-    def getReferenceTomogram(self):
+    def getVolName(self):
         """ Get the reference tomogram for the current mask.
         """
-        return self._refTomo.get()
+        return self._volName.get()
 
-    def setReferenceTomogram(self, tomoName):
+    def setVolName(self, tomoName):
         """ Set the reference tomogram for the current mask.
         """
-        self._refTomo.set(tomoName)
+        self._volName.set(tomoName)
 
 
 class SetOfTomoMasks(data.SetOfVolumes):
