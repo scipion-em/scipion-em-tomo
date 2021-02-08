@@ -44,6 +44,7 @@ from pwem.emlib.image import ImageHandler
 
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
+
     def __init__(self, **kwargs):
         self._tiltAngle = pwobj.Float(kwargs.get('tiltAngle', None))
         self._tsId = pwobj.String(kwargs.get('tsId', None))
@@ -78,6 +79,7 @@ class TiltImageBase:
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
+
     def __init__(self, location=None, **kwargs):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
@@ -189,6 +191,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
+
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
 
@@ -278,6 +281,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
 
 class TiltImageM(data.Movie, TiltImageBase):
     """ Tilt movie. """
+
     def __init__(self, location=None, **kwargs):
         data.Movie.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
@@ -324,7 +328,7 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         SetOfTiltSeriesBase.copyInfo(self, other)
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
-        #self._firstFramesRange.set(other.getFramesRange())
+        # self._firstFramesRange.set(other.getFramesRange())
 
 
 class TiltSeriesDict:
@@ -334,6 +338,7 @@ class TiltSeriesDict:
     - Check for new input items that needs to be processed
     - Check for items already done that needs to be saved.
     """
+
     def __init__(self, inputSet=None, outputSet=None,
                  newItemsCallback=None,
                  doneItemsCallback=None):
@@ -537,6 +542,7 @@ class SetOfTomograms(data.SetOfVolumes):
 class Coordinate3D(data.EMObject):
     """This class holds the (x,y) position and other information
     associated with a coordinate"""
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = pwobj.Pointer(objDoStore=False)
@@ -869,6 +875,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 class AverageSubTomogram(SubTomogram):
     """Represents a set of Averages.
     It is a SetOfParticles but it is useful to differentiate outputs."""
+
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
@@ -911,6 +918,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to an specific tilt-series."""
+
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = pwobj.String(tsId)
@@ -935,7 +943,7 @@ class LandmarkModel(data.EMObject):
     def setModelName(self, modelName):
         self._modelName = pwobj.String(modelName)
 
-    def addLandmark(self, xCoor, yCoor,  tiltIm, chainId, xResid, yResid):
+    def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
 
         mode = "a" if os.path.exists(self.getFileName()) else "w"
@@ -965,6 +973,7 @@ class Mesh(data.EMObject):
     the triangulation of a volume.
     A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
+
     def __init__(self, path=None, group=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._path = pwobj.String(path)
@@ -989,9 +998,9 @@ class Mesh(data.EMObject):
         filePath = self.getPath()
         mesh = []
         array = np.genfromtxt(filePath, delimiter=',')
-        numMeshes = np.unique(array[:,3])
+        numMeshes = np.unique(array[:, 3])
         for idm in numMeshes:
-            mesh_group = array[array[:,3] == idm, :]
+            mesh_group = array[array[:, 3] == idm, :]
             mesh.append(mesh_group[:, 0:3])
         return mesh[self.getGroup() - 1]
 
@@ -1061,6 +1070,7 @@ class SetOfMeshes(data.EMSet):
 
 class Ellipsoid(data.EMObject):
     """This class represent an ellipsoid"""
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._center = pwobj.String()
@@ -1089,8 +1099,6 @@ class Ellipsoid(data.EMObject):
         return self._algebraicDesc is not None
 
 
-# no es una clase nueva CTFImodModel, anadir campo ctf imod // float -> List [extra]. defocus as Average
-# series f(name)
 class CTFTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
 
@@ -1102,7 +1110,15 @@ class CTFTomo(data.CTFModel):
         return self._index
 
     def setIndex(self, value):
-        self._index = value
+        self._index = pwobj.Integer(value)
+
+    def getCutOnFreq(self):
+        return self._cutOnFreq
+
+    def setCutOnFreq(self, value):
+        self._cutOnFreq = pwobj.Float(value)
+
+    " List data methods allow compatibility with IMOD metadata. "
 
     def getDefocusUList(self):
         return self._defocusUList.get()
@@ -1140,6 +1156,15 @@ class CTFTomo(data.CTFModel):
     def appendPhaseShiftList(self, value):
         self._phaseShiftList.append(value)
 
+    def getCutOnFreqList(self):
+        return self._cutOnFreqList.get()
+
+    def setCutOnFreqList(self, cutOnFreqList):
+        self._cutOnFreqList.set(cutOnFreqList)
+
+    def appendCutOnFreqList(self, value):
+        self._cutOnFreqList.append(value)
+
     def hasEstimationInfoAsList(self):
         """ This method checks if the CTFTomo object contains estimation information in the form of a list. """
 
@@ -1170,41 +1195,45 @@ class CTFTomo(data.CTFModel):
 
         This method will assign as the defocus value and angle the median of the estimation list. """
 
-        # Check that at least one list is provided
+        " DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
+
+        " Check that at least one list is provided "
         if not self.hasEstimationInfoAsList():
             raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
                             "list information available.")
 
-        # Get the number of provided list (1 or 2)
+        " Get the number of provided list (1 or 2) "
         numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")) else 1
 
-        #  No astigmatism is estimated (only one list provided)
+        " No astigmatism is estimated (only one list provided) "
         if numberOfProvidedList == 1:
             providedList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
             providedList = providedList.split(",")
 
-            # DefocusAngle is set to 0 degrees
+            " DefocusAngle is set to 0 degrees "
             self.setDefocusAngle(0)
 
-            # DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list.
+            " DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list "
             middlePoint = math.trunc(len(providedList) / 2)
 
-            # If the size of the defocus list is even, mean the 2 centre values
+            " If the size of the defocus list is even, mean the 2 centre values "
             if len(providedList) % 2 == 0:
                 value = (float(providedList[middlePoint]) + float(providedList[middlePoint - 1])) / 2
 
                 self.setDefocusU(value)
                 self.setDefocusV(value)
 
-            # If the size of defocus estimation is odd, get the centre value
             else:
+                " If the size of defocus estimation is odd, get the centre value "
+
                 value = providedList[middlePoint]
 
                 self.setDefocusU(value)
                 self.setDefocusV(value)
 
-        # Astigmatism is estimated (two lists are provided)
         else:
+            " Astigmatism is estimated (two lists are provided) "
+
             providedDefocusUList = self.getDefocusUList()
             providedDefocusUList = providedDefocusUList.split(",")
 
@@ -1214,16 +1243,16 @@ class CTFTomo(data.CTFModel):
             providedDefocusAngleList = self.getDefocusAngleList()
             providedDefocusAngleList = providedDefocusAngleList.split(",")
 
-            # Check that the three list are equally long
+            " Check that the three list are equally long "
             if len(providedDefocusUList) != len(providedDefocusVList) or \
                     len(providedDefocusUList) != len(providedDefocusAngleList) or \
                     len(providedDefocusVList) != len(providedDefocusAngleList):
                 raise Exception("DefocusUList, DefocusVList and DefocusAngleList lengths must be equal.")
 
-            # DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list.
+            " DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list "
             middlePoint = math.trunc(len(providedDefocusUList) / 2)
 
-            # If the size of the defocus list is even, mean the 2 centre values
+            " If the size of the defocus list is even, mean the 2 centre values "
             if len(providedDefocusUList) % 2 == 0:
                 defocusU = (float(providedDefocusUList[middlePoint]) +
                             float(providedDefocusUList[middlePoint - 1])) / 2
@@ -1236,8 +1265,9 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(defocusV)
                 self.setDefocusAngle(defocusAngle)
 
-            # If the size of defocus estimation is odd, get the centre value
             else:
+                " If the size of defocus estimation list is odd, get the centre value "
+
                 defocusU = providedDefocusUList[middlePoint]
                 defocusV = providedDefocusVList[middlePoint]
                 defocusAngle = providedDefocusAngleList[middlePoint]
@@ -1246,33 +1276,65 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(defocusV)
                 self.setDefocusAngle(defocusAngle)
 
-            # Check if phase shift information is also available
-            if hasattr(self, "_phaseShiftList"):
-                providedPhaseSiftList = self.getPhaseShiftList()
-                providedPhaseSiftList = providedPhaseSiftList.split(",")
+        " PHASE SHIFT INFORMATION -------------------------------------------------------------------------------------"
 
-                # Check that the three list are equally long
-                if len(providedDefocusUList) != len(providedPhaseSiftList):
-                    raise Exception("PhaseShiftList length must be equal to DefocusUList, DefocusVList and "
-                                    "DefocusAngleList lengths.")
+        " Check if phase shift information is also available "
+        if hasattr(self, "_phaseShiftList"):
+            providedPhaseShiftList = self.getPhaseShiftList()
+            providedPhaseShiftList = providedPhaseShiftList.split(",")
 
-                # PhaseShift is set equal to the middle estimation of the list.
-                middlePoint = math.trunc(len(providedDefocusUList) / 2)
+            " Check that all the lists are equally long "
+            if len(providedDefocusUList) != len(providedPhaseShiftList):
+                raise Exception("PhaseShiftList length must be equal to DefocusUList, DefocusVList and "
+                                "DefocusAngleList lengths.")
 
-                # If the size of the defocus list is even, mean the 2 centre values
-                if len(providedPhaseSiftList) % 2 == 0:
-                    phaseShift = (float(providedPhaseSiftList[middlePoint]) +
-                                float(providedPhaseSiftList[middlePoint - 1])) / 2
+            " PhaseShift is set equal to the middle estimation of the list "
+            middlePoint = math.trunc(len(providedPhaseShiftList) / 2)
 
-                    self.setPhaseShift(phaseShift)
+            " If the size of the phase shift list is even, mean the 2 centre values "
+            if len(providedPhaseShiftList) % 2 == 0:
+                phaseShift = (float(providedPhaseShiftList[middlePoint]) +
+                              float(providedPhaseShiftList[middlePoint - 1])) / 2
 
-                # If the size of defocus estimation is odd, get the centre value
-                else:
-                    phaseShift = providedPhaseSiftList[middlePoint]
+                self.setPhaseShift(phaseShift)
 
-                    self.setPhaseShift(phaseShift)
+            else:
+                " If the size of phase shift list estimation is odd, get the centre value "
 
-        # Standardize the input values
+                phaseShift = providedPhaseShiftList[middlePoint]
+
+                self.setPhaseShift(phaseShift)
+
+        " CUT-ON FREQUENCY INFORMATION --------------------------------------------------------------------------------"
+
+        " Check if cut-on frequency information is also available "
+        if hasattr(self, "_cutOnFreqList"):
+            providedCutOnFreqList = self.getCutOnFreqList()
+            providedCutOnFreqList = providedCutOnFreqList.split(",")
+
+            " Check that all the lists are equally long "
+            if len(providedPhaseShiftList) != len(providedCutOnFreqList):
+                raise Exception("CutOnFreqList length must be equal to PhaseShiftList, DefocusUList, DefocusVList and "
+                                "DefocusAngleList lengths.")
+
+            " Cut-on frequency is set equal to the middle estimation of the list "
+            middlePoint = math.trunc(len(providedCutOnFreqList) / 2)
+
+            " If the size of the cut-on frequency shift list is even, mean the 2 centre values "
+            if len(providedCutOnFreqList) % 2 == 0:
+                cutOnFreq = (float(providedCutOnFreqList[middlePoint]) +
+                             float(providedCutOnFreqList[middlePoint - 1])) / 2
+
+                self.setCutOnFreq(cutOnFreq)
+
+            else:
+                " If the size of the cut-on frequency list estimation is odd, get the centre value "
+
+                cutOnFreq = providedCutOnFreqList[middlePoint]
+
+                self.setCutOnFreq(cutOnFreq)
+
+        " Standardize the input values "
         self.standardize()
 
 
@@ -1359,8 +1421,6 @@ class CTFTomoSeries(data.EMSet):
              from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
 
         self._IMODFormatFile = pwobj.Integer(flag)
-
-    # TODO: cut on frequency
 
     def setNumberOfEstimationsInRangeFromDefocusList(self):
         """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
@@ -1464,7 +1524,7 @@ class SetOfCTFTomoSeries(data.EMSet):
                     objId = tiltSeries.getObjId()
 
             if objId is None:
-                raise("Could not find tilt-series with tsId = %s" % item.getTsId())
+                raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
 
             item.setTiltSeries(self.getSetOfTiltSeries()[objId])
             self._setItemMapperPath(item)
