@@ -1335,22 +1335,26 @@ class CTFTomoSeries(data.EMSet):
 
         return self._IMODFormatFile.get()
 
-    def setIMODFormatFile(self, mode):
+    def setIMODDefocusFileFlag(self, flag):
         """ Set the format file from which the CTF estimation information has been acquired.
-        :param mode: Integer of the range size.
+        :param flag: Integer of the range size.
 
         This parameter is
-        useful for posterior information and format conversions between IMOD and Scipion. This classification is not
-        coincident with the IMOD one. Possible values:
-            - 0: Simple estimation (no astigmatism, phase shift nor cut-on frequency)
-            - 1: Astigmatism is estimated.
-            - 2: Phase shift is estimated.
-            - 3: Cut-on frequency is estimated.
-            - 4: Astigmatism and phase shift are estimated.
-            - 5: Astigmatism and cut-on frequency are estimated.
-            - 6: Astigmatism, phase shift and cut-on frequency are estimated. """
+        useful for posterior information and format conversions between IMOD and Scipion. The flag value "is the sum of:
 
-        self._IMODFormatFile = pwobj.Integer(mode)
+          1 if the file has astigmatism values
+          2 if the astigmatism axis angle is in radians, not degrees
+          4 if the file has phase shifts
+          8 if the phase shifts are in radians, not degrees
+         16 if tilt angles need to be inverted to match what the
+             program expects (what Ctfplotter would produce)
+             with the -invert option
+         32 if the file has cut-on frequencies attenuating the phase
+             at low frequencies"
+
+             from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
+
+        self._IMODFormatFile = pwobj.Integer(flag)
 
     # TODO: cut on frequency
 
