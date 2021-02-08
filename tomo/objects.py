@@ -956,6 +956,26 @@ class LandmarkModel(data.EMObject):
                              'xResid': xResid,
                              'yResid': yResid})
 
+    def retrieveInfoTable(self):
+        """ This methods return a table containing the information of the lankmark model. One landmark pero line
+        specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
+
+        fileName = self.getFileName()
+
+        outputInfo = []
+
+        with open(fileName) as f:
+            reader = csv.reader(f)
+
+            # Ignore header
+            next(reader)
+
+            for line in reader:
+                vector = line[0].split()
+                outputInfo.append(vector)
+
+        return outputInfo
+
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
