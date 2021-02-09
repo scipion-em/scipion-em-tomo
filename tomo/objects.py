@@ -959,6 +959,26 @@ class LandmarkModel(data.EMObject):
                              'xResid': xResid,
                              'yResid': yResid})
 
+    def retrieveInfoTable(self):
+        """ This methods return a table containing the information of the lankmark model. One landmark pero line
+        specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
+
+        fileName = self.getFileName()
+
+        outputInfo = []
+
+        with open(fileName) as f:
+            reader = csv.reader(f)
+
+            # Ignore header
+            next(reader)
+
+            for line in reader:
+                vector = line[0].split()
+                outputInfo.append(vector)
+
+        return outputInfo
+
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
@@ -1002,7 +1022,10 @@ class Mesh(data.EMObject):
         for idm in numMeshes:
             mesh_group = array[array[:, 3] == idm, :]
             mesh.append(mesh_group[:, 0:3])
-        return mesh[self.getGroup() - 1]
+        if len(mesh) == 1:
+            return mesh[0]
+        else:
+            return mesh[self.getGroup() - 1]
 
     def getVolume(self):
         """ Return the tomogram object to which
