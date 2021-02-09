@@ -1443,7 +1443,7 @@ class CTFTomoSeries(data.EMSet):
 
              from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
 
-        self._IMODFormatFile = pwobj.Integer(flag)
+        self._IMODDefocusFileFlag = pwobj.Integer(flag)
 
     def setNumberOfEstimationsInRangeFromDefocusList(self):
         """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
