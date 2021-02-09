@@ -1406,7 +1406,7 @@ class CTFTomoSeries(data.EMSet):
 
         self._estimationsInRange = pwobj.Integer(estimationRange)
 
-    def getIMODFormatFile(self):
+    def getIMODDefocusFileFlag(self):
         """ Return the format file from which the CTF estimation information has been acquired. This parameter is
         useful for posterior information and format conversions between IMOD and Scipion. The flag value "is the sum of:
 
@@ -1422,7 +1422,7 @@ class CTFTomoSeries(data.EMSet):
 
              from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
 
-        return self._IMODFormatFile.get()
+        return self._IMODDefocusFileFlag.get()
 
     def setIMODDefocusFileFlag(self, flag):
         """ Set the format file from which the CTF estimation information has been acquired.
