@@ -1207,18 +1207,18 @@ class CTFTomo(data.CTFModel):
 
         " No astigmatism is estimated (only one list provided) "
         if numberOfProvidedList == 1:
-            providedList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
-            providedList = providedList.split(",")
+            providedDefocusUList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
+            providedDefocusUList = providedDefocusUList.split(",")
 
             " DefocusAngle is set to 0 degrees "
             self.setDefocusAngle(0)
 
             " DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list "
-            middlePoint = math.trunc(len(providedList) / 2)
+            middlePoint = math.trunc(len(providedDefocusUList) / 2)
 
             " If the size of the defocus list is even, mean the 2 centre values "
-            if len(providedList) % 2 == 0:
-                value = (float(providedList[middlePoint]) + float(providedList[middlePoint - 1])) / 2
+            if len(providedDefocusUList) % 2 == 0:
+                value = (float(providedDefocusUList[middlePoint]) + float(providedDefocusUList[middlePoint - 1])) / 2
 
                 self.setDefocusU(value)
                 self.setDefocusV(value)
@@ -1226,7 +1226,7 @@ class CTFTomo(data.CTFModel):
             else:
                 " If the size of defocus estimation is odd, get the centre value "
 
-                value = providedList[middlePoint]
+                value = providedDefocusUList[middlePoint]
 
                 self.setDefocusU(value)
                 self.setDefocusV(value)
