@@ -872,13 +872,15 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
 
 class AverageSubTomogram(SubTomogram):
-    """Represents a set of Averages.
-    It is a SetOfParticles but it is useful to differentiate outputs."""
+    """Represents a Average SubTomogram.
+        It is a SubTomogram but it is useful to differentiate outputs."""
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
 
 class SetOfAverageSubTomograms(SetOfSubTomograms):
+    """Represents a set of Averages.
+    It is a SetOfSubTomograms but it is useful to differentiate outputs."""
     ITEM_TYPE = AverageSubTomogram
     REP_TYPE = AverageSubTomogram
 
