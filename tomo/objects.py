@@ -1374,6 +1374,11 @@ class CTFTomoSeries(data.EMSet):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
+    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=ignoreAttrs)
+        return clone
+
     def getTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """
         return self._tiltSeriesPointer.get()
