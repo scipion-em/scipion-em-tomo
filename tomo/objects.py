@@ -1374,6 +1374,10 @@ class CTFTomoSeries(data.EMSet):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
+    def __del__(self):
+        # Cancel closing the mapper since this class is an item of a set and shares the mapper with its parent set.
+        pass
+
     def getTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """
         return self._tiltSeriesPointer.get()
