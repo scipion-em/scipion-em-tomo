@@ -1374,6 +1374,11 @@ class CTFTomoSeries(data.EMSet):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
+    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=ignoreAttrs)
+        return clone
+
     def __del__(self):
         # Cancel closing the mapper since this class is an item of a set and shares the mapper with its parent set.
         pass
