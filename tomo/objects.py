@@ -516,8 +516,6 @@ class SetOfTomoMasks(data.SetOfVolumes):
     ITEM_TYPE = TomoMask
     EXPOSE_ITEMS = True
 
-    def __init__(self, *args, **kwargs):
-        data.SetOfVolumes.__init__(self, **kwargs)
 
 
 class Tomogram(data.Volume):
