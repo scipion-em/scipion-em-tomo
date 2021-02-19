@@ -815,9 +815,11 @@ class SetOfCoordinates3D(data.EMSet):
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
         coord = data.EMSet.__getitem__(self, itemId)
-        clone = self.getPrecedents().getClass()()
-        clone.copy(self)
-        coord.setVolume(clone[coord.getVolId()])
+        # In case pointer is lost in a for loop
+        # clone = self.getPrecedents().getClass()()
+        # clone.copy(self)
+        # coord.setVolume(clone[coord.getVolId()])
+        coord.setVolume(self.getPrecedents()[coord.getVolId()])
         return coord
 
 
