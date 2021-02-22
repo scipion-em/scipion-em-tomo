@@ -44,25 +44,25 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     _outputClassName = 'SetOfCoordinates3D'
     _label = 'import set of coordinates 3D'
 
-    IMPORT_FROM_AUTO = 0
-    IMPORT_FROM_TXT = 1
-    IMPORT_FROM_EMAN = 2
-    IMPORT_FROM_DYNAMO = 3
+    IMPORT_FROM_AUTO = 'auto'
+    IMPORT_FROM_TXT = 'txt'
+    IMPORT_FROM_EMAN = 'eman'
+    IMPORT_FROM_DYNAMO = 'dynamo'
 
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        importChoices = ['auto', 'txt', None, None]
+        importChoices = ['auto', 'txt']
         if existsPlugin('emantomo'):
-            importChoices[self.IMPORT_FROM_EMAN] = 'eman'
+            importChoices.append('eman')
         if existsPlugin('dynamo'):
-            importChoices[self.IMPORT_FROM_DYNAMO] = 'dynamo'
+            importChoices.append('dynamo')
         return importChoices
 
     def _getDefaultChoice(self):
-        return self.IMPORT_FROM_AUTO
+        return 0
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
@@ -199,7 +199,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):
-        importFrom = self.importFrom.get()
+        importFrom = self._getImportChoices()[self.importFrom.get()]
         if importFrom == self.IMPORT_FROM_AUTO:
             importFrom = self.getFormat()
         return importFrom
