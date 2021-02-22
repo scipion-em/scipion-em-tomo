@@ -24,13 +24,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+
 import re
 from os.path import abspath, basename
 
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
+
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.path import createAbsLink
+import pyworkflow.protocol.params as params
 
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
@@ -49,6 +53,55 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
         ProtTomoImportAcquisition._defineParams(self, form)
+        form.addSection('Origin Info')
+        form.addParam('setOrigCoord', params.BooleanParam,
+                      condition='importFrom == IMPORT_FROM_FILES',
+                      label="Set origin of coordinates",
+                      help="Option YES:\nA new volume will be created with "
+                           "the "
+                           "given ORIGIN of coordinates. This ORIGIN will be "
+                           "set in the map file header.\nThe ORIGIN of "
+                           "coordinates will be placed at the center of the "
+                           "whole volume if you select n(x)/2, n(y)/2, "
+                           "n(z)/2 as "
+                           "x, y, z coordinates (n(x), n(y), n(z) are the "
+                           "dimensions of the whole volume). However, "
+                           "selecting "
+                           "0, 0, 0 as x, y, z coordinates, the volume will be "
+                           "placed at the upper right-hand corner.\n\n"
+                           "Option NO:\nThe ORIGIN of coordinates will be "
+                           "placed at the center of the whole volume ("
+                           "coordinates n(x)/2, n(y)/2, n(z)/2 by default). "
+                           "This "
+                           "ORIGIN will NOT be set in the map file header.\n\n"
+                           "WARNING: In case you want to process "
+                           "the volume with programs requiring a specific "
+                           "symmetry regarding the origin of coordinates, "
+                           "for example the protocol extract unit "
+                           "cell, check carefully that the coordinates of the "
+                           "origin preserve the symmetry of the whole volume. "
+                           "This is particularly relevant for loading "
+                           "fragments/subunits of the whole volume.\n",
+                      default=False)
+        line = form.addLine('Offset',
+                            help="A wizard will suggest you possible "
+                                 "coordinates for the ORIGIN. In MRC volume "
+                                 "files, the ORIGIN coordinates will be "
+                                 "obtained from the file header.\n "
+                                 "In case you prefer set your own ORIGIN "
+                                 "coordinates, write them here. You have to "
+                                 "provide the map center coordinates in "
+                                 "Angstroms (pixels x sampling).\n",
+                            condition='setOrigCoord')
+        # line.addParam would produce a nicer looking form
+        # but them the wizard icon is drawn outside the visible
+        # window. Until this bug is fixed form is a better option
+        form.addParam('x', params.FloatParam, condition='setOrigCoord',
+                      label="x", help="offset along x axis (Angstroms)")
+        form.addParam('y', params.FloatParam, condition='setOrigCoord',
+                      label="y", help="offset along y axis (Angstroms)")
+        form.addParam('z', params.FloatParam, condition='setOrigCoord',
+                      label="z", help="offset along z axis (Angstroms)")
 
     def _getImportChoices(self):
         """ Return a list of possible choices
@@ -94,11 +147,15 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                     zDim = z
             else:
                 zDim = z
+
             origin = Transform()
 
-            origin.setShifts(x / -2. * samplingRate,
-                        y / -2. * samplingRate,
-                        zDim / -2. * samplingRate)
+            if self.setOrigCoord.get():
+                origin.setShiftsTuple(self._getOrigCoord())
+            else:
+                origin.setShifts(x / -2. * samplingRate,
+                                 y / -2. * samplingRate,
+                                 zDim / -2. * samplingRate)
 
             tomo.setOrigin(origin)  # read origin from form
 
@@ -122,6 +179,10 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                     tomoSet.append(tomo)
 
         self._defineOutputs(outputTomograms=tomoSet)
+
+    # --------------------------- UTILS functions ------------------------------
+    def _getOrigCoord(self):
+        return -1. * self.x.get(), -1. * self.y.get(), -1. * self.z.get()
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
