@@ -167,7 +167,7 @@ def generatePointCloud(v, tomoDim):
         h = v[7]
         i = v[8]
         j = v[9]
-        print('X2')
+        print('X^2')
         for z in zgrid:
             for y in ygrid:
                 A = a
@@ -246,7 +246,7 @@ def generatePointCloud(v, tomoDim):
         h = v[7]
         i = v[8]
         j = v[9]
-        print('Y2')
+        print('Y^2')
         for z in zgrid:
             A = b
             B = (2*f*z) + (2*h)
@@ -291,7 +291,7 @@ def generatePointCloud(v, tomoDim):
         c = 1
         i = v[8]
         j = v[9]
-        print('Z2')  # if algDesc with z2 = 0 for z values, x=y=0
+        print('Z^2')  # if algDesc with z2 = 0 for z values, x=y=0
         for z in zgrid:
             result = c*z*z + 2*i*z + j
             if result == 0:

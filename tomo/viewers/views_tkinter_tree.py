@@ -41,6 +41,7 @@ import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
 
 import tomo.objects
+from tomo.convert.convert import getMeshVolFileName
 
 
 class TiltSeriesTreeProvider(TreeProvider):
@@ -348,8 +349,7 @@ class TomogramsDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui)
 
     def doubleClickViewer(self, e=None):
-        self.mesh = e
-        self.tomo = e.getVolume()
+        self.tomo = e
         self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui_viewer)
@@ -523,10 +523,7 @@ class TomogramsDialog(ToolbarListDialog):
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
-        mesh_group = self.mesh.getMesh()
-        group = np.ones((1, len(mesh_group))) * self.mesh.getGroup()
-        meshFile = 'mesh.txt'
-        np.savetxt(os.path.join(path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
+        meshFile = getMeshVolFileName(self.tomo.getObjId())
 
         macro = r"""path = "%s";
     file = "%s"

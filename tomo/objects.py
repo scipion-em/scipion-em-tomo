@@ -607,6 +607,9 @@ class Coordinate3D(data.EMObject):
     def getMatrix(self):
         return self._eulerMatrix.getMatrix()
 
+    def hasTransform(self):
+        return self._eulerMatrix is not None
+
     def euler2Matrix(self, r, p, y):
         self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
@@ -634,7 +637,7 @@ class Coordinate3D(data.EMObject):
         self._z.multiply(factor)
 
     def getPosition(self):
-        """ Return the position of the coordinate as a (x, y) tuple.
+        """ Return the position of the coordinate as a (x, y, z) tuple.
         mode: select if the position is the center of the box
         or in the top left corner.
         """
@@ -735,7 +738,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume=None):
+    def iterCoordinates(self, volume=None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
         If tomogram=None, the iteration is performed over the whole
         set of coordinates.
@@ -754,7 +757,7 @@ class SetOfCoordinates3D(data.EMSet):
         # otherwise use micId to filter the where selection
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
-        for coord in self.iterItems(where=coordWhere):
+        for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
             coord.setVolume(self.getPrecedents()[coord.getVolId()])
             yield coord
 
@@ -812,6 +815,10 @@ class SetOfCoordinates3D(data.EMSet):
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
         coord = data.EMSet.__getitem__(self, itemId)
+        # In case pointer is lost in a for loop
+        # clone = self.getPrecedents().getClass()()
+        # clone.copy(self)
+        # coord.setVolume(clone[coord.getVolId()])
         coord.setVolume(self.getPrecedents()[coord.getVolId()])
         return coord
 
@@ -897,14 +904,15 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
 
 class AverageSubTomogram(SubTomogram):
-    """Represents a set of Averages.
-    It is a SetOfParticles but it is useful to differentiate outputs."""
-
+    """Represents a Average SubTomogram.
+        It is a SubTomogram but it is useful to differentiate outputs."""
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
 
 class SetOfAverageSubTomograms(SetOfSubTomograms):
+    """Represents a set of Averages.
+    It is a SetOfSubTomograms but it is useful to differentiate outputs."""
     ITEM_TYPE = AverageSubTomogram
     REP_TYPE = AverageSubTomogram
 
@@ -1012,58 +1020,21 @@ class SetOfLandmarkModels(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
 
 
-class Mesh(data.EMObject):
+class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
     the triangulation of a volume.
     A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
+    def __init__(self, **kwargs):
+        Coordinate3D.__init__(self, **kwargs)
+        self._volumeName = pwobj.String()
+        self._description = None  # Algebraic description of fitted mesh
 
-    def __init__(self, path=None, group=None, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
-        self._path = pwobj.String(path)
-        self._volumePointer = pwobj.Pointer(objDoStore=False)
-        self._group = pwobj.Integer(group)
-        self._volId = pwobj.Integer()
-        self._description = None  # algebraic description and parameters of fitted mesh
+    def getVolumeName(self):
+        return self._volumeName
 
-    def getPath(self):
-        return self._path.get()
-
-    def setPath(self, path):
-        self._path.set(path)
-
-    def getGroup(self):
-        return self._group.get()
-
-    def setGroup(self, group):
-        self._group.set(group)
-
-    def getMesh(self):
-        filePath = self.getPath()
-        mesh = []
-        array = np.genfromtxt(filePath, delimiter=',')
-        numMeshes = np.unique(array[:, 3])
-        for idm in numMeshes:
-            mesh_group = array[array[:, 3] == idm, :]
-            mesh.append(mesh_group[:, 0:3])
-        if len(mesh) == 1:
-            return mesh[0]
-        else:
-            return mesh[self.getGroup() - 1]
-
-    def getVolume(self):
-        """ Return the tomogram object to which
-        this mesh is associated.
-        """
-        return self._volumePointer.get()
-
-    def setVolume(self, volume):
-        """ Set the tomogram to which this mesh belongs. """
-        self._volumePointer.set(volume)
-        self._volId.set(volume.getObjId())
-
-    def getVolId(self):
-        return self._volId.get()
+    def setVolumeName(self, volName):
+        self._volumeName.set(volName)
 
     def getDescription(self):
         return self._description
@@ -1074,50 +1045,24 @@ class Mesh(data.EMObject):
     def hasDescription(self):
         return self._description is not None
 
-    def __str__(self):
-        return "Mesh (path=%s)" % self.getPath()
 
-
-class SetOfMeshes(data.EMSet):
+class SetOfMeshes(SetOfCoordinates3D):
     """ Store a series of meshes. """
-    ITEM_TYPE = Mesh
+    ITEM_TYPE = MeshPoint
 
-    def __init__(self, *args, **kwargs):
-        data.EMSet.__init__(self, *args, **kwargs)
-        self._volumesPointer = pwobj.Pointer()
+    def __init__(self, **kwargs):
+        SetOfCoordinates3D.__init__(self, **kwargs)
+        self._numberOfMeshes = pwobj.Integer()  # Indicates how many meshes are in the set
 
-    def setVolumes(self, volumes):
-        """ Set the tomograms associated with this set of coordinates.
-        Params:
-            tomograms: Either a SetOfTomograms object or a pointer to it.
-        """
-        if volumes.isPointer():
-            self._volumesPointer.copy(volumes)
-        else:
-            self._volumesPointer.set(volumes)
+    def getNumberOfMeshes(self):
+        return self._numberOfMeshes.get()
 
-    def getVolumes(self):
-        """ Returns the SetOfTomograms associated with
-        this SetOfCoordinates"""
-        return self._volumesPointer.get()
-
-    def iterItems(self, orderBy='id', direction='ASC', where='1', limit=None):
-        """ Redefine iteration to set the acquisition to images. """
-        for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
-                                         where=where, limit=limit):
-            mesh.setVolume(self.getVolumes()[mesh.getVolId()])
-            yield mesh
-
-    def __getitem__(self, itemId):
-        """ Add a pointer to a Tomogram before returning the Coordinate3D """
-        mesh = data.EMSet.__getitem__(self, itemId)
-        mesh.setVolume(self.getVolumes()[mesh.getVolId()])
-        return mesh
+    def setNumberOfMeshes(self, n):
+        self._numberOfMeshes.set(n)
 
 
 class Ellipsoid(data.EMObject):
-    """This class represent an ellipsoid"""
-
+    """This class represent an ellipsoid. This is an instance class of description attribute of object MeshPoint"""
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._center = pwobj.String()
