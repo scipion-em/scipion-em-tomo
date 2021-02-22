@@ -35,6 +35,7 @@ from pwem.objects import CTFModel
 
 from . import DataSet
 from ..objects import SetOfTiltSeriesM, SetOfTiltSeries
+from ..utils import existsPlugin
 import tomo.protocols
 
 
@@ -812,31 +813,37 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         return protImportCoordinates3d
 
     def test_import_set_of_coordinates_3D(self):
-        protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
-        output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertTrue(output,
-                             "There was a problem with coordinates 3d output")
-        self.assertTrue(output.getSize() == 19)
-        self.assertTrue(output.getBoxSize() == 32)
-        self.assertTrue(output.getSamplingRate() == 5.5)
+        outputs = []
+        if existsPlugin('emantomo'):
+            protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
+            output = getattr(protCoordinates, 'outputCoordinates', None)
+            self.assertTrue(output,
+                                 "There was a problem with coordinates 3d output")
+            self.assertTrue(output.getSize() == 19)
+            self.assertTrue(output.getBoxSize() == 32)
+            self.assertTrue(output.getSamplingRate() == 5.5)
+            outputs.append(output)
 
-        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt', 'EMAN', 'TXT')
+        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output2 = getattr(protCoordinates2, 'outputCoordinates', None)
         self.assertTrue(output2,
                              "There was a problem with coordinates 3d output")
         self.assertTrue(output2.getSize() == 5)
         self.assertTrue(output2.getBoxSize() == 32)
         self.assertTrue(output2.getSamplingRate() == 5.5)
+        outputs.append(output2)
 
-        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
-        output3 = getattr(protCoordinates2, 'outputCoordinates', None)
-        self.assertTrue(output2,
-                             "There was a problem with coordinates 3d output")
-        self.assertTrue(output2.getSize() == 5)
-        self.assertTrue(output2.getBoxSize() == 32)
-        self.assertTrue(output2.getSamplingRate() == 5.5)
+        if existsPlugin('dynamo'):
+            protCoordinates2 = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
+            output3 = getattr(protCoordinates2, 'outputCoordinates', None)
+            self.assertTrue(output2,
+                                 "There was a problem with coordinates 3d output")
+            self.assertTrue(output2.getSize() == 5)
+            self.assertTrue(output2.getBoxSize() == 32)
+            self.assertTrue(output2.getSamplingRate() == 5.5)
+            outputs.append(output3)
 
-        return output, output2, output3
+        return outputs
 
 
 class TestTomoPreprocessing(BaseTest):
