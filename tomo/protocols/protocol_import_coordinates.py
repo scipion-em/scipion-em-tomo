@@ -54,11 +54,11 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        importChoices = ['auto', 'txt']
+        importChoices = ['auto', 'txt', None, None]
         if existsPlugin('emantomo'):
-            importChoices.append('eman')
+            importChoices[self.IMPORT_FROM_EMAN] = 'eman'
         if existsPlugin('dynamo'):
-            importChoices.append('dynamo')
+            importChoices[self.IMPORT_FROM_DYNAMO] = 'dynamo'
         return importChoices
 
     def _getDefaultChoice(self):
