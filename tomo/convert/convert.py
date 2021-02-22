@@ -26,7 +26,36 @@
 
 import numpy as np
 
+from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
+
 import pyworkflow.utils as pwutils
+
+
+class TomoImport:
+
+    def __init__(self, protocol):
+        self.protocol = protocol
+        self.copyOrLink = protocol.getCopyOrLink()
+
+    def importCoordinates3D(self, fileName, addCoordinate):
+        from tomo.objects import Coordinate3D
+        if pwutils.exists(fileName):
+            ext = pwutils.getExt(fileName)
+
+        if ext == ".txt":
+            md = MetaData()
+            md.readPlain(fileName, "xcoor ycoor zcoor")
+            for objId in md:
+                x = md.getValue(MDL_XCOOR, objId)
+                y = md.getValue(MDL_YCOOR, objId)
+                z = md.getValue(MDL_ZCOOR, objId)
+                coord = Coordinate3D()
+                coord.setPosition(x, y, z)
+                addCoordinate(coord)
+
+        else:
+            raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
+
 
 def getMeshVolFileName(volId):
     return 'Meshes_Vol%d.txt' % volId
