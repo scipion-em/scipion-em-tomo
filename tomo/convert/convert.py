@@ -1,12 +1,12 @@
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     David Herreros Calero (dherreros@cnb.csic.es) [1]
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
-# * the Free Software Foundation; either version 2 of the License, or
+# * the Free Software Foundation; either version 3 of the License, or
 # * (at your option) any later version.
 # *
 # * This program is distributed in the hope that it will be useful,
@@ -24,31 +24,28 @@
 # *
 # **************************************************************************
 
+import numpy as np
+
 import pyworkflow.utils as pwutils
-from pwem.objects.data_tiltpairs import Angles
-from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
 
-class TomoImport:
+def getMeshVolFileName(volId):
+    return 'Meshes_Vol%d.txt' % volId
 
-    def __init__(self, protocol):
-        self.protocol = protocol
-        self.copyOrLink = protocol.getCopyOrLink()
+def setOfMeshes2Files(meshes, path):
 
-    def importCoordinates3D(self, fileName, addCoordinate):
-        from tomo.objects import Coordinate3D
-        if pwutils.exists(fileName):
-            ext = pwutils.getExt(fileName)
+    def writeFile():
+        fnInputCoor = getMeshVolFileName(currentVolId)
+        pathInputCoor = pwutils.join(path, fnInputCoor)
+        np.savetxt(pathInputCoor, np.asarray(coords), fmt='%d', delimiter=",")
 
-        if ext == ".txt":
-            md = MetaData()
-            md.readPlain(fileName, "xcoor ycoor zcoor")
-            for objId in md:
-                x = md.getValue(MDL_XCOOR, objId)
-                y = md.getValue(MDL_YCOOR, objId)
-                z = md.getValue(MDL_ZCOOR, objId)
-                coord = Coordinate3D()
-                coord.setPosition(x, y, z)
-                addCoordinate(coord)
-
-        else:
-            raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
+    currentVolId = None
+    coords = []
+    for coor in meshes.iterCoordinates(orderBy="_volId"):
+        if coor.getVolId() != currentVolId:
+            if currentVolId != None:
+                writeFile()
+            currentVolId = coor.getVolId()
+            coords = []
+        coords.append([coor.getX(), coor.getY(), coor.getZ(), coor.getGroupId()])
+    if coords:
+        writeFile()

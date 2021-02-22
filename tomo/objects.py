@@ -44,6 +44,7 @@ from pwem.emlib.image import ImageHandler
 
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
+
     def __init__(self, **kwargs):
         self._tiltAngle = pwobj.Float(kwargs.get('tiltAngle', None))
         self._tsId = pwobj.String(kwargs.get('tsId', None))
@@ -78,6 +79,7 @@ class TiltImageBase:
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
+
     def __init__(self, location=None, **kwargs):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
@@ -189,6 +191,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
+
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
 
@@ -278,6 +281,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
 
 class TiltImageM(data.Movie, TiltImageBase):
     """ Tilt movie. """
+
     def __init__(self, location=None, **kwargs):
         data.Movie.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
@@ -324,7 +328,7 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         SetOfTiltSeriesBase.copyInfo(self, other)
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
-        #self._firstFramesRange.set(other.getFramesRange())
+        # self._firstFramesRange.set(other.getFramesRange())
 
 
 class TiltSeriesDict:
@@ -334,6 +338,7 @@ class TiltSeriesDict:
     - Check for new input items that needs to be processed
     - Check for items already done that needs to be saved.
     """
+
     def __init__(self, inputSet=None, outputSet=None,
                  newItemsCallback=None,
                  doneItemsCallback=None):
@@ -494,6 +499,30 @@ class TomoAcquisition(data.Acquisition):
         self._angleAxis2.set(value)
 
 
+class TomoMask(data.Volume):
+    """ Object used to represent segmented tomograms/subtomograms
+    """
+    def __init__(self, **kwargs):
+        data.Volume.__init__(self, **kwargs)
+        self._volName = pwobj.String()
+
+    def getVolName(self):
+        """ Get the reference tomogram for the current mask.
+        """
+        return self._volName.get()
+
+    def setVolName(self, tomoName):
+        """ Set the reference tomogram for the current mask.
+        """
+        self._volName.set(tomoName)
+
+
+class SetOfTomoMasks(data.SetOfVolumes):
+    ITEM_TYPE = TomoMask
+    EXPOSE_ITEMS = True
+
+
+
 class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
@@ -537,6 +566,7 @@ class SetOfTomograms(data.SetOfVolumes):
 class Coordinate3D(data.EMObject):
     """This class holds the (x,y) position and other information
     associated with a coordinate"""
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = pwobj.Pointer(objDoStore=False)
@@ -577,6 +607,9 @@ class Coordinate3D(data.EMObject):
     def getMatrix(self):
         return self._eulerMatrix.getMatrix()
 
+    def hasTransform(self):
+        return self._eulerMatrix is not None
+
     def euler2Matrix(self, r, p, y):
         self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
@@ -604,7 +637,7 @@ class Coordinate3D(data.EMObject):
         self._z.multiply(factor)
 
     def getPosition(self):
-        """ Return the position of the coordinate as a (x, y) tuple.
+        """ Return the position of the coordinate as a (x, y, z) tuple.
         mode: select if the position is the center of the box
         or in the top left corner.
         """
@@ -705,7 +738,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume=None):
+    def iterCoordinates(self, volume=None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
         If tomogram=None, the iteration is performed over the whole
         set of coordinates.
@@ -724,7 +757,7 @@ class SetOfCoordinates3D(data.EMSet):
         # otherwise use micId to filter the where selection
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
-        for coord in self.iterItems(where=coordWhere):
+        for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
             coord.setVolume(self.getPrecedents()[coord.getVolId()])
             yield coord
 
@@ -782,6 +815,10 @@ class SetOfCoordinates3D(data.EMSet):
     def __getitem__(self, itemId):
         '''Add a pointer to a Tomogram before returning the Coordinate3D'''
         coord = data.EMSet.__getitem__(self, itemId)
+        # In case pointer is lost in a for loop
+        # clone = self.getPrecedents().getClass()()
+        # clone.copy(self)
+        # coord.setVolume(clone[coord.getVolId()])
         coord.setVolume(self.getPrecedents()[coord.getVolId()])
         return coord
 
@@ -867,13 +904,15 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
 
 class AverageSubTomogram(SubTomogram):
-    """Represents a set of Averages.
-    It is a SetOfParticles but it is useful to differentiate outputs."""
+    """Represents a Average SubTomogram.
+        It is a SubTomogram but it is useful to differentiate outputs."""
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
 
 class SetOfAverageSubTomograms(SetOfSubTomograms):
+    """Represents a set of Averages.
+    It is a SetOfSubTomograms but it is useful to differentiate outputs."""
     ITEM_TYPE = AverageSubTomogram
     REP_TYPE = AverageSubTomogram
 
@@ -910,7 +949,8 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class LandmarkModel(data.EMObject):
-    """Represents the set of landmarks belonging to an specific Tilt-series."""
+    """Represents the set of landmarks belonging to an specific tilt-series."""
+
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = pwobj.String(tsId)
@@ -935,7 +975,7 @@ class LandmarkModel(data.EMObject):
     def setModelName(self, modelName):
         self._modelName = pwobj.String(modelName)
 
-    def addLandmark(self, xCoor, yCoor,  tiltIm, chainId, xResid, yResid):
+    def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
 
         mode = "a" if os.path.exists(self.getFileName()) else "w"
@@ -951,6 +991,26 @@ class LandmarkModel(data.EMObject):
                              'xResid': xResid,
                              'yResid': yResid})
 
+    def retrieveInfoTable(self):
+        """ This methods return a table containing the information of the lankmark model. One landmark pero line
+        specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
+
+        fileName = self.getFileName()
+
+        outputInfo = []
+
+        with open(fileName) as f:
+            reader = csv.reader(f)
+
+            # Ignore header
+            next(reader)
+
+            for line in reader:
+                vector = line[0].split()
+                outputInfo.append(vector)
+
+        return outputInfo
+
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
@@ -960,57 +1020,21 @@ class SetOfLandmarkModels(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
 
 
-class Mesh(data.EMObject):
+class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
     the triangulation of a volume.
     A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
-    def __init__(self, path=None, group=None, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
-        self._path = pwobj.String(path)
-        self._volumePointer = pwobj.Pointer(objDoStore=False)
-        self._group = pwobj.Integer(group)
-        self._volId = pwobj.Integer()
-        self._description = None  # algebraic description and parameters of fitted mesh
+    def __init__(self, **kwargs):
+        Coordinate3D.__init__(self, **kwargs)
+        self._volumeName = pwobj.String()
+        self._description = None  # Algebraic description of fitted mesh
 
-    def getPath(self):
-        return self._path.get()
+    def getVolumeName(self):
+        return self._volumeName
 
-    def setPath(self, path):
-        self._path.set(path)
-
-    def getGroup(self):
-        return self._group.get()
-
-    def setGroup(self, group):
-        self._group.set(group)
-
-    def getMesh(self):
-        filePath = self.getPath()
-        mesh = []
-        array = np.genfromtxt(filePath, delimiter=',')
-        numMeshes = np.unique(array[:,3])
-        for idm in numMeshes:
-            mesh_group = array[array[:,3] == idm, :]
-            mesh.append(mesh_group[:, 0:3])
-        if len(mesh) == 1:
-            return mesh[0]
-        else:
-            return mesh[self.getGroup() - 1]
-
-    def getVolume(self):
-        """ Return the tomogram object to which
-        this mesh is associated.
-        """
-        return self._volumePointer.get()
-
-    def setVolume(self, volume):
-        """ Set the tomogram to which this mesh belongs. """
-        self._volumePointer.set(volume)
-        self._volId.set(volume.getObjId())
-
-    def getVolId(self):
-        return self._volId.get()
+    def setVolumeName(self, volName):
+        self._volumeName.set(volName)
 
     def getDescription(self):
         return self._description
@@ -1021,49 +1045,24 @@ class Mesh(data.EMObject):
     def hasDescription(self):
         return self._description is not None
 
-    def __str__(self):
-        return "Mesh (path=%s)" % self.getPath()
 
-
-class SetOfMeshes(data.EMSet):
+class SetOfMeshes(SetOfCoordinates3D):
     """ Store a series of meshes. """
-    ITEM_TYPE = Mesh
+    ITEM_TYPE = MeshPoint
 
-    def __init__(self, *args, **kwargs):
-        data.EMSet.__init__(self, *args, **kwargs)
-        self._volumesPointer = pwobj.Pointer()
+    def __init__(self, **kwargs):
+        SetOfCoordinates3D.__init__(self, **kwargs)
+        self._numberOfMeshes = pwobj.Integer()  # Indicates how many meshes are in the set
 
-    def setVolumes(self, volumes):
-        """ Set the tomograms associated with this set of coordinates.
-        Params:
-            tomograms: Either a SetOfTomograms object or a pointer to it.
-        """
-        if volumes.isPointer():
-            self._volumesPointer.copy(volumes)
-        else:
-            self._volumesPointer.set(volumes)
+    def getNumberOfMeshes(self):
+        return self._numberOfMeshes.get()
 
-    def getVolumes(self):
-        """ Returns the SetOfTomograms associated with
-        this SetOfCoordinates"""
-        return self._volumesPointer.get()
-
-    def iterItems(self, orderBy='id', direction='ASC', where='1', limit=None):
-        """ Redefine iteration to set the acquisition to images. """
-        for mesh in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
-                                 where=where, limit=limit):
-            mesh.setVolume(self.getVolumes()[mesh.getVolId()])
-            yield mesh
-
-    def __getitem__(self, itemId):
-        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
-        mesh = data.EMSet.__getitem__(self, itemId)
-        mesh.setVolume(self.getVolumes()[mesh.getVolId()])
-        return mesh
+    def setNumberOfMeshes(self, n):
+        self._numberOfMeshes.set(n)
 
 
 class Ellipsoid(data.EMObject):
-    """This class represent an ellipsoid"""
+    """This class represent an ellipsoid. This is an instance class of description attribute of object MeshPoint"""
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._center = pwobj.String()
@@ -1090,3 +1089,445 @@ class Ellipsoid(data.EMObject):
 
     def hasAlgebraicDesc(self):
         return self._algebraicDesc is not None
+
+
+class CTFTomo(data.CTFModel):
+    """ Represents a generic CTF model for a tilt-image. """
+
+    def __init__(self, **kwargs):
+        data.CTFModel.__init__(self, **kwargs)
+        self._index = pwobj.Integer(kwargs.get('index', None))
+
+    def getIndex(self):
+        return self._index
+
+    def setIndex(self, value):
+        self._index = pwobj.Integer(value)
+
+    def getCutOnFreq(self):
+        return self._cutOnFreq
+
+    def setCutOnFreq(self, value):
+        self._cutOnFreq = pwobj.Float(value)
+
+    " List data methods allow compatibility with IMOD metadata. "
+
+    def getDefocusUList(self):
+        return self._defocusUList.get()
+
+    def setDefocusUList(self, defList):
+        self._defocusUList.set(defList)
+
+    def appendDefocusUList(self, value):
+        self._defocusUList.append(value)
+
+    def getDefocusVList(self):
+        return self._defocusVList.get()
+
+    def setDefocusVList(self, defList):
+        self._defocusVList.set(defList)
+
+    def appendDefocusVList(self, value):
+        self._defocusVList.append(value)
+
+    def getDefocusAngleList(self):
+        return self._defocusAngleList.get()
+
+    def setDefocusAngleList(self, defList):
+        self._defocusAngleList.set(defList)
+
+    def appendDefocusAngleList(self, value):
+        self._defocusAngleList.append(value)
+
+    def getPhaseShiftList(self):
+        return self._phaseShiftList.get()
+
+    def setPhaseShiftList(self, defList):
+        self._phaseShiftList.set(defList)
+
+    def appendPhaseShiftList(self, value):
+        self._phaseShiftList.append(value)
+
+    def getCutOnFreqList(self):
+        return self._cutOnFreqList.get()
+
+    def setCutOnFreqList(self, cutOnFreqList):
+        self._cutOnFreqList.set(cutOnFreqList)
+
+    def appendCutOnFreqList(self, value):
+        self._cutOnFreqList.append(value)
+
+    def hasEstimationInfoAsList(self):
+        """ This method checks if the CTFTomo object contains estimation information in the form of a list. """
+
+        if hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList"):
+            return True
+        else:
+            return False
+
+    def hasAstigmatismInfoAsList(self):
+        """ This method checks if the CTFTomo object contains astigmatism information in the form of a list. """
+
+        if hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList"):
+            return True
+        else:
+            return False
+
+    # TODO: cut on frequency
+
+    def completeInfoFromList(self):
+        """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
+        information lists.
+
+        Based on the IMOD program ctfphaseflip: "The program  will assign that defocus value to the midpoint of the
+        range of views.  For a view at a given tilt angle, it will find the defocus either by interpolating between
+        two surrounding midpoint angles, if there are such angles, or by taking the nearest defocus value, if the
+        angle is beyond the range of the available midpoint angles. "
+        - From IMOD documentation https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html
+
+        This method will assign as the defocus value and angle the median of the estimation list. """
+
+        " DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
+
+        " Check that at least one list is provided "
+        if not self.hasEstimationInfoAsList():
+            raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                            "list information available.")
+
+        " Get the number of provided list (1 or 2) "
+        numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")) else 1
+
+        " No astigmatism is estimated (only one list provided) "
+        if numberOfProvidedList == 1:
+            providedDefocusUList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
+            providedDefocusUList = providedDefocusUList.split(",")
+
+            " DefocusAngle is set to 0 degrees "
+            self.setDefocusAngle(0)
+
+            " DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list "
+            middlePoint = math.trunc(len(providedDefocusUList) / 2)
+
+            " If the size of the defocus list is even, mean the 2 centre values "
+            if len(providedDefocusUList) % 2 == 0:
+                value = (float(providedDefocusUList[middlePoint]) + float(providedDefocusUList[middlePoint - 1])) / 2
+
+                self.setDefocusU(value)
+                self.setDefocusV(value)
+
+            else:
+                " If the size of defocus estimation is odd, get the centre value "
+
+                value = providedDefocusUList[middlePoint]
+
+                self.setDefocusU(value)
+                self.setDefocusV(value)
+
+        else:
+            " Astigmatism is estimated (two lists are provided) "
+
+            providedDefocusUList = self.getDefocusUList()
+            providedDefocusUList = providedDefocusUList.split(",")
+
+            providedDefocusVList = self.getDefocusVList()
+            providedDefocusVList = providedDefocusVList.split(",")
+
+            providedDefocusAngleList = self.getDefocusAngleList()
+            providedDefocusAngleList = providedDefocusAngleList.split(",")
+
+            " Check that the three list are equally long "
+            if len(providedDefocusUList) != len(providedDefocusVList) or \
+                    len(providedDefocusUList) != len(providedDefocusAngleList) or \
+                    len(providedDefocusVList) != len(providedDefocusAngleList):
+                raise Exception("DefocusUList, DefocusVList and DefocusAngleList lengths must be equal.")
+
+            " DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list "
+            middlePoint = math.trunc(len(providedDefocusUList) / 2)
+
+            " If the size of the defocus list is even, mean the 2 centre values "
+            if len(providedDefocusUList) % 2 == 0:
+                defocusU = (float(providedDefocusUList[middlePoint]) +
+                            float(providedDefocusUList[middlePoint - 1])) / 2
+                defocusV = (float(providedDefocusVList[middlePoint]) +
+                            float(providedDefocusVList[middlePoint - 1])) / 2
+                defocusAngle = (float(providedDefocusAngleList[middlePoint]) +
+                                float(providedDefocusAngleList[middlePoint - 1])) / 2
+
+                self.setDefocusU(defocusU)
+                self.setDefocusV(defocusV)
+                self.setDefocusAngle(defocusAngle)
+
+            else:
+                " If the size of defocus estimation list is odd, get the centre value "
+
+                defocusU = providedDefocusUList[middlePoint]
+                defocusV = providedDefocusVList[middlePoint]
+                defocusAngle = providedDefocusAngleList[middlePoint]
+
+                self.setDefocusU(defocusU)
+                self.setDefocusV(defocusV)
+                self.setDefocusAngle(defocusAngle)
+
+        " PHASE SHIFT INFORMATION -------------------------------------------------------------------------------------"
+
+        " Check if phase shift information is also available "
+        if hasattr(self, "_phaseShiftList"):
+            providedPhaseShiftList = self.getPhaseShiftList()
+            providedPhaseShiftList = providedPhaseShiftList.split(",")
+
+            " Check that all the lists are equally long "
+            if len(providedDefocusUList) != len(providedPhaseShiftList):
+                raise Exception("PhaseShiftList length must be equal to DefocusUList, DefocusVList and "
+                                "DefocusAngleList lengths.")
+
+            " PhaseShift is set equal to the middle estimation of the list "
+            middlePoint = math.trunc(len(providedPhaseShiftList) / 2)
+
+            " If the size of the phase shift list is even, mean the 2 centre values "
+            if len(providedPhaseShiftList) % 2 == 0:
+                phaseShift = (float(providedPhaseShiftList[middlePoint]) +
+                              float(providedPhaseShiftList[middlePoint - 1])) / 2
+
+                self.setPhaseShift(phaseShift)
+
+            else:
+                " If the size of phase shift list estimation is odd, get the centre value "
+
+                phaseShift = providedPhaseShiftList[middlePoint]
+
+                self.setPhaseShift(phaseShift)
+
+        " CUT-ON FREQUENCY INFORMATION --------------------------------------------------------------------------------"
+
+        " Check if cut-on frequency information is also available "
+        if hasattr(self, "_cutOnFreqList"):
+            providedCutOnFreqList = self.getCutOnFreqList()
+            providedCutOnFreqList = providedCutOnFreqList.split(",")
+
+            " Check that all the lists are equally long "
+            if len(providedPhaseShiftList) != len(providedCutOnFreqList):
+                raise Exception("CutOnFreqList length must be equal to PhaseShiftList, DefocusUList, DefocusVList and "
+                                "DefocusAngleList lengths.")
+
+            " Cut-on frequency is set equal to the middle estimation of the list "
+            middlePoint = math.trunc(len(providedCutOnFreqList) / 2)
+
+            " If the size of the cut-on frequency shift list is even, mean the 2 centre values "
+            if len(providedCutOnFreqList) % 2 == 0:
+                cutOnFreq = (float(providedCutOnFreqList[middlePoint]) +
+                             float(providedCutOnFreqList[middlePoint - 1])) / 2
+
+                self.setCutOnFreq(cutOnFreq)
+
+            else:
+                " If the size of the cut-on frequency list estimation is odd, get the centre value "
+
+                cutOnFreq = providedCutOnFreqList[middlePoint]
+
+                self.setCutOnFreq(cutOnFreq)
+
+        " Standardize the input values "
+        self.standardize()
+
+
+class CTFTomoSeries(data.EMSet):
+    """ Represents a set of CTF models belonging to the same tilt-series. """
+    ITEM_TYPE = CTFTomo
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._tsId = pwobj.String(kwargs.get('tsId', None))
+
+        # CtfModels will always be used inside a SetOfTiltSeries
+        # so, let's do no store the mapper path by default
+        self._mapperPath.setStore(False)
+
+    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+        clone = self.getClass()()
+        clone.copy(self, ignoreAttrs=ignoreAttrs)
+        return clone
+
+    def __del__(self):
+        # Cancel closing the mapper since this class is an item of a set and shares the mapper with its parent set.
+        pass
+
+    def getTiltSeries(self):
+        """ Return the tilt-series associated with this CTF model series. """
+        return self._tiltSeriesPointer.get()
+
+    def setTiltSeries(self, tiltSeries):
+        """ Set the tilt-series from which this CTF model series were estimated.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+        if tiltSeries.isPointer():
+            self._tiltSeriesPointer.copy(tiltSeries)
+        else:
+            self._tiltSeriesPointer.set(tiltSeries)
+
+    def getTsId(self):
+        """ Get unique TiltSeries ID, usually retrieved from the
+        file pattern provided by the user at the import time.
+        """
+        return self._tsId.get()
+
+    def setTsId(self, value):
+        self._tsId.set(value)
+
+    def getNumberOfEstimationsInRange(self):
+        """ Return the tilt-images range size used for estimation. """
+        return self._estimationsInRange.get()
+
+    def setNumberOfEstimationsInRange(self, estimationRange):
+        """ Set the tilt-images range size used for estimation.
+        :param estimationRange: Integer of the range size. """
+
+        self._estimationsInRange = pwobj.Integer(estimationRange)
+
+    def getIMODDefocusFileFlag(self):
+        """ Return the format file from which the CTF estimation information has been acquired. This parameter is
+        useful for posterior information and format conversions between IMOD and Scipion. The flag value "is the sum of:
+
+          1 if the file has astigmatism values
+          2 if the astigmatism axis angle is in radians, not degrees
+          4 if the file has phase shifts
+          8 if the phase shifts are in radians, not degrees
+         16 if tilt angles need to be inverted to match what the
+             program expects (what Ctfplotter would produce)
+             with the -invert option
+         32 if the file has cut-on frequencies attenuating the phase
+             at low frequencies"
+
+             from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
+
+        return self._IMODDefocusFileFlag.get()
+
+    def setIMODDefocusFileFlag(self, flag):
+        """ Set the format file from which the CTF estimation information has been acquired.
+        :param flag: Integer of the range size.
+
+        This parameter is
+        useful for posterior information and format conversions between IMOD and Scipion. The flag value "is the sum of:
+
+          1 if the file has astigmatism values
+          2 if the astigmatism axis angle is in radians, not degrees
+          4 if the file has phase shifts
+          8 if the phase shifts are in radians, not degrees
+         16 if tilt angles need to be inverted to match what the
+             program expects (what Ctfplotter would produce)
+             with the -invert option
+         32 if the file has cut-on frequencies attenuating the phase
+             at low frequencies"
+
+             from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
+
+        self._IMODDefocusFileFlag = pwobj.Integer(flag)
+
+    def setNumberOfEstimationsInRangeFromDefocusList(self):
+        """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
+
+        estimationRange = 0
+
+        for ctfEstimation in self:
+            # Check that at least one list is provided
+            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(ctfEstimation, "_defocusUList")):
+                raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                                "list information available.")
+
+            providedList = ctfEstimation.getDefocusUList() if hasattr(ctfEstimation, "_defocusUList") \
+                else ctfEstimation.getDefocusVList()
+            providedList = providedList.split(",")
+
+            listLength = len(providedList) - 1
+
+            if listLength > estimationRange:
+                estimationRange = listLength
+
+        self.setNumberOfEstimationsInRange(estimationRange)
+
+
+class SetOfCTFTomoSeries(data.EMSet):
+    """ Represents a set of CTF model series belonging to the same set of tilt-series. """
+    ITEM_TYPE = CTFTomoSeries
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._setOfTiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+
+    def getSetOfTiltSeries(self):
+        """ Return the tilt-series associated with this CTF model series. """
+        return self._setOfTiltSeriesPointer.get()
+
+    def setSetOfTiltSeries(self, setOfTiltSeries):
+        """ Set the tilt-series from which this CTF model series were estimated.
+        :param setOfTiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+        if setOfTiltSeries.isPointer():
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+        else:
+            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
+
+    def iterClassItems(self, iterDisabled=False):
+        """ Iterate over the images of a class.
+        Params:
+            iterDisabled: If True, also include the disabled items. """
+        for cls in self.iterItems():
+            if iterDisabled or cls.isEnabled():
+                for img in cls:
+                    if iterDisabled or img.isEnabled():
+                        yield img
+
+    def _setItemMapperPath(self, item):
+        """ Set the mapper path of this class according to the mapper
+        path of the SetOfClasses and also the prefix according to class id
+        """
+        item._mapperPath.set('%s,id%s' % (self.getFileName(), item.getObjId()))
+        item.load()
+
+    def _insertItem(self, item):
+        """ Create the SetOfImages assigned to a class.
+        If the file exists, it will load the Set.
+        """
+        self._setItemMapperPath(item)
+        data.EMSet._insertItem(self, item)
+        item.write(properties=False)  # Set.write(self)
+
+    def __getitem__(self, itemId):
+        """ Setup the mapper classes before returning the item. """
+        classItem = data.EMSet.__getitem__(self, itemId)
+
+        objId = None
+        for tiltSeries in self.getSetOfTiltSeries():
+            if tiltSeries.getTsId() == classItem.getTsId():
+                objId = tiltSeries.getObjId()
+
+        if objId is None:
+            raise ("Could not find tilt-series with tsId = %s" % classItem.getTsId())
+
+        classItem.setTiltSeries(self.getSetOfTiltSeries()[objId])
+
+        self._setItemMapperPath(classItem)
+        return classItem
+
+    def getFirstItem(self):
+        classItem = data.EMSet.getFirstItem(self)
+        self._setItemMapperPath(classItem)
+        return classItem
+
+    def iterItems(self, orderBy='id', direction='ASC'):
+        for item in data.EMSet.iterItems(self,
+                                         orderBy=orderBy,
+                                         direction=direction):
+
+            objId = None
+            for tiltSeries in self.getSetOfTiltSeries():
+                if tiltSeries.getTsId() == item.getTsId():
+                    objId = tiltSeries.getObjId()
+
+            if objId is None:
+                raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
+
+            item.setTiltSeries(self.getSetOfTiltSeries()[objId])
+            self._setItemMapperPath(item)
+
+            yield item
