@@ -206,6 +206,12 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
                 ProtTomoImportAcquisition._summary(self, summary, outputTomograms)
 
+                x, y, z = self.outputTomograms.getFirstItem().getShiftsFromOrigin()
+                summary.append(u"Tomograms Origin (x,y,z):\n"
+                               u"    x: *%0.2f* (Å/px)\n"
+                               u"    y: *%0.2f* (Å/px)\n"
+                               u"    z: *%0.2f* (Å/px)" % (x, y, z))
+
         except Exception as e:
             print(e)
 
