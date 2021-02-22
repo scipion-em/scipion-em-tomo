@@ -45,9 +45,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     _label = 'import set of coordinates 3D'
 
     IMPORT_FROM_AUTO = 0
-    IMPORT_FROM_EMAN = 1
-    IMPORT_FROM_DYNAMO = 2
-    IMPORT_FROM_TXT = 3
+    IMPORT_FROM_TXT = 1
+    IMPORT_FROM_EMAN = 2
+    IMPORT_FROM_DYNAMO = 3
 
     def _getImportChoices(self):
         """ Return a list of possible choices
