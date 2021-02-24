@@ -522,8 +522,11 @@ class SetOfTomoMasks(data.SetOfVolumes):
     EXPOSE_ITEMS = True
 
 
-
 class Tomogram(data.Volume):
+    """ Class to hold the tomogram abstraction inside Scipion. The origin of the volume is set as the location of the
+    first coordinate loaded from the binary file.
+    """
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
