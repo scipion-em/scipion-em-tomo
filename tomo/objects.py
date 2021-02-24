@@ -564,7 +564,7 @@ class SetOfTomograms(data.SetOfVolumes):
 
 
 class Coordinate3D(data.EMObject):
-    """This class holds the (x,y) position and other information
+    """This class holds the (x,y,z) position and other information
     associated with a coordinate"""
 
     def __init__(self, **kwargs):
