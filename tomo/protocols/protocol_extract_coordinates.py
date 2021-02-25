@@ -35,6 +35,7 @@ from pyworkflow.object import Integer
 
 from .protocol_base import ProtTomoPicking
 
+import tomo.constants as const
 from ..objects import Coordinate3D
 
 
@@ -104,9 +105,9 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 except:
                     idx = None
                 if idx is not None:
-                    x, y, z = coord.getPosition()
+                    x, y, z = coord.getPosition(const.SCIPION)
                     newCoord.copyObjId(subTomo)
-                    newCoord.setPosition(x * scale, y * scale, z * scale)
+                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
 
                     if len(filesTomo) == 1:
                         newCoord.setVolume(inTomos.getFirstItem())
@@ -119,8 +120,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                     self.outputCoords.append(newCoord)
             else:
                 newCoord.copyObjId(subTomo)
-                x, y, z = coord.getPosition()
-                newCoord.setPosition(x * scale, y * scale, z * scale)
+                x, y, z = coord.getPosition(const.SCIPION)
+                newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
 
                 newCoord.setVolume(tomo)
                 newCoord.setBoxSize(boxSize)

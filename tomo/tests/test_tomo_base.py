@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+import numpy as np
 import os
 import random
 
@@ -31,13 +32,13 @@ import pyworkflow.utils as pwutils
 import pwem.protocols as emprot
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pwem import Domain
-from pwem.objects import CTFModel
+from pwem.objects import CTFModel, Transform
 
 from . import DataSet
-from ..objects import SetOfTiltSeriesM, SetOfTiltSeries
+from ..objects import SetOfTiltSeriesM, SetOfTiltSeries, Coordinate3D, Tomogram
 from ..utils import existsPlugin
 import tomo.protocols
-
+import tomo.constants as const
 
 class TestTomoBase(BaseTest):
     @classmethod
@@ -1078,6 +1079,78 @@ class TestTomoSplitEvenOdd(BaseTest):
 
         return split
 
+class TestTomoCoordinatesOrigin(BaseTest):
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.TomogramPath = cls.dataset.getFile('tomo1')
+
+    def _createCoordinate3D(self):
+        # Tomogram associated to Coordinate3D
+        self.Tomo = Tomogram()
+        self.Tomo.setSamplingRate(1)
+        self.Tomo.setLocation(self.TomogramPath)
+        x, y, z = self.Tomo.getDim()
+        origin = Transform()
+        origin.setShifts(x / -2.,
+                         y / -2.,
+                         z / -2.)
+        self.Tomo.setOrigin(origin)
+
+        # Coordinate3D
+        self.coord = Coordinate3D()
+        self.coord.setBoxSize(32)
+        self.coord.setVolume(self.Tomo)
+        self.coord.setPosition(0, 0, 0, const.BOTTOM_LEFT_CORNER)
+        self.coord.setMatrix(np.eye(4))
+
+    def test_CenterGravity_Origin(self):
+        '''Test CENTER_GRAVITY convention (origin is placed in the center of
+        the Tomogram so Position (-dimx/2,-dimy/2,-dimz/2) should remain the same
+        (i.e. we follow the default Scipion convention so coordinate is not transformed).
+        '''
+        self._createCoordinate3D()
+        x, y, z = self.Tomo.getDim()
+        trPosition = self.coord.getPosition(const.CENTER_GRAVITY)
+        self.assertEqual(-0.5 * x, trPosition[0],
+                         'CENTER_GRAVITY: Conversion did not return the expected value for X axis')
+        self.assertEqual(-0.5 * y, trPosition[1],
+                         'CENTER_GRAVITY: Conversion did not return the expected value for Y axis')
+        self.assertEqual(-0.5 * z, trPosition[2],
+                         'CENTER_GRAVITY: Conversion did not return the expected value for Z axis')
+
+    def test_BottomLeftCorner_Origin(self):
+        '''Test BOTTOM_LEFT_CORNER convention (origin is originally placed
+        in the center of the Tomogram so Position (-dimx/2,-dimy/2,-dimz/2)
+        should be converter into (0,0,0) (i.e. the bottom left corner should
+        be now the origin).
+        '''
+        self._createCoordinate3D()
+        trPosition = self.coord.getPosition(const.BOTTOM_LEFT_CORNER)
+        self.assertEqual(0, trPosition[0],
+                         'BOTTOM_LEFT_CORNER: Conversion did not return the expected value for X axis')
+        self.assertEqual(0, trPosition[1],
+                         'BOTTOM_LEFT_CORNER: Conversion did not return the expected value for Y axis')
+        self.assertEqual(0, trPosition[2],
+                         'BOTTOM_LEFT_CORNER: Conversion did not return the expected value for Z axis')
+
+    def test_Scipion_Origin(self):
+        '''Test SCIPION convention (by default, origin is placed
+        in the center of the Tomogram so Position (-dimx/2,-dimy/2,-dimz/2)
+        should remain the same for this test (i.e. we follow the default Scipion convention
+        so coordinate is not transformed).
+        '''
+        self._createCoordinate3D()
+        x, y, z = self.Tomo.getDim()
+        trPosition = self.coord.getPosition(const.SCIPION)
+        self.assertEqual(-0.5 * x, trPosition[0],
+                         'SCIPION: Conversion did not return the expected value for X axis')
+        self.assertEqual(-0.5 * y, trPosition[1],
+                         'SCIPION: Conversion did not return the expected value for Y axis')
+        self.assertEqual(-0.5 * z, trPosition[2],
+                         'SCIPION: Conversion did not return the expected value for Z axis')
 
 if __name__ == 'main':
     pass

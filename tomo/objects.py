@@ -41,6 +41,8 @@ from pwem.convert.transformations import euler_matrix
 import pwem.emlib as emlib
 from pwem.emlib.image import ImageHandler
 
+import tomo.constants as const
+
 
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
@@ -577,29 +579,69 @@ class Coordinate3D(data.EMObject):
         self._eulerMatrix = data.Transform()
         self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
-    def getX(self):
-        return self._x.get()
+    def getX(self, originFunction):
+        ''' See getPosition method for a full description of how "originFunction"
+        works'''
+        origin = originFunction(self.getVolume().getDim())\
+                 if originFunction(self.getVolume().getDim()) != None \
+                 else tuple([-coord for coord in self.getVolumeOrigin()])
+        origin_Scipion = self.getVolumeOrigin()
+        return self._x.get() - origin[0] - origin_Scipion[0]
 
-    def setX(self, x):
-        self._x.set(x)
+    def setX(self, x, originFunction):
+        ''' See setPosition method for a full description of how "originFunction"
+        works'''
+
+        origin = originFunction(self.getVolume().getDim()) \
+                 if originFunction(self.getVolume().getDim()) != None \
+                 else tuple([-coord for coord in self.getVolumeOrigin()])
+        origin_Scipion = self.getVolumeOrigin()
+        self._x.set(x + origin[0] + origin_Scipion[0])
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
 
-    def getY(self):
-        return self._y.get()
+    def getY(self, originFunction):
+        ''' See getPosition method for a full description of how "originFunction"
+        works'''
+        origin = originFunction(self.getVolume().getDim()) \
+                 if originFunction(self.getVolume().getDim()) != None \
+                 else tuple([-coord for coord in self.getVolumeOrigin()])
+        origin_Scipion = self.getVolumeOrigin()
+        return self._y.get() - origin[1] - origin_Scipion[1]
 
-    def setY(self, y):
-        self._y.set(y)
+    def setY(self, y, originFunction):
+        ''' See setPosition method for a full description of how "originFunction"
+        works'''
+        origin = originFunction(self.getVolume().getDim()) \
+                 if originFunction(self.getVolume().getDim()) != None \
+                 else tuple([-coord for coord in self.getVolumeOrigin()])
+        origin_Scipion = self.getVolumeOrigin()
+        self._y.set(y + origin[1] + origin_Scipion[1])
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
 
-    def getZ(self):
-        return self._z.get()
+    def getZ(self, originFunction):
+        ''' See getPosition method for a full description of how "originFunction"
+        works'''
+        origin = originFunction(self.getVolume().getDim()) \
+                 if originFunction(self.getVolume().getDim()) != None \
+                 else tuple([-coord for coord in self.getVolumeOrigin()])
+        origin_Scipion = self.getVolumeOrigin()
+        return self._z.get() - origin[2] - origin_Scipion[2]
 
-    def setZ(self, z):
-        self._z.set(z)
+    def setZ(self, z, originFunction):
+        ''' See setPosition method for a full description of how "originFunction"
+        works'''
+        origin = originFunction(self.getVolume().getDim()) \
+                 if originFunction(self.getVolume().getDim()) != None \
+                 else tuple([-coord for coord in self.getVolumeOrigin()])
+        origin_Scipion = self.getVolumeOrigin()
+        self._z.set(z + origin[2] + origin_Scipion[2])
+
+    def shiftZ(self, shiftZ):
+        self._z.sum(shiftZ)
 
     def setMatrix(self, matrix):
         self._eulerMatrix.setMatrix(matrix)
@@ -636,17 +678,51 @@ class Coordinate3D(data.EMObject):
         self._y.multiply(factor)
         self._z.multiply(factor)
 
-    def getPosition(self):
-        """ Return the position of the coordinate as a (x, y, z) tuple.
-        mode: select if the position is the center of the box
-        or in the top left corner.
-        """
-        return self.getX(), self.getY(), self.getZ()
+    def getPosition(self, originFunction):
+        '''Get the position a Coordinate3D refered to a given origin defined by originFunction.
+        The input of the method is a funtion (originFunction) which moves the coordinate
+        position refered to the bottom left corner to other origin (retrieved by originFunction) in the grid.
 
-    def setPosition(self, x, y, z):
-        self.setX(x)
-        self.setY(y)
-        self.setZ(z)
+        Parameters:
+
+            :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner from a
+                                            given convention.
+
+        Example:
+            >>> origin = originFunction((Lx, Ly, Lz))
+            >>> (vx, vy, vz)  # Vector to refer (x,y,z) coordinate to an origin from the bottom left corner
+
+        Firstly, the Scipion origin vector stored in the Tomogram associated to the Coordinate3D
+        will be applied to refer the current coordinate to the bottom left coordinate of the Tomogram.
+        '''
+        return self.getX(originFunction), self.getY(originFunction), self.getZ(originFunction)
+
+    def setPosition(self, x, y, z, originFunction):
+        """Set the position of the coordinate to be saved in the Coordinate3D object.
+        The inputs of the method are the (x,y,z) position of the coordinate and a
+        funtion (originFunction) which moves the current position to the bottom left
+        corner of the Tomogram with dimensions Lx, Ly, Lz.
+
+        Parameters:
+
+            :param int x: Position of the coordinate in the X axis
+            :param int y: Position of the coordinate in the Y axis
+            :param int z: Position of the coordinate in the Z axis
+            :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner from a
+                                            given convention.
+
+        Example:
+            >>> origin = originFunction((Lx, Ly, Lz))
+            >>> (vx, vy, vz)  # Vector to refer (x,y,z) coordinate to the bottom left corner
+
+        In this way, it is possible to apply the Scipion origin vector stored in the
+        Tomogram associated to the Coordinate3D which moves the positions referred to
+        the bottom left corner of a grid to the center of gravity of the grid (or any
+        other origin specified by the user).
+        """
+        self.setX(x, originFunction)
+        self.setY(y, originFunction)
+        self.setZ(z, originFunction)
 
     def getVolume(self):
         """ Return the micrograph object to which
@@ -661,7 +737,7 @@ class Coordinate3D(data.EMObject):
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
-        self.setPosition(*coord.getPosition())
+        self.setPosition(*coord.getPosition(const.CENTER_GRAVITY))
         self.setObjId(coord.getObjId())
         self.setBoxSize(coord.getBoxSize())
 
@@ -695,6 +771,17 @@ class Coordinate3D(data.EMObject):
 
     def hasGroupId(self):
         return self._groupId is not None
+
+    def getVolumeOrigin(self, angstrom=False):
+        '''Return the a vector that can be used to move the position of the Coordinate3D
+        (referred to the center of the Tomogram or other origin specified by the user)
+        to the bottom left corner of the Tomogram
+        '''
+        if angstrom:
+            return self.getVolume().getShiftsFromOrigin()
+        else:
+            sr = self.getVolume().getSamplingRate()
+            return tuple([int(axis / sr) for axis in self.getVolume().getShiftsFromOrigin()])
 
 
 class SetOfCoordinates3D(data.EMSet):

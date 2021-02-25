@@ -31,6 +31,8 @@ import numpy as np
 
 import pyworkflow.utils as pwutils
 
+import tomo.constants as const
+
 
 def existsPlugin(plugin):
     return importlib.util.find_spec(plugin)
@@ -72,7 +74,7 @@ def extractVesicles(coordinates, dictVesicles, tomoName):
             ids = []
             for coord in coordinates.iterCoordinates(volume=coordinates.getPrecedents()[tomoId]):
                 if coord.getGroupId() == idv:
-                    vesicle.append(coord.getPosition())
+                    vesicle.append(coord.getPosition(const.SCIPION))
                     trMat = coord.getMatrix()
                     normals.append(normalFromMatrix(trMat))
                     ids.append(coord.getObjId())
