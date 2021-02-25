@@ -111,8 +111,13 @@ class ProtAlignmentAssignSubtomo(EMProtocol):
 
     def _validate(self):
         validateMsgs = []
-        for input in self.inputAlignment.get().iterItems():
-            if not input.hasTransform():
+        inputAlignment = self.inputAlignment.get().getFirstItem()
+        input = self.input.get().getFirstItem()
+        if type(input) != inputAlignment:
+            validateMsgs.append('*Input* and *Alignments* parameters must belong to the same type '
+                                '(SetOfCoordinates3D or SetOfSubtomorgams).')
+        else:
+            if not inputAlignment.hasTransform():
                 validateMsgs.append('Please provide Subtomograms/Coordinates3D which '
                                     'have transformation matrix in "inputAlignment".')
         return validateMsgs
