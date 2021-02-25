@@ -848,8 +848,25 @@ class SetOfCoordinates3D(data.EMSet):
 
     def iterCoordinates(self, volume=None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
-        If tomogram=None, the iteration is performed over the whole
+        If volume=None, the iteration is performed over the whole
         set of coordinates.
+
+        IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
+        pointer to ther associated Tomogram. This method overcomes this problem by retrieving and
+        relinking the Tomogram as if nothing would ever happened.
+
+        It is recommended to use this method when working with Coordinates3D, being the common
+        "iterItems" deprecated for this set.
+
+        Example:
+
+            >>> for coord in coordSet.iterItems()
+            >>>     print(coord.getVolName())
+            >>>     Error: Tomogram associated to Coordinate3D is NoneType (pointer lost)
+            >>> for coord in coordSet.iterCoordinates()
+            >>>     print(coord.getVolName())
+            >>>     '/path/to/Tomo.file' retrieved correctly
+
         """
         if volume is None:
             volId = None
