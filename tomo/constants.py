@@ -29,7 +29,7 @@
 # ---------------------------- ORIGIN Conventions ----------------------------
 
 # Origin conversion functions based on different conventions (to move the coordinates
-# from convention to bottom left corner by default)
+# from convention to bottom left corner)
 # Input parameter of lambda functions is a tuple/list with the dimensions of a Tomogram
 BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp
 CENTER_GRAVITY = lambda dim: (0.5 * dim[0], 0.5 * dim[1], 0.5 * dim[2])  # Imod Fiducials

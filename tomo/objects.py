@@ -693,6 +693,7 @@ class Coordinate3D(data.EMObject):
                                             given convention.
 
         Example:
+
             >>> origin = originFunction((Lx, Ly, Lz))
             >>> (vx, vy, vz)  # Vector to refer (x,y,z) coordinate to an origin from the bottom left corner
 
@@ -716,6 +717,7 @@ class Coordinate3D(data.EMObject):
                                             given convention.
 
         Example:
+
             >>> origin = originFunction((Lx, Ly, Lz))
             >>> (vx, vy, vz)  # Vector to refer (x,y,z) coordinate to the bottom left corner
 
@@ -723,6 +725,21 @@ class Coordinate3D(data.EMObject):
         Tomogram associated to the Coordinate3D which moves the positions referred to
         the bottom left corner of a grid to the center of gravity of the grid (or any
         other origin specified by the user).
+
+        IMPORTANT NOTE: For this method to work properly, it is needed to associate the Tomogram
+        before doing a call to this method.
+
+        Example:
+
+            >>> coord = Coordinate3D()
+            >>> coord.setPosition(x, y, z, originFunction)
+            >>> Error: Tomogram is still NoneType
+            >>> coord.setVolume(Tomogram)
+            >>> coord.setPosition(x, y, z, originFunction)
+            >>> Exit: Everything runs normally
+
+        This requirement is only needed for "setPostion" method. The remaining attributes of the object
+        can be set either before or after calling "setVolume" method.
         """
         self.setX(x, originFunction)
         self.setY(y, originFunction)

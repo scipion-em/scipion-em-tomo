@@ -105,25 +105,28 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 except:
                     idx = None
                 if idx is not None:
-                    x, y, z = coord.getPosition(const.SCIPION)
-                    newCoord.copyObjId(subTomo)
-                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
-
                     if len(filesTomo) == 1:
                         newCoord.setVolume(inTomos.getFirstItem())
+                        coord.setVolume(inTomos.getFirstItem())
                     else:
                         newCoord.setVolume(inTomos[idx+1])
+                        coord.setVolume(inTomos[idx+1])
+                    x, y, z = coord.getPosition(const.SCIPION)
+                    newCoord.copyObjId(subTomo)
+
+                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
                     if coord.hasGroupId():
                         newCoord.setGroupId(coord.getGroupId())
                     self.outputCoords.append(newCoord)
             else:
+                coord.setVolume(tomo)
                 newCoord.copyObjId(subTomo)
                 x, y, z = coord.getPosition(const.SCIPION)
+                newCoord.setVolume(tomo)
                 newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
 
-                newCoord.setVolume(tomo)
                 newCoord.setBoxSize(boxSize)
                 newCoord.setMatrix(checkMatrix(subTomo, coord))
                 self.outputCoords.append(newCoord)
