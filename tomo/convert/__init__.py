@@ -26,6 +26,7 @@
 
 import pyworkflow.utils as pwutils
 from pwem.emlib.image import ImageHandler
+from .convert import *
 
 
 def writeTiStack(inputTiList, outputStackFn, outputTltFn=None,
