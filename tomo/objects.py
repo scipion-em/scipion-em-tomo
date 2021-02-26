@@ -955,6 +955,7 @@ class SubTomogram(data.Volume):
         self._coordinate = None
         self._volId = Integer()
         self._volName = pwobj.String()
+        self._volume = None
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -962,8 +963,18 @@ class SubTomogram(data.Volume):
     def setCoordinate3D(self, coordinate):
         self._coordinate = coordinate
 
+    def setVolume(self, volume):
+        '''Set the Tomogram from which the SubTomogram was extracted'''
+        self._volume = volume
+
+    def getVolume(self):
+        '''Get the Tomogram from which the SubTomogram was extracted'''
+        return self._volume
+
     def getCoordinate3D(self):
-        return self._coordinate
+        coord = self._coordinate
+        coord.setVolume(self.getVolume())
+        return coord
 
     def getAcquisition(self):
         return self._acquisition
@@ -994,14 +1005,28 @@ class SubTomogram(data.Volume):
         """ Return the tomogram filename if the coordinate is not None.
         or have set the _volName property.
         """
+        # FIXME: Since we cant recover the pointer to the Tomogram in the Coordinate3D, it
+        # FIXME: will be safer to store the volume pointer at the level of the SubTomogram
+        # FIXME: and use it to recover the pointer to the Coordinate3D
         if self._volName.hasValue():
             return self._volName.get()
-        if self.hasCoordinate3D():
-            return self.getCoordinate3D().getVolName()
-        return self._volName.get()
+        if self.getVolume():
+            return self.getVolume().getFileName()
+        return None
 
     def setVolName(self, volName):
         self._volName.set(volName)
+
+    def getVolumeOrigin(self, angstrom=False):
+        '''Return the a vector that can be used to move the position of the Coordinate3D
+        associated to the SubTomogram (referred to the center of the Tomogram or other
+        origin specified by the user) to the bottom left corner of the Tomogram
+        '''
+        if angstrom:
+            return self.getVolume().getShiftsFromOrigin()
+        else:
+            sr = self.getVolume().getSamplingRate()
+            return tuple([int(axis / sr) for axis in self.getVolume().getShiftsFromOrigin()])
 
 
 class SetOfSubTomograms(data.SetOfVolumes):

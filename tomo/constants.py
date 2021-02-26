@@ -31,8 +31,9 @@
 # Origin conversion functions based on different conventions (to move the coordinates
 # from convention to bottom left corner)
 # Input parameter of lambda functions is a tuple/list with the dimensions of a Tomogram
+# This functions return the vector in VOXELS. No decimal places allowed --> (int(vx), int(vy), int(vz))
 BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp
-CENTER_GRAVITY = lambda dim: (0.5 * dim[0], 0.5 * dim[1], 0.5 * dim[2])  # Imod Fiducials
+CENTER_GRAVITY = lambda dim: (int(0.5 * dim[0]), int(0.5 * dim[1]), int(0.5 * dim[2]))  # Imod Fiducials
 
 # This is a bit different as we do not know beforehand where te
 # user has set the origin (Coordinate3D methods will use the None
