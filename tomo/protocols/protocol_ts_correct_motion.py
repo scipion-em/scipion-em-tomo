@@ -172,7 +172,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
             """
             tsImg = tiClass(location=alignedTIFile, tiltAngle=ta)
             tsImg.setSamplingRate(sRate)
-            newLocation = (index, self._getExtraPath(tsImM.getTsId() + suffix))
+            newLocation = (counter, self._getExtraPath(tsImM.getTsId() + suffix))
             ih.convert(alignedTIFile, newLocation)
             tsImg.setLocation(newLocation)
             tsObject.append(tsImg)
@@ -228,13 +228,15 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
-            # Merge all micrographs from the same tilt images in a sorted single "mrcs" stack file,
-            # but keeping the indices the same as in the TS with all the frames for data coherence
+            # Merge all micrographs from the same tilt images in a sorted-by-tilt single "mrcs" stack file,
             ind = np.argsort([ti.getTiltAngle() for ti in self.tsMList])
-            counter = 0
-            for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):#zip(evenList, oddList, tsMList):
+            counter = 1
+            # for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):
+            for i in ind:
+                fileEven = self.evenAvgFrameList[i]
+                fileOdd = self.oddAvgFrameList[i]
+                tsImM = self.tsMList[i]
                 ta = tsImM.getTiltAngle()
-                index = int(np.where(ind == counter)[0]) + 1
                 # Even
                 mergeTiltImage('_even.mrcs', tsObjEven, fileEven)
                 # Odd
@@ -362,10 +364,18 @@ class ProtTsCorrectMotion(ProtTsProcess):
             ts = TiltSeries()
             ts.copyInfo(self._tsDict.getTs(tsId), copyId=True)
             outputSet.append(ts)
-            for ti in self._tsDict.getTiList(tsId):
-                tiOut = TiltImage(location=ti.getLocation())
+            tList = self._tsDict.getTiList(tsId)
+            ind = np.argsort([ti.getTiltAngle() for ti in tList])
+            counter = 1
+            for i in ind:  # Make each row of the sqlite file be sorted by
+                # index after having been sorted by angle previously, in order to avoid tilt image mismatching in
+                # another operations, such as the fiducial alignment, which expects the sqlite to be sorted that way
+                ti = tList[i]
+                tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
+                tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
+                counter += 1
 
             outputSet.update(ts)
 
