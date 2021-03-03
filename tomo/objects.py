@@ -504,6 +504,7 @@ class TomoAcquisition(data.Acquisition):
 class TomoMask(data.Volume):
     """ Object used to represent segmented tomograms/subtomograms
     """
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._volName = pwobj.String()
@@ -534,6 +535,7 @@ class Tomogram(data.Volume):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._dim = None
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -554,6 +556,28 @@ class Tomogram(data.Volume):
         return (self._acquisition is not None
                 and self._acquisition.getAngleMin() is not None
                 and self._acquisition.getAngleMax() is not None)
+
+    def getDim(self):
+        """Return image dimensions as tuple: (Xdim, Ydim, Zdim)"""
+        if self._dim is None:
+            from pwem.emlib.image import ImageHandler
+
+            fn = self.getFileName()
+            if fn is not None and os.path.exists(fn.replace(':mrc', '')):
+                x, y, z, n = ImageHandler().getDimensions(self)
+
+                # Some volumes in mrc format can have the z dimension
+                # as n dimension, so we need to consider this case.
+                if z > 1:
+                    self._dim = (x, y, z)
+                    return x, y, z
+                else:
+                    self._dim = (x, y, n)
+                    return x, y, n
+        else:
+            return self._dim
+        return None
+
 
 
 class SetOfTomograms(data.SetOfVolumes):
@@ -586,21 +610,18 @@ class Coordinate3D(data.EMObject):
     def getX(self, originFunction):
         ''' See getPosition method for a full description of how "originFunction"
         works'''
-        origin = originFunction(self.getVolume().getDim())\
-                 if originFunction(self.getVolume().getDim()) != None \
-                 else tuple([-coord for coord in self.getVolumeOrigin()])
-        origin_Scipion = self.getVolumeOrigin()
-        return self._x.get() - origin[0] - origin_Scipion[0]
+        origin_Scipion = self.getVolumeOrigin()[0]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[0] if aux is not None else -origin_Scipion
+        return self._x.get() - origin - origin_Scipion
 
     def setX(self, x, originFunction):
         ''' See setPosition method for a full description of how "originFunction"
         works'''
-
-        origin = originFunction(self.getVolume().getDim()) \
-                 if originFunction(self.getVolume().getDim()) != None \
-                 else tuple([-coord for coord in self.getVolumeOrigin()])
-        origin_Scipion = self.getVolumeOrigin()
-        self._x.set(x + origin[0] + origin_Scipion[0])
+        origin_Scipion = self.getVolumeOrigin()[0]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[0] if aux is not None else -origin_Scipion
+        self._x.set(x + origin + origin_Scipion)
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
@@ -608,20 +629,18 @@ class Coordinate3D(data.EMObject):
     def getY(self, originFunction):
         ''' See getPosition method for a full description of how "originFunction"
         works'''
-        origin = originFunction(self.getVolume().getDim()) \
-                 if originFunction(self.getVolume().getDim()) != None \
-                 else tuple([-coord for coord in self.getVolumeOrigin()])
-        origin_Scipion = self.getVolumeOrigin()
-        return self._y.get() - origin[1] - origin_Scipion[1]
+        origin_Scipion = self.getVolumeOrigin()[1]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[1] if aux is not None else -origin_Scipion
+        return self._y.get() - origin - origin_Scipion
 
     def setY(self, y, originFunction):
         ''' See setPosition method for a full description of how "originFunction"
         works'''
-        origin = originFunction(self.getVolume().getDim()) \
-                 if originFunction(self.getVolume().getDim()) != None \
-                 else tuple([-coord for coord in self.getVolumeOrigin()])
-        origin_Scipion = self.getVolumeOrigin()
-        self._y.set(y + origin[1] + origin_Scipion[1])
+        origin_Scipion = self.getVolumeOrigin()[1]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[1] if aux is not None else -origin_Scipion
+        self._y.set(y + origin + origin_Scipion)
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
@@ -629,20 +648,18 @@ class Coordinate3D(data.EMObject):
     def getZ(self, originFunction):
         ''' See getPosition method for a full description of how "originFunction"
         works'''
-        origin = originFunction(self.getVolume().getDim()) \
-                 if originFunction(self.getVolume().getDim()) != None \
-                 else tuple([-coord for coord in self.getVolumeOrigin()])
-        origin_Scipion = self.getVolumeOrigin()
-        return self._z.get() - origin[2] - origin_Scipion[2]
+        origin_Scipion = self.getVolumeOrigin()[2]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[2] if aux is not None else -origin_Scipion
+        return self._z.get() - origin - origin_Scipion
 
     def setZ(self, z, originFunction):
         ''' See setPosition method for a full description of how "originFunction"
         works'''
-        origin = originFunction(self.getVolume().getDim()) \
-                 if originFunction(self.getVolume().getDim()) != None \
-                 else tuple([-coord for coord in self.getVolumeOrigin()])
-        origin_Scipion = self.getVolumeOrigin()
-        self._z.set(z + origin[2] + origin_Scipion[2])
+        origin_Scipion = self.getVolumeOrigin()[2]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[2] if aux is not None else -origin_Scipion
+        self._z.set(z + origin + origin_Scipion)
 
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
@@ -778,7 +795,7 @@ class Coordinate3D(data.EMObject):
         if not self.getVolume() is None:
             dims = self.getVolume().getDim()
             height = dims[1]
-            self.setY(height - self.getY())
+            self.setY(height - self.getY(const.SCIPION), const.SCIPION)
         # else: error TODO
 
     def getVolName(self):
@@ -801,8 +818,10 @@ class Coordinate3D(data.EMObject):
         if angstrom:
             return self.getVolume().getShiftsFromOrigin()
         else:
-            sr = self.getVolume().getSamplingRate()
-            return tuple([int(axis / sr) for axis in self.getVolume().getShiftsFromOrigin()])
+            vol = self.getVolume()
+            sr = vol.getSamplingRate()
+            origin = vol.getShiftsFromOrigin()
+            return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -955,7 +974,6 @@ class SubTomogram(data.Volume):
         self._coordinate = None
         self._volId = Integer()
         self._volName = pwobj.String()
-        self._volume = None
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -963,17 +981,15 @@ class SubTomogram(data.Volume):
     def setCoordinate3D(self, coordinate):
         self._coordinate = coordinate
 
-    def setVolume(self, volume):
-        '''Set the Tomogram from which the SubTomogram was extracted'''
-        self._volume = volume
-
-    def getVolume(self):
-        '''Get the Tomogram from which the SubTomogram was extracted'''
-        return self._volume
-
     def getCoordinate3D(self):
+        '''Since the object Coordinate3D needs a volume, use the information stored in the
+        SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D'''
+        tomo = Tomogram()
+        tomo.setOrigin(self.getOrigin())
+        tomo.setLocation(self.getVolName())
+        tomo.setSamplingRate(self.getSamplingRate())
         coord = self._coordinate
-        coord.setVolume(self.getVolume())
+        coord.setVolume(tomo)
         return coord
 
     def getAcquisition(self):
@@ -1005,9 +1021,6 @@ class SubTomogram(data.Volume):
         """ Return the tomogram filename if the coordinate is not None.
         or have set the _volName property.
         """
-        # FIXME: Since we cant recover the pointer to the Tomogram in the Coordinate3D, it
-        # FIXME: will be safer to store the volume pointer at the level of the SubTomogram
-        # FIXME: and use it to recover the pointer to the Coordinate3D
         if self._volName.hasValue():
             return self._volName.get()
         if self.getVolume():
@@ -1023,10 +1036,11 @@ class SubTomogram(data.Volume):
         origin specified by the user) to the bottom left corner of the Tomogram
         '''
         if angstrom:
-            return self.getVolume().getShiftsFromOrigin()
+            return self.getShiftsFromOrigin()
         else:
-            sr = self.getVolume().getSamplingRate()
-            return tuple([int(axis / sr) for axis in self.getVolume().getShiftsFromOrigin()])
+            sr = self.getSamplingRate()
+            origin = self.getShiftsFromOrigin()
+            return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
@@ -1056,6 +1070,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
         It is a SubTomogram but it is useful to differentiate outputs."""
+
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
@@ -1175,6 +1190,7 @@ class MeshPoint(Coordinate3D):
     the triangulation of a volume.
     A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
+
     def __init__(self, **kwargs):
         Coordinate3D.__init__(self, **kwargs)
         self._volumeName = pwobj.String()
@@ -1213,6 +1229,7 @@ class SetOfMeshes(SetOfCoordinates3D):
 
 class Ellipsoid(data.EMObject):
     """This class represent an ellipsoid. This is an instance class of description attribute of object MeshPoint"""
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._center = pwobj.String()
