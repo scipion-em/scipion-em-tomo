@@ -923,7 +923,7 @@ class TestTomoPreprocessing(BaseTest):
 
 
 class TestTomoAssignAlignment(BaseTest):
-    """This class check if the protocol assign alignments for subtomograms works properly."""
+    """This class check if the protocol assign alignments for subtomograms/coordinates works properly."""
 
     @classmethod
     def setUpClass(cls):
@@ -949,25 +949,24 @@ class TestTomoAssignAlignment(BaseTest):
                                       angularSampling=30)
         self.launchProtocol(protMltomo)
         self.assertIsNotNone(protMltomo.outputSubtomograms,
-                         "There was a problem with SetOfSubtomogram output")
+                         "There was a problem with the output")
         self.assertIsNotNone(protMltomo.outputClassesSubtomo,
-                         "There was a problem with SetOfSubtomogram output")
+                         "There was a problem with the output")
         return protImport2, protMltomo
 
     def _assignAlignment(self):
         protImport2, protMltomo = self._runPreviousProtocols()
         assign = self.newProtocol(tomo.protocols.ProtAlignmentAssignSubtomo,
-                                 inputSubtomos=protImport2.outputSubTomograms,
+                                 input=protImport2.outputSubTomograms,
                                  inputAlignment=protMltomo.outputSubtomograms)
         self.launchProtocol(assign)
-        self.assertIsNotNone(assign.outputSubtomograms,
-                             "There was a problem with subtomograms output")
+        self.assertIsNotNone(assign.outputAligned,
+                             "There was a problem with the output")
         return assign
 
     def test_assignAlignment(self):
         assign = self._assignAlignment()
-        self.assertTrue(getattr(assign, 'outputSubtomograms'))
-        self.assertTrue(assign.outputSubtomograms.getFirstItem().hasTransform())
+        self.assertTrue(assign.outputAligned.getFirstItem().hasTransform())
         return assign
 
 

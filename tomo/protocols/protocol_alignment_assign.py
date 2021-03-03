@@ -113,7 +113,7 @@ class ProtAlignmentAssignSubtomo(EMProtocol):
         validateMsgs = []
         inputAlignment = self.inputAlignment.get().getFirstItem()
         input = self.input.get().getFirstItem()
-        if type(input) != inputAlignment:
+        if type(input) != type(inputAlignment):
             validateMsgs.append('*Input* and *Alignments* parameters must belong to the same type '
                                 '(SetOfCoordinates3D or SetOfSubtomorgams).')
         else:

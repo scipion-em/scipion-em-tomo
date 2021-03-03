@@ -706,8 +706,8 @@ class Coordinate3D(data.EMObject):
 
         Parameters:
 
-            :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner from a
-                                            given convention.
+            :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner
+                                            from a given convention.
 
         Example:
 
@@ -894,11 +894,11 @@ class SetOfCoordinates3D(data.EMSet):
         elif isinstance(volume, data.Volume):
             volId = volume.getObjId()
         else:
-            raise Exception('Invalid input micrograph of type %s'
+            raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
-        # Iterate over all coordinates if micId is None,
-        # otherwise use micId to filter the where selection
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
