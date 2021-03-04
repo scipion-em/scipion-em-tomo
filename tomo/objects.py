@@ -168,15 +168,24 @@ class TiltSeriesBase(data.SetOfImages):
             f.writelines("%s\n" % angle for angle in angleList)
 
     def hasOrigin(self):
-        """ """
+        """ Method indicating if the TiltSeries object has a defined origin. """
+
         return self._origin is not None
 
     def setOrigin(self, newOrigin):
-        """shifts in A"""
+        """ Method to set the origin of the TiltSeries object.
+        :param newOrigin: Scipion Transform object indicating the origin to be set to the TiltSeries.
+        """
+
         self._origin = newOrigin
 
     def getOrigin(self, force=False):
-        """shifts in A"""
+        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the the object
+        it may create a default one.
+        :param force: Boolean indicating if the method must return a default origin in case the object has no one
+        associated.
+        """
+
         if self.hasOrigin():
             return self._origin
         else:
@@ -186,6 +195,8 @@ class TiltSeriesBase(data.SetOfImages):
                 return None
 
     def getShiftsFromOrigin(self):
+        """ Method to return the origin shift from the Scipion Transform object. """
+
         origin = self.getOrigin(force=True).getShifts()
         x = origin[0]
         y = origin[1]
