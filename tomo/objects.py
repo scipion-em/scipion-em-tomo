@@ -204,12 +204,18 @@ class TiltSeriesBase(data.SetOfImages):
         return x, y, z
         # x, y, z are floats in Angstroms
 
-    def updateOriginWithBinning(self):
-        origin = self.getOrigin(force=True).getShifts()
-        x = origin[0]
-        y = origin[1]
-        z = origin[2]
-        return x, y, z
+    def updateOriginWithResize(self,  resizeFactor):
+        """ Method to update the origin after resizing the TiltSeries. """
+
+        origin = self.getOrigin()
+
+        xOri, yOri, zOri = self.getShiftsFromOrigin()
+
+        origin.setShifts(xOri * resizeFactor,
+                         yOri * resizeFactor,
+                         zOri * resizeFactor)
+
+        self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
 
