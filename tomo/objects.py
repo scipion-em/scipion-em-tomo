@@ -150,17 +150,25 @@ class TiltSeriesBase(data.SetOfImages):
         return self._samplingRate.get() * 1e-4 * mag
 
     def generateTltFile(self, tltFilePath, reverse=False):
-        """Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order"""
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param tltFilePath: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        """
+
         angleList = []
+
         for ti in self:
             angleList.append(ti.getTiltAngle())
+
         if reverse:
             angleList.reverse()
+
         with open(tltFilePath, 'w') as f:
             f.writelines("%s\n" % angle for angle in angleList)
 
     def hasOrigin(self):
+        """ """
         return self._origin is not None
 
     def setOrigin(self, newOrigin):
@@ -178,6 +186,14 @@ class TiltSeriesBase(data.SetOfImages):
                 return None
 
     def getShiftsFromOrigin(self):
+        origin = self.getOrigin(force=True).getShifts()
+        x = origin[0]
+        y = origin[1]
+        z = origin[2]
+        return x, y, z
+        # x, y, z are floats in Angstroms
+
+    def updateOriginWithBinning(self):
         origin = self.getOrigin(force=True).getShifts()
         x = origin[0]
         y = origin[1]
