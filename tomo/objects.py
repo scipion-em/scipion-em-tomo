@@ -115,6 +115,8 @@ class TiltSeriesBase(data.SetOfImages):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
+        self._origin = None
+
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
         file pattern provided by the user at the import time.
@@ -157,6 +159,31 @@ class TiltSeriesBase(data.SetOfImages):
             angleList.reverse()
         with open(tltFilePath, 'w') as f:
             f.writelines("%s\n" % angle for angle in angleList)
+
+    def hasOrigin(self):
+        return self._origin is not None
+
+    def setOrigin(self, newOrigin):
+        """shifts in A"""
+        self._origin = newOrigin
+
+    def getOrigin(self, force=False):
+        """shifts in A"""
+        if self.hasOrigin():
+            return self._origin
+        else:
+            if force:
+                return self._getDefaultOrigin()
+            else:
+                return None
+
+    def getShiftsFromOrigin(self):
+        origin = self.getOrigin(force=True).getShifts()
+        x = origin[0]
+        y = origin[1]
+        z = origin[2]
+        return x, y, z
+        # x, y, z are floats in Angstroms
 
 
 class TiltSeries(TiltSeriesBase):
