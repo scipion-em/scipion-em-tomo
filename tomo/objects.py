@@ -35,6 +35,7 @@ import csv
 
 from pyworkflow.object import Integer
 import pyworkflow.object as pwobj
+from pwem.objects import Transform
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
@@ -193,6 +194,16 @@ class TiltSeriesBase(data.SetOfImages):
                 return self._getDefaultOrigin()
             else:
                 return None
+
+    def _getDefaultOrigin(self):
+        sampling = self.getSamplingRate()
+        t = Transform()
+        x, y, z = self.getDim()
+        if z > 1:
+            z = z / -2.
+        print(t)
+        t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
+        return t  # The identity matrix
 
     def getShiftsFromOrigin(self):
         """ Method to return the origin shift from the Scipion Transform object. """
