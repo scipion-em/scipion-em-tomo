@@ -36,6 +36,7 @@ from sqlite3 import OperationalError
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
+from pwem.objects import Transform
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
@@ -230,6 +231,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 someNew = True
 
                 tsObj = tsClass(tsId=ts)
+
+                origin = Transform()
+                tsObj.setOrigin(origin)
+
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
                 # Add tilt images to the tiltSeries
@@ -242,6 +247,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
                         raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
                                         "(avoid symbols as -) that can not start with a number." % ts)
+
+                origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * self.samplingRate.get(),
+                                 -tsObj.getFirstItem().getYDim() / 2 * self.samplingRate.get(),
+                                 0)
+
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
                 someAdded = True

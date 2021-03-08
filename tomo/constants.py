@@ -32,8 +32,8 @@
 # from convention to bottom left corner)
 # Input parameter of lambda functions is a tuple/list with the dimensions of a Tomogram
 # This functions return the vector in VOXELS. No decimal places allowed --> (int(vx), int(vy), int(vz))
-BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp
-CENTER_GRAVITY = lambda dim: (int(0.5 * dim[0]), int(0.5 * dim[1]), int(0.5 * dim[2]))  # Imod Fiducials
+BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp, Imod
+CENTER_GRAVITY = lambda dim: (int(0.5 * dim[0]), int(0.5 * dim[1]), int(0.5 * dim[2]))
 
 # This is a bit different as we do not know beforehand where te
 # user has set the origin (Coordinate3D methods will use the None

@@ -35,6 +35,7 @@ import csv
 
 from pyworkflow.object import Integer
 import pyworkflow.object as pwobj
+from pwem.objects import Transform
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
@@ -115,6 +116,8 @@ class TiltSeriesBase(data.SetOfImages):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
+        self._origin = None
+
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
         file pattern provided by the user at the import time.
@@ -148,15 +151,83 @@ class TiltSeriesBase(data.SetOfImages):
         return self._samplingRate.get() * 1e-4 * mag
 
     def generateTltFile(self, tltFilePath, reverse=False):
-        """Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order"""
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param tltFilePath: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        """
+
         angleList = []
+
         for ti in self:
             angleList.append(ti.getTiltAngle())
+
         if reverse:
             angleList.reverse()
+
         with open(tltFilePath, 'w') as f:
             f.writelines("%s\n" % angle for angle in angleList)
+
+    def hasOrigin(self):
+        """ Method indicating if the TiltSeries object has a defined origin. """
+
+        return self._origin is not None
+
+    def setOrigin(self, newOrigin):
+        """ Method to set the origin of the TiltSeries object.
+        :param newOrigin: Scipion Transform object indicating the origin to be set to the TiltSeries.
+        """
+
+        self._origin = newOrigin
+
+    def getOrigin(self, force=False):
+        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the the object
+        it may create a default one.
+        :param force: Boolean indicating if the method must return a default origin in case the object has no one
+        associated.
+        """
+
+        if self.hasOrigin():
+            return self._origin
+        else:
+            if force:
+                return self._getDefaultOrigin()
+            else:
+                return None
+
+    def _getDefaultOrigin(self):
+        sampling = self.getSamplingRate()
+        t = Transform()
+        x, y, z = self.getDim()
+        if z > 1:
+            z = z / -2.
+        print(t)
+        t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
+        return t  # The identity matrix
+
+    def getShiftsFromOrigin(self):
+        """ Method to return the origin shift from the Scipion Transform object. """
+
+        origin = self.getOrigin(force=True).getShifts()
+        x = origin[0]
+        y = origin[1]
+        z = origin[2]
+        return x, y, z
+        # x, y, z are floats in Angstroms
+
+    def updateOriginWithResize(self,  resizeFactor):
+        """ Method to update the origin after resizing the TiltSeries. """
+
+        origin = self.getOrigin()
+
+        xOri, yOri, zOri = self.getShiftsFromOrigin()
+
+        origin.setShifts(xOri * resizeFactor,
+                         yOri * resizeFactor,
+                         zOri * resizeFactor)
+
+        self.setOrigin(origin)
+        # x, y, z are floats in Angstroms
 
 
 class TiltSeries(TiltSeriesBase):
@@ -466,7 +537,7 @@ class TomoAcquisition(data.Acquisition):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = pwobj.Float(kwargs.get('angleMin', None))
         self._angleMax = pwobj.Float(kwargs.get('angleMax', None))
-        self._step = pwobj.Integer(kwargs.get('step', None))
+        self._step = pwobj.Float(kwargs.get('step', None))
         self._angleAxis1 = pwobj.Float(kwargs.get('angleAxis1', None))
         self._angleAxis2 = pwobj.Float(kwargs.get('angleAxis2', None))
 
