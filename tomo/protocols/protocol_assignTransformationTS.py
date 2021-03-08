@@ -68,8 +68,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def assignTransformationMatricesStep(self, tsObjId):
         outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
-        getTMTS = self.setTMSetOfTiltSeries.get()[tsObjId]
-        setTMTS = self.getTMSetOfTiltSeries.get()[tsObjId]
+        setTMTS = self.setTMSetOfTiltSeries.get()[tsObjId]
+        getTMTS = self.getTMSetOfTiltSeries.get()[tsObjId]
         tsId = getTMTS.getTsId()
 
         newTs = tomoObj.TiltSeries(tsId=tsId)
@@ -83,9 +83,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             newTi.setTransform(tiltImageGetTM.getTransform())
             newTs.append(newTi)
 
-        ih = ImageHandler()
-        x, y, z, _ = ih.getDimensions(newTs.getFirstItem().getFileName())
-        newTs.setDim((x, y, z))
+        newTs.setDim(setTMTS.getDim())
         newTs.write()
 
         outputAssignedTransformSetOfTiltSeries.update(newTs)
@@ -97,8 +95,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def getOutputAssignedTransformSetOfTiltSeries(self):
         if not hasattr(self, "outputAssignedTransformSetOfTiltSeries"):
             outputAssignedTransformSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AssignedTransform')
-            outputAssignedTransformSetOfTiltSeries.copyInfo(self.getTMSetOfTiltSeries.get())
-            outputAssignedTransformSetOfTiltSeries.setDim(self.getTMSetOfTiltSeries.get().getDim())
+            outputAssignedTransformSetOfTiltSeries.copyInfo(self.setTMSetOfTiltSeries.get())
+            outputAssignedTransformSetOfTiltSeries.setDim(self.setTMSetOfTiltSeries.get().getDim())
 
             self._defineOutputs(outputAssignedTransformSetOfTiltSeries=outputAssignedTransformSetOfTiltSeries)
             self._defineSourceRelation(self.getTMSetOfTiltSeries, outputAssignedTransformSetOfTiltSeries)
