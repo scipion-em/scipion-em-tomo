@@ -45,14 +45,14 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection('Input')
-        form.addParam('inputSetOfTiltSeries',
+        form.addParam('getTMSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series from which transformation matrices will be obtained.',
                       label='Set of tilt-series from which get transform')
 
-        form.addParam('assignTransformSetOfTiltSeries',
+        form.addParam('setTMSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
@@ -61,26 +61,26 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        for ts in self.inputSetOfTiltSeries.get():
+        for ts in self.getTMSetOfTiltSeries.get():
             self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
 
     # --------------------------- STEPS functions ----------------------------
     def assignTransformationMatricesStep(self, tsObjId):
         outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
-        ts = self.assignTransformSetOfTiltSeries.get()[tsObjId]
-        tsTM = self.inputSetOfTiltSeries.get()[tsObjId]
-        tsId = ts.getTsId()
+        getTMTS = self.setTMSetOfTiltSeries.get()[tsObjId]
+        setTMTS = self.getTMSetOfTiltSeries.get()[tsObjId]
+        tsId = getTMTS.getTsId()
 
         newTs = tomoObj.TiltSeries(tsId=tsId)
-        newTs.copyInfo(ts)
+        newTs.copyInfo(setTMTS)
         outputAssignedTransformSetOfTiltSeries.append(newTs)
 
-        for tiltImage, tiltImageTM in zip(ts, tsTM):
+        for tiltImageGetTM, tiltImageSetTM in zip(getTMTS, setTMTS):
             newTi = tomoObj.TiltImage()
-            newTi.copyInfo(tiltImage, copyId=True)
-            newTi.setLocation(tiltImage.getLocation())
-            newTi.setTransform(tiltImageTM.getTransform())
+            newTi.copyInfo(tiltImageSetTM, copyId=True)
+            newTi.setLocation(tiltImageSetTM.getLocation())
+            newTi.setTransform(tiltImageGetTM.getTransform())
             newTs.append(newTi)
 
         ih = ImageHandler()
@@ -97,28 +97,28 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def getOutputAssignedTransformSetOfTiltSeries(self):
         if not hasattr(self, "outputAssignedTransformSetOfTiltSeries"):
             outputAssignedTransformSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AssignedTransform')
-            outputAssignedTransformSetOfTiltSeries.copyInfo(self.inputSetOfTiltSeries.get())
-            outputAssignedTransformSetOfTiltSeries.setDim(self.inputSetOfTiltSeries.get().getDim())
+            outputAssignedTransformSetOfTiltSeries.copyInfo(self.getTMSetOfTiltSeries.get())
+            outputAssignedTransformSetOfTiltSeries.setDim(self.getTMSetOfTiltSeries.get().getDim())
 
             self._defineOutputs(outputAssignedTransformSetOfTiltSeries=outputAssignedTransformSetOfTiltSeries)
-            self._defineSourceRelation(self.inputSetOfTiltSeries, outputAssignedTransformSetOfTiltSeries)
+            self._defineSourceRelation(self.getTMSetOfTiltSeries, outputAssignedTransformSetOfTiltSeries)
         return self.outputAssignedTransformSetOfTiltSeries
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
         validateMsgs = []
 
-        for ts in self.inputSetOfTiltSeries.get():
+        for ts in self.getTMSetOfTiltSeries.get():
             if not ts.getFirstItem().hasTransform():
                 validateMsgs.append("Some tilt-series from the input set of tilt-series does not have a "
                                     "transformation matrix assigned.")
 
-            if ts.getSize() != self.assignTransformSetOfTiltSeries.get()[ts.getObjId()].getSize():
+            if ts.getSize() != self.setTMSetOfTiltSeries.get()[ts.getObjId()].getSize():
                 validateMsgs.append("Some tilt-series from the input set of tilt-series and its target in the assign "
                                     "transfomration set of tilt-series size's do not match. Every input tilt-series "
                                     "and its target must have the same number of elements")
 
-        if self.inputSetOfTiltSeries.get().getSize() != self.assignTransformSetOfTiltSeries.get().getSize():
+        if self.getTMSetOfTiltSeries.get().getSize() != self.setTMSetOfTiltSeries.get().getSize():
             validateMsgs.append("Both input sets of tilt-series size's do not match. Both sets must have the same "
                                 "number of elements.")
 
@@ -128,7 +128,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         summary = []
         if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
             summary.append("Input Tilt-Series: %d.\nTransformation matrices assigned: %d.\n"
-                           % (self.inputSetOfTiltSeries.get().getSize(),
+                           % (self.getTMSetOfTiltSeries.get().getSize(),
                               self.outputAssignedTransformSetOfTiltSeries.getSize()))
         else:
             summary.append("Output classes not ready yet.")
