@@ -50,14 +50,14 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series from which transformation matrices will be obtained.',
-                      label='Input set of tilt-series')
+                      label='Set of tilt-series from which get transform')
 
         form.addParam('assignTransformSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series on which transformation matrices will be assigned.',
-                      label='Assign transformation set of tilt-series')
+                      label='Set of tilt-series to which set transform')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
