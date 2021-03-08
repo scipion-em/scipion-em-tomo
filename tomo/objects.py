@@ -671,9 +671,9 @@ class Coordinate3D(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = pwobj.Pointer(objDoStore=False)
-        self._x = None
-        self._y = None
-        self._z = None
+        self._x = Integer()
+        self._y = Integer()
+        self._z = Integer()
         self._volId = pwobj.Integer()
         self._eulerMatrix = data.Transform()
         self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
