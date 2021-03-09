@@ -28,6 +28,7 @@
 import os
 from os.path import basename
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
@@ -45,6 +46,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfCoordinates3D'
     _label = 'import set of coordinates 3D'
+    _devStatus = BETA
 
     IMPORT_FROM_AUTO = 'auto'
     IMPORT_FROM_TXT = 'txt'

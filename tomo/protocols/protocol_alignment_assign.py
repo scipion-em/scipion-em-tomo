@@ -25,10 +25,12 @@
 # *
 # **************************************************************************
 
+from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
 from pwem.protocols import EMProtocol
 
 import tomo.objects as tomoObjs
+
 
 class ProtAlignmentAssignSubtomo(EMProtocol):
     """ Assign the alignment stored in a set of Subtomograms/Coordinates3D
@@ -37,6 +39,7 @@ class ProtAlignmentAssignSubtomo(EMProtocol):
     The Subtomograms/Coordinates3D with the alignment can also be a subset of a bigger set.
     """
     _label = 'assign alignment'
+    _devStatus = BETA
 
     def _defineParams(self, form):
         form.addSection(label='Input')

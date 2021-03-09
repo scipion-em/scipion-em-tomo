@@ -27,6 +27,7 @@
 import os
 import numpy as np
 import itertools
+from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 import pyworkflow.utils.path as path
 from pwem.protocols import EMProtocol
@@ -41,6 +42,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     """
 
     _label = 'Tilt-series assign alignment'
+    _devStatus = BETA
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):

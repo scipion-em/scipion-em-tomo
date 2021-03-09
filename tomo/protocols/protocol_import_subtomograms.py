@@ -31,6 +31,7 @@ from os.path import abspath, basename
 
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
+from pyworkflow import BETA
 from pyworkflow.utils.path import createAbsLink
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
@@ -42,6 +43,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfSubTomograms'
     _label = 'import subtomograms'
+    _devStatus = BETA
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)

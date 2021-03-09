@@ -457,6 +457,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
     motion correction. It is used mainly for testing purposes.
     """
     _label = 'average tiltseries'
+    _devStatus = pw.BETA
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ Simple add all frames and divide by its number. """

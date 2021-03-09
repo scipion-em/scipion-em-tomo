@@ -27,6 +27,7 @@
 # **************************************************************************
 
 from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
 from tomo.objects import SetOfTomograms
 from tomo.protocols import ProtTomoBase
@@ -36,6 +37,7 @@ class ProtSplitEvenOddTomoSet(EMProtocol, ProtTomoBase):
     """ Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
     """
     _label = 'split even/odd'
+    _devStatus = BETA
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
