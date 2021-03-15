@@ -24,7 +24,8 @@
 # *
 # **************************************************************************
 import os
-import mrcfile
+from os.path import abspath
+
 import numpy as np
 
 import pyworkflow as pw
@@ -33,11 +34,13 @@ from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 
-from ..objects import TiltSeries, TiltImage
+from ..objects import TiltSeries, TiltImage, SetOfTiltSeries
 from .protocol_ts_base import ProtTsProcess
 
 OUTPUT_TILT_SERIES_ODD = 'outputTiltSeriesOdd'
 OUTPUT_TILT_SERIES_EVEN = 'outputTiltSeriesEven'
+EVEN = 'even'
+ODD = 'odd'
 
 
 class ProtTsCorrectMotion(ProtTsProcess):
@@ -148,9 +151,26 @@ class ProtTsCorrectMotion(ProtTsProcess):
         self._processTiltImageM(workingFolder, tiltImageM, *args)
 
         if self._doSplitEvenOdd():
-            alignedFrameStack = self._getExtraPath(removeBaseExt(tiltImageM.getFileName()) + '_aligned_movie.mrcs')
-            self.tsMList.append(tiltImageM)  # Store the corresponding tsImM to use its data later in the even/odd TS
-            self._genEvenOddTiltImages(alignedFrameStack, tiltImageM.getSamplingRate())
+            baseName = removeBaseExt(tiltImageM.getFileName())
+            evenName = abspath(self._getExtraPath(baseName + '_avg_' + EVEN))
+            oddName = abspath(self._getExtraPath(baseName + '_avg_' + ODD))
+            alignedFrameStack = self._getExtraPath(baseName + '_aligned_movie.mrcs')
+            # Get even/odd xmd files
+            args = '--img %s ' % abspath(alignedFrameStack)
+            args += '--type frames '
+            args += '-o %s ' % (evenName + '.xmd')
+            args += '-e %s ' % (oddName + '.xmd')
+            args += '--sum_frames '
+            self.runJob('xmipp_image_odd_even', args)
+
+            # Store the corresponding tsImM to use its data later in the even/odd TS
+            self.tsMList.append(tiltImageM)
+
+            # Update even and odd average lists
+            self.evenAvgFrameList.append(evenName + '_aligned.mrc')
+            self.oddAvgFrameList.append(oddName + '_aligned.mrc')
+
+            pw.utils.cleanPath(alignedFrameStack)
 
         tiFn, tiFnDW = self._getOutputTiltImagePaths(tiltImageM)
         if not os.path.exists(tiFn):
@@ -162,21 +182,18 @@ class ProtTsCorrectMotion(ProtTsProcess):
     def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
 
-        def mergeTiltImage(suffix, tsObject, alignedTIFile):
+        def addTiltImage(tiFile, tsObject, suffix):
             """
-
-            :param suffix: even or odd suffix for the new merged mrcs
+            :param ti: aligned tilt image
             :param tsObject: TiltSeries to add the new Image to
-            :param alignedTIFile: Computed aligned file (Micrograph for the movie)
-            :return:
             """
-            tsImg = tiClass(location=alignedTIFile, tiltAngle=ta)
-            tsImg.setSamplingRate(sRate)
-            newLocation = (counter, self._getExtraPath(tsImM.getTsId() + suffix))
-            ih.convert(alignedTIFile, newLocation)
-            tsImg.setLocation(newLocation)
-            tsObject.append(tsImg)
-            pw.utils.cleanPath(alignedTIFile)
+            ti = TiltImage(tiltAngle=ta, tsId=tsId)
+            ti.setSamplingRate(sRate)
+            newLocation = (counter, self._getExtraPath(tsId + '_' + suffix + '.mrcs'))
+            ih.convert(tiFile, newLocation)
+            ti.setLocation(newLocation)
+            tsObject.append(ti)
+            pw.utils.cleanPath(tiFile)
 
         ts = self._tsDict.getTs(tsId)
         ts.setDim([])
@@ -204,25 +221,25 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         # Even and odd stuff
         if self._doSplitEvenOdd():
+            template = 'tiltseries%s.sqlite'
             acq = ts.getAcquisition()
             sRate = ts.getSamplingRate()
             # Even
             if self.outputSetEven:
                 self.outputSetEven.enableAppend()
             else:
-                self.outputSetEven = self._createSetOfTiltSeries(suffix='even')
+                self.outputSetEven = SetOfTiltSeries.create(self._getPath(), template=template, suffix=EVEN)
                 self.outputSetEven.setAcquisition(acq)
                 self.outputSetEven.setSamplingRate(sRate)
             # Odd
             if self.outputSetOdd:
                 self.outputSetOdd.enableAppend()
             else:
-                self.outputSetOdd = self._createSetOfTiltSeries(suffix='odd')
+                self.outputSetOdd = SetOfTiltSeries.create(self._getPath(), template=template, suffix=ODD)
                 self.outputSetOdd.setAcquisition(acq)
                 self.outputSetOdd.setSamplingRate(sRate)
 
             tsClass = self.outputSetEven.ITEM_TYPE
-            tiClass = tsClass.ITEM_TYPE
             tsObjEven = tsClass(tsId=tsId)
             tsObjOdd = tsClass(tsId=tsId)
             self.outputSetEven.append(tsObjEven)
@@ -233,14 +250,14 @@ class ProtTsCorrectMotion(ProtTsProcess):
             counter = 1
             # for fileEven, fileOdd, tsImM in zip(self.evenAvgFrameList, self.oddAvgFrameList, self.tsMList):
             for i in ind:
-                fileEven = self.evenAvgFrameList[i]
-                fileOdd = self.oddAvgFrameList[i]
-                tsImM = self.tsMList[i]
-                ta = tsImM.getTiltAngle()
+                tiEvenFile = self.evenAvgFrameList[i]
+                tiOddFile = self.oddAvgFrameList[i]
+                tsM = self.tsMList[i]
+                ta = tsM.getTiltAngle()
                 # Even
-                mergeTiltImage('_even.mrcs', tsObjEven, fileEven)
+                addTiltImage(tiEvenFile, tsObjEven, EVEN)
                 # Odd
-                mergeTiltImage('_odd.mrcs', tsObjOdd, fileOdd)
+                addTiltImage(tiOddFile, tsObjOdd, ODD)
 
                 counter += 1
 
@@ -252,34 +269,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.evenAvgFrameList = []
             self.oddAvgFrameList = []
             self.tsMList = []
-
-    @staticmethod
-    def _saveStack(path, data, pixel_spacing):
-        mrc = mrcfile.open(path, mode='w+')
-        mrc.set_data(data)
-        mrc.voxel_size = pixel_spacing
-        mrc.close()
-
-    def _genEvenOddTiltImages(self, alignedMovieFn, sRate):
-        """Even/odd frame splitting requires all frames (per tilt angle) movie saving
-        because the frames are extracted form the whole stack. Then they're saved as an averaged
-        image per angle, and finally the even and odd frames tilt series can be generated."""
-
-        aligned_stack = mrcfile.open(alignedMovieFn, permissive=True)
-        pathBaseName = self._getExtraPath(removeBaseExt(alignedMovieFn).replace('movie', ''))
-        evenName = pathBaseName + 'even.mrc'
-        oddName = pathBaseName + 'odd.mrc'
-        # Even TS
-        self._saveStack(evenName, np.sum(aligned_stack.data[::2], axis=0), sRate)
-        # Odd TS
-        self._saveStack(oddName, np.sum(aligned_stack.data[1::2], axis=0), sRate)
-        # Update even and odd average lists
-        self.evenAvgFrameList.append(evenName)
-        self.oddAvgFrameList.append(oddName)
-        # Remove stack file if the user didn't ask to save them
-        if not self.doSaveMovie.get():
-            print("Removing %s" % alignedMovieFn)
-            os.remove(alignedMovieFn)
 
     def createOutputStep(self):
         """" Overwrites the parent method to allow te creation of odd and even outputs"""
