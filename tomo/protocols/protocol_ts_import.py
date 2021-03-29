@@ -30,17 +30,21 @@ from glob import glob
 import time
 from datetime import timedelta, datetime
 from collections import OrderedDict
+from os.path import join
+from pathlib import PureWindowsPath
+
 import numpy as np
 from sqlite3 import OperationalError
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
+from pyworkflow.utils import removeExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 
-import tomo.convert
+from tomo.convert import parseMdoc, getAnglesFromHeader, getAnglesFromMdoc, getAnglesFromTlt
 from .protocol_base import ProtTomoBase
 
 
@@ -59,6 +63,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     ANGLES_FROM_MDOC = 'Mdoc'
     ANGLES_FROM_TLT = 'Tlt'
     ANGLES_FROM_RANGE = 'Range'
+
+    NOT_MDOC = '"mdoc" not in filesPattern'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -154,19 +160,24 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         group = form.addGroup('Acquisition info')
         group.addParam('voltage', params.FloatParam, default=300,
                        label=Message.LABEL_VOLTAGE,
+                       condition=self.NOT_MDOC,
                        help=Message.TEXT_VOLTAGE)
         group.addParam('sphericalAberration', params.FloatParam, default=2.7,
                        label=Message.LABEL_SPH_ABERRATION,
+                       expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
                        label=Message.LABEL_AMPLITUDE,
+                       condition=self.NOT_MDOC,
                        help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam, default=50000,
                        label=Message.LABEL_MAGNI_RATE,
+                       condition=self.NOT_MDOC,
                        help=Message.TEXT_MAGNI_RATE)
         group.addParam('samplingRate', params.FloatParam,  default=1.0,
                        important=True,
                        label=Message.LABEL_SAMP_RATE,
+                       condition=self.NOT_MDOC,
                        help=Message.TEXT_SAMP_RATE)
 
         return group
@@ -286,7 +297,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     def _validate(self):
         self._initialize()
         try:
-            matching = self.getMatchingFiles()
+            if 'mdoc' in self.filesPattern.get():
+                matching = self.getMatchingFilesFromMdoc()
+            else:
+                matching = self.getMatchingFiles()
+
         except Exception as e:
             errorStr = str(e)
             if 'Missing angles file: ' in errorStr:
@@ -352,6 +367,66 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ This function should be called after a call to _initialize"""
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
+    def getMatchingFilesFromMdoc(self):
+        """"""
+        matchingFiles = OrderedDict()
+        mdocList = glob(join(self.filesPath.get(), self.filesPattern.get()))
+        for mdoc in mdocList:
+            zValueList = parseMdoc(mdoc)
+            fileOrderAngleList = []
+            fileList = []
+            counter = 0
+            for slice in zValueList:
+                fileName = self._getAngleMovieFileName(slice['SubFramePath'])
+                fileOrderAngleList.append((
+                    join(self.filesPath.get(), fileName),
+                    '{:03d}'.format(counter),
+                    slice['TiltAngle']
+                ))
+                fileList.append(removeExt(fileName))
+                counter += 1
+            tsId = self._getTsIdFromMdocData(fileList)
+            matchingFiles[tsId] = fileOrderAngleList
+        return matchingFiles
+
+    @staticmethod
+    def _getAngleMovieFileName(subFramePath):
+        # PureWindowsPath pathlib is ised to make possible deal with different path separators, like \\
+        return PureWindowsPath(subFramePath).parts[-1]
+
+    @staticmethod
+    def _getTsIdFromMdocData(baseNameList):
+        """Find the most common substring in the list of subFrame base names to get the tsId"""
+        def _findStem(arr):
+            """function to find the stem (longest common substring) from the string array"""
+            # Determine size of the array
+            n = len(arr)
+            # Take first word from array as reference
+            s = arr[0]
+            l = len(s)
+            res = ""
+            for i in range(l):
+                for j in range(i + 1, l + 1):
+                    # generating all possible substrings
+                    # of our reference string arr[0] i.e s
+                    stem = s[i:j]
+                    k = 1
+                    for k in range(1, n):
+                        # Check if the generated stem is
+                        # common to all words
+                        if stem not in arr[k]:
+                            break
+                    # If current substring is present in
+                    # all strings and its length is greater
+                    # than current result
+                    if k + 1 == n and len(res) < len(stem):
+                        res = stem
+
+            return res
+
+        d = _findStem(baseNameList).replace('_0', '')
+        return d
+
     def getMatchingFiles(self, fileTimeOut=None):
         """ Return an ordered dict with TiltSeries found in the files as key
         and a list of all tilt images of that series as value.
@@ -381,17 +456,17 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             anglesFrom = self.getEnumText('anglesFrom')
 
             if anglesFrom == self.ANGLES_FROM_HEADER:
-                angles = tomo.convert.getAnglesFromHeader(f)
+                angles = getAnglesFromHeader(f)
             elif anglesFrom == self.ANGLES_FROM_MDOC:
                 mdocFn = os.path.splitext(f)[0] + '.mdoc'
                 if not os.path.exists(mdocFn):
                     raise Exception("Missing angles file: %s" % mdocFn)
-                angles = tomo.convert.getAnglesFromMdoc(mdocFn)
+                angles = getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
                 tltFn = os.path.splitext(f)[0] + '.tlt'
                 if not os.path.exists(tltFn):
                     raise Exception("Missing angles file: %s" % tltFn)
-                angles = tomo.convert.getAnglesFromTlt(tltFn)
+                angles = getAnglesFromTlt(tltFn)
             elif anglesFrom == self.ANGLES_FROM_RANGE:
                 angles = self._getTiltAngleRange()
             else:
@@ -565,7 +640,8 @@ class ProtImportTsMovies(ProtImportTsBase):
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
-        group = form.addGroup('Tilt info')
+        group = form.addGroup('Tilt info',
+                              condition=self.NOT_MDOC)
 
         group.addParam('anglesFrom', params.EnumParam,
                        default=0,
@@ -582,6 +658,7 @@ class ProtImportTsMovies(ProtImportTsBase):
         group = ProtImportTsBase._defineAcquisitionParams(self, form)
 
         line = group.addLine('Dose (e/A^2)',
+                             condition=self.NOT_MDOC,
                              help="Initial accumulated dose (usually 0) and "
                                   "dose per frame. ")
         line.addParam('doseInitial', params.FloatParam, default=0,
