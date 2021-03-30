@@ -39,7 +39,8 @@ from sqlite3 import OperationalError
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
-from pyworkflow.utils import removeExt
+from pwem.objects import Acquisition
+from pyworkflow.utils import removeExt, getParentFolder, removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
@@ -64,7 +65,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     ANGLES_FROM_TLT = 'Tlt'
     ANGLES_FROM_RANGE = 'Range'
 
-    NOT_MDOC = '"mdoc" not in filesPattern'
+    NOT_MDOC_GUI_COND = '"mdoc" not in filesPattern'
+    MDOC_DATA_SOURCE = False
+
+    acquisitions = None
+    sRates = None
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -160,7 +165,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         group = form.addGroup('Acquisition info')
         group.addParam('voltage', params.FloatParam, default=300,
                        label=Message.LABEL_VOLTAGE,
-                       condition=self.NOT_MDOC,
+                       condition=self.NOT_MDOC_GUI_COND,
                        help=Message.TEXT_VOLTAGE)
         group.addParam('sphericalAberration', params.FloatParam, default=2.7,
                        label=Message.LABEL_SPH_ABERRATION,
@@ -168,16 +173,16 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
                        label=Message.LABEL_AMPLITUDE,
-                       condition=self.NOT_MDOC,
+                       expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam, default=50000,
                        label=Message.LABEL_MAGNI_RATE,
-                       condition=self.NOT_MDOC,
+                       condition=self.NOT_MDOC_GUI_COND,
                        help=Message.TEXT_MAGNI_RATE)
-        group.addParam('samplingRate', params.FloatParam,  default=1.0,
+        group.addParam('samplingRate', params.FloatParam, default=1.0,
                        important=True,
                        label=Message.LABEL_SAMP_RATE,
-                       condition=self.NOT_MDOC,
+                       condition=self.NOT_MDOC_GUI_COND,
                        help=Message.TEXT_SAMP_RATE)
 
         return group
@@ -197,8 +202,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self.info("Using glob pattern: '%s'" % self._globPattern)
-        self.info("Using regex pattern: '%s'" % self._regexPattern)
+        if not self.MDOC_DATA_SOURCE:
+            self.info("Using glob pattern: '%s'" % self._globPattern)
+            self.info("Using regex pattern: '%s'" % self._regexPattern)
 
         outputSet = getattr(self, self._outputName, None)
 
@@ -297,10 +303,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     def _validate(self):
         self._initialize()
         try:
-            if 'mdoc' in self.filesPattern.get():
-                matching = self.getMatchingFilesFromMdoc()
-            else:
-                matching = self.getMatchingFiles()
+            matching = self.getMatchingFiles()
 
         except Exception as e:
             errorStr = str(e)
@@ -339,22 +342,24 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             and also replacing special character # by digit matching.
         - outputs: Output variable names
         """
-        path = self.filesPath.get('').strip()
-        pattern = self.filesPattern.get('').strip()
-        self._pattern = os.path.join(path, pattern) if pattern else path
+        self.MDOC_DATA_SOURCE = 'mdoc' in self.filesPattern.get()
+        if not self.MDOC_DATA_SOURCE:
+            path = self.filesPath.get('').strip()
+            pattern = self.filesPattern.get('').strip()
+            self._pattern = os.path.join(path, pattern) if pattern else path
 
-        def _replace(p, ts, to, ta):
-            p = p.replace('{TS}', ts)
-            p = p.replace('{TO}', to)
-            p = p.replace('{TA}', ta)
-            return p
+            def _replace(p, ts, to, ta):
+                p = p.replace('{TS}', ts)
+                p = p.replace('{TO}', to)
+                p = p.replace('{TA}', ta)
+                return p
 
-        self._regexPattern = _replace(self._pattern.replace('*', '(.*)'),
-                                      '(?P<TS>.*)',
-                                      '(?P<TO>\d+)',
-                                      '(?P<TA>[+-]?\d+(\.\d+)?)')
-        self._regex = re.compile(self._regexPattern)
-        self._globPattern = _replace(self._pattern, '*', '*', '*')
+            self._regexPattern = _replace(self._pattern.replace('*', '(.*)'),
+                                          '(?P<TS>.*)',
+                                          '(?P<TO>\d+)',
+                                          '(?P<TA>[+-]?\d+(\.\d+)?)')
+            self._regex = re.compile(self._regexPattern)
+            self._globPattern = _replace(self._pattern, '*', '*', '*')
 
         # Set output names depending on the import type (either movies or images)
         self._outputName = 'outputTiltSeries'
@@ -367,27 +372,68 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ This function should be called after a call to _initialize"""
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
-    def getMatchingFilesFromMdoc(self):
+    def _getMatchingFilesFromMdoc(self):
         """"""
         matchingFiles = OrderedDict()
+        self.acquisitions = OrderedDict()
+        self.sRates = OrderedDict()
         mdocList = glob(join(self.filesPath.get(), self.filesPattern.get()))
         for mdoc in mdocList:
             zValueList = parseMdoc(mdoc)
+            z0 = zValueList[0]
+            acquisition = self._genTsAcquisitionFromMdoc(z0)  # Get acquisition from 1st movie (first angle)
+            sRate = z0.get('PixelSpacing')  # The same for the pixel size
             fileOrderAngleList = []
             fileList = []
             counter = 0
-            for slice in zValueList:
-                fileName = self._getAngleMovieFileName(slice['SubFramePath'])
+            for zSlice in zValueList:
+                fileName = self._getAngleMovieFileName(zSlice['SubFramePath'])
                 fileOrderAngleList.append((
-                    join(self.filesPath.get(), fileName),
-                    '{:03d}'.format(counter),
-                    slice['TiltAngle']
+                    join(getParentFolder(mdoc), fileName),  # Filename
+                    '{:03d}'.format(counter),               # Acquisition order
+                    zSlice['TiltAngle'],                    # Tilt angle
                 ))
                 fileList.append(removeExt(fileName))
                 counter += 1
-            tsId = self._getTsIdFromMdocData(fileList)
+            tsId = removeBaseExt(mdoc)  # TODO: possible parameter (advanced) used by the user to indicate the structure
+            # of the file contained in fields SubFramePath #self._getTsIdFromMdocData(fileList)
             matchingFiles[tsId] = fileOrderAngleList
+            self.acquisitions[tsId] = acquisition
+            self.sRates[tsId] = sRate
         return matchingFiles
+
+    @staticmethod
+    def _getDoseFromMdoc(zSlice):
+        EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
+        DOSE_RATE = 'DoseRate'  # Dose rate to the camera, in electrons per unbinned pixel per second
+        EXPOSURE_TIME = 'ExposureTime'  # Image exposure time
+        MIN_MAX_MEAN = 'MinMaxMean'  # Minimum, maximum, and mean value for this image
+        PIXEL_SIZE = 'PixelSpacing'  # Pixel spacing in Angstroms for individual image
+        COUNTS_PER_ELECTRON = 'CountsPerElectron'
+
+        def _keysInDict(listOfKeys):
+            return all([key in zSlice.keys() for key in listOfKeys])
+
+        # Different ways of calculating the dose, ordered by priority
+        expDose = 0
+        if EXPOSURE_DOSE in zSlice:
+            expDose = float(zSlice[EXPOSURE_DOSE])
+
+        if not expDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
+            doseRate = zSlice[DOSE_RATE]
+            expTime = zSlice[EXPOSURE_TIME]
+            if doseRate and expTime:
+                expDose = float(doseRate) * float(expTime)
+
+        if not expDose and _keysInDict([MIN_MAX_MEAN, PIXEL_SIZE, COUNTS_PER_ELECTRON]):
+            minMaxMean = zSlice[MIN_MAX_MEAN]
+            pixelSize = zSlice[PIXEL_SIZE]
+            counts = zSlice[COUNTS_PER_ELECTRON]
+            if all([minMaxMean, pixelSize, counts]):
+                meanVal = list(minMaxMean.strip())[-1]  # Get the mean from a string like '-42 2441 51.7968'
+                expDose = (float(meanVal)/int(counts)) / float(pixelSize)**2
+
+        return expDose
 
     @staticmethod
     def _getAngleMovieFileName(subFramePath):
@@ -427,77 +473,90 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         d = _findStem(baseNameList).replace('_0', '')
         return d
 
+    def _genTsAcquisitionFromMdoc(self, zSlice):
+        expDose = self._getDoseFromMdoc(zSlice)
+        acq = Acquisition()
+        acq.setVoltage(zSlice.get('Voltage', self.voltage.get()))
+        acq.setSphericalAberration(self.sphericalAberration.get())
+        acq.setAmplitudeContrast(self.amplitudeContrast.get())
+        acq.setMagnification(zSlice.get('Magnification', self.magnification.get()))
+        acq.setDoseInitial(self.doseInitial.get())
+        acq.setDosePerFrame(expDose if expDose else self.dosePerFrame.get())
+
+        return acq
+
     def getMatchingFiles(self, fileTimeOut=None):
         """ Return an ordered dict with TiltSeries found in the files as key
         and a list of all tilt images of that series as value.
         """
-        filePaths = glob(self._globPattern)
-        filePaths.sort(key=lambda fn: os.path.getmtime(fn))
-        fileTimeOut = fileTimeOut or timedelta(seconds=5)
-
-        matchingFiles = OrderedDict()
-
-        def _getTsId(match):
-            """ Retrieve the TiltSerie ID from the matching object.
-            We need to have tsId that starts with character, so
-            let's add a prefix if it is not the case
-            """
-            tsId = match.group('TS')
-            return tsId
-
-        def _addOne(fileList, f, m):
-            """ Add one file matching to the list. """
-            fileList.append((f, int(m.group('TO')), float(m.group('TA'))))
-
-        def _addMany(fileList, f, m):
-            """ Add many 'files' (when angles in header or mdoc) to the list. """
-            # _, _, _, n = ImageHandler().getDimensions(f)
-
-            anglesFrom = self.getEnumText('anglesFrom')
-
-            if anglesFrom == self.ANGLES_FROM_HEADER:
-                angles = getAnglesFromHeader(f)
-            elif anglesFrom == self.ANGLES_FROM_MDOC:
-                mdocFn = os.path.splitext(f)[0] + '.mdoc'
-                if not os.path.exists(mdocFn):
-                    raise Exception("Missing angles file: %s" % mdocFn)
-                angles = getAnglesFromMdoc(mdocFn)
-            elif anglesFrom == self.ANGLES_FROM_TLT:
-                tltFn = os.path.splitext(f)[0] + '.tlt'
-                if not os.path.exists(tltFn):
-                    raise Exception("Missing angles file: %s" % tltFn)
-                angles = getAnglesFromTlt(tltFn)
-            elif anglesFrom == self.ANGLES_FROM_RANGE:
-                angles = self._getTiltAngleRange()
-            else:
-                raise Exception('Invalid angles option: %s' % anglesFrom)
-
-            for i, a in enumerate(angles):
-                fileList.append(((i+1, f), i+1, a))
-
-        addFunc = _addOne if self._anglesInPattern() else _addMany
-
-        # Handle special case of just one TiltSeries, to avoid
-        # the user the need to specify {TS}
-        if len(filePaths) == 1 and not self.isInStreaming():
-            f = filePaths[0]
-            ts = pwutils.removeBaseExt(f)  # Base name without extension
-            matchingFiles[ts] = []
-            _addMany(matchingFiles[ts], f, None)
+        if self.MDOC_DATA_SOURCE:
+            return self._getMatchingFilesFromMdoc()
         else:
-            for f in filePaths:
-                if self.fileModified(f, fileTimeOut):
-                    continue
-                m = self._regex.match(f)
-                if m is not None:
-                    ts = _getTsId(m)
-                    # Only report files of new tilt-series
-                    if ts not in self._existingTs:
-                        if ts not in matchingFiles:
-                            matchingFiles[ts] = []
-                        addFunc(matchingFiles[ts], f, m)
+            filePaths = glob(self._globPattern)
+            filePaths.sort(key=lambda fn: os.path.getmtime(fn))
+            fileTimeOut = fileTimeOut or timedelta(seconds=5)
 
-        return matchingFiles
+            matchingFiles = OrderedDict()
+
+            def _getTsId(match):
+                """ Retrieve the TiltSerie ID from the matching object.
+                We need to have tsId that starts with character, so
+                let's add a prefix if it is not the case
+                """
+                tsId = match.group('TS')
+                return tsId
+
+            def _addOne(fileList, f, m):
+                """ Add one file matching to the list. """
+                fileList.append((f, int(m.group('TO')), float(m.group('TA'))))
+
+            def _addMany(fileList, f, m):
+                """ Add many 'files' (when angles in header or mdoc) to the list. """
+                anglesFrom = self.getEnumText('anglesFrom')
+
+                if anglesFrom == self.ANGLES_FROM_HEADER:
+                    angles = getAnglesFromHeader(f)
+                elif anglesFrom == self.ANGLES_FROM_MDOC:
+                    mdocFn = os.path.splitext(f)[0] + '.mdoc'
+                    if not os.path.exists(mdocFn):
+                        raise Exception("Missing angles file: %s" % mdocFn)
+                    angles = getAnglesFromMdoc(mdocFn)
+                elif anglesFrom == self.ANGLES_FROM_TLT:
+                    tltFn = os.path.splitext(f)[0] + '.tlt'
+                    if not os.path.exists(tltFn):
+                        raise Exception("Missing angles file: %s" % tltFn)
+                    angles = getAnglesFromTlt(tltFn)
+                elif anglesFrom == self.ANGLES_FROM_RANGE:
+                    angles = self._getTiltAngleRange()
+                else:
+                    raise Exception('Invalid angles option: %s' % anglesFrom)
+
+                for i, a in enumerate(angles):
+                    fileList.append(((i+1, f), i+1, a))
+
+            addFunc = _addOne if self._anglesInPattern() else _addMany
+
+            # Handle special case of just one TiltSeries, to avoid
+            # the user the need to specify {TS}
+            if len(filePaths) == 1 and not self.isInStreaming():
+                f = filePaths[0]
+                ts = pwutils.removeBaseExt(f)  # Base name without extension
+                matchingFiles[ts] = []
+                _addMany(matchingFiles[ts], f, None)
+            else:
+                for f in filePaths:
+                    if self.fileModified(f, fileTimeOut):
+                        continue
+                    m = self._regex.match(f)
+                    if m is not None:
+                        ts = _getTsId(m)
+                        # Only report files of new tilt-series
+                        if ts not in self._existingTs:
+                            if ts not in matchingFiles:
+                                matchingFiles[ts] = []
+                            addFunc(matchingFiles[ts], f, m)
+
+            return matchingFiles
 
     def getCopyOrLink(self):
         # Set a function to copyFile or createLink
@@ -548,7 +607,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                          self.maxAngle.get() + offset,  # also include last angle
                          self.stepAngle.get())
 
-    def _getSortedAngles(self, tiltSeriesList):
+    @staticmethod
+    def _getSortedAngles(tiltSeriesList):
         """ Return the sorted angles from a given tiltSeriesList. """
         return sorted(item[2] for item in tiltSeriesList)
 
@@ -641,7 +701,7 @@ class ProtImportTsMovies(ProtImportTsBase):
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
         group = form.addGroup('Tilt info',
-                              condition=self.NOT_MDOC)
+                              condition=self.NOT_MDOC_GUI_COND)
 
         group.addParam('anglesFrom', params.EnumParam,
                        default=0,
@@ -658,7 +718,7 @@ class ProtImportTsMovies(ProtImportTsBase):
         group = ProtImportTsBase._defineAcquisitionParams(self, form)
 
         line = group.addLine('Dose (e/A^2)',
-                             condition=self.NOT_MDOC,
+                             condition=self.NOT_MDOC_GUI_COND,
                              help="Initial accumulated dose (usually 0) and "
                                   "dose per frame. ")
         line.addParam('doseInitial', params.FloatParam, default=0,
@@ -676,13 +736,21 @@ class ProtImportTsMovies(ProtImportTsBase):
         return group
 
     def _fillAcquisitionInfo(self, inputTs):
-        ProtImportTsBase._fillAcquisitionInfo(self, inputTs)
-
         inputTs.setGain(self.gainFile.get())
         inputTs.setDark(self.darkFile.get())
-        acq = inputTs.getAcquisition()
-        acq.setDoseInitial(self.doseInitial.get())
-        acq.setDosePerFrame(self.dosePerFrame.get())
+
+        if self.MDOC_DATA_SOURCE:
+            # TODO Acquisition is historically expected as one per set of tilt series movies, so the first one is hte one used, at least for now
+            firstTsId = list(self.acquisitions.keys())[0]
+            acq = self.acquisitions[firstTsId]
+            sRate = self.sRates[firstTsId]
+            inputTs.setAcquisition(acq)
+            inputTs.setSamplingRate(sRate)
+        else:
+            ProtImportTsBase._fillAcquisitionInfo(self, inputTs)
+            acq = inputTs.getAcquisition()
+            acq.setDoseInitial(self.doseInitial.get())
+            acq.setDosePerFrame(self.dosePerFrame.get())
 
     def _initialize(self):
         ProtImportTsBase._initialize(self)
@@ -693,7 +761,7 @@ class ProtImportTsMovies(ProtImportTsBase):
         """ Function to be implemented in subclass to validate
         the angles range.
         """
-        if self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
+        if not self.MDOC_DATA_SOURCE and self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
             if not self._anglesInPattern():
                 return ['When importing movies, {TA} and {TO} should be in the '
                         'files pattern.']
