@@ -65,7 +65,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     ANGLES_FROM_TLT = 'Tlt'
     ANGLES_FROM_RANGE = 'Range'
 
-    NOT_MDOC_GUI_COND = '"mdoc" not in filesPattern'
+    NOT_MDOC_GUI_COND = 'filesPattern is None or (filesPattern is not None and "mdoc" not in filesPattern)'
     MDOC_DATA_SOURCE = False
 
     acquisitions = None
@@ -121,7 +121,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            "*Relative symlink*: Create symbolic links as "
                            "relative path from the protocol run folder. ")
 
-        self._defineAcquisitionParams(form)
+        self._defineAcquisitionParams(form, isTiltSeries=True)
 
         form.addSection('Streaming')
 
@@ -160,11 +160,16 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Used in subclasses to define the option to fetch tilt angles. """
         pass
 
-    def _defineAcquisitionParams(self, form):
+    def _defineAcquisitionParams(self, form, isTiltSeries):
         """ Define acq parameters, it can be overridden
         by subclasses to change what parameters to include.
         """
-        group = form.addGroup('Acquisition info')
+        acqGroupCondition = True  # Tilt series movies case
+        if isTiltSeries:
+            acqGroupCondition = self.NOT_MDOC_GUI_COND
+
+        group = form.addGroup('Acquisition info',
+                              condition=acqGroupCondition)
         group.addParam('voltage', params.FloatParam, default=300,
                        label=Message.LABEL_VOLTAGE,
                        condition=self.NOT_MDOC_GUI_COND,
@@ -402,6 +407,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             - The tilt series id will be the base name of the mdoc file, by default, so the mdocs must have different
               base name. If another name is desired, the user can introduce the name structure (see advanced parameter)
             """
+        fpath = self.filesPath.get()
+        mdocList = glob(join(fpath, self.filesPattern.get()))
+        if not mdocList:
+            raise Exception('No mdoc files were found in the introduced path:\n%s' % fpath)
+
         def _validateMdocInfoRead():
             msg = ['Data not found in file\n%s:\n' % mdoc]
             if not acquisition.getVoltage():
@@ -423,7 +433,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
         self.meanDosesPerFrame = OrderedDict()
-        mdocList = glob(join(self.filesPath.get(), self.filesPattern.get()))
         validationErrorMsgList = []
         for mdoc in mdocList:
             accumulatedDose = 0
@@ -431,7 +440,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             z0 = zValueList[0]
             # Acquisition and pixel size are read from the first slice (acquisition angle)
             acquisition = self._genTsAcquisitionFromMdoc(z0)
-            sRate = z0.get('PixelSpacing')  # Get the pixel size
+            sRate = z0.get('PixelSpacing', self.samplingRate.get())  # Get the pixel size
 
             # fileList = []
             fileOrderAngleList = []
@@ -562,7 +571,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         acq.setSphericalAberration(self.sphericalAberration.get())
         acq.setAmplitudeContrast(self.amplitudeContrast.get())
         acq.setMagnification(zSlice.get('Magnification', self.magnification.get()))
-        acq.setDoseInitial(self.doseInitial.get())
+        if hasattr(self, 'doseInitial'):  # This field is only present in the form for TsM import
+            acq.setDoseInitial(self.doseInitial.get())
 
         return acq
 
@@ -737,13 +747,14 @@ class ProtImportTs(ProtImportTsBase):
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
-        group = form.addGroup('Tilt info')
+        group = form.addGroup('Tilt info',
+                              condition=self.NOT_MDOC_GUI_COND)
 
         group.addParam('anglesFrom', params.EnumParam,
                        default=0,
                        choices=[self.ANGLES_FROM_RANGE,
                                 self.ANGLES_FROM_HEADER,
-                                self.ANGLES_FROM_MDOC,
+                                # self.ANGLES_FROM_MDOC,
                                 self.ANGLES_FROM_TLT],
                        display=params.EnumParam.DISPLAY_HLIST,
                        label='Import angles from',
@@ -764,15 +775,16 @@ class ProtImportTs(ProtImportTsBase):
         line.addParam('stepAngle', params.FloatParam, default=3, label='step')
 
     def _validateAngles(self):
-        ts, tiltSeriesList = self._firstMatch
-        i, fileName = tiltSeriesList[0][0]
-        x, y, z, n = ImageHandler().getDimensions(fileName)
-        nImages = max(z, n)  # Just handle ambiguity with mrc format
-        nAngles = len(self._tiltAngleList)
-        if nAngles != nImages:
-            return ['Tilt-series %s stack has different number of images (%d) '
-                    'than the expected number of tilt angles (%d). '
-                    % (fileName, nImages, nAngles)]
+        if not self.MDOC_DATA_SOURCE:
+            ts, tiltSeriesList = self._firstMatch
+            i, fileName = tiltSeriesList[0][0]
+            x, y, z, n = ImageHandler().getDimensions(fileName)
+            nImages = max(z, n)  # Just handle ambiguity with mrc format
+            nAngles = len(self._tiltAngleList)
+            if nAngles != nImages:
+                return ['Tilt-series %s stack has different number of images (%d) '
+                        'than the expected number of tilt angles (%d). '
+                        % (fileName, nImages, nAngles)]
         return []
 
 
@@ -794,9 +806,9 @@ class ProtImportTsMovies(ProtImportTsBase):
                             'of the pattern, that will be used to match the '
                             'value of the angle for each TiltSeriesMovie.')
 
-    def _defineAcquisitionParams(self, form):
+    def _defineAcquisitionParams(self, form, isTiltSeries):
         """ Add movie specific options to the acquisition section. """
-        group = ProtImportTsBase._defineAcquisitionParams(self, form)
+        group = ProtImportTsBase._defineAcquisitionParams(self, form, isTiltSeries=False)
 
         line = group.addLine('Dose (e/A^2)',
                              condition=self.NOT_MDOC_GUI_COND,
