@@ -70,6 +70,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     acquisitions = None
     sRates = None
+    accumDoses = None
+    meanDosesPerFrame = None
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -202,6 +204,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
+        doseList = []
+        counter = 0
+
         if not self.MDOC_DATA_SOURCE:
             self.info("Using glob pattern: '%s'" % self._globPattern)
             self.info("Using regex pattern: '%s'" % self._regexPattern)
@@ -249,16 +254,33 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 tsObj = tsClass(tsId=ts)
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
+
+                if self.MDOC_DATA_SOURCE:
+                    doseList = self.accumDoses[ts]
+                    counter = 0
+
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
                     try:
-                        tsObj.append(tiClass(location=f,
-                                             acquisitionOrder=to,
-                                             tiltAngle=ta))
+                        ti = tiClass(location=f,
+                                     acquisitionOrder=to,
+                                     tiltAngle=ta)
+                        if self.MDOC_DATA_SOURCE:
+                            ti.setAcquisition(tsObj.getAcquisition())
+                            ti.getAcquisition().setDosePerFrame(doseList[counter])  # Accumulated dose in current ti
+                            counter += 1
+                        tsObj.append(ti)
                     except OperationalError as e:
 
                         raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
                                         "(avoid symbols as -) that can not start with a number." % ts)
+
+                if self.MDOC_DATA_SOURCE:
+                    # Tilt series object dose per frame has been updated each time the tilt image dose per frame has
+                    # been updated before, so the mean value is used to be the reference in the acquisition of the
+                    # whole tilt series movie
+                    tsObj.getAcquisition().setDosePerFrame(self.meanDosesPerFrame[ts])
+
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
                 someAdded = True
@@ -307,10 +329,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         except Exception as e:
             errorStr = str(e)
-            if 'Missing angles file: ' in errorStr:
-                return [errorStr]
-            else:
-                raise e
+            return [errorStr]
+            # if 'Missing angles file: ' in errorStr:
+            #     return [errorStr]
+            # else:
+            #     raise e
 
         if not matching:
             return ["There are no files matching the pattern %s"
@@ -373,38 +396,85 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
     def _getMatchingFilesFromMdoc(self):
-        """"""
+        """If the list of files provided by the user is a list of mdoc files, then the tilt series movies
+        are built from them, following the considerations listed below:
+            - For each mdoc file, it and the corresponding movie files must be in the same directory.
+            - The tilt series id will be the base name of the mdoc file, by default, so the mdocs must have different
+              base name. If another name is desired, the user can introduce the name structure (see advanced parameter)
+            """
+        def _validateMdocInfoRead():
+            msg = ['Data not found in file\n%s:\n' % mdoc]
+            if not acquisition.getVoltage():
+                msg.append('Voltage')
+            if not acquisition.getMagnification():
+                msg.append('Magnification')
+            if not sRate:
+                msg.append('PixelSpacing')
+            if None in tiltAngleList:
+                indices = [str(i) for i, v in enumerate(tiltAngleList) if v is None]
+                msg.append('TiltAngle: %s' % ' '.join(indices))
+            if len(msg) > 1:
+                validationErrorMsgList.append(msg)
+
+            return validationErrorMsgList
+
         matchingFiles = OrderedDict()
         self.acquisitions = OrderedDict()
         self.sRates = OrderedDict()
+        self.accumDoses = OrderedDict()
+        self.meanDosesPerFrame = OrderedDict()
         mdocList = glob(join(self.filesPath.get(), self.filesPattern.get()))
+        validationErrorMsgList = []
         for mdoc in mdocList:
+            accumulatedDose = 0
             zValueList = parseMdoc(mdoc)
             z0 = zValueList[0]
-            acquisition = self._genTsAcquisitionFromMdoc(z0)  # Get acquisition from 1st movie (first angle)
-            sRate = z0.get('PixelSpacing')  # The same for the pixel size
+            # Acquisition and pixel size are read from the first slice (acquisition angle)
+            acquisition = self._genTsAcquisitionFromMdoc(z0)
+            sRate = z0.get('PixelSpacing')  # Get the pixel size
+
+            # fileList = []
             fileOrderAngleList = []
-            fileList = []
+            accumulatedDoseList = []
+            tiltAngleList = []
+
             counter = 0
             for zSlice in zValueList:
                 fileName = self._getAngleMovieFileName(zSlice['SubFramePath'])
+                tiltAngle = zSlice.get('TiltAngle', None)
+                tiltAngleList.append(tiltAngle)
                 fileOrderAngleList.append((
                     join(getParentFolder(mdoc), fileName),  # Filename
                     '{:03d}'.format(counter),               # Acquisition order
-                    zSlice['TiltAngle'],                    # Tilt angle
+                    tiltAngle,                              # Tilt angle
                 ))
-                fileList.append(removeExt(fileName))
+                accumulatedDose = self._getDoseFromMdoc(zSlice, accumulatedDose)
+                accumulatedDoseList.append(accumulatedDose)
+                # fileList.append(removeExt(fileName))
                 counter += 1
             tsId = removeBaseExt(mdoc)  # TODO: possible parameter (advanced) used by the user to indicate the structure
-            # of the file contained in fields SubFramePath #self._getTsIdFromMdocData(fileList)
+            # self._getTsIdFromMdocData(fileList)
             matchingFiles[tsId] = fileOrderAngleList
             self.acquisitions[tsId] = acquisition
             self.sRates[tsId] = sRate
+            self.accumDoses[tsId] = accumulatedDoseList
+            self.meanDosesPerFrame[tsId] = accumulatedDoseList[-1]/counter
+
+            # Check Mdoc info read
+            validationErrorMsgList = _validateMdocInfoRead()
+
+        if validationErrorMsgList:
+            raise Exception(' '.join(validationErrorMsgList))
+
         return matchingFiles
 
     @staticmethod
-    def _getDoseFromMdoc(zSlice):
+    def _getDoseFromMdoc(zSlice, accumulatedDose):
+        """It calculates the accumulated dose on the frames represented by zSlice, and add it to the
+        previous accumulated dose"""
         EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
+        FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumbers'  # Dose per frame in electrons per square Angstrom followed
+        # by number of frames at that dose
         DOSE_RATE = 'DoseRate'  # Dose rate to the camera, in electrons per unbinned pixel per second
         EXPOSURE_TIME = 'ExposureTime'  # Image exposure time
         MIN_MAX_MEAN = 'MinMaxMean'  # Minimum, maximum, and mean value for this image
@@ -414,74 +484,85 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         def _keysInDict(listOfKeys):
             return all([key in zSlice.keys() for key in listOfKeys])
 
-        # Different ways of calculating the dose, ordered by priority
-        expDose = 0
-        if EXPOSURE_DOSE in zSlice:
-            expDose = float(zSlice[EXPOSURE_DOSE])
+        # Different ways of calculating the dose, ordered by priority considering the possible variability between
+        # different mdoc files
+        newDose = 0
 
-        if not expDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
+        # Directly from field ExposureDose
+        if EXPOSURE_DOSE in zSlice:
+            expDoseVal = zSlice[EXPOSURE_DOSE]
+            if expDoseVal:
+                newDose = float(expDoseVal)
+
+        # Directly from field FrameDosesAndNumbers
+        if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
+            frameDoseAndNums = zSlice[FRAME_DOSES_AND_NUMBERS]
+            if frameDoseAndNums:
+                newDose = float(list(frameDoseAndNums.strip())[-1])  # Get the mean from a string like '0 6'
+
+        # Calculated from fields DoseRate and ExposureTime
+        if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
             doseRate = zSlice[DOSE_RATE]
             expTime = zSlice[EXPOSURE_TIME]
             if doseRate and expTime:
-                expDose = float(doseRate) * float(expTime)
+                newDose = float(doseRate) * float(expTime)
 
-        if not expDose and _keysInDict([MIN_MAX_MEAN, PIXEL_SIZE, COUNTS_PER_ELECTRON]):
+        # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
+        if not newDose and _keysInDict([MIN_MAX_MEAN, PIXEL_SIZE, COUNTS_PER_ELECTRON]):
             minMaxMean = zSlice[MIN_MAX_MEAN]
             pixelSize = zSlice[PIXEL_SIZE]
             counts = zSlice[COUNTS_PER_ELECTRON]
             if all([minMaxMean, pixelSize, counts]):
                 meanVal = list(minMaxMean.strip())[-1]  # Get the mean from a string like '-42 2441 51.7968'
-                expDose = (float(meanVal)/int(counts)) / float(pixelSize)**2
+                newDose = (float(meanVal)/int(counts)) / float(pixelSize)**2
 
-        return expDose
+        return newDose + accumulatedDose
 
     @staticmethod
     def _getAngleMovieFileName(subFramePath):
         # PureWindowsPath pathlib is ised to make possible deal with different path separators, like \\
         return PureWindowsPath(subFramePath).parts[-1]
 
-    @staticmethod
-    def _getTsIdFromMdocData(baseNameList):
-        """Find the most common substring in the list of subFrame base names to get the tsId"""
-        def _findStem(arr):
-            """function to find the stem (longest common substring) from the string array"""
-            # Determine size of the array
-            n = len(arr)
-            # Take first word from array as reference
-            s = arr[0]
-            l = len(s)
-            res = ""
-            for i in range(l):
-                for j in range(i + 1, l + 1):
-                    # generating all possible substrings
-                    # of our reference string arr[0] i.e s
-                    stem = s[i:j]
-                    k = 1
-                    for k in range(1, n):
-                        # Check if the generated stem is
-                        # common to all words
-                        if stem not in arr[k]:
-                            break
-                    # If current substring is present in
-                    # all strings and its length is greater
-                    # than current result
-                    if k + 1 == n and len(res) < len(stem):
-                        res = stem
-
-            return res
-
-        d = _findStem(baseNameList).replace('_0', '')
-        return d
+    # @staticmethod
+    # def _getTsIdFromMdocData(baseNameList):
+    #     """Find the most common substring in the list of subFrame base names to get the tsId"""
+    #     def _findStem(arr):
+    #         """function to find the stem (longest common substring) from the string array"""
+    #         # Determine size of the array
+    #         n = len(arr)
+    #         # Take first word from array as reference
+    #         s = arr[0]
+    #         l = len(s)
+    #         res = ""
+    #         for i in range(l):
+    #             for j in range(i + 1, l + 1):
+    #                 # generating all possible substrings
+    #                 # of our reference string arr[0] i.e s
+    #                 stem = s[i:j]
+    #                 k = 1
+    #                 for k in range(1, n):
+    #                     # Check if the generated stem is
+    #                     # common to all words
+    #                     if stem not in arr[k]:
+    #                         break
+    #                 # If current substring is present in
+    #                 # all strings and its length is greater
+    #                 # than current result
+    #                 if k + 1 == n and len(res) < len(stem):
+    #                     res = stem
+    #
+    #         return res
+    #
+    #     d = _findStem(baseNameList).replace('_0', '')
+    #     return d
 
     def _genTsAcquisitionFromMdoc(self, zSlice):
-        expDose = self._getDoseFromMdoc(zSlice)
         acq = Acquisition()
         acq.setVoltage(zSlice.get('Voltage', self.voltage.get()))
         acq.setSphericalAberration(self.sphericalAberration.get())
         acq.setAmplitudeContrast(self.amplitudeContrast.get())
         acq.setMagnification(zSlice.get('Magnification', self.magnification.get()))
         acq.setDoseInitial(self.doseInitial.get())
-        acq.setDosePerFrame(expDose if expDose else self.dosePerFrame.get())
 
         return acq
 
