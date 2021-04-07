@@ -34,7 +34,10 @@ DataSet(name='tomo-em', folder='tomo-em',
                'subtomo': 'basename.hdf',
                'eman_coordinates': 'coordinates3Deman2',
                'etomo': 'tutorialData',
-               'empiar': 'EMPIAR-10164'
+               'empiar': 'EMPIAR-10164',
+               'tsMParentFolder': 'ts_tsM_and_mdocs',
+               'tsM10Dir': 'ts_tsM_and_mdocs/Tomo_10',
+               'tsM31Dir': 'ts_tsM_and_mdocs/Tomo_31'
         })
 
 DataSet(name='reliontomo', folder='reliontomo',
