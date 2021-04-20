@@ -85,30 +85,27 @@ def setOfMeshes2Files(meshes, path):
 
 class MDoc:
 
-    _isImportingTsMovies = None
-    _mdocFileName = None
-    _tsId = None
-    # Acquisition general attributes
-    _voltage = None
-    _magnification = None
-    _samplingRate = None
-    # Acquisition specific attributes (per angle)
-    _angles = []
-    _angleMovieFiles = []
-    _accumulatedDoses = []
-
     def __init__(self, fileName, isImportingTsMovies=True):
         self._mdocFileName = fileName
         self.isImportingTsMovies = isImportingTsMovies
+        self._tsId = None
+        # Acquisition general attributes
+        self._voltage = None
+        self._magnification = None
+        self._samplingRate = None
+        # Acquisition specific attributes (per angle)
+        self._angles = []
+        self._angleMovieFiles = []
+        self._accumulatedDoses = []
 
     def read(self):
         validateTSFromMdocErrMsgList = ''
         tsFile = None
         mdoc = self._mdocFileName
-        zSlices = self._parseMdoc()
+        headerDict, zSlices = self._parseMdoc()
 
         # Get acquisition general info
-        self._getAcquisitionInfoFromMdoc(zSlices[0])
+        self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
         self._tsId = removeBaseExt(mdoc)
         parentFolder = getParentFolder(mdoc)
         if not self.isImportingTsMovies:
@@ -133,34 +130,43 @@ class MDoc:
     def _parseMdoc(self):
         """
         Parse the mdoc file and return a list with a dict key=value for each
-        of the [Zvalue = X] sections
-        :return: list of dictonaries
+        of the [Zvalue = X] sections and a dictionary for the first lines global variables.
+        :return: dictionary (header), list of dictonaries (Z slices)
         """
-        # TODO: read also the first lines data and use it as defaults in method _getAcquisitionInfoFromMdoc in case the desired info does not appear in the first slice
-
+        headerDict = {}
+        headerParsed = False
         zvalueList = []
 
         with open(self._mdocFileName) as f:
             for line in f:
                 if line.startswith('[ZValue'):
                     # We have found a new Zvalue
+                    headerParsed = True
                     zvalue = int(line.split(']')[0].split('=')[1])
                     if zvalue != len(zvalueList):
                         raise Exception("Unexpected ZValue = %d" % zvalue)
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
                 else:
-                    if line.strip() and zvalueList:
+                    if not line.startswith('[T') and line.strip():
                         key, value = line.split('=')
-                        zvalueDict[key.strip()] = value.strip()
+                        if not headerParsed:
+                            headerDict[key.strip()] = value.strip()
+                        if zvalueList:
+                            zvalueDict[key.strip()] = value.strip()
 
-        return zvalueList
+        return headerDict, zvalueList
 
-    def _getAcquisitionInfoFromMdoc(self, firstSlice):
-        # Check info from first slice
-        self._voltage = firstSlice.get('Voltage', None)
-        self._magnification = firstSlice.get('Magnification', None)
-        self._samplingRate = firstSlice.get('PixelSpacing', None)
+    def _getAcquisitionInfoFromMdoc(self, headerDict, firstSlice):
+        """Acquisition data is read from to data sources (from higher to lower priority):
+            - From the first ZSlice data.
+            - From the file header data."""
+        VOLTAGE = 'Voltage'
+        MAGNIFICATION = 'Magnification'
+        PIXEL_SPACING = 'PixelSpacing'
+        self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, None))
+        self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, None))
+        self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, None))
 
     def _getSlicesData(self, zSlices, tsFile):
         parentFolder = getParentFolder(self._mdocFileName)
@@ -171,7 +177,8 @@ class MDoc:
             # Files
             self._angleMovieFiles.append(self._getAngleMovieFileName(parentFolder, zSlice, tsFile))
             # Doses
-            self._accumulatedDoses.append(self._getDoseFromMdoc(zSlice, accumulatedDose))
+            accumulatedDose = self._getDoseFromMdoc(zSlice, accumulatedDose)
+            self._accumulatedDoses.append(accumulatedDose)
 
     @staticmethod
     def _getAngleMovieFileName(parentFolder, zSlice, tsFile):
@@ -258,6 +265,30 @@ class MDoc:
             validateMdocContentsErrorMsgList.append(' '.join(msg))
 
         return validateMdocContentsErrorMsgList
+
+    def getFileName(self):
+        return self._mdocFileName
+
+    def getTsId(self):
+        return self._tsId
+
+    def getVoltage(self):
+        return self._voltage
+
+    def getMagnification(self):
+        return self._magnification
+
+    def getSamplingRate(self):
+        return self._samplingRate
+
+    def getTiltAngles(self):
+        return self._angles
+
+    def getAngleMovieFiles(self):
+        return self._angleMovieFiles
+
+    def getAccumDoses(self):
+        return self._accumulatedDoses
 
 
 

@@ -345,7 +345,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
         protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeries', None)
-        self._checkResults(outputSet, isTsMovie, dimensions=(1440, 1024, 1))  # ts and tsM has different dimensions
+        self._checkResults(outputSet, isTsMovie, dimensions=(1440, 1024, 1))  # ts and tsM have different dimensions
         # because they have been downsampled separately in order to get a lighter test dataset
 
 
