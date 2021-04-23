@@ -37,7 +37,8 @@ DataSet(name='tomo-em', folder='tomo-em',
                'empiar': 'EMPIAR-10164',
                'tsMParentFolder': 'ts_tsM_and_mdocs',
                'tsM10Dir': 'ts_tsM_and_mdocs/Tomo_10',
-               'tsM31Dir': 'ts_tsM_and_mdocs/Tomo_31'
+               'tsM31Dir': 'ts_tsM_and_mdocs/Tomo_31',
+               'empiarMdocDir': 'ts_tsM_and_mdocs/mdocsEMPIAR',
         })
 
 DataSet(name='reliontomo', folder='reliontomo',

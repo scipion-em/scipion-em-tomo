@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
 import os
 import random
 from os.path import join
@@ -32,6 +33,7 @@ import pwem.protocols as emprot
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pwem import Domain
 from pwem.objects import CTFModel
+from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
 from ..objects import SetOfTiltSeriesM, SetOfTiltSeries
@@ -235,7 +237,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
         cls.ts10Dir = cls.dataset.getFile('tsM10Dir')
         cls.ts31Dir = cls.dataset.getFile('tsM31Dir')
         cls.path = cls.dataset.getPath()
-        cls.pattern = '*/*.mdoc'
+        cls.pattern = '*/stack*.mdoc'
         cls.sRate = 1.716
 
     def _getListOfFileNames(self, tomoNum, isTsMovie):
@@ -347,6 +349,29 @@ class TestTomoImportTsFromMdoc(BaseTest):
         outputSet = getattr(protImport, 'outputTiltSeries', None)
         self._checkResults(outputSet, isTsMovie, dimensions=(1440, 1024, 1))  # ts and tsM have different dimensions
         # because they have been downsampled separately in order to get a lighter test dataset
+
+    def test_mdocFileChecker(self):
+        # JORGE
+        import os
+        fname = "/home/jjimenez/Desktop/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
+        mdocList = glob.glob(join(self.dataset.getFile('empiarMdocDir'), '*.mdoc'))
+        self.assertEqual(len(mdocList), 10)
+
+        errorMsgList = []
+        for mdoc in mdocList:
+            mdocObj = MDoc(mdoc)
+            errorMsgList.append(mdocObj.read(isImportingTsMovies=True, ignoreFilesValidation=True))
+
+        a = 1
 
 
 class TestTomoSubSetsTs(BaseTest):

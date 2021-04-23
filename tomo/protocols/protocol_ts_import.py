@@ -45,7 +45,7 @@ from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 
-from tomo.convert import getAnglesFromHeader, getAnglesFromMdoc, getAnglesFromTlt, MDoc
+from tomo.convert import getAnglesFromHeader, getAnglesFromMdoc, getAnglesFromTlt
 from .protocol_base import ProtTomoBase
 
 
@@ -426,12 +426,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
         self.meanDosesPerFrame = OrderedDict()
-        isImportingTsMovies = self._isImportingTsMovies()
         validationErrors = []
 
         for mdoc in mdocList:
-            mdocObj = MDoc(mdoc, isImportingTsMovies=isImportingTsMovies)
-            validationError = mdocObj.read()
+            mdocObj = MDoc(mdoc)
+            validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
             if validationError:
                 validationErrors.append(validationError)
                 # Continue parsing the remaining mdoc files to provide a fully detailed error message
@@ -441,24 +440,20 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             tsId = mdocObj.getTsId()
             fileOrderAngleList = []
             accumulatedDoseList = []
-            counter = 0
-            for taFile, tiltAngle, accumDose in zip(mdocObj.getAngleMovieFiles(),
-                                                    mdocObj.getTiltAngles(),
-                                                    mdocObj.getAccumDoses()):
+            for tiltMetadata in mdocObj.getTiltsMetadata():
                 fileOrderAngleList.append((
-                    taFile,                         # Filename
-                    '{:03d}'.format(counter),       # Acquisition order
-                    tiltAngle,                      # Tilt angle
+                    tiltMetadata.getAngleMovieFile(),                    # Filename
+                    '{:03d}'.format(tiltMetadata.getAcqOrder()),         # Acquisition order
+                    tiltMetadata.getTiltAngle(),                         # Tilt angle
                 ))
-                accumulatedDoseList.append(accumDose)
-                counter += 1
+                accumulatedDoseList.append(tiltMetadata.getAccumDose())
 
             # self._getTsIdFromMdocData(fileList)
             matchingFiles[tsId] = fileOrderAngleList
             self.acquisitions[tsId] = acquisition
             self.sRates[tsId] = mdocObj.getSamplingRate()
             self.accumDoses[tsId] = accumulatedDoseList
-            self.meanDosesPerFrame[tsId] = accumulatedDoseList[-1]/counter
+            self.meanDosesPerFrame[tsId] = accumulatedDoseList[-1]/len(accumulatedDoseList)
 
         if validationErrors:
             raise Exception(' '.join(validationErrors))
@@ -800,3 +795,246 @@ class ProtImportTsMovies(ProtImportTsBase):
                 return ['When importing movies, {TA} and {TO} should be in the '
                         'files pattern.']
         return []
+
+
+class MDoc:
+
+    def __init__(self, fileName):
+        self._mdocFileName = fileName
+        self._tsId = None
+        # Acquisition general attributes
+        self._voltage = None
+        self._magnification = None
+        self._samplingRate = None
+        # Acquisition specific attributes (per angle)
+        self._tiltsMetadata = []
+
+    def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
+        validateTSFromMdocErrMsgList = ''
+        tsFile = None
+        mdoc = self._mdocFileName
+        headerDict, zSlices = self._parseMdoc()
+
+        # Get acquisition general info
+        self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
+        self._tsId = removeBaseExt(mdoc)
+        parentFolder = getParentFolder(mdoc)
+        if not isImportingTsMovies:
+            tsFile = join(parentFolder, self._tsId + '.mrcs')
+            validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
+
+        # Get acquisition specific (per angle) info
+        self._getSlicesData(zSlices, tsFile)
+
+        # Check Mdoc info read
+        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation)
+
+        # Check all the possible errors found
+        exceptionMsg = ''
+        if validateTSFromMdocErrMsgList:
+            exceptionMsg += ' '.join(validateTSFromMdocErrMsgList)
+        if validateMdocContentsErrorMsgList:
+            exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
+
+        return exceptionMsg
+
+    def _parseMdoc(self):
+        """
+        Parse the mdoc file and return a list with a dict key=value for each
+        of the [Zvalue = X] sections and a dictionary for the first lines global variables.
+        :return: dictionary (header), list of dictonaries (Z slices)
+        """
+        headerDict = {}
+        headerParsed = False
+        zvalueList = []
+
+        with open(self._mdocFileName) as f:
+            for line in f:
+                if line.startswith('[ZValue'):
+                    # We have found a new Zvalue
+                    headerParsed = True
+                    zvalue = int(line.split(']')[0].split('=')[1])
+                    if zvalue != len(zvalueList):
+                        raise Exception("Unexpected ZValue = %d" % zvalue)
+                    zvalueDict = {}
+                    zvalueList.append(zvalueDict)
+                else:
+                    if not line.startswith('[T') and line.strip():
+                        key, value = line.split('=')
+                        if not headerParsed:
+                            headerDict[key.strip()] = value.strip()
+                        if zvalueList:
+                            zvalueDict[key.strip()] = value.strip()
+
+        return headerDict, zvalueList
+
+    def _getAcquisitionInfoFromMdoc(self, headerDict, firstSlice):
+        """Acquisition data is read from to data sources (from higher to lower priority):
+            - From the first ZSlice data.
+            - From the file header data."""
+        VOLTAGE = 'Voltage'
+        MAGNIFICATION = 'Magnification'
+        PIXEL_SPACING = 'PixelSpacing'
+        self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, None))
+        self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, None))
+        self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, None))
+
+    def _getSlicesData(self, zSlices, tsFile):
+        parentFolder = getParentFolder(self._mdocFileName)
+        accumulatedDose = 0
+        for counter, zSlice in enumerate(zSlices):
+            accumulatedDose = self._getDoseFromMdoc(zSlice, accumulatedDose)
+            self._tiltsMetadata.append(TiltMetadata(
+                angle=zSlice.get('TiltAngle', None),
+                angleFile=self._getAngleMovieFileName(parentFolder, zSlice, tsFile),
+                acqOrder=counter,
+                accumDose=accumulatedDose
+            ))
+
+    @staticmethod
+    def _getAngleMovieFileName(parentFolder, zSlice, tsFile):
+        if tsFile:
+            return tsFile
+        else:
+            # PureWindowsPath pathlib is ised to make possible deal with different path separators, like \\
+            return join(parentFolder, PureWindowsPath(zSlice['SubFramePath']).parts[-1])
+
+    @staticmethod
+    def _getDoseFromMdoc(zSlice, accumulatedDose):
+        """It calculates the accumulated dose on the frames represented by zSlice, and add it to the
+        previous accumulated dose"""
+        EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
+        FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumbers'  # Dose per frame in electrons per square Angstrom followed
+        # by number of frames at that dose
+        DOSE_RATE = 'DoseRate'  # Dose rate to the camera, in electrons per unbinned pixel per second
+        EXPOSURE_TIME = 'ExposureTime'  # Image exposure time
+        MIN_MAX_MEAN = 'MinMaxMean'  # Minimum, maximum, and mean value for this image
+        PIXEL_SIZE = 'PixelSpacing'  # Pixel spacing in Angstroms for individual image
+        COUNTS_PER_ELECTRON = 'CountsPerElectron'
+
+        def _keysInDict(listOfKeys):
+            return all([key in zSlice.keys() for key in listOfKeys])
+
+        # Different ways of calculating the dose, ordered by priority considering the possible variability between
+        # different mdoc files
+        newDose = 0
+
+        # Directly from field ExposureDose
+        if EXPOSURE_DOSE in zSlice:
+            expDoseVal = zSlice[EXPOSURE_DOSE]
+            if expDoseVal:
+                newDose = float(expDoseVal)
+
+        # Directly from field FrameDosesAndNumbers
+        if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
+            frameDoseAndNums = zSlice[FRAME_DOSES_AND_NUMBERS]
+            if frameDoseAndNums:
+                newDose = float(list(frameDoseAndNums.strip())[-1])  # Get the mean from a string like '0 6'
+
+        # Calculated from fields DoseRate and ExposureTime
+        if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
+            doseRate = zSlice[DOSE_RATE]
+            expTime = zSlice[EXPOSURE_TIME]
+            if doseRate and expTime:
+                newDose = float(doseRate) * float(expTime)
+
+        # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
+        if not newDose and _keysInDict([MIN_MAX_MEAN, PIXEL_SIZE, COUNTS_PER_ELECTRON]):
+            minMaxMean = zSlice[MIN_MAX_MEAN]
+            pixelSize = zSlice[PIXEL_SIZE]
+            counts = zSlice[COUNTS_PER_ELECTRON]
+            if all([minMaxMean, pixelSize, counts]):
+                meanVal = list(minMaxMean.strip())[-1]  # Get the mean from a string like '-42 2441 51.7968'
+                newDose = (float(meanVal) / int(counts)) / float(pixelSize) ** 2
+
+        return newDose + accumulatedDose
+
+    @staticmethod
+    def _validateTSFromMdoc(mdoc, tsFile):
+        errMsg = ''
+        if not exists(tsFile):
+            errMsg = '\nMdoc --> %s\nExpected tilt series file not found \n%s' % (mdoc, tsFile)
+
+        return errMsg
+
+    def _validateMdocInfoRead(self, ignoreFilesValidation=False):
+        validateMdocContentsErrorMsgList = []
+        msg = ['\n*Data not found in file*\n%s:\n' % self._mdocFileName]
+        missingFiles = []
+        missingAnglesIndices = []
+        for i, tiltMetadata in enumerate(self._tiltsMetadata):
+            # Check the angles
+            if not tiltMetadata.getTiltAngle():
+                missingAnglesIndices.append(str(i))
+            # Check the angle stack files read
+            if not ignoreFilesValidation:
+                # Ignore the files validation is sometimes used for test purposes
+                file = tiltMetadata.getAngleMovieFile()
+                if not exists(file):
+                    missingFiles.append(file)
+
+        if not self._voltage:
+            msg.append('*Voltage*\n')
+        if not self._magnification:
+            msg.append('*Magnification*\n')
+        if not self._samplingRate:
+            msg.append('*PixelSpacing*\n')
+        if missingAnglesIndices:
+            msg.append('*TiltAngle*: %s\n' % ' '.join(missingAnglesIndices))
+        if missingFiles:
+            msg.append('*Missing files*:\n%s\n' % ' '.join(missingFiles))
+        if len(msg) > 1:
+            validateMdocContentsErrorMsgList.append(' '.join(msg))
+
+        return validateMdocContentsErrorMsgList
+
+    def getFileName(self):
+        return self._mdocFileName
+
+    def getTsId(self):
+        return self._tsId
+
+    def getVoltage(self):
+        return self._voltage
+
+    def getMagnification(self):
+        return self._magnification
+
+    def getSamplingRate(self):
+        return self._samplingRate
+
+    def getTiltsMetadata(self):
+        return self._tiltsMetadata
+
+
+class TiltMetadata:
+
+    def __init__(self, angle=None, angleFile=None, acqOrder=None, accumDose=None):
+        self._angle = angle
+        self._angleFile = angleFile
+        self._acqOrder = acqOrder
+        self._accumDose = accumDose
+
+    def setTiltAngle(self, tiltAngle):
+        self._angle = tiltAngle
+
+    def setAngleMovieFile(self, angleMovieFile):
+        self._angleFile = angleMovieFile
+
+    def setAcqOorder(self, order):
+        self._acqOrder = order
+
+    def setAccumDose(self, accumDose):
+        self._accumDose = accumDose
+
+    def getTiltAngle(self):
+        return self._angle
+
+    def getAngleMovieFile(self):
+        return self._angleFile
+
+    def getAcqOrder(self):
+        return self._acqOrder
+
+    def getAccumDose(self):
+        return self._accumDose
