@@ -23,15 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import join, exists
-from pathlib import PureWindowsPath
-
 import numpy as np
-
 from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
-
 import pyworkflow.utils as pwutils
-from pyworkflow.utils import removeBaseExt, getParentFolder
 
 
 class TomoImport:
