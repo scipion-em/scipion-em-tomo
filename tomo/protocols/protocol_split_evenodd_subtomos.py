@@ -35,7 +35,7 @@ from tomo.protocols import ProtTomoBase
 class ProtSplitEvenOddTomoSet(EMProtocol, ProtTomoBase):
     """ Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
     """
-    _label = 'split even/odd'
+    _label = 'split even/odd subtomos'
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
