@@ -350,28 +350,71 @@ class TestTomoImportTsFromMdoc(BaseTest):
         self._checkResults(outputSet, isTsMovie, dimensions=(1440, 1024, 1))  # ts and tsM have different dimensions
         # because they have been downsampled separately in order to get a lighter test dataset
 
-    def test_mdocFileChecker(self):
-        # JORGE
-        import os
-        fname = "/home/jjimenez/Desktop/test_JJ.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        import time
-        time.sleep(10)
-        # JORGE_END
-        mdocList = glob.glob(join(self.dataset.getFile('empiarMdocDir'), '*.mdoc'))
-        self.assertEqual(len(mdocList), 10)
+    def test_mdocFileCheckerRealOk(self):
+        # Real data from EMPIAR --> OK files
+        mdocList = glob.glob(join(self.dataset.getFile('empiarMdocDirOk'), '*.mdoc'))
+        expectedErrorKeyWordList = None
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
-        errorMsgList = []
-        for mdoc in mdocList:
+    def test_mdocFileCheckerRealNoOk(self):
+        # Real data from EMPIAR --> No OK files
+        dataSet = self.dataset.filesDict
+        noOkMdocDir = self.dataset.getFile('empiarMdocDirNoOk')
+        mdocList = [
+            join(noOkMdocDir, dataSet['realFileNoVoltage1']),
+            join(noOkMdocDir, dataSet['realFileNoVoltage2'])
+        ]
+        VOLTAGE = '*Voltage*'
+        expectedErrorKeyWordList = [
+            VOLTAGE,                      # Missing voltage
+            VOLTAGE                       # Missing voltage
+        ]
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def test_mdocFileCheckerSimpleError(self):
+        # Edited data to simulate simple errors
+        dataSet = self.dataset.filesDict
+        simErrorMdocDir = self.dataset.getFile('simErrorMdocDir')
+        mdocList = [
+            join(simErrorMdocDir, dataSet['noMaginficationMdoc']),
+            join(simErrorMdocDir, dataSet['noSamplingRateMdoc'])
+        ]
+        expectedErrorKeyWordList = [
+            '*Magnification*',          # Missing Magnification
+            '*PixelSpacing*'            # Missing Sampling Rate
+        ]
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def test_mdocFileCheckerMultipleErrors(self):
+        # Edited data to simulate multiple errors, which are more than one acquisition magnitude or an angle specific
+        # error present in more than one angular slice
+        dataSet = self.dataset.filesDict
+        simErrorMdocDir = self.dataset.getFile('simErrorMdocDir')
+        mdocList = [
+            join(simErrorMdocDir, dataSet['noVoltagenoSRateMdoc']),
+            join(simErrorMdocDir, dataSet['someMissingAnglesMdoc'])
+        ]
+        expectedErrorKeyWordList = [
+            ['*Voltage*', '*PixelSpacing*'],   # Missing voltage and sampling rate
+            '*TiltAngle*: 1 7 48'              # Missing tilt angles in slices 1, 7 and 48
+        ]
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def _checkMDocParsingErrorMsg(self, mdocList, expectedErrorKeyWordList):
+        for i, mdoc in enumerate(mdocList):
             mdocObj = MDoc(mdoc)
-            errorMsgList.append(mdocObj.read(isImportingTsMovies=True, ignoreFilesValidation=True))
+            errorMsg = mdocObj.read(
+                isImportingTsMovies=True,
+                ignoreFilesValidation=True)  # Ignore files validation in order to make the dataset lighter
 
-        a = 1
+            if expectedErrorKeyWordList:  # There can be more than one error keyword to be checked per file
+                keywords = expectedErrorKeyWordList[i]
+                if type(keywords) is str:
+                    keywords = [keywords]
+                for errorKeyword in keywords:
+                    self.assertTrue(errorKeyword in errorMsg)
+            else:
+                self.assertTrue(not errorMsg)
 
 
 class TestTomoSubSetsTs(BaseTest):
