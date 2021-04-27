@@ -23,11 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
 import numpy as np
-
 from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
-
 import pyworkflow.utils as pwutils
 
 
@@ -78,3 +75,7 @@ def setOfMeshes2Files(meshes, path):
         coords.append([coor.getX(), coor.getY(), coor.getZ(), coor.getGroupId()])
     if coords:
         writeFile()
+
+
+
+

@@ -23,15 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import glob
 import os
 import random
+from os.path import join
 
 import pyworkflow.utils as pwutils
 import pwem.protocols as emprot
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pwem import Domain
 from pwem.objects import CTFModel
+from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
 from ..objects import SetOfTiltSeriesM, SetOfTiltSeries
@@ -158,7 +160,7 @@ class TestTomoBaseProtocols(BaseTest):
         self.launchProtocol(protMc)
 
 
-class TestTomoImportTs(BaseTest):
+class TestTomoImportTsFromPattern(BaseTest):
         @classmethod
         def setUpClass(cls):
             setupTestProject(cls)
@@ -212,6 +214,207 @@ class TestTomoImportTs(BaseTest):
             output = getattr(protImport, 'outputTiltSeries', None)
             self.assertFalse(output is None)
             self.assertEqual(output.getSize(), 2)
+
+
+class TestTomoImportTsFromMdoc(BaseTest):
+
+    VOLTAGE = 'voltage'
+    MAGNIFICATION = 'magnification'
+    SPH_ABERRATION = 'sphAberration'
+    AMP_CONTRAST = 'ampContrast'
+    DOSE_PER_FRAME = 'dosePerFrame'
+    PIXEL_SIZE = 'pixelSize'
+    SIZE = 'size'
+    FILENAME_LIST = 'filenames'
+    ACCUM_DOSE_LIST = 'doses'
+    ANGLE_LIST = 'angles'
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.parentDir = cls.dataset.getFile('tsMParentFolder')
+        cls.ts10Dir = cls.dataset.getFile('tsM10Dir')
+        cls.ts31Dir = cls.dataset.getFile('tsM31Dir')
+        cls.path = cls.dataset.getPath()
+        cls.pattern = '*/stack*.mdoc'
+        cls.sRate = 1.716
+
+    def _getListOfFileNames(self, tomoNum, isTsMovie):
+        fpath = self.ts31Dir if tomoNum == 31 else self.ts10Dir
+        angles = [0, 3, -3, -6, 6]
+        if isTsMovie:
+            # Each slice will be a stack of frames, which means a different file
+            pattern = 'SKvesicles_Pertuzumab_tomo%2.0f_%03d_%1.1f.mrc'
+
+            return [join(self.dataset.getPath(), fpath, pattern % (tomoNum, i, angle))
+                    for i, angle in enumerate(angles)]
+        else:
+            # Each slice will be referred to the same stack file, the one which represents the tilt series
+            return [join(self.dataset.getPath(), fpath, 'stack%2.0f.mrcs' % tomoNum)] * len(angles)
+
+    @classmethod
+    def _genTestDict(cls, **kwargs):
+        return {
+            cls.VOLTAGE: kwargs.get(cls.VOLTAGE, None),
+            cls.MAGNIFICATION: kwargs.get(cls.MAGNIFICATION, None),
+            cls.SPH_ABERRATION: kwargs.get(cls.SPH_ABERRATION, None),
+            cls.AMP_CONTRAST: kwargs.get(cls.AMP_CONTRAST, None),
+            cls.DOSE_PER_FRAME: kwargs.get(cls.DOSE_PER_FRAME, None),
+            cls.PIXEL_SIZE: kwargs.get(cls.PIXEL_SIZE, None),
+            cls.SIZE: kwargs.get(cls.SIZE, None),
+            cls.FILENAME_LIST: kwargs.get(cls.FILENAME_LIST, None),
+            cls.ACCUM_DOSE_LIST: kwargs.get(cls.ACCUM_DOSE_LIST, None),
+            cls.ANGLE_LIST: kwargs.get(cls.ANGLE_LIST, None)
+        }
+
+    def _genTestData(self, isTsMovie):
+        return {
+            'stack31': self._genTestDict(
+                voltage=300,
+                magnification=53000,
+                sphAberration=2.7,
+                ampContrast=0.1,
+                dosePerFrame=0.0891,
+                pixelSize=self.sRate,
+                size=5,
+                filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
+                doses=[0.0424, 0.2121, 0.2546, 0.3394, 0.4455],
+                angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684]
+            ),
+            'stack10': self._genTestDict(
+                voltage=300,
+                magnification=53000,
+                sphAberration=2.7,
+                ampContrast=0.1,
+                dosePerFrame=0.0806,
+                pixelSize=self.sRate,
+                size=5,
+                filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
+                doses=[0.1909, 0.2333, 0.2546, 0.2970, 0.4030],
+                angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684]
+            )
+        }
+
+    def _runImportTiltSeries(self, isTsMovie=False):
+        prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
+        protImport = self.newProtocol(
+            prot,
+            filesPath=self.parentDir,
+            filesPattern=self.pattern)
+        self.launchProtocol(protImport)
+        return protImport
+
+    def _checkResults(self, outputSet, isTsMovie, dimensions):
+        # Generate the test data
+        testDict = self._genTestData(isTsMovie)
+        # Check set properties
+        self.assertSetSize(outputSet, size=2)
+        self.assertAlmostEqual(outputSet.getSamplingRate(), self.sRate, delta=0.001)
+        self.assertEqual(outputSet.getDimensions(), dimensions)
+        # Check tilt series movies
+        for tsM in outputSet:
+            testDataDict = testDict[tsM.getTsId()]
+            # Check set acquisition
+            acq = tsM.getAcquisition()
+            self.assertAlmostEqual(tsM.getSamplingRate(), testDataDict[self.PIXEL_SIZE], delta=0.001)
+            self.assertAlmostEqual(acq.getVoltage(), testDataDict[self.VOLTAGE], delta=0.1)
+            self.assertAlmostEqual(acq.getMagnification(), testDataDict[self.MAGNIFICATION], delta=0.1)
+            self.assertAlmostEqual(acq.getSphericalAberration(), testDataDict[self.SPH_ABERRATION], delta=0.01)
+            self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
+            self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
+            # Check angles and accumulated dose per angular acquisition (tilt series image)
+            filesList = testDataDict[self.FILENAME_LIST]
+            accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
+            angleList = testDataDict[self.ANGLE_LIST]
+            for i, tiM in enumerate(tsM):
+                self.assertEqual(tiM.getFileName(), filesList[i])
+                self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), accumDoseList[i], delta=0.0001)
+                self.assertAlmostEqual(tiM.getTiltAngle(), angleList[i], delta=0.0001)
+
+    def test_importTiltSeriesM(self):
+        isTsMovie = True
+        # Run protocol
+        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
+        # Check results
+        outputSet = getattr(protImport, 'outputTiltSeriesM', None)
+        self._checkResults(outputSet, isTsMovie, dimensions=(1152, 1152, 6))  # ts and tsM has different dimensions
+        # because they have been downsampled separately in order to get a lighter test dataset
+
+    def test_importTiltSeries(self):
+        isTsMovie = False
+        # Run protocol
+        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
+        # Check results
+        outputSet = getattr(protImport, 'outputTiltSeries', None)
+        self._checkResults(outputSet, isTsMovie, dimensions=(1440, 1024, 1))  # ts and tsM have different dimensions
+        # because they have been downsampled separately in order to get a lighter test dataset
+
+    def test_mdocFileCheckerRealOk(self):
+        # Real data from EMPIAR --> OK files
+        mdocList = glob.glob(join(self.dataset.getFile('empiarMdocDirOk'), '*.mdoc'))
+        expectedErrorKeyWordList = None
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def test_mdocFileCheckerRealNoOk(self):
+        # Real data from EMPIAR --> No OK files
+        dataSet = self.dataset.filesDict
+        noOkMdocDir = self.dataset.getFile('empiarMdocDirNoOk')
+        mdocList = [
+            join(noOkMdocDir, dataSet['realFileNoVoltage1']),
+            join(noOkMdocDir, dataSet['realFileNoVoltage2'])
+        ]
+        VOLTAGE = '*Voltage*'
+        expectedErrorKeyWordList = [
+            VOLTAGE,                      # Missing voltage
+            VOLTAGE                       # Missing voltage
+        ]
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def test_mdocFileCheckerSimpleError(self):
+        # Edited data to simulate simple errors
+        dataSet = self.dataset.filesDict
+        simErrorMdocDir = self.dataset.getFile('simErrorMdocDir')
+        mdocList = [
+            join(simErrorMdocDir, dataSet['noMaginficationMdoc']),
+            join(simErrorMdocDir, dataSet['noSamplingRateMdoc'])
+        ]
+        expectedErrorKeyWordList = [
+            '*Magnification*',          # Missing Magnification
+            '*PixelSpacing*'            # Missing Sampling Rate
+        ]
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def test_mdocFileCheckerMultipleErrors(self):
+        # Edited data to simulate multiple errors, which are more than one acquisition magnitude or an angle specific
+        # error present in more than one angular slice
+        dataSet = self.dataset.filesDict
+        simErrorMdocDir = self.dataset.getFile('simErrorMdocDir')
+        mdocList = [
+            join(simErrorMdocDir, dataSet['noVoltagenoSRateMdoc']),
+            join(simErrorMdocDir, dataSet['someMissingAnglesMdoc'])
+        ]
+        expectedErrorKeyWordList = [
+            ['*Voltage*', '*PixelSpacing*'],   # Missing voltage and sampling rate
+            '*TiltAngle*: 1 7 48'              # Missing tilt angles in slices 1, 7 and 48
+        ]
+        self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
+
+    def _checkMDocParsingErrorMsg(self, mdocList, expectedErrorKeyWordList):
+        for i, mdoc in enumerate(mdocList):
+            mdocObj = MDoc(mdoc)
+            errorMsg = mdocObj.read(
+                isImportingTsMovies=True,
+                ignoreFilesValidation=True)  # Ignore files validation in order to make the dataset lighter
+
+            if expectedErrorKeyWordList:  # There can be more than one error keyword to be checked per file
+                keywords = expectedErrorKeyWordList[i]
+                if type(keywords) is str:
+                    keywords = [keywords]
+                for errorKeyword in keywords:
+                    self.assertTrue(errorKeyword in errorMsg)
+            else:
+                self.assertTrue(not errorMsg)
 
 
 class TestTomoSubSetsTs(BaseTest):
