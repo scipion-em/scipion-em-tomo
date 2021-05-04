@@ -188,6 +188,7 @@ class TiltSeries(TiltSeriesBase):
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
+    USE_CREATE_COPY_FOR_SUBSET = True
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
