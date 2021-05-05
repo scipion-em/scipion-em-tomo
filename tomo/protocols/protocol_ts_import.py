@@ -287,7 +287,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     except OperationalError as e:
 
                         raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
-                                        "(avoid symbols as -) that can not start with a number." % ts)
+                                        "(avoid symbols as -) that can not start with a number. %s" % (ts, e))
 
                 if self.MDOC_DATA_SOURCE:
                     # Tilt series object dose per frame has been updated each time the tilt image dose per frame has
@@ -809,6 +809,19 @@ class MDoc:
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
+    def normalizeTSId(self, rawTSId):
+        """ Normalizes the name of a TS to prevent sqlite errors, it ends up as a table in a set"""
+        # remove paths and extension
+        normTSID = removeBaseExt(rawTSId)
+
+        # Avoid dots case: TS_234.mrc.mdoc
+        normTSID = normTSID.split(".")[0]
+
+        if normTSID[0].isdigit():
+            normTSID = "TS_" + normTSID
+
+        return normTSID
+
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
         validateTSFromMdocErrMsgList = ''
         tsFile = None
@@ -817,7 +830,7 @@ class MDoc:
 
         # Get acquisition general info
         self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
-        self._tsId = removeBaseExt(mdoc)
+        self._tsId = self.normalizeTSId(mdoc)
         parentFolder = getParentFolder(mdoc)
         if not isImportingTsMovies:
             tsFile = join(parentFolder, self._tsId + '.mrcs')
@@ -945,7 +958,7 @@ class MDoc:
             counts = zSlice[COUNTS_PER_ELECTRON]
             if all([minMaxMean, pixelSize, counts]):
                 meanVal = list(minMaxMean.strip())[-1]  # Get the mean from a string like '-42 2441 51.7968'
-                newDose = (float(meanVal) / int(counts)) / float(pixelSize) ** 2
+                newDose = (float(meanVal) / float(counts)) / float(pixelSize) ** 2
 
         return newDose + accumulatedDose
 
