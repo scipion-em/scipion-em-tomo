@@ -529,6 +529,7 @@ class TestTomoSubSetsTs(BaseTest):
                                        ignoreExtraAttributes=True)
         joinTsSets.inputSets.append(tsSubset1.outputTiltSeriesM)
         joinTsSets.inputSets.append(tsSubset2.outputTiltSeriesM)
+        joinTsSets.ignoreDuplicates.set(False)
         self.launchProtocol(joinTsSets, wait=True)
 
         print(pwutils.magentaStr("\n==> Split the subset 3 "))

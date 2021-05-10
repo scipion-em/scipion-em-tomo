@@ -250,22 +250,23 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             updateTiCallback: optional callback after TiltImage is created
         """
         for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
-            tsOut = self.ITEM_TYPE()
-            tsOut.copyInfo(ts)
-            tsOut.copyObjId(ts)
-            if updateTsCallback:
-                updateTsCallback(i, ts, tsOut)
-            self.append(tsOut)
-            for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
-                tiOut = tsOut.ITEM_TYPE()
-                tiOut.copyInfo(ti)
-                tiOut.copyObjId(ti)
-                tiOut.setLocation(ti.getLocation())
-                if updateTiCallback:
-                    updateTiCallback(j, ts, ti, tsOut, tiOut)
-                tsOut.append(tiOut)
+            if ts.isEnabled():
+                tsOut = self.ITEM_TYPE()
+                tsOut.copyInfo(ts)
+                tsOut.copyObjId(ts)
+                if updateTsCallback:
+                    updateTsCallback(i, ts, tsOut)
+                self.append(tsOut)
+                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
+                    tiOut = tsOut.ITEM_TYPE()
+                    tiOut.copyInfo(ti)
+                    tiOut.copyObjId(ti)
+                    tiOut.setLocation(ti.getLocation())
+                    if updateTiCallback:
+                        updateTiCallback(j, ts, ti, tsOut, tiOut)
+                    tsOut.append(tiOut)
 
-            self.update(tsOut)
+                self.update(tsOut)
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
