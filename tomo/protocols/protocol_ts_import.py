@@ -276,9 +276,24 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
                     try:
+                        # Link/move to extra
+                        if type(f) == tuple:
+                            imageFile = f[1]
+                        else:
+                            imageFile = f
+
+                        finalDestination = self._getExtraPath(os.path.basename(imageFile))
+                        self.copyOrLink(imageFile, finalDestination)
+
+                        if type(f) == tuple:
+                            f = f[0], finalDestination
+                        else:
+                            f = finalDestination
+
                         ti = tiClass(location=f,
                                      acquisitionOrder=to,
                                      tiltAngle=ta)
+
                         if self.MDOC_DATA_SOURCE:
                             ti.setAcquisition(tsObj.getAcquisition())
                             ti.getAcquisition().setDosePerFrame(doseList[counter])  # Accumulated dose in current ti
@@ -365,12 +380,12 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return []
 
     # -------------------------- BASE methods to be overridden -----------------
-    def _getImportChoices(self):
-        """ Return a list of possible choices
-        from which the import can be done.
-        (usually packages form such as: xmipp3, eman2, relion...etc.
-        """
-        return ['files']
+    # def _getImportChoices(self):
+    #     """ Return a list of possible choices
+    #     from which the import can be done.
+    #     (usually packages form such as: xmipp3, eman2, relion...etc.
+    #     """
+    #     return ['files']
 
     # -------------------------- UTILS functions -------------------------------
     def _initialize(self):
@@ -429,7 +444,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         validationErrors = []
 
         for mdoc in mdocList:
-            mdocObj = MDoc(mdoc)
+            mdocObj = MDoc(mdoc, voltage=self.voltage.get(), magnification=self.magnification.get(), samplingRate=self.samplingRate.get())
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
             if validationError:
                 validationErrors.append(validationError)
@@ -461,39 +476,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     def _isImportingTsMovies(self):
         return True if type(self) is ProtImportTsMovies else False
-
-    # @staticmethod
-    # def _getTsIdFromMdocData(baseNameList):
-    #     """Find the most common substring in the list of subFrame base names to get the tsId"""
-    #     def _findStem(arr):
-    #         """function to find the stem (longest common substring) from the string array"""
-    #         # Determine size of the array
-    #         n = len(arr)
-    #         # Take first word from array as reference
-    #         s = arr[0]
-    #         l = len(s)
-    #         res = ""
-    #         for i in range(l):
-    #             for j in range(i + 1, l + 1):
-    #                 # generating all possible substrings
-    #                 # of our reference string arr[0] i.e s
-    #                 stem = s[i:j]
-    #                 k = 1
-    #                 for k in range(1, n):
-    #                     # Check if the generated stem is
-    #                     # common to all words
-    #                     if stem not in arr[k]:
-    #                         break
-    #                 # If current substring is present in
-    #                 # all strings and its length is greater
-    #                 # than current result
-    #                 if k + 1 == n and len(res) < len(stem):
-    #                     res = stem
-    #
-    #         return res
-    #
-    #     d = _findStem(baseNameList).replace('_0', '')
-    #     return d
 
     def _genTsAcquisitionFromMdoc(self, voltage, magnification):
         acq = Acquisition()
@@ -530,23 +512,23 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             tsId = match.group('TS')
             return tsId
 
-        def _addOne(fileList, f, m):
+        def _addOne(fileList, file, match):
             """ Add one file matching to the list. """
-            fileList.append((f, int(m.group('TO')), float(m.group('TA'))))
+            fileList.append((file, int(match.group('TO')), float(match.group('TA'))))
 
-        def _addMany(fileList, f, m):
+        def _addMany(fileList, file, match):
             """ Add many 'files' (when angles in header or mdoc) to the list. """
             anglesFrom = self.getEnumText('anglesFrom')
 
             if anglesFrom == self.ANGLES_FROM_HEADER:
-                angles = getAnglesFromHeader(f)
+                angles = getAnglesFromHeader(file)
             elif anglesFrom == self.ANGLES_FROM_MDOC:
-                mdocFn = os.path.splitext(f)[0] + '.mdoc'
+                mdocFn = os.path.splitext(file)[0] + '.mdoc'
                 if not os.path.exists(mdocFn):
                     raise Exception("Missing angles file: %s" % mdocFn)
                 angles = getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
-                tltFn = os.path.splitext(f)[0] + '.tlt'
+                tltFn = os.path.splitext(file)[0] + '.tlt'
                 if not os.path.exists(tltFn):
                     raise Exception("Missing angles file: %s" % tltFn)
                 angles = getAnglesFromTlt(tltFn)
@@ -556,7 +538,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 raise Exception('Invalid angles option: %s' % anglesFrom)
 
             for i, a in enumerate(angles):
-                fileList.append(((i + 1, f), i + 1, a))
+                fileList.append(((i + 1, file), i + 1, a))
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
 
@@ -582,13 +564,20 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         return matchingFiles
 
-    def getCopyOrLink(self):
-        # Set a function to copyFile or createLink
-        # depending in the user selected option
-        if self.copyFiles:
+    def _getCopyOrLink(self):
+        """ Returns a function to copy or link files based on user selected option"""
+
+        if self.importAction.get()== self.IMPORT_COPY_FILES:
             return pw.utils.copyFile
+        elif self.importAction.get() == self.IMPORT_LINK_REL:
+            return pw.utils.createLink
         else:
             return pw.utils.createAbsLink
+
+    def copyOrLink(self, source, destination):
+        """ Calls the copy or link method chosen by the user in importAction option"""
+        func = self._getCopyOrLink()
+        func(source, destination)
 
     def fileModified(self, fileName, fileTimeout):
         """ Check if the fileName modification time is less
@@ -700,11 +689,11 @@ class ProtImportTs(ProtImportTsBase):
                                 self.ANGLES_FROM_TLT],
                        display=params.EnumParam.DISPLAY_HLIST,
                        label='Import angles from',
-                       help='Select how the tilt angles will be imported. '
-                            'It can be defined by range: Min, Max, Step '
-                            'or from image header, or from complementary'
-                            'mdoc or tlt files (should have the same filename '
-                            'but with the .mdoc or .tlt extension).')
+                       help="Choose how the tilt angles will be inferred. "
+                            "It can be taken from a range: Min, Max, Step "
+                            "or from the image header, or from an"
+                            "mdoc or tlt file (should have the SAME file name "
+                            "but with the .mdoc or .tlt extension at the end).")
 
         line = group.addLine('Tilt angular range',
                              condition='anglesFrom==0',  # ANGLES_FROM_RANGE
@@ -799,17 +788,18 @@ class ProtImportTsMovies(ProtImportTsBase):
 
 class MDoc:
 
-    def __init__(self, fileName):
+    def __init__(self, fileName, voltage=None, magnification=None, samplingRate = None):
         self._mdocFileName = fileName
         self._tsId = None
         # Acquisition general attributes
-        self._voltage = None
-        self._magnification = None
-        self._samplingRate = None
+        self._voltage = voltage
+        self._magnification = magnification
+        self._samplingRate = samplingRate
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
-    def normalizeTSId(self, rawTSId):
+    @staticmethod
+    def normalizeTSId(rawTSId):
         """ Normalizes the name of a TS to prevent sqlite errors, it ends up as a table in a set"""
         # remove paths and extension
         normTSID = removeBaseExt(rawTSId)
@@ -833,7 +823,10 @@ class MDoc:
         self._tsId = self.normalizeTSId(mdoc)
         parentFolder = getParentFolder(mdoc)
         if not isImportingTsMovies:
-            tsFile = join(parentFolder, self._tsId + '.mrcs')
+            # Some mdoc files point to an .st file stored in the ImageFile header line
+            tsFile = join(parentFolder, headerDict.get("ImageFile", None))
+            if not os.path.exists(tsFile):
+                tsFile = join(parentFolder, self._tsId + '.mrcs')
             validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
 
         # Get acquisition specific (per angle) info
@@ -855,7 +848,8 @@ class MDoc:
         """
         Parse the mdoc file and return a list with a dict key=value for each
         of the [Zvalue = X] sections and a dictionary for the first lines global variables.
-        :return: dictionary (header), list of dictonaries (Z slices)
+
+        :return: dictionary (header), list of dictionaries (Z slices)
         """
         headerDict = {}
         headerParsed = False
@@ -864,7 +858,7 @@ class MDoc:
         with open(self._mdocFileName) as f:
             for line in f:
                 if line.startswith('[ZValue'):
-                    # We have found a new Zvalue
+                    # We have found a new z value
                     headerParsed = True
                     zvalue = int(line.split(']')[0].split('=')[1])
                     if zvalue != len(zvalueList):
@@ -888,9 +882,9 @@ class MDoc:
         VOLTAGE = 'Voltage'
         MAGNIFICATION = 'Magnification'
         PIXEL_SPACING = 'PixelSpacing'
-        self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, None))
-        self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, None))
-        self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, None))
+        self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, self._voltage))
+        self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, self._magnification))
+        self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
 
     def _getSlicesData(self, zSlices, tsFile):
         parentFolder = getParentFolder(self._mdocFileName)
@@ -900,7 +894,7 @@ class MDoc:
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(parentFolder, zSlice, tsFile),
-                acqOrder=counter,
+                acqOrder=counter+1,
                 accumDose=accumulatedDose
             ))
 
