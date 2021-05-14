@@ -31,6 +31,7 @@ import threading
 from collections import OrderedDict
 import numpy as np
 import math
+import statistics
 import csv
 
 from pyworkflow.object import Integer
@@ -1107,12 +1108,28 @@ class CTFTomo(data.CTFModel):
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
         self._index = pwobj.Integer(kwargs.get('index', None))
+        self._defocusUDeviation = pwobj.Float()
+        self._isDefocusUDeviationInRange = pwobj.Boolean(True)
+        self._defocusVDeviation = pwobj.Float()
+        self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
     def getIndex(self):
         return self._index
 
     def setIndex(self, value):
         self._index = pwobj.Integer(value)
+
+    def getdefocusUDeviation(self):
+        return self._defocusUDeviation
+
+    def getIsDefocusUDeviationInRange(self):
+        return self._isDefocusUDeviationInRange
+
+    def getdefocusVDeviation(self):
+        return self._defocusVDeviation
+
+    def getIsDefocusVDeviationInRange(self):
+        return self._isDefocusVDeviationInRange
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -1339,6 +1356,20 @@ class CTFTomo(data.CTFModel):
         " Standardize the input values "
         self.standardize()
 
+    def getDefocusUDeviation(self, mean):
+        return abs(self.getDefocusU() - mean)
+
+    def isDefocusUDeviationInRange(self, mean, percentage=20):
+        defocusUDeviation = self.getDefocusUDeviation(mean)
+        return True if defocusUDeviation < percentage * mean else False
+
+    def getDefocusVDeviation(self, mean):
+        return abs(self.getDefocusV() - mean)
+
+    def isDefocusVDeviationInRange(self, mean, percentage=20):
+        defocusVDeviation = self.getDefocusVDeviation(mean)
+        return True if defocusVDeviation < percentage * mean else False
+
 
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
@@ -1348,6 +1379,8 @@ class CTFTomoSeries(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
         self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._isDefocusUDeviationInRange = pwobj.Boolean(True)
+        self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
@@ -1454,6 +1487,44 @@ class CTFTomoSeries(data.EMSet):
                 estimationRange = listLength
 
         self.setNumberOfEstimationsInRange(estimationRange)
+
+    def getIsDefocusUDeviationInRange(self):
+        return self._isDefocusUDeviationInRange
+
+    def getIsDefocusVDeviationInRange(self):
+        return self._isDefocusVDeviationInRange
+
+    def calculateDefocusUDeviation(self, defocusUTolerance=20):
+        defocusUValueList = []
+        for ctfTomo in self:
+            defocusUValueList.append(ctfTomo.getDefocusU())
+
+        mean = statistics.mean(defocusUValueList)
+
+        for ctfTomo in self.iterItems(iterate=False):
+            ctfTomo._defocusUDeviation.set(ctfTomo.getDefocusUDeviation(mean))
+            isDefocusUDeviationInRange = ctfTomo.isDefocusUDeviationInRange(mean,
+                                                    percentage=defocusUTolerance)
+            if not isDefocusUDeviationInRange:
+                self._isDefocusUDeviationInRange.set(False)
+            ctfTomo._isDefocusUDeviationInRange.set(isDefocusUDeviationInRange)
+            self.update(ctfTomo)
+
+    def calculateDefocusVDeviation(self, defocusVTolerance=20):
+        defocusVValueList = []
+        for ctfTomo in self:
+            defocusVValueList.append(ctfTomo.getDefocusV())
+
+        mean = statistics.mean(defocusVValueList)
+
+        for ctfTomo in self.iterItems(iterate=False):
+            ctfTomo._defocusVDeviation.set(ctfTomo.getDefocusVDeviation(mean))
+            isDefocusVDeviationInRange = ctfTomo.isDefocusVDeviationInRange(mean,
+                                                    percentage=defocusVTolerance)
+            if not isDefocusVDeviationInRange:
+                self._isDefocusVDeviationInRange.set(False)
+            ctfTomo._isDefocusVDeviationInRange.set(isDefocusVDeviationInRange)
+            self.update(ctfTomo)
 
 
 class SetOfCTFTomoSeries(data.EMSet):
