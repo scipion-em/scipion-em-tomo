@@ -116,6 +116,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            "{TS} as a, b, ...\n"
                            "{TO} as 001, 002, 003, ...\n"
                            "{TA} as 0.0, 3.0, -3.0, ...\n")
+        form.addParam('exclusionWords', params.StringParam,
+                      label='Exclusion words:',
+                      help="List of words separated by a space that the path should not have",
+                      expertLevel=params.LEVEL_ADVANCED)
         self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
@@ -515,8 +519,29 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         else:
             return self._getMatchingFilesFromRegExPattern(fileTimeOut=fileTimeOut)
 
+    def _excludeByWords(self, files):
+        exclusionWords = self.exclusionWords.get()
+
+        if exclusionWords is None:
+            return files
+
+        exclusionWordList = exclusionWords.split()
+
+        allowedFiles = []
+
+        for file in files:
+            if any(bannedWord in file for bannedWord in exclusionWordList):
+                print("%s excluded. Contains any of %s" % (file,exclusionWords))
+                continue
+            allowedFiles.append(file)
+
+        return allowedFiles
+
     def _getMatchingFilesFromRegExPattern(self, fileTimeOut):
         filePaths = glob(self._globPattern)
+
+        filePaths = self._excludeByWords(filePaths)
+
         filePaths.sort(key=lambda fn: os.path.getmtime(fn))
         fileTimeOut = fileTimeOut or timedelta(seconds=5)
 
