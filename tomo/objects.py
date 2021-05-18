@@ -1530,6 +1530,7 @@ class CTFTomoSeries(data.EMSet):
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
     ITEM_TYPE = CTFTomoSeries
+    USE_CREATE_COPY_FOR_SUBSET = True
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
