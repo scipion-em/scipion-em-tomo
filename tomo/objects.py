@@ -1536,6 +1536,10 @@ class SetOfCTFTomoSeries(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._setOfTiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
 
+    def copyInfo(self, other):
+        data.EMSet.copyInfo(self, other)
+        self._setOfTiltSeriesPointer.set(other.getSetOfTiltSeries())
+
     def getSetOfTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """
         return self._setOfTiltSeriesPointer.get()
