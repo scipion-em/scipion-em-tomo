@@ -184,7 +184,7 @@ class TiltSeries(TiltSeriesBase):
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
-            path.createAbsLink(inputFilePath, outputFilePath)
+            path.createLink(inputFilePath, outputFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
