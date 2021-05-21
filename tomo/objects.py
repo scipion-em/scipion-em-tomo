@@ -1361,14 +1361,14 @@ class CTFTomo(data.CTFModel):
 
     def isDefocusUDeviationInRange(self, mean, percentage=20):
         defocusUDeviation = self.getDefocusUDeviation(mean)
-        return True if defocusUDeviation < percentage * mean else False
+        return True if defocusUDeviation < (percentage * mean/100) else False
 
     def getDefocusVDeviation(self, mean):
         return abs(self.getDefocusV() - mean)
 
     def isDefocusVDeviationInRange(self, mean, percentage=20):
         defocusVDeviation = self.getDefocusVDeviation(mean)
-        return True if defocusVDeviation < percentage * mean else False
+        return True if defocusVDeviation < (percentage * mean/100) else False
 
 
 class CTFTomoSeries(data.EMSet):
