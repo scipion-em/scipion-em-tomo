@@ -187,8 +187,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
             :param ti: aligned tilt image
             :param tsObject: TiltSeries to add the new Image to
             """
-            ti = TiltImage(tiltAngle=ta, tsId=tsId)
+            ti = TiltImage(tiltAngle=ta, tsId=tsId, acquisitionOrder=to)
             ti.setSamplingRate(sRate)
+            ti.setAcquisition(acq)
             newLocation = (counter, self._getExtraPath(tsId + '_' + suffix + '.mrcs'))
             ih.convert(tiFile, newLocation)
             ti.setLocation(newLocation)
@@ -254,6 +255,8 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOddFile = self.oddAvgFrameList[i]
                 tsM = self.tsMList[i]
                 ta = tsM.getTiltAngle()
+                to = tsM.getAcquisitionOrder()
+                acq = tsM.getAcquisition()
                 # Even
                 addTiltImage(tiEvenFile, tsObjEven, EVEN)
                 # Odd
@@ -362,6 +365,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 ti = tList[i]
                 tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
+                tiOut.setAcquisition(ti.getAcquisition())
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1
