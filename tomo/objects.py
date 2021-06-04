@@ -73,9 +73,11 @@ class TiltImageBase:
         self._acqOrder.set(value)
 
     def copyInfo(self, other, copyId=False):
-        self.copyAttributes(other, '_tiltAngle', '_tsId')
+        # self.copyAttributes(other, self._tiltAngle.__name__, self._tsId.__name__, self._acqOrder.__name__)
+        self.copyAttributes(other, '_tiltAngle', '_tsId', '_acqOrder')
         if copyId:
             self.copyObjId(other)
+
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
