@@ -31,6 +31,7 @@ import threading
 from collections import OrderedDict
 import numpy as np
 import math
+import statistics
 import csv
 
 from pyworkflow.object import Integer
@@ -261,6 +262,7 @@ class TiltSeries(TiltSeriesBase):
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
+    USE_CREATE_COPY_FOR_SUBSET = True
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
@@ -322,22 +324,23 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             updateTiCallback: optional callback after TiltImage is created
         """
         for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
-            tsOut = self.ITEM_TYPE()
-            tsOut.copyInfo(ts)
-            tsOut.copyObjId(ts)
-            if updateTsCallback:
-                updateTsCallback(i, ts, tsOut)
-            self.append(tsOut)
-            for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
-                tiOut = tsOut.ITEM_TYPE()
-                tiOut.copyInfo(ti)
-                tiOut.copyObjId(ti)
-                tiOut.setLocation(ti.getLocation())
-                if updateTiCallback:
-                    updateTiCallback(j, ts, ti, tsOut, tiOut)
-                tsOut.append(tiOut)
+            if ts.isEnabled():
+                tsOut = self.ITEM_TYPE()
+                tsOut.copyInfo(ts)
+                tsOut.copyObjId(ts)
+                if updateTsCallback:
+                    updateTsCallback(i, ts, tsOut)
+                self.append(tsOut)
+                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
+                    tiOut = tsOut.ITEM_TYPE()
+                    tiOut.copyInfo(ti)
+                    tiOut.copyObjId(ti)
+                    tiOut.setLocation(ti.getLocation())
+                    if updateTiCallback:
+                        updateTiCallback(j, ts, ti, tsOut, tiOut)
+                    tsOut.append(tiOut)
 
-            self.update(tsOut)
+                self.update(tsOut)
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
@@ -572,30 +575,6 @@ class TomoAcquisition(data.Acquisition):
         self._angleAxis2.set(value)
 
 
-class TomoMask(data.Volume):
-    """ Object used to represent segmented tomograms/subtomograms
-    """
-
-    def __init__(self, **kwargs):
-        data.Volume.__init__(self, **kwargs)
-        self._volName = pwobj.String()
-
-    def getVolName(self):
-        """ Get the reference tomogram for the current mask.
-        """
-        return self._volName.get()
-
-    def setVolName(self, tomoName):
-        """ Set the reference tomogram for the current mask.
-        """
-        self._volName.set(tomoName)
-
-
-class SetOfTomoMasks(data.SetOfVolumes):
-    ITEM_TYPE = TomoMask
-    EXPOSE_ITEMS = True
-
-
 class Tomogram(data.Volume):
     """ Class to hold the tomogram abstraction inside Scipion. The origin (self._origin) of the volume is set as the
     location of the first coordinate loaded from the binary file. The volume may be displaced by setting a different
@@ -662,6 +641,38 @@ class SetOfTomograms(data.SetOfVolumes):
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
+
+
+class TomoMask(Tomogram):
+    """ Object used to represent segmented tomograms
+    """
+    def __init__(self, **kwargs):
+        Tomogram.__init__(self, **kwargs)
+        self._volName = pwobj.String()
+
+    def getVolName(self):
+        """ Get the reference tomogram file for the current tomoMask.
+        """
+        return self._volName.get()
+
+    def setVolName(self, tomoName):
+        """ Set the reference tomogram file for the current tomoMask.
+        """
+        self._volName.set(tomoName)
+
+    def getTomogram(self):
+        """ Generate the reference tomogram object for the current tomoMask.
+        """
+        tomo = Tomogram()
+        tomo.setLocation(self.getVolName())
+        tomo.setSamplingRate(self.getSamplingRate())
+        tomo.setAcquisition(self.getAcquisition())
+        return tomo
+
+
+class SetOfTomoMasks(SetOfTomograms):
+    ITEM_TYPE = TomoMask
+    EXPOSE_ITEMS = True
 
 
 class Coordinate3D(data.EMObject):
@@ -1335,12 +1346,28 @@ class CTFTomo(data.CTFModel):
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
         self._index = pwobj.Integer(kwargs.get('index', None))
+        self._defocusUDeviation = pwobj.Float()
+        self._isDefocusUDeviationInRange = pwobj.Boolean(True)
+        self._defocusVDeviation = pwobj.Float()
+        self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
     def getIndex(self):
         return self._index
 
     def setIndex(self, value):
         self._index = pwobj.Integer(value)
+
+    def getdefocusUDeviation(self):
+        return self._defocusUDeviation
+
+    def getIsDefocusUDeviationInRange(self):
+        return self._isDefocusUDeviationInRange
+
+    def getdefocusVDeviation(self):
+        return self._defocusVDeviation
+
+    def getIsDefocusVDeviationInRange(self):
+        return self._isDefocusVDeviationInRange
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -1567,6 +1594,20 @@ class CTFTomo(data.CTFModel):
         " Standardize the input values "
         self.standardize()
 
+    def getDefocusUDeviation(self, mean):
+        return abs(self.getDefocusU() - mean)
+
+    def isDefocusUDeviationInRange(self, mean, percentage=20):
+        defocusUDeviation = self.getDefocusUDeviation(mean)
+        return True if defocusUDeviation < (percentage * mean/100) else False
+
+    def getDefocusVDeviation(self, mean):
+        return abs(self.getDefocusV() - mean)
+
+    def isDefocusVDeviationInRange(self, mean, percentage=20):
+        defocusVDeviation = self.getDefocusVDeviation(mean)
+        return True if defocusVDeviation < (percentage * mean/100) else False
+
 
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
@@ -1576,6 +1617,8 @@ class CTFTomoSeries(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
         self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._isDefocusUDeviationInRange = pwobj.Boolean(True)
+        self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
@@ -1683,14 +1726,57 @@ class CTFTomoSeries(data.EMSet):
 
         self.setNumberOfEstimationsInRange(estimationRange)
 
+    def getIsDefocusUDeviationInRange(self):
+        return self._isDefocusUDeviationInRange
+
+    def getIsDefocusVDeviationInRange(self):
+        return self._isDefocusVDeviationInRange
+
+    def calculateDefocusUDeviation(self, defocusUTolerance=20):
+        defocusUValueList = []
+        for ctfTomo in self:
+            defocusUValueList.append(ctfTomo.getDefocusU())
+
+        mean = statistics.mean(defocusUValueList)
+
+        for ctfTomo in self.iterItems(iterate=False):
+            ctfTomo._defocusUDeviation.set(ctfTomo.getDefocusUDeviation(mean))
+            isDefocusUDeviationInRange = ctfTomo.isDefocusUDeviationInRange(mean,
+                                                    percentage=defocusUTolerance)
+            if not isDefocusUDeviationInRange:
+                self._isDefocusUDeviationInRange.set(False)
+            ctfTomo._isDefocusUDeviationInRange.set(isDefocusUDeviationInRange)
+            self.update(ctfTomo)
+
+    def calculateDefocusVDeviation(self, defocusVTolerance=20):
+        defocusVValueList = []
+        for ctfTomo in self:
+            defocusVValueList.append(ctfTomo.getDefocusV())
+
+        mean = statistics.mean(defocusVValueList)
+
+        for ctfTomo in self.iterItems(iterate=False):
+            ctfTomo._defocusVDeviation.set(ctfTomo.getDefocusVDeviation(mean))
+            isDefocusVDeviationInRange = ctfTomo.isDefocusVDeviationInRange(mean,
+                                                    percentage=defocusVTolerance)
+            if not isDefocusVDeviationInRange:
+                self._isDefocusVDeviationInRange.set(False)
+            ctfTomo._isDefocusVDeviationInRange.set(isDefocusVDeviationInRange)
+            self.update(ctfTomo)
+
 
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
     ITEM_TYPE = CTFTomoSeries
+    USE_CREATE_COPY_FOR_SUBSET = True
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._setOfTiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+
+    def copyInfo(self, other):
+        data.EMSet.copyInfo(self, other)
+        self._setOfTiltSeriesPointer.set(other.getSetOfTiltSeries())
 
     def getSetOfTiltSeries(self):
         """ Return the tilt-series associated with this CTF model series. """

@@ -34,7 +34,19 @@ DataSet(name='tomo-em', folder='tomo-em',
                'subtomo': 'basename.hdf',
                'eman_coordinates': 'coordinates3Deman2',
                'etomo': 'tutorialData',
-               'empiar': 'EMPIAR-10164'
+               'empiar': 'EMPIAR-10164',
+               'tsMParentFolder': 'ts_tsM_and_mdocs',
+               'tsM10Dir': 'ts_tsM_and_mdocs/Tomo_10',
+               'tsM31Dir': 'ts_tsM_and_mdocs/Tomo_31',
+               'empiarMdocDirOk': 'ts_tsM_and_mdocs/mdocs/realFromEmpiar/complete',
+               'empiarMdocDirNoOk': 'ts_tsM_and_mdocs/mdocs/realFromEmpiar/incomplete',
+               'realFileNoVoltage1': 'tomo4_delay.st.mdoc',
+               'realFileNoVoltage2': 'TS_54.mrc.mdoc',
+               'simErrorMdocDir': 'ts_tsM_and_mdocs/mdocs/editedForErrorSimulation',
+               'noMaginficationMdoc': 'NoMagnification.mdoc',
+               'noSamplingRateMdoc': 'NoPixelSpacing.mdoc',
+               'noVoltagenoSRateMdoc': 'NoVoltage_NoPixelSpacing.mdoc',
+               'someMissingAnglesMdoc': 'SomeTiltAnglesMissing_1_7_48.mdoc'
         })
 
 DataSet(name='reliontomo', folder='reliontomo',
