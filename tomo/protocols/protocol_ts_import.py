@@ -708,6 +708,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 class ProtImportTs(ProtImportTsBase):
     """Protocol to import tilt series."""
     _label = 'import tilt-series'
+    _devStatus = pw.BETA
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
@@ -755,6 +756,7 @@ class ProtImportTs(ProtImportTsBase):
 class ProtImportTsMovies(ProtImportTsBase):
     """Protocol to import tilt series movies."""
     _label = 'import tilt-series movies'
+    _devStatus = pw.BETA
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """

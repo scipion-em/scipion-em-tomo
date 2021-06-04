@@ -28,6 +28,7 @@
 import numpy as np
 import os
 
+from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
@@ -50,6 +51,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     """
 
     _label = 'extract 3D coordinates'
+    _devStatus = BETA
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
