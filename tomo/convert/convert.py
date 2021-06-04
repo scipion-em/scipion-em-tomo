@@ -27,6 +27,7 @@ import numpy as np
 from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
 import pyworkflow.utils as pwutils
 
+import tomo.constants as const
 
 class TomoImport:
 
@@ -47,8 +48,7 @@ class TomoImport:
                 y = md.getValue(MDL_YCOOR, objId)
                 z = md.getValue(MDL_ZCOOR, objId)
                 coord = Coordinate3D()
-                coord.setPosition(x, y, z)
-                addCoordinate(coord)
+                addCoordinate(coord, x, y, z)
 
         else:
             raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
@@ -72,7 +72,10 @@ def setOfMeshes2Files(meshes, path):
                 writeFile()
             currentVolId = coor.getVolId()
             coords = []
-        coords.append([coor.getX(), coor.getY(), coor.getZ(), coor.getGroupId()])
+        coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
+                       coor.getY(const.BOTTOM_LEFT_CORNER),
+                       coor.getZ(const.BOTTOM_LEFT_CORNER),
+                       coor.getGroupId()])
     if coords:
         writeFile()
 

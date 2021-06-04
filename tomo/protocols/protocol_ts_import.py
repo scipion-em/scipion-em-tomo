@@ -39,7 +39,7 @@ from sqlite3 import OperationalError
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
-from pwem.objects import Acquisition
+from pwem.objects import Acquisition, Transform
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
@@ -270,6 +270,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 someNew = True
 
                 tsObj = tsClass(tsId=ts)
+
+                origin = Transform()
+                tsObj.setOrigin(origin)
+
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
 
@@ -306,7 +310,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     except OperationalError as e:
 
                         raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
-                                        "(avoid symbols as -) that can not start with a number. %s" % (ts, e))
+                                        "(avoid symbols as -) that can not start with a number." % ts)
+
+                origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * self.samplingRate.get(),
+                                 -tsObj.getFirstItem().getYDim() / 2 * self.samplingRate.get(),
+                                 0)
 
                 if self.MDOC_DATA_SOURCE:
                     # Tilt series object dose per frame has been updated each time the tilt image dose per frame has
@@ -700,6 +708,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 class ProtImportTs(ProtImportTsBase):
     """Protocol to import tilt series."""
     _label = 'import tilt-series'
+    _devStatus = pw.BETA
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
@@ -747,6 +756,7 @@ class ProtImportTs(ProtImportTsBase):
 class ProtImportTsMovies(ProtImportTsBase):
     """Protocol to import tilt series movies."""
     _label = 'import tilt-series movies'
+    _devStatus = pw.BETA
 
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """

@@ -28,6 +28,7 @@
 import numpy as np
 import os
 
+from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
@@ -35,6 +36,7 @@ from pyworkflow.object import Integer
 
 from .protocol_base import ProtTomoPicking
 
+import tomo.constants as const
 from ..objects import Coordinate3D
 
 
@@ -49,6 +51,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     """
 
     _label = 'extract 3D coordinates'
+    _devStatus = BETA
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -104,25 +107,28 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 except:
                     idx = None
                 if idx is not None:
-                    x, y, z = coord.getPosition()
-                    newCoord.copyObjId(subTomo)
-                    newCoord.setPosition(x * scale, y * scale, z * scale)
-
                     if len(filesTomo) == 1:
                         newCoord.setVolume(inTomos.getFirstItem())
+                        coord.setVolume(inTomos.getFirstItem())
                     else:
                         newCoord.setVolume(inTomos[idx+1])
+                        coord.setVolume(inTomos[idx+1])
+                    x, y, z = coord.getPosition(const.SCIPION)
+                    newCoord.copyObjId(subTomo)
+
+                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
                     if coord.hasGroupId():
                         newCoord.setGroupId(coord.getGroupId())
                     self.outputCoords.append(newCoord)
             else:
+                coord.setVolume(tomo)
                 newCoord.copyObjId(subTomo)
-                x, y, z = coord.getPosition()
-                newCoord.setPosition(x * scale, y * scale, z * scale)
-
+                x, y, z = coord.getPosition(const.SCIPION)
                 newCoord.setVolume(tomo)
+                newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
+
                 newCoord.setBoxSize(boxSize)
                 newCoord.setMatrix(checkMatrix(subTomo, coord))
                 self.outputCoords.append(newCoord)

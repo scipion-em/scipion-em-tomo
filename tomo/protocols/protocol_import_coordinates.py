@@ -28,6 +28,7 @@
 import os
 from os.path import basename
 
+from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
@@ -38,11 +39,14 @@ from .protocol_base import ProtTomoImportFiles
 from ..convert import TomoImport
 from ..utils import existsPlugin
 
+import tomo.constants as const
+
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfCoordinates3D'
     _label = 'import set of coordinates 3D'
+    _devStatus = BETA
 
     IMPORT_FROM_AUTO = 'auto'
     IMPORT_FROM_TXT = 'txt'
@@ -101,8 +105,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
                     if self.getImportFrom() == self.IMPORT_FROM_EMAN or self.getImportFrom() == self.IMPORT_FROM_TXT:
-                        def addCoordinate(coord):
+                        def addCoordinate(coord, x, y, z):
                             coord.setVolume(tomo.clone())
+                            coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
                             coordsSet.append(coord)
                         ci.importCoordinates3D(coordFile, addCoordinate)
                     elif self.getImportFrom() == self.IMPORT_FROM_DYNAMO:
