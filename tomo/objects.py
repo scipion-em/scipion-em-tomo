@@ -40,7 +40,6 @@ from pwem.objects import Transform
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
-import pwem.emlib as emlib
 from pwem.emlib.image import ImageHandler
 
 import tomo.constants as const
