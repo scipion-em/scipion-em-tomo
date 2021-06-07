@@ -351,6 +351,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
     FILENAME_LIST = 'filenames'
     ACCUM_DOSE_LIST = 'doses'
     ANGLE_LIST = 'angles'
+    ACQ_ORDER_LIST = 'acqOrder'
 
     @classmethod
     def setUpClass(cls):
@@ -363,7 +364,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
         cls.pattern = '*/stack*.mdoc'
         cls.sRate = 1.716
 
-    def _getListOfFileNames(self, tomoNum, isTsMovie):
+    @staticmethod
+    def _getListOfFileNames(tomoNum, isTsMovie):
         angles = [0, 3, -3, -6, 6]
         if isTsMovie:
             # Each slice will be a stack of frames, which means a different file
@@ -387,7 +389,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             cls.SIZE: kwargs.get(cls.SIZE, None),
             cls.FILENAME_LIST: kwargs.get(cls.FILENAME_LIST, None),
             cls.ACCUM_DOSE_LIST: kwargs.get(cls.ACCUM_DOSE_LIST, None),
-            cls.ANGLE_LIST: kwargs.get(cls.ANGLE_LIST, None)
+            cls.ANGLE_LIST: kwargs.get(cls.ANGLE_LIST, None),
+            cls.ACQ_ORDER_LIST: kwargs.get(cls.ACQ_ORDER_LIST, None)
         }
 
     def _genTestData(self, isTsMovie):
@@ -402,7 +405,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
                 doses=[0.0424, 0.2121, 0.2546, 0.3394, 0.4455],
-                angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684]
+                angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684],
+                acqOrder=[1, 2, 3, 4, 5]
             ),
             'stack10': self._genTestDict(
                 voltage=300,
@@ -414,7 +418,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
                 doses=[0.1909, 0.2333, 0.2546, 0.2970, 0.4030],
-                angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684]
+                angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684],
+                acqOrder=[1, 2, 3, 4, 5]
             )
         }
 
@@ -449,13 +454,17 @@ class TestTomoImportTsFromMdoc(BaseTest):
             filesList = testDataDict[self.FILENAME_LIST]
             accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
             angleList = testDataDict[self.ANGLE_LIST]
+            acqOrderList = testDataDict[self.ACQ_ORDER_LIST]
             for i, tiM in enumerate(tsM):
                 self.assertEqual(tiM.getFileName(), prot._getExtraPath(filesList[i]))
-                self.assertTrue(os.path.islink(tiM.getFileName()), "Tilt series file %s is not a link." % tiM.getFileName())
+                self.assertTrue(os.path.islink(tiM.getFileName()),
+                                "Tilt series file %s is not a link." % tiM.getFileName())
                 self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), accumDoseList[i], delta=0.0001)
                 self.assertAlmostEqual(tiM.getTiltAngle(), angleList[i], delta=0.0001)
                 # objId must start with 1 --> i +1
                 self.assertEqual(i+1, tiM.getObjId(), "Tilt image Movie objId is incorrect")
+                # Acquisition order
+                self.assertEqual(tiM.getAcquisitionOrder(), acqOrderList[i])
 
     def test_importTiltSeriesM(self):
         isTsMovie = True

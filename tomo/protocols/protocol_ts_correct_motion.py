@@ -182,14 +182,23 @@ class ProtTsCorrectMotion(ProtTsProcess):
     def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
 
-        def addTiltImage(tiFile, tsObject, suffix):
+        def addTiltImage(tiFile, tsObject, suffix, tsMov, tsIde, samplingRate, objId):
             """
-            :param ti: aligned tilt image
-            :param tsObject: TiltSeries to add the new Image to
+            :param tiFile: aligned tilt image file
+            :param tsObject: Tilt Series to which the new Ti Image will be added
+            :param suffix: used for the location. Admitted values are even or odd
+            :param tsMov: Tilt Series Movies object
+            :param tsIde: Tilt series identifier
+            :param samplingRate: current Tilt Series sampling rate
+            :param objId: location of the Tilt Image which will be added
             """
-            ti = TiltImage(tiltAngle=ta, tsId=tsId)
-            ti.setSamplingRate(sRate)
-            newLocation = (counter, self._getExtraPath(tsId + '_' + suffix + '.mrcs'))
+            ta = tsMov.getTiltAngle()
+            to = tsMov.getAcquisitionOrder()
+            acq = tsMov.getAcquisition()
+            ti = TiltImage(tiltAngle=ta, tsId=tsIde, acquisitionOrder=to)
+            ti.setSamplingRate(samplingRate)
+            ti.setAcquisition(acq)
+            newLocation = (objId, self._getExtraPath(tsIde + '_' + suffix + '.mrcs'))
             ih.convert(tiFile, newLocation)
             ti.setLocation(newLocation)
             tsObject.append(ti)
@@ -253,11 +262,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiEvenFile = self.evenAvgFrameList[i]
                 tiOddFile = self.oddAvgFrameList[i]
                 tsM = self.tsMList[i]
-                ta = tsM.getTiltAngle()
                 # Even
-                addTiltImage(tiEvenFile, tsObjEven, EVEN)
+                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter)
                 # Odd
-                addTiltImage(tiOddFile, tsObjOdd, ODD)
+                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter)
 
                 counter += 1
 
@@ -362,6 +370,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 ti = tList[i]
                 tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
+                tiOut.setAcquisition(ti.getAcquisition())
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1

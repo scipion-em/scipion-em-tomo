@@ -40,7 +40,6 @@ from pwem.objects import Transform
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
-import pwem.emlib as emlib
 from pwem.emlib.image import ImageHandler
 
 import tomo.constants as const
@@ -49,13 +48,10 @@ import tomo.constants as const
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
 
-    def __init__(self, **kwargs):
-        self._tiltAngle = pwobj.Float(kwargs.get('tiltAngle', None))
-        self._tsId = pwobj.String(kwargs.get('tsId', None))
-
-        # Use the acquisition order as objId
-        if 'acquisitionOrder' in kwargs:
-            self.setObjId(int(kwargs['acquisitionOrder']))
+    def __init__(self, tsId=None, tiltAngle=None, acquisitionOrder=None, **kwargs):
+        self._tiltAngle = pwobj.Float(tiltAngle)
+        self._tsId = pwobj.String(tsId)
+        self._acqOrder = pwobj.Integer(acquisitionOrder)
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -73,10 +69,13 @@ class TiltImageBase:
         self._tiltAngle.set(value)
 
     def getAcquisitionOrder(self):
-        return self.getObjId()
+        return self._acqOrder.get()
+
+    def setAcquisitionOrder(self, value):
+        self._acqOrder.set(value)
 
     def copyInfo(self, other, copyId=False):
-        self.copyAttributes(other, '_tiltAngle', '_tsId')
+        self.copyAttributes(other, '_tiltAngle', '_tsId', '_acqOrder')
         if copyId:
             self.copyObjId(other)
 
@@ -536,13 +535,13 @@ class TiltSeriesDict:
 
 
 class TomoAcquisition(data.Acquisition):
-    def __init__(self, **kwargs):
+    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None, angleAxis2=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
-        self._angleMin = pwobj.Float(kwargs.get('angleMin', None))
-        self._angleMax = pwobj.Float(kwargs.get('angleMax', None))
-        self._step = pwobj.Float(kwargs.get('step', None))
-        self._angleAxis1 = pwobj.Float(kwargs.get('angleAxis1', None))
-        self._angleAxis2 = pwobj.Float(kwargs.get('angleAxis2', None))
+        self._angleMin = pwobj.Float(angleMin)
+        self._angleMax = pwobj.Float(angleMax)
+        self._step = pwobj.Float(step)
+        self._angleAxis1 = pwobj.Float(angleAxis1)
+        self._angleAxis2 = pwobj.Float(angleAxis2)
 
     def getAngleMax(self):
         return self._angleMax.get()
