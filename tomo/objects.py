@@ -36,11 +36,14 @@ import csv
 
 from pyworkflow.object import Integer
 import pyworkflow.object as pwobj
+from pwem.objects import Transform
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
 from pwem.convert.transformations import euler_matrix
 import pwem.emlib as emlib
 from pwem.emlib.image import ImageHandler
+
+import tomo.constants as const
 
 
 class TiltImageBase:
@@ -114,6 +117,8 @@ class TiltSeriesBase(data.SetOfImages):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
 
+        self._origin = None
+
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
         file pattern provided by the user at the import time.
@@ -147,15 +152,83 @@ class TiltSeriesBase(data.SetOfImages):
         return self._samplingRate.get() * 1e-4 * mag
 
     def generateTltFile(self, tltFilePath, reverse=False):
-        """Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order"""
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param tltFilePath: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        """
+
         angleList = []
+
         for ti in self:
             angleList.append(ti.getTiltAngle())
+
         if reverse:
             angleList.reverse()
+
         with open(tltFilePath, 'w') as f:
             f.writelines("%s\n" % angle for angle in angleList)
+
+    def hasOrigin(self):
+        """ Method indicating if the TiltSeries object has a defined origin. """
+
+        return self._origin is not None
+
+    def setOrigin(self, newOrigin):
+        """ Method to set the origin of the TiltSeries object.
+        :param newOrigin: Scipion Transform object indicating the origin to be set to the TiltSeries.
+        """
+
+        self._origin = newOrigin
+
+    def getOrigin(self, force=False):
+        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the the object
+        it may create a default one.
+        :param force: Boolean indicating if the method must return a default origin in case the object has no one
+        associated.
+        """
+
+        if self.hasOrigin():
+            return self._origin
+        else:
+            if force:
+                return self._getDefaultOrigin()
+            else:
+                return None
+
+    def _getDefaultOrigin(self):
+        sampling = self.getSamplingRate()
+        t = Transform()
+        x, y, z = self.getDim()
+        if z > 1:
+            z = z / -2.
+        print(t)
+        t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
+        return t  # The identity matrix
+
+    def getShiftsFromOrigin(self):
+        """ Method to return the origin shift from the Scipion Transform object. """
+
+        origin = self.getOrigin(force=True).getShifts()
+        x = origin[0]
+        y = origin[1]
+        z = origin[2]
+        return x, y, z
+        # x, y, z are floats in Angstroms
+
+    def updateOriginWithResize(self,  resizeFactor):
+        """ Method to update the origin after resizing the TiltSeries. """
+
+        origin = self.getOrigin()
+
+        xOri, yOri, zOri = self.getShiftsFromOrigin()
+
+        origin.setShifts(xOri * resizeFactor,
+                         yOri * resizeFactor,
+                         zOri * resizeFactor)
+
+        self.setOrigin(origin)
+        # x, y, z are floats in Angstroms
 
 
 class TiltSeries(TiltSeriesBase):
@@ -503,10 +576,16 @@ class TomoAcquisition(data.Acquisition):
 
 
 class Tomogram(data.Volume):
+    """ Class to hold the tomogram abstraction inside Scipion. The origin (self._origin) of the volume is set as the
+    location of the first coordinate loaded from the binary file. The volume may be displaced by setting a different
+    origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
+    """
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._dim = None
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -527,6 +606,28 @@ class Tomogram(data.Volume):
         return (self._acquisition is not None
                 and self._acquisition.getAngleMin() is not None
                 and self._acquisition.getAngleMax() is not None)
+
+    def getDim(self):
+        """Return image dimensions as tuple: (Xdim, Ydim, Zdim)"""
+        if self._dim is None:
+            from pwem.emlib.image import ImageHandler
+
+            fn = self.getFileName()
+            if fn is not None and os.path.exists(fn.replace(':mrc', '')):
+                x, y, z, n = ImageHandler().getDimensions(self)
+
+                # Some volumes in mrc format can have the z dimension
+                # as n dimension, so we need to consider this case.
+                if z > 1:
+                    self._dim = (x, y, z)
+                    return x, y, z
+                else:
+                    self._dim = (x, y, n)
+                    return x, y, n
+        else:
+            return self._dim
+        return None
+
 
 
 class SetOfTomograms(data.SetOfVolumes):
@@ -575,42 +676,75 @@ class SetOfTomoMasks(SetOfTomograms):
 
 
 class Coordinate3D(data.EMObject):
-    """This class holds the (x,y) position and other information
+    """This class holds the (x,y,z) position and other information
     associated with a coordinate"""
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = pwobj.Pointer(objDoStore=False)
-        self._x = pwobj.Integer(kwargs.get('x', None))
-        self._y = pwobj.Integer(kwargs.get('y', None))
-        self._z = pwobj.Integer(kwargs.get('z', None))
+        self._x = Integer()
+        self._y = Integer()
+        self._z = Integer()
         self._volId = pwobj.Integer()
         self._eulerMatrix = data.Transform()
         self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
-    def getX(self):
-        return self._x.get()
+    def getX(self, originFunction):
+        ''' See getPosition method for a full description of how "originFunction"
+        works'''
+        origin_Scipion = self.getVolumeOrigin()[0]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[0] if aux is not None else -origin_Scipion
+        return self._x.get() - origin - origin_Scipion
 
-    def setX(self, x):
-        self._x.set(x)
+    def setX(self, x, originFunction):
+        ''' See setPosition method for a full description of how "originFunction"
+        works'''
+        origin_Scipion = self.getVolumeOrigin()[0]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[0] if aux is not None else -origin_Scipion
+        self._x.set(x + origin + origin_Scipion)
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
 
-    def getY(self):
-        return self._y.get()
+    def getY(self, originFunction):
+        ''' See getPosition method for a full description of how "originFunction"
+        works'''
+        origin_Scipion = self.getVolumeOrigin()[1]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[1] if aux is not None else -origin_Scipion
+        return self._y.get() - origin - origin_Scipion
 
-    def setY(self, y):
-        self._y.set(y)
+    def setY(self, y, originFunction):
+        ''' See setPosition method for a full description of how "originFunction"
+        works'''
+        origin_Scipion = self.getVolumeOrigin()[1]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[1] if aux is not None else -origin_Scipion
+        self._y.set(y + origin + origin_Scipion)
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
 
-    def getZ(self):
-        return self._z.get()
+    def getZ(self, originFunction):
+        ''' See getPosition method for a full description of how "originFunction"
+        works'''
+        origin_Scipion = self.getVolumeOrigin()[2]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[2] if aux is not None else -origin_Scipion
+        return self._z.get() - origin - origin_Scipion
 
-    def setZ(self, z):
-        self._z.set(z)
+    def setZ(self, z, originFunction):
+        ''' See setPosition method for a full description of how "originFunction"
+        works'''
+        origin_Scipion = self.getVolumeOrigin()[2]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[2] if aux is not None else -origin_Scipion
+        self._z.set(z + origin + origin_Scipion)
+
+    def shiftZ(self, shiftZ):
+        self._z.sum(shiftZ)
 
     def setMatrix(self, matrix):
         self._eulerMatrix.setMatrix(matrix)
@@ -647,17 +781,68 @@ class Coordinate3D(data.EMObject):
         self._y.multiply(factor)
         self._z.multiply(factor)
 
-    def getPosition(self):
-        """ Return the position of the coordinate as a (x, y, z) tuple.
-        mode: select if the position is the center of the box
-        or in the top left corner.
-        """
-        return self.getX(), self.getY(), self.getZ()
+    def getPosition(self, originFunction):
+        '''Get the position a Coordinate3D refered to a given origin defined by originFunction.
+        The input of the method is a funtion (originFunction) which moves the coordinate
+        position refered to the bottom left corner to other origin (retrieved by originFunction) in the grid.
 
-    def setPosition(self, x, y, z):
-        self.setX(x)
-        self.setY(y)
-        self.setZ(z)
+        Parameters:
+
+            :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner
+                                            from a given convention.
+
+        Example:
+
+            >>> origin = originFunction((Lx, Ly, Lz))
+            >>> (vx, vy, vz)  # Vector to refer (x,y,z) coordinate to an origin from the bottom left corner
+
+        Firstly, the Scipion origin vector stored in the Tomogram associated to the Coordinate3D
+        will be applied to refer the current coordinate to the bottom left coordinate of the Tomogram.
+        '''
+        return self.getX(originFunction), self.getY(originFunction), self.getZ(originFunction)
+
+    def setPosition(self, x, y, z, originFunction):
+        """Set the position of the coordinate to be saved in the Coordinate3D object.
+        The inputs of the method are the (x,y,z) position of the coordinate and a
+        funtion (originFunction) which moves the current position to the bottom left
+        corner of the Tomogram with dimensions Lx, Ly, Lz.
+
+        Parameters:
+
+            :param int x: Position of the coordinate in the X axis
+            :param int y: Position of the coordinate in the Y axis
+            :param int z: Position of the coordinate in the Z axis
+            :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner from a
+                                            given convention.
+
+        Example:
+
+            >>> origin = originFunction((Lx, Ly, Lz))
+            >>> (vx, vy, vz)  # Vector to refer (x,y,z) coordinate to the bottom left corner
+
+        In this way, it is possible to apply the Scipion origin vector stored in the
+        Tomogram associated to the Coordinate3D which moves the positions referred to
+        the bottom left corner of a grid to the center of gravity of the grid (or any
+        other origin specified by the user).
+
+        IMPORTANT NOTE: For this method to work properly, it is needed to associate the Tomogram
+        before doing a call to this method.
+
+        Example:
+
+            >>> coord = Coordinate3D()
+            >>> coord.setPosition(x, y, z, originFunction)
+            >>> Error: Tomogram is still NoneType
+            >>> coord.setVolume(Tomogram)
+            >>> coord.setPosition(x, y, z, originFunction)
+            >>> Exit: Everything runs normally
+
+        This requirement is only needed for "setPostion" method. The remaining attributes of the object
+        can be set either before or after calling "setVolume" method.
+        """
+        self.setX(x, originFunction)
+        self.setY(y, originFunction)
+        self.setZ(z, originFunction)
 
     def getVolume(self):
         """ Return the micrograph object to which
@@ -672,7 +857,7 @@ class Coordinate3D(data.EMObject):
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
-        self.setPosition(*coord.getPosition())
+        self.setPosition(*coord.getPosition(const.CENTER_GRAVITY))
         self.setObjId(coord.getObjId())
         self.setBoxSize(coord.getBoxSize())
 
@@ -692,7 +877,7 @@ class Coordinate3D(data.EMObject):
         if not self.getVolume() is None:
             dims = self.getVolume().getDim()
             height = dims[1]
-            self.setY(height - self.getY())
+            self.setY(height - self.getY(const.SCIPION), const.SCIPION)
         # else: error TODO
 
     def getVolName(self):
@@ -706,6 +891,19 @@ class Coordinate3D(data.EMObject):
 
     def hasGroupId(self):
         return self._groupId is not None
+
+    def getVolumeOrigin(self, angstrom=False):
+        '''Return the a vector that can be used to move the position of the Coordinate3D
+        (referred to the center of the Tomogram or other origin specified by the user)
+        to the bottom left corner of the Tomogram
+        '''
+        if angstrom:
+            return self.getVolume().getShiftsFromOrigin()
+        else:
+            vol = self.getVolume()
+            sr = vol.getSamplingRate()
+            origin = vol.getShiftsFromOrigin()
+            return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -751,8 +949,25 @@ class SetOfCoordinates3D(data.EMSet):
 
     def iterCoordinates(self, volume=None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
-        If tomogram=None, the iteration is performed over the whole
+        If volume=None, the iteration is performed over the whole
         set of coordinates.
+
+        IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
+        pointer to ther associated Tomogram. This method overcomes this problem by retrieving and
+        relinking the Tomogram as if nothing would ever happened.
+
+        It is recommended to use this method when working with Coordinates3D, being the common
+        "iterItems" deprecated for this set.
+
+        Example:
+
+            >>> for coord in coordSet.iterItems()
+            >>>     print(coord.getVolName())
+            >>>     Error: Tomogram associated to Coordinate3D is NoneType (pointer lost)
+            >>> for coord in coordSet.iterCoordinates()
+            >>>     print(coord.getVolName())
+            >>>     '/path/to/Tomo.file' retrieved correctly
+
         """
         if volume is None:
             volId = None
@@ -761,11 +976,11 @@ class SetOfCoordinates3D(data.EMSet):
         elif isinstance(volume, data.Volume):
             volId = volume.getObjId()
         else:
-            raise Exception('Invalid input micrograph of type %s'
+            raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
-        # Iterate over all coordinates if micId is None,
-        # otherwise use micId to filter the where selection
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
@@ -849,7 +1064,15 @@ class SubTomogram(data.Volume):
         self._coordinate = coordinate
 
     def getCoordinate3D(self):
-        return self._coordinate
+        '''Since the object Coordinate3D needs a volume, use the information stored in the
+        SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D'''
+        tomo = Tomogram()
+        tomo.setOrigin(self.getOrigin())
+        tomo.setLocation(self.getVolName())
+        tomo.setSamplingRate(self.getSamplingRate())
+        coord = self._coordinate
+        coord.setVolume(tomo)
+        return coord
 
     def getAcquisition(self):
         return self._acquisition
@@ -882,12 +1105,24 @@ class SubTomogram(data.Volume):
         """
         if self._volName.hasValue():
             return self._volName.get()
-        if self.hasCoordinate3D():
-            return self.getCoordinate3D().getVolName()
-        return self._volName.get()
+        if self.getVolume():
+            return self.getVolume().getFileName()
+        return None
 
     def setVolName(self, volName):
         self._volName.set(volName)
+
+    def getVolumeOrigin(self, angstrom=False):
+        '''Return the a vector that can be used to move the position of the Coordinate3D
+        associated to the SubTomogram (referred to the center of the Tomogram or other
+        origin specified by the user) to the bottom left corner of the Tomogram
+        '''
+        if angstrom:
+            return self.getShiftsFromOrigin()
+        else:
+            sr = self.getSamplingRate()
+            origin = self.getShiftsFromOrigin()
+            return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
@@ -917,6 +1152,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
         It is a SubTomogram but it is useful to differentiate outputs."""
+
     def __init__(self, **kwargs):
         SubTomogram.__init__(self, **kwargs)
 
@@ -1036,6 +1272,7 @@ class MeshPoint(Coordinate3D):
     the triangulation of a volume.
     A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
+
     def __init__(self, **kwargs):
         Coordinate3D.__init__(self, **kwargs)
         self._volumeName = pwobj.String()
@@ -1074,6 +1311,7 @@ class SetOfMeshes(SetOfCoordinates3D):
 
 class Ellipsoid(data.EMObject):
     """This class represent an ellipsoid. This is an instance class of description attribute of object MeshPoint"""
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._center = pwobj.String()

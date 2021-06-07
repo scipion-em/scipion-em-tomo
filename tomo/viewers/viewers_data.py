@@ -78,8 +78,9 @@ class TomoDataViewer(pwviewer.Viewer):
             from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
             outputMeshes = obj
             tomoList = [item.clone() for item in outputMeshes.iterVolumes()]
-            path = os.path.join(self.protocol._getExtraPath(), '..')
+            path = self.protocol._getExtraPath()
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
+            path = os.path.join(path, '..')
             setOfMeshes2Files(outputMeshes, path)
             setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
 
