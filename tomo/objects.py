@@ -539,7 +539,7 @@ class TomoAcquisition(data.Acquisition):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = pwobj.Float(angleMin)
         self._angleMax = pwobj.Float(angleMax)
-        self._step = pwobj.Integer(step)
+        self._step = pwobj.Float(step)
         self._angleAxis1 = pwobj.Float(angleAxis1)
         self._angleAxis2 = pwobj.Float(angleAxis2)
 
