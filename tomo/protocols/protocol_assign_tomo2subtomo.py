@@ -24,15 +24,18 @@
 # *
 # **************************************************************************
 
+from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
 from pyworkflow.utils import removeExt
 from pwem.protocols import EMProtocol
+
 
 class ProtAssignTomo2Subtomo(EMProtocol):
     """ This protocol assign tomograms to subtomograms that have been imported before without tomograms.
     Subtomograms should contain the name of the original tomogram in their own file name.
     """
     _label = 'assign tomos to subtomos'
+    _devStatus = BETA
 
     def _defineParams(self, form):
         form.addSection(label='Input')

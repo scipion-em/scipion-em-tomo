@@ -28,32 +28,45 @@
 import os
 from os.path import basename
 
+from pyworkflow import BETA
+import pyworkflow.utils as pwutils
+
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
 
 from ..objects import SetOfCoordinates3D
-
 from .protocol_base import ProtTomoImportFiles
+from ..convert import TomoImport
+from ..utils import existsPlugin
+
+import tomo.constants as const
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfCoordinates3D'
     _label = 'import set of coordinates 3D'
+    _devStatus = BETA
 
-    IMPORT_FROM_AUTO = 0
-    IMPORT_FROM_EMAN = 1
-    IMPORT_FROM_DYNAMO = 2
+    IMPORT_FROM_AUTO = 'auto'
+    IMPORT_FROM_TXT = 'txt'
+    IMPORT_FROM_EMAN = 'eman'
+    IMPORT_FROM_DYNAMO = 'dynamo'
 
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        return ['auto', 'eman', 'dynamo']
+        importChoices = ['auto', 'txt']
+        if existsPlugin('emantomo'):
+            importChoices.append('eman')
+        if existsPlugin('dynamo'):
+            importChoices.append('dynamo')
+        return importChoices
 
     def _getDefaultChoice(self):
-        return self.IMPORT_FROM_AUTO
+        return 0
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
@@ -91,9 +104,10 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 fileName = basename(os.path.splitext(coordFile)[0])
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() == self.IMPORT_FROM_EMAN:
-                        def addCoordinate(coord):
+                    if self.getImportFrom() == self.IMPORT_FROM_EMAN or self.getImportFrom() == self.IMPORT_FROM_TXT:
+                        def addCoordinate(coord, x, y, z):
                             coord.setVolume(tomo.clone())
+                            coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
                             coordsSet.append(coord)
                         ci.importCoordinates3D(coordFile, addCoordinate)
                     elif self.getImportFrom() == self.IMPORT_FROM_DYNAMO:
@@ -137,18 +151,71 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
         return self._getExtraPath(baseFileName)
 
+    def _validate(self):
+        errors = []
+        try:
+            next(self.iterFiles())
+        except StopIteration:
+            errors.append('No files matching the pattern %s were found.' % self.getPattern())
+        else:
+            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+            numberMatches = len(set(tomoFiles) & set(coordFiles))
+            if numberMatches == 0:
+                errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
+                              "relation, the filename of the corresponding tomogram and coordinate "
+                              "files must be equal.")
+        return errors
+
+    def _warnings(self):
+        warnings = []
+        tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+        coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+        numberMatches = len(set(tomoFiles) & set(coordFiles))
+        if not existsPlugin('emantomo'):
+            warnings.append('Plugin *scipion-em-emantomo* has not being installed. Please, install the Plugin to '
+                            'import Eman related formats (currently supported formats: ".json"). Otherwise, the protocol '
+                            'may have unexpected outputs if Eman files are attempted to be imported.\n')
+        if not existsPlugin('dynamo'):
+            warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
+                            'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
+                            'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
+        if numberMatches < max(len(tomoFiles), len(coordFiles)):
+            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
+                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
+                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
+                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
+                            "- '.txt', '.tbl', '.json').\n")
+            mismatches_coords = set(coordFiles).difference(tomoFiles)
+            if mismatches_coords:
+                warnings.append("The following coordinate files will not be associated to any Tomogram "
+                                "(name without extension):")
+                for file in mismatches_coords:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+            mismatches_tomos = set(tomoFiles).difference(coordFiles)
+            if mismatches_tomos:
+                warnings.append("The following Tomogram files will not be associated to any coordinates "
+                                "(name without extension):")
+                for file in mismatches_tomos:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+        return warnings
+
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):
-        importFrom = self.importFrom.get()
+        importFrom = self._getImportChoices()[self.importFrom.get()]
         if importFrom == self.IMPORT_FROM_AUTO:
             importFrom = self.getFormat()
         return importFrom
 
     def getFormat(self):
         for coordFile, _ in self.iterFiles():
-            if coordFile.endswith('.json') or coordFile.endswith('.txt'):
+            if coordFile.endswith('.txt'):
+                return self.IMPORT_FROM_TXT
+            if coordFile.endswith('.json') and existsPlugin('emantomo'):
                 return self.IMPORT_FROM_EMAN
-            if coordFile.endswith('.tbl'):
+            if coordFile.endswith('.tbl') and existsPlugin('dynamo'):
                 return self.IMPORT_FROM_DYNAMO
         return -1
 
@@ -157,7 +224,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         importFrom = self.getImportFrom()
 
         if importFrom == self.IMPORT_FROM_EMAN:
-            EmanImport = Domain.importFromPlugin('eman2.convert', 'EmanImport',
+            EmanImport = Domain.importFromPlugin('emantomo.convert', 'EmanTomoImport',
                                           errorMsg='Eman is needed to import .json or '
                                                    '.box files',
                                           doRaise=True)
@@ -166,6 +233,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         elif importFrom == self.IMPORT_FROM_DYNAMO:
             readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
             return readDynCoord
+
+        elif importFrom == self.IMPORT_FROM_TXT:
+            return TomoImport(self)
         else:
             self.importFilePath = ''
             return None

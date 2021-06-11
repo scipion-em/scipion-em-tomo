@@ -24,11 +24,14 @@
 # *
 # **************************************************************************
 
+import os
+
 import pyworkflow.viewer as pwviewer
 from pwem.viewers import ObjectView
 from pyworkflow.protocol import LabelParam
 
 from .views import ClassesSubTomogramsView
+from ..convert.convert import setOfMeshes2Files
 import tomo.objects
 from tomo.protocols import ProtTsCorrectMotion
 
@@ -72,12 +75,13 @@ class TomoDataViewer(pwviewer.Viewer):
                                                    obj.getFileName()))
 
         elif issubclass(cls, tomo.objects.SetOfMeshes):
-            from .views_tkinter_tree import MeshesTreeProvider, TomogramsDialog
-            meshList = [item.clone() for item in obj.iterItems()]
-
-            tomoProvider = MeshesTreeProvider(meshList)
-
-            path = self.protocol._getTmpPath()
+            from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
+            outputMeshes = obj
+            tomoList = [item.clone() for item in outputMeshes.iterVolumes()]
+            path = self.protocol._getExtraPath()
+            tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
+            path = os.path.join(path, '..')
+            setOfMeshes2Files(outputMeshes, path)
             setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
 
         return views

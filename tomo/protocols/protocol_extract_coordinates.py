@@ -28,12 +28,15 @@
 import numpy as np
 import os
 
+from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 
 import pyworkflow.utils as pwutils
+from pyworkflow.object import Integer
 
 from .protocol_base import ProtTomoPicking
 
+import tomo.constants as const
 from ..objects import Coordinate3D
 
 
@@ -48,6 +51,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     """
 
     _label = 'extract 3D coordinates'
+    _devStatus = BETA
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -85,7 +89,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         inSubTomos = self.getInputSubTomos()
         scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
         print("Scaling coordinates by a factor *%0.2f*" % scale)
-        filesTomo = [os.path.basename(tomo.getFileName()) for tomo in inTomos.iterItems()]
+        filesTomo = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomos.iterItems()]
 
         suffix = ''
         self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
@@ -99,24 +103,32 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             if tomo is None:
                 print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
                 try:
-                    idx = filesTomo.index(os.path.basename(subTomo.getVolName()))
+                    idx = filesTomo.index(pwutils.removeBaseExt(subTomo.getVolName()))
                 except:
                     idx = None
                 if idx is not None:
-                    x, y, z = coord.getPosition()
+                    if len(filesTomo) == 1:
+                        newCoord.setVolume(inTomos.getFirstItem())
+                        coord.setVolume(inTomos.getFirstItem())
+                    else:
+                        newCoord.setVolume(inTomos[idx+1])
+                        coord.setVolume(inTomos[idx+1])
+                    x, y, z = coord.getPosition(const.SCIPION)
                     newCoord.copyObjId(subTomo)
-                    newCoord.setPosition(x * scale, y * scale, z * scale)
 
-                    newCoord.setVolume(inTomos[idx+1])
+                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
+                    if coord.hasGroupId():
+                        newCoord.setGroupId(coord.getGroupId())
                     self.outputCoords.append(newCoord)
             else:
+                coord.setVolume(tomo)
                 newCoord.copyObjId(subTomo)
-                x, y, z = coord.getPosition()
-                newCoord.setPosition(x * scale, y * scale, z * scale)
-
+                x, y, z = coord.getPosition(const.SCIPION)
                 newCoord.setVolume(tomo)
+                newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
+
                 newCoord.setBoxSize(boxSize)
                 newCoord.setMatrix(checkMatrix(subTomo, coord))
                 self.outputCoords.append(newCoord)
@@ -142,9 +154,16 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         self.outputCoords.setBoxSize(boxSize)
 
     def createOutputStep(self):
-        self._defineOutputs(outputCoordinates3D=self.outputCoords)
-        self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
-        self._defineSourceRelation(self.inputTomos, self.outputCoords)
+        if self.outputCoords.getSize() > 0:
+            self._defineOutputs(outputCoordinates3D=self.outputCoords)
+            self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
+            self._defineSourceRelation(self.inputTomos, self.outputCoords)
+        else:
+            raise Exception("No coordinates were extracted from the input subtomograms probably "
+                            "due to an issue during the association with the new tomograms. In case "
+                            "the association was done by the filename, please, check that the tomograms where "
+                            "subtomograms were extracted and new tomograms have the same file names "
+                            "and try again.")
 
     # ------------- UTILS functions ----------------
     def getSuffix(self, suffix):

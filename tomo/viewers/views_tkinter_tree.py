@@ -41,6 +41,7 @@ import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
 
 import tomo.objects
+from tomo.convert.convert import getMeshVolFileName
 
 
 class TiltSeriesTreeProvider(TreeProvider):
@@ -263,7 +264,7 @@ class MeshesTreeProvider(TreeProvider):
         self.tomoList.sort(key=lambda x: x.getFileName(), reverse=False)
 
     def getColumns(self):
-        return [('Tomogram', 300), ('Number of Mehes', 150)]
+        return [('Tomogram', 300), ('Number of Meshes', 150)]
 
     def getObjectInfo(self, obj):
         if isinstance(obj, tomo.objects.Mesh):
@@ -332,11 +333,14 @@ class TomogramsDialog(ToolbarListDialog):
             self.after(1000, self.refresh_gui_viewer)
         else:
             pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
+            pwutils.cleanPath(self.macroPath)
 
     def refresh_gui(self):
         self.tree.update()
         if self.proc.isAlive():
             self.after(1000, self.refresh_gui)
+        else:
+            pwutils.cleanPath(self.macroPath)
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
@@ -345,14 +349,13 @@ class TomogramsDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui)
 
     def doubleClickViewer(self, e=None):
-        self.mesh = e
-        self.tomo = e.getVolume()
+        self.tomo = e
         self.proc = threading.Thread(target=self.lanchIJForViewing, args=(self.path, self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui_viewer)
 
     def lanchIJForTomogram(self, path, tomogram):
-        macroPath = os.path.join(conf.Config.SCIPION_TMP, "AutoSave_ROI.ijm")
+        self.macroPath = os.path.join(conf.Config.SCIPION_TMP, "AutoSave_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
@@ -502,11 +505,11 @@ class TomogramsDialog(ToolbarListDialog):
     return groupEnd;
     }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0])
-        macroFid = open(macroPath, 'w')
+        macroFid = open(self.macroPath, 'w')
         macroFid.write(macro)
         macroFid.close()
 
-        args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        args = "-i %s -macro %s" % (tomogramFile, self.macroPath)
         viewParams = {showj.ZOOM: 50}
         for key, value in viewParams.items():
             args = "%s --%s %s" % (args, key, value)
@@ -516,14 +519,11 @@ class TomogramsDialog(ToolbarListDialog):
         runJavaIJapp(4, app, args).wait()
 
     def lanchIJForViewing(self, path, tomogram):
-        macroPath = os.path.join(conf.Config.SCIPION_TMP, "View_ROI.ijm")
+        self.macroPath = os.path.join(conf.Config.SCIPION_TMP, "View_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
-        mesh_group = self.mesh.getMesh()
-        group = np.ones((1, len(mesh_group))) * self.mesh.getGroup()
-        meshFile = 'mesh.txt'
-        np.savetxt(os.path.join(path, meshFile), np.append(mesh_group, group.T, axis=1), fmt='%d', delimiter=',')
+        meshFile = getMeshVolFileName(self.tomo.getObjId())
 
         macro = r"""path = "%s";
     file = "%s"
@@ -581,11 +581,11 @@ class TomogramsDialog(ToolbarListDialog):
     return groups;
     }
     """ % (os.path.join(path, ''), os.path.splitext(tomogramName)[0], meshFile)
-        macroFid = open(macroPath, 'w')
+        macroFid = open(self.macroPath, 'w')
         macroFid.write(macro)
         macroFid.close()
 
-        args = "-i %s -macro %s" % (tomogramFile, macroPath)
+        args = "-i %s -macro %s" % (tomogramFile, self.macroPath)
         viewParams = {showj.ZOOM: 50}
         for key, value in viewParams.items():
             args = "%s --%s %s" % (args, key, value)

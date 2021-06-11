@@ -32,6 +32,7 @@ for input tomograms.
 
 import os
 from distutils.spawn import find_executable
+import tempfile
 
 import pyworkflow.protocol.params as params
 from pwem.viewers import EmProtocolViewer, ChimeraView
@@ -42,6 +43,8 @@ from pwem.emlib.image import ImageHandler
 
 from tomo.protocols import ProtImportTomograms, \
     ProtImportSubTomograms
+from tomo.objects import SetOfSubTomograms
+
 
 TOMOGRAM_SLICES = 1
 TOMOGRAM_CHIMERA = 0
@@ -51,7 +54,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
     """ Wrapper to visualize tomo objects
     with default viewers such as xmipp/showj and chimera. """
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
-    _targets = [ProtImportTomograms, ProtImportSubTomograms]
+    _targets = [ProtImportTomograms, ProtImportSubTomograms, SetOfSubTomograms]
     _label = 'viewer input tomogram'
 
     def _defineParams(self, form):
@@ -96,20 +99,35 @@ class ViewerProtImportTomograms(EmProtocolViewer):
         elif self.displayTomo == TOMOGRAM_SLICES:
             return self._showTomogramsSlices()
 
-    def _createSetOfObjects(self):
-        if hasattr(self.protocol, 'outputTomograms'):
-            setOfObjects = self.protocol.outputTomograms
-            sampling = self.protocol.outputTomograms.getSamplingRate()
+    def _sourceIsOutput(self):
+        """If source is a SetOfSubtomograms"""
+        return isinstance(self.protocol, SetOfSubTomograms)
+
+    def _getOutput(self):
+        if self._sourceIsOutput():
+            # Protocol here is a SetOfSubtomograms
+            return self.protocol
+        elif hasattr(self.protocol, 'outputTomograms'):
+            return self.protocol.outputTomograms
         elif hasattr(self.protocol, 'outputSubTomograms'):
-            setOfObjects = self.protocol.outputSubTomograms
-            sampling = self.protocol.outputSubTomograms.getSamplingRate()
+            return self.protocol.outputSubTomograms
+
+    def _getSetAndSampling(self):
+        setOfObjects = self._getOutput()
+        sampling = setOfObjects.getSamplingRate()
         return sampling, setOfObjects
+
+    def _getExtraFolder(self, fileName):
+        if self._sourceIsOutput():
+            return os.path.join(tempfile.mkdtemp(), fileName)
+        else:
+            return self.protocol._getExtraPath(fileName)
 
     def _showTomogramsChimera(self):
         """ Create a chimera script to visualize selected tomograms. """
-        tmpFileNameCMD = self.protocol._getTmpPath("chimera.cxc")
+        tmpFileNameCMD = self._getExtraFolder("chimera.cxc")
         f = open(tmpFileNameCMD, "w")
-        sampling, _setOfObjects = self._createSetOfObjects()
+        sampling, _setOfObjects = self._getSetAndSampling()
         count = 1  # first model in chimera is a tomogram
 
         if len(_setOfObjects) == 1:
@@ -120,14 +138,12 @@ class ViewerProtImportTomograms(EmProtocolViewer):
             # be in the center of the window
 
             dim = _setOfObjects.getDim()[0]
-            tmpFileNameBILD = os.path.abspath(self.protocol._getTmpPath(
-                "axis.bild"))
+            tmpFileNameBILD = os.path.abspath(self._getExtraFolder("axis.bild"))
             viewers.viewer_chimera.Chimera.createCoordinateAxisFile(dim,
                                                                     bildFileName=tmpFileNameBILD,
                                                                     sampling=sampling)
             f.write("open %s\n" % tmpFileNameBILD)
             f.write("cofr 0,0,0\n")  # set center of coordinates
-            count = 1  # skip first model because is not a 3D map
         oldFileName = ""
         for tomo in _setOfObjects:
             fileName = tomo.getFileName()
@@ -142,6 +158,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
             f.write("open %s\n" % localTomo)
             f.write("volume #%d style surface voxelSize %f\n" %
                     (count, sampling))
+            f.write("volume #%d level 1\n" % count)
             count += 1
 
         if len(_setOfObjects) > 1:
@@ -155,7 +172,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
 
     def _showTomogramsSlices(self):
         # Write an sqlite with all tomograms selected for visualization.
-        sampling, setOfObjects = self._createSetOfObjects()
+        sampling, setOfObjects = self._getSetAndSampling()
 
         viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
         view = viewers.views.ObjectView(self._project, setOfObjects.strId(),

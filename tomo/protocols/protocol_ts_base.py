@@ -48,15 +48,15 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
     def _insertAllSteps(self):
         self._initialize()
 
-        inputTs = self._getInputTs()
+        inputTsM = self._getInputTs()
 
         self._ciStepId = self._insertFunctionStep('convertInputStep',
-                                                inputTs.getObjId())
+                                                  inputTsM.getObjId())
         self._insertFunctionStep('createOutputStep', wait=True,
                                  prerequisites=[self._ciStepId])
         self._coStep = self._steps[-1]  # get last step
 
-        self._tsDict = TiltSeriesDict(inputTs, self._getOutputSet(),
+        self._tsDict = TiltSeriesDict(inputTsM, self._getOutputSet(),
                                       newItemsCallback=self._insertNewSteps,
                                       doneItemsCallback=self._updateOutput)
         self._tsDict.update()
