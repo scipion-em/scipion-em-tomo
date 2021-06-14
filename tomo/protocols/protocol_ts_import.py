@@ -862,13 +862,15 @@ class MDoc:
             tsFile = join(parentFolder, headerDict.get("ImageFile", None))
             if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.mrcs')
+            if not os.path.exists(tsFile):
+                tsFile = join(parentFolder, self._tsId + '.st')
             validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
 
         # Get acquisition specific (per angle) info
         self._getSlicesData(zSlices, tsFile)
 
         # Check Mdoc info read
-        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation)
+        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation or not isImportingTsMovies)
 
         # Check all the possible errors found
         exceptionMsg = ''
