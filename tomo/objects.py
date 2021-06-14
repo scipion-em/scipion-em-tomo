@@ -1350,6 +1350,33 @@ class CTFTomo(data.CTFModel):
         self._defocusVDeviation = pwobj.Float()
         self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
+    def copyInfo(self, other, copyId=False):
+        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile', '_micFile',
+                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation',
+                            '_isDefocusUDeviationInRange', '_isDefocusVDeviationInRange')
+
+        if other.hasPhaseShift():
+            self.setPhaseShift(other.getPhaseShift())
+
+        if self.hasEstimationInfoAsList():
+            if self.hasAstigmatismInfoAsList():
+                self.setDefocusUList(other.getDefocusUList())
+                self.setDefocusVList(other.getDefocusVList())
+                self.setDefocusAngleList(other.getDefocusAngleList())
+
+            else:
+                self.setDefocusUList(other.getDefocusUList())
+
+        if self.hasPhaseShiftInfoAsList():
+            self.setPhaseShiftList(other.getPhaseShiftList())
+
+        if self.hasCutOnFrequncyInfoAsList():
+            self.setCutOnFreq(other.getCutOnFreq())
+            self.setCutOnFreqList(other.getCutOnFreqList())
+
+        if copyId:
+            self.copyObjId(other)
+
     def getIndex(self):
         return self._index
 
