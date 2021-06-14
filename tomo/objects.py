@@ -1352,7 +1352,7 @@ class CTFTomo(data.CTFModel):
 
     def copyInfo(self, other, copyId=False):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile', '_micFile',
-                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation',
+                            '_resolution', '_fitQuality', '_index', '_objEnabled', '_defocusUDeviation', '_defocusVDeviation',
                             '_isDefocusUDeviationInRange', '_isDefocusVDeviationInRange')
 
         if other.hasPhaseShift():
