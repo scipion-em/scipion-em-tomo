@@ -1437,6 +1437,21 @@ class CTFTomo(data.CTFModel):
         else:
             return False
 
+    def hasPhaseShiftInfoAsList(self):
+        """ This method checks if the CTFTomo object contains phase shift information in the form of a list. """
+
+        if hasattr(self, "_phaseShiftList"):
+            return True
+        else:
+            return False
+
+    def hasCutOnFrequncyInfoAsList(self):
+        """ This method checks if the CTFTomo object contains cut-on frequency information in the form of a list. """
+
+        if hasattr(self, "_cutOnFreqList"):
+            return True
+        else:
+            return False
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
