@@ -1355,7 +1355,9 @@ class CTFTomo(data.CTFModel):
                             '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation')
 
         self.setEnabled(other.isEnabled())
-                            #'_isDefocusUDeviationInRange', '_isDefocusVDeviationInRange',)
+
+        self.setIsDefocusUDeviationInRange(other.getIsDefocusUDeviationInRange())
+        self.setIsDefocusVDeviationInRange(other.getIsDefocusVDeviationInRange())
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
@@ -1394,11 +1396,17 @@ class CTFTomo(data.CTFModel):
     def getdefocusUDeviation(self):
         return self._defocusUDeviation
 
+    def setIsDefocusUDeviationInRange(self, value):
+        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
 
     def getdefocusVDeviation(self):
         return self._defocusVDeviation
+
+    def setIsDefocusVDeviationInRange(self, value):
+        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
 
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
