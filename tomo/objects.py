@@ -1437,7 +1437,6 @@ class CTFTomo(data.CTFModel):
         else:
             return False
 
-    # TODO: cut on frequency
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
