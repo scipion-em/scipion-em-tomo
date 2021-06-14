@@ -1785,8 +1785,14 @@ class CTFTomoSeries(data.EMSet):
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
 
+    def setIsDefocusUDeviationInRange(self, value):
+        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
+
+    def setIsDefocusVDeviationInRange(self, value):
+        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
 
     def calculateDefocusUDeviation(self, defocusUTolerance=20):
         defocusUValueList = []
