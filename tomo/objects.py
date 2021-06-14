@@ -1351,28 +1351,34 @@ class CTFTomo(data.CTFModel):
         self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
     def copyInfo(self, other, copyId=False):
-        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile', '_micFile',
-                            '_resolution', '_fitQuality', '_index', '_objEnabled', '_defocusUDeviation', '_defocusVDeviation',
-                            '_isDefocusUDeviationInRange', '_isDefocusVDeviationInRange')
+        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
+                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation')#,
+                            #'_isDefocusUDeviationInRange', '_isDefocusVDeviationInRange', '_objEnabled',)
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
 
-        if self.hasEstimationInfoAsList():
-            if self.hasAstigmatismInfoAsList():
+        if other.hasEstimationInfoAsList():
+            if other.hasAstigmatismInfoAsList():
+                self._defocusUList = pwobj.CsvList(pType=float)
+                self._defocusVList = pwobj.CsvList(pType=float)
+                self._defocusAngleList = pwobj.CsvList(pType=float)
                 self.setDefocusUList(other.getDefocusUList())
                 self.setDefocusVList(other.getDefocusVList())
                 self.setDefocusAngleList(other.getDefocusAngleList())
 
             else:
+                self._defocusUList = pwobj.CsvList(pType=float)
                 self.setDefocusUList(other.getDefocusUList())
 
-        if self.hasPhaseShiftInfoAsList():
+        if other.hasPhaseShiftInfoAsList():
+            self._phaseShiftList = pwobj.CsvList(pType=float)
             self.setPhaseShiftList(other.getPhaseShiftList())
 
-        if self.hasCutOnFrequncyInfoAsList():
-            self.setCutOnFreq(other.getCutOnFreq())
+        if other.hasCutOnFrequncyInfoAsList():
+            self._cutOnFreqList = pwobj.CsvList(pType=float)
             self.setCutOnFreqList(other.getCutOnFreqList())
+            self.setCutOnFreq(other.getCutOnFreq())
 
         if copyId:
             self.copyObjId(other)
