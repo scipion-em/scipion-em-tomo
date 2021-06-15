@@ -1350,6 +1350,43 @@ class CTFTomo(data.CTFModel):
         self._defocusVDeviation = pwobj.Float()
         self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
+    def copyInfo(self, other, copyId=False):
+        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
+                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation')
+
+        self.setEnabled(other.isEnabled())
+
+        self.setIsDefocusUDeviationInRange(other.getIsDefocusUDeviationInRange())
+        self.setIsDefocusVDeviationInRange(other.getIsDefocusVDeviationInRange())
+
+        if other.hasPhaseShift():
+            self.setPhaseShift(other.getPhaseShift())
+
+        if other.hasEstimationInfoAsList():
+            if other.hasAstigmatismInfoAsList():
+                self._defocusUList = pwobj.CsvList(pType=float)
+                self._defocusVList = pwobj.CsvList(pType=float)
+                self._defocusAngleList = pwobj.CsvList(pType=float)
+                self.setDefocusUList(other.getDefocusUList())
+                self.setDefocusVList(other.getDefocusVList())
+                self.setDefocusAngleList(other.getDefocusAngleList())
+
+            else:
+                self._defocusUList = pwobj.CsvList(pType=float)
+                self.setDefocusUList(other.getDefocusUList())
+
+        if other.hasPhaseShiftInfoAsList():
+            self._phaseShiftList = pwobj.CsvList(pType=float)
+            self.setPhaseShiftList(other.getPhaseShiftList())
+
+        if other.hasCutOnFrequncyInfoAsList():
+            self._cutOnFreqList = pwobj.CsvList(pType=float)
+            self.setCutOnFreqList(other.getCutOnFreqList())
+            self.setCutOnFreq(other.getCutOnFreq())
+
+        if copyId:
+            self.copyObjId(other)
+
     def getIndex(self):
         return self._index
 
@@ -1359,11 +1396,17 @@ class CTFTomo(data.CTFModel):
     def getdefocusUDeviation(self):
         return self._defocusUDeviation
 
+    def setIsDefocusUDeviationInRange(self, value):
+        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
 
     def getdefocusVDeviation(self):
         return self._defocusVDeviation
+
+    def setIsDefocusVDeviationInRange(self, value):
+        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
 
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
@@ -1437,7 +1480,21 @@ class CTFTomo(data.CTFModel):
         else:
             return False
 
-    # TODO: cut on frequency
+    def hasPhaseShiftInfoAsList(self):
+        """ This method checks if the CTFTomo object contains phase shift information in the form of a list. """
+
+        if hasattr(self, "_phaseShiftList"):
+            return True
+        else:
+            return False
+
+    def hasCutOnFrequncyInfoAsList(self):
+        """ This method checks if the CTFTomo object contains cut-on frequency information in the form of a list. """
+
+        if hasattr(self, "_cutOnFreqList"):
+            return True
+        else:
+            return False
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
@@ -1728,8 +1785,14 @@ class CTFTomoSeries(data.EMSet):
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
 
+    def setIsDefocusUDeviationInRange(self, value):
+        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
+
+    def setIsDefocusVDeviationInRange(self, value):
+        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
 
     def calculateDefocusUDeviation(self, defocusUTolerance=20):
         defocusUValueList = []
