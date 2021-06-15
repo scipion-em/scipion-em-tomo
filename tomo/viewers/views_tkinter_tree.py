@@ -53,6 +53,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_IX = 'Index'
     COL_TI_ID = 'Order'
     COL_TI_ANGLE = 'Angle'
+    COL_TI_DOSE = "Dose"
     COL_TI_DEFOCUS_U = 'Defocus'
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
@@ -98,8 +99,9 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TS, 100),
             (self.COL_TI_ID, 50),
             (self.COL_TI_ANGLE, 50),
+            (self.COL_TI_DOSE, 50),
             (self.COL_TI_IX, 50),
-            (self.COL_TI,400),
+            (self.COL_TI, 400),
         ]
 
         if self._hasCtf:
@@ -122,12 +124,17 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = obj.getObjId()
             text = tsId
-            values = ['', '', '', str(obj)]
+            values = ['', '', '', '', str(obj)]
             opened = True
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, obj.getObjId())
             text = ''
-            values = [objId, obj.getTiltAngle(),
+            dose = obj.getAcquisition().getDosePerFrame()
+            if dose:
+                dose = round(dose, 2)
+
+            values = [obj.getAcquisitionOrder(), round(obj.getTiltAngle(), 2),
+                      dose,
                       str(obj.getLocation()[0]),
                       str(obj.getLocation()[1])]
             if self._hasCtf:

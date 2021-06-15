@@ -159,7 +159,7 @@ class TiltSeriesBase(data.SetOfImages):
 
         angleList = []
 
-        for ti in self:
+        for ti in self.iterItems(orderBy="_tiltAngle"):
             angleList.append(ti.getTiltAngle())
 
         if reverse:
