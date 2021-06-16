@@ -305,9 +305,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC'):
+    def iterItems(self, orderBy='id', direction='ASC', iterate=True):
         for item in data.EMSet.iterItems(self, orderBy=orderBy,
-                                         direction=direction):
+                                         direction=direction,
+                                         iterate=iterate):
             self._setItemMapperPath(item)
             yield item
 
@@ -1883,7 +1884,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         classItem = data.EMSet.__getitem__(self, itemId)
 
         objId = None
-        for tiltSeries in self.getSetOfTiltSeries():
+        for tiltSeries in self.getSetOfTiltSeries().iterItems(iterate=False):
             if tiltSeries.getTsId() == classItem.getTsId():
                 objId = tiltSeries.getObjId()
 
