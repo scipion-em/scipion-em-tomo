@@ -182,7 +182,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
 
-        def addTiltImage(tiFile, tsObject, suffix, tsMov, tsIde, samplingRate, objId):
+        def addTiltImage(tiFile, tsObject, suffix, tsMov, tsIde, samplingRate, objId, index):
             """
             :param tiFile: aligned tilt image file
             :param tsObject: Tilt Series to which the new Ti Image will be added
@@ -191,12 +191,14 @@ class ProtTsCorrectMotion(ProtTsProcess):
             :param tsIde: Tilt series identifier
             :param samplingRate: current Tilt Series sampling rate
             :param objId: location of the Tilt Image which will be added
+            :param index: position of the slice in the generated slack
             """
             ta = tsMov.getTiltAngle()
             to = tsMov.getAcquisitionOrder()
             acq = tsMov.getAcquisition()
             ti = TiltImage(tiltAngle=ta, tsId=tsIde, acquisitionOrder=to)
             ti.setSamplingRate(samplingRate)
+            ti.setIndex(index)
             ti.setAcquisition(acq)
             newLocation = (objId, self._getExtraPath(tsIde + '_' + suffix + '.mrcs'))
             ih.convert(tiFile, newLocation)
@@ -263,9 +265,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOddFile = self.oddAvgFrameList[i]
                 tsM = self.tsMList[i]
                 # Even
-                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter)
+                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter, i)
                 # Odd
-                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter)
+                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter, i)
 
                 counter += 1
 
@@ -371,6 +373,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
                 tiOut.setAcquisition(ti.getAcquisition())
+                tiOut.setIndex(i)
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1
