@@ -268,7 +268,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
-        self._anglesCount = None
+        self._anglesCount = Integer()
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -347,7 +347,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Update dimensions of this set base on the first element. """
         firstItem = self.getFirstItem()
         self.setDim(firstItem.getDim())
-        self._anglesCount = pwobj.Integer(firstItem.getSize())
+        self._anglesCount.set(firstItem.getSize())
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
