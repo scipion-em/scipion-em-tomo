@@ -1405,6 +1405,14 @@ class CTFTomo(data.CTFModel):
         if copyId:
             self.copyObjId(other)
 
+    @staticmethod
+    def ctfModelToCtfTomo(ctfModel):
+        newCTFTomo = CTFTomo()
+        newCTFTomo.copyAttributes(ctfModel, '_defocusU', '_defocusV',
+                                  '_defocusAngle', '_defocusRatio', '_psdFile',
+                                  '_resolution',  '_fitQuality')
+        return newCTFTomo
+
     def getIndex(self):
         return self._index
 
