@@ -72,7 +72,7 @@ class TomoDataViewer(pwviewer.Viewer):
 
         elif issubclass(cls, tomo.objects.SetOfClassesSubTomograms):
             views.append(ClassesSubTomogramsView(self._project, obj.strId(),
-                                                   obj.getFileName()))
+                                                 obj.getFileName()))
 
         elif issubclass(cls, tomo.objects.SetOfMeshes):
             from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
@@ -86,33 +86,28 @@ class TomoDataViewer(pwviewer.Viewer):
 
         return views
 
+
 class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
     """ Wrapper to visualize outputs of tilt series motion correction protocols
     """
-
     _label = 'Tilt series motion correction viewer'
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [
-        ProtTsCorrectMotion
-    ]
+    _targets = [ProtTsCorrectMotion]
 
     def _defineParams(self, form):
             form.addSection(label='Visualization of tilt series')
             form.addParam('displayFullTiltSeries', LabelParam,
                           label='Display f*ull* frame aligned tilt series',
-                          help='Shows full frames aligned set of tilt series'
-                          )
+                          help='Shows full frames aligned set of tilt series')
             if self.hasEvenSet():
                 form.addParam('displayEvenTiltSeries', LabelParam,
-                          label='Display *even* frames aligned tilt series',
-                          help='Shows even frames aligned set of tilt series'
-                          )
+                              label='Display *even* frames aligned tilt series',
+                              help='Shows even frames aligned set of tilt series')
 
             if self.hasOddSet():
                 form.addParam('displayOddTiltSeries', LabelParam,
-                          label='Display *odd* frames aligned tilt series',
-                          help='Shows even frames aligned set of tilt series'
-                          )
+                              label='Display *odd* frames aligned tilt series',
+                              help='Shows even frames aligned set of tilt series')
 
     def hasEvenSet(self):
         return hasattr(self.protocol, SERIES_EVEN)
@@ -143,9 +138,46 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
         }
 
     def _visualize(self, setOfTiltSeries):
-
         from .views_tkinter_tree import TiltSeriesDialogView
         setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
 
         return [setTsView]
 
+
+class CtfEstimationTomoViewer(pwviewer.Viewer):
+    """ This class implements a view using Tkinter CtfEstimationListDialog
+    and the CtfEstimationTreeProvider.
+    """
+    _label = 'CTF estimation viewer'
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [tomo.objects.SetOfCTFTomoSeries]
+
+    def __init__(self, parent, protocol, **kwargs):
+        pwviewer.Viewer.__init__(self, **kwargs)
+        self._tkParent = parent.root
+        self._protocol = protocol
+        self._title = 'CTF estimation viewer'
+
+    def plot1D(self, ctfSet, ctfId):
+        """ To be implemented in the viewers. """
+        return None
+
+    def plot2D(self, ctfSet, ctfId):
+        """ To be implemented in the viewers. """
+        return None
+
+    def visualize(self, obj, windows=None, protocol=None):
+        # JMRT: Local import to avoid importing Tkinter stuff at top level
+        from .views_tkinter_tree import CtfEstimationTreeProvider, CtfEstimationListDialog
+        objName = obj.getObjName().split('.')[1]
+        for output in self._protocol._iterOutputsNew():
+            if output[0] == objName:
+                self._outputSetOfCTFTomoSeries = output[1]
+                break
+        self._inputSetOfTiltSeries = self._outputSetOfCTFTomoSeries.getSetOfTiltSeries()
+        self._provider = CtfEstimationTreeProvider(self._tkParent,
+                                                   self._protocol,
+                                                   self._outputSetOfCTFTomoSeries)
+        CtfEstimationListDialog(self._tkParent, self._title, self._provider,
+                                self._protocol, self._inputSetOfTiltSeries,
+                                plot1Dfunc=self.plot1D, plot2Dfunc=self.plot2D)
