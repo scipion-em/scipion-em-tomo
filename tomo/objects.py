@@ -268,6 +268,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
+        self._anglesCount = Integer()
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -305,9 +306,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC'):
+    def iterItems(self, orderBy='id', direction='ASC', iterate=True):
         for item in data.EMSet.iterItems(self, orderBy=orderBy,
-                                         direction=direction):
+                                         direction=direction,
+                                         iterate=iterate):
             self._setItemMapperPath(item)
             yield item
 
@@ -343,11 +345,27 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
-        self.setDim(self.getFirstItem().getDim())
+        firstItem = self.getFirstItem()
+        self.setDim(firstItem.getDim())
+        self._anglesCount.set(firstItem.getSize())
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
+
+    def __str__(self):
+        """ String representation of a set of TiltSeries. """
+        sampling = self.getSamplingRate()
+
+        if not sampling:
+            print("FATAL ERROR: Object %s has no sampling rate!!!"
+                  % self.getName())
+            sampling = -999.0
+
+        s = "%s (%d items, %s x %s, %0.2f Å/px%s)" % \
+            (self.getClassName(), self.getSize(), self._anglesCount,
+             self._dimStr(), sampling, self._appendStreamState())
+        return s
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -1387,6 +1405,14 @@ class CTFTomo(data.CTFModel):
         if copyId:
             self.copyObjId(other)
 
+    @staticmethod
+    def ctfModelToCtfTomo(ctfModel):
+        newCTFTomo = CTFTomo()
+        newCTFTomo.copyAttributes(ctfModel, '_defocusU', '_defocusV',
+                                  '_defocusAngle', '_defocusRatio', '_psdFile',
+                                  '_resolution',  '_fitQuality')
+        return newCTFTomo
+
     def getIndex(self):
         return self._index
 
@@ -1883,7 +1909,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         classItem = data.EMSet.__getitem__(self, itemId)
 
         objId = None
-        for tiltSeries in self.getSetOfTiltSeries():
+        for tiltSeries in self.getSetOfTiltSeries().iterItems(iterate=False):
             if tiltSeries.getTsId() == classItem.getTsId():
                 objId = tiltSeries.getObjId()
 

@@ -28,10 +28,13 @@ import os
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
+from pyworkflow.object import Set, Integer
+from pyworkflow.protocol import STATUS_NEW
 from pyworkflow.utils.properties import Message
 from pwem import emlib
 
 from .protocol_ts_base import ProtTsProcess
+from ..objects import SetOfCTFTomoSeries, CTFTomoSeries
 
 
 class ProtTsEstimateCTF(ProtTsProcess):
@@ -43,7 +46,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
         """ Define input parameters from this program into the given form. """
         form.addSection(label='Input')
         form.addParam('inputTiltSeries', params.PointerParam, important=True,
-                      pointerClass='SetOfTiltSeries',
+                      pointerClass='SetOfTiltSeries, SetOfCTFTomoSeries',
                       label='Input tilt series')
 
         self._defineProcessParams(form)
@@ -97,6 +100,74 @@ class ProtTsEstimateCTF(ProtTsProcess):
         """ Step called after all CTF are estimated for a given tilt series. """
         self._tsDict.setFinished(tsId)
 
+    def _updateOutput(self, tsIdList):
+        """ Update the output set with the finished Tilt-series.
+        Params:
+            :param tsIdList: list of ids of finished tasks.
+        """
+        ts = self._getTiltSeries(tsIdList[0])
+        tsId = ts.getTsId()
+        objId = ts.getObjId()
+        # Flag to check the first time we save output
+        self._createOutput = getattr(self, '_createOutput', True)
+
+        outputSet = self._getOutputSet()
+
+        if outputSet is None:
+            # Special case just to update the outputSet status
+            # but it only makes sense when there is outputSet
+            if not tsIdList:
+                return
+            outputSet = self._createOutputSet()
+        else:
+            outputSet.enableAppend()
+            self._createOutput = False
+
+        newCTFTomoSeries = CTFTomoSeries()
+        newCTFTomoSeries.copyInfo(ts)
+        newCTFTomoSeries.setTiltSeries(ts)
+        newCTFTomoSeries.setTsId(tsId)
+        newCTFTomoSeries.setObjId(objId)
+
+        outputSet.append(newCTFTomoSeries)
+
+        index = 1
+        for ti in self._tsDict.getTiList(tsId):
+            newCTFTomo = ti._ctfModel
+            newCTFTomo.setIndex(Integer(index))
+            index += 1
+            newCTFTomoSeries.append(newCTFTomo)
+
+        newCTFTomoSeries.calculateDefocusUDeviation()
+        newCTFTomoSeries.calculateDefocusVDeviation()
+
+        if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
+                newCTFTomoSeries.getIsDefocusVDeviationInRange()):
+            newCTFTomoSeries.setEnabled(False)
+
+        newCTFTomoSeries.write(properties=False)
+        outputSet.update(newCTFTomoSeries)
+
+        if self._createOutput:
+            self._defineOutputs(**{self._getOutputName(): outputSet})
+            self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+            self._createOutput = False
+        else:
+            outputSet.write()
+            self._store(outputSet)
+
+        outputSet.close()
+        self._store()
+
+        if self._tsDict.allDone():
+            self._coStep.setStatus(STATUS_NEW)
+
+    def createOutputStep(self):
+        outputSet = self._getOutputSet()
+        outputSet.setStreamState(outputSet.STREAM_CLOSED)
+        outputSet.write()
+        self._store(outputSet)
+
     # --------------------------- INFO functions ------------------------------
     def _validate(self):
         errors = []
@@ -104,11 +175,62 @@ class ProtTsEstimateCTF(ProtTsProcess):
         return errors
 
     def _summary(self):
-        return [self.summaryVar.get('')]
+        summary = []
+        if hasattr(self, 'outputSetOfCTFTomoSeries'):
+            inputLabel = 'Input Tilt-Series'
+            if isinstance(self.inputTiltSeries.get(), SetOfCTFTomoSeries):
+                inputLabel = 'Input CTFTomoSeries'
+            summary.append(
+                inputLabel + ": %d.\nnumber of CTF estimated: %d.\n"
+                % (self._getInputTs().getSize(),
+                   self.outputSetOfCTFTomoSeries.getSize()))
+        else:
+            summary.append("Output classes not ready yet.")
+        return summary
 
     # --------------------------- UTILS functions ----------------------------
+    def _createOutputSet(self, suffix=''):
+        """ Method to create the output set.
+        By default will a SetOfTiltSeries, but can be re-defined in subclasses.
+        """
+        outputSetOfCTFTomoSeries = SetOfCTFTomoSeries.create(self._getPath(),
+                                                             template='CTFmodels%s.sqlite')
+        outputSetOfCTFTomoSeries.setSetOfTiltSeries(self._getInputTs())
+        outputSetOfCTFTomoSeries.setStreamState(Set.STREAM_OPEN)
+        return outputSetOfCTFTomoSeries
+
+    def _getTiltSeries(self, itemId):
+        obj = None
+        inputSetOfTiltseries = self._getInputTs()
+        for item in inputSetOfTiltseries.iterItems(iterate=False):
+            if item.getTsId() == itemId:
+                obj = item
+                if isinstance(obj, CTFTomoSeries):
+                    obj = item.getTiltSeries()
+                break
+
+        if obj is None:
+            raise ("Could not find tilt-series with tsId = %s" % itemId)
+
+        return obj
+
+    def _getOutputName(self):
+        """ Return the output name, by default 'outputTiltSeries'.
+        This method can be re-implemented in subclasses that have a
+        different output. (e.g outputTomograms).
+        """
+        return 'outputSetOfCTFTomoSeries'
+
+    def _getOutputSet(self):
+        return getattr(self, self._getOutputName(), None)
+
     def _getInputTsPointer(self):
         return self.inputTiltSeries
+
+    def _getInputTs(self):
+        if isinstance(self.inputTiltSeries.get(), SetOfCTFTomoSeries):
+            return self.inputTiltSeries.get().getSetOfTiltSeries()
+        return self.inputTiltSeries.get()
 
     def _initialize(self):
         """ This function define a dictionary with parameters used
@@ -163,3 +285,6 @@ class ProtTsEstimateCTF(ProtTsProcess):
 
     def getTiPrefix(self, ti):
         return '%s_%03d' % (ti.getTsId(), ti.getObjId())
+
+    def allowsDelete(self, obj):
+        return True
