@@ -400,11 +400,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 magnification=53000,
                 sphAberration=2.7,
                 ampContrast=0.1,
-                dosePerFrame=0.0891,
+                dosePerFrame=1.1048,
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
-                doses=[0.0424, 0.2121, 0.2546, 0.3394, 0.4455],
+                doses=[1.1044, 2.2032, 3.3154, 4.4292, 5.5239],
                 angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             ),
@@ -413,11 +413,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 magnification=53000,
                 sphAberration=2.7,
                 ampContrast=0.1,
-                dosePerFrame=0.0806,
+                dosePerFrame=1.1703,
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
-                doses=[0.1909, 0.2333, 0.2546, 0.2970, 0.4030],
+                doses=[1.1722, 2.3432, 3.5145, 4.6831, 5.8514],
                 angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             )

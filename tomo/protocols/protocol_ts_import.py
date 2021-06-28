@@ -946,7 +946,7 @@ class MDoc:
         """It calculates the accumulated dose on the frames represented by zSlice, and add it to the
         previous accumulated dose"""
         EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
-        FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumbers'  # Dose per frame in electrons per square Angstrom followed
+        FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'  # Dose per frame in electrons per square Angstrom followed
         # by number of frames at that dose
         DOSE_RATE = 'DoseRate'  # Dose rate to the camera, in electrons per unbinned pixel per second
         EXPOSURE_TIME = 'ExposureTime'  # Image exposure time
@@ -971,7 +971,10 @@ class MDoc:
         if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
             frameDoseAndNums = zSlice[FRAME_DOSES_AND_NUMBERS]
             if frameDoseAndNums:
-                newDose = float(list(frameDoseAndNums.strip())[-1])  # Get the mean from a string like '0 6'
+                data = frameDoseAndNums.split()  # Get the mean from a string like '0 6'
+                dosePerFrame = data[0]
+                nFrames = data[1]
+                newDose = float(dosePerFrame) * float(nFrames)
 
         # Calculated from fields DoseRate and ExposureTime
         if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
@@ -986,7 +989,7 @@ class MDoc:
             pixelSize = zSlice[PIXEL_SIZE]
             counts = zSlice[COUNTS_PER_ELECTRON]
             if all([minMaxMean, pixelSize, counts]):
-                meanVal = list(minMaxMean.strip())[-1]  # Get the mean from a string like '-42 2441 51.7968'
+                meanVal = minMaxMean.split()[-1]  # Get the mean from a string like '-42 2441 51.7968'
                 newDose = (float(meanVal) / float(counts)) / float(pixelSize) ** 2
 
         return newDose + accumulatedDose
