@@ -34,7 +34,7 @@ from pwem.viewers import showj
 from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
-from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo, showError
+from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
 import pyworkflow.config as conf
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
@@ -614,13 +614,15 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     COL_TILT_ANG = 'Tilt Angle'
     CRITERIA_1 = 'Status'
     COL_CTF_EST_IX = 'Index'
-    COL_CTF_EST_DEFOCUS_U = 'Defocus (A)'
+    COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
+    COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
     COL_CTF_EST_AST = 'Astigmatism (A)'
     COL_CTF_EST_RES = 'Resolution (A)'
     COL_CTF_EST_FIT = 'CC value'
     COL_CTF_EST_PHASE = 'Phase shift (deg)'
 
     ORDER_DICT = {COL_CTF_EST_DEFOCUS_U: '_defocusU',
+                  COL_CTF_EST_DEFOCUS_V: '_defocusV',
                   COL_CTF_EST_AST: '_defocusRatio',
                   COL_CTF_EST_RES: '_resolution',
                   COL_CTF_EST_PHASE: '_phaseShift',
@@ -672,6 +674,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             (self.COL_TILT_ANG, 100),
             (self.CRITERIA_1, 60),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
+            (self.COL_CTF_EST_DEFOCUS_V, 100),
             (self.COL_CTF_EST_AST, 150),
             (self.COL_CTF_EST_RES, 100),
             (self.COL_CTF_EST_FIT, 100)
@@ -710,9 +713,10 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
                       CTFSerieStates.OK if obj.getIsDefocusUDeviationInRange()
                       else CTFSerieStates.FAILED,
                       str("%d" % obj.getDefocusU()),
+                      str("%d" % obj.getDefocusV()),
                       str("%d" % ast),
-                      str("%0.1f" % obj.getResolution()),
-                      str("%0.3f" % obj.getFitQuality())]
+                      str("%0.1f" % obj.getResolution()) if obj.getResolution() else "-",
+                      str("%0.3f" % obj.getFitQuality()) if obj.getFitQuality() else "-"]
 
             if self._hasPhaseShift:
                 values.insert(4, str("%0.2f" % phSh))
@@ -831,7 +835,8 @@ class CtfEstimationListDialog(ListDialog):
         topRigthPanel = tk.Frame(topPanel)
         topRigthPanel.grid(row=0, column=1, padx=0, pady=0, sticky='news')
         self._createSubsetButton(topRigthPanel)
-        self._createShowFit(topRigthPanel)
+        if self._show1DPLot is not None:
+            self._createShowFit(topRigthPanel)
         self._createViewerHelp(topRigthPanel)
 
     def _createSubsetButton(self, topRigthPanel):
@@ -846,18 +851,16 @@ class CtfEstimationListDialog(ListDialog):
                                                     state=state)
 
     def _createShowFit(self, topRigthPanel):
-        self._addButton(topRigthPanel, '1D fit',
-                        pwutils.Icon.ACTION_RESULTS, self._show1DFit, sticky='ne')
+        self.createShowFitButton = self._addButton(topRigthPanel, '1D fit',
+                        pwutils.Icon.ACTION_RESULTS, self._show1DFit,
+                        state=tk.DISABLED,
+                        sticky='ne')
 
     def _createViewerHelp(self, topRigthPanel):
         self._addButton(topRigthPanel, pwutils.Message.LABEL_HELP,
                         pwutils.Icon.ACTION_HELP, self._showHelp, sticky='ne')
 
     def _show1DFit(self, event=None):
-        if self._show1DPLot is None:
-            showError('Not implemented',
-                      '1D fit viewer is not implemented by this plugin',
-                      self.parent)
         itemSelected = self.tree.getSelectedItem()
         obj = self.tree.getSelectedObj()
         if self.tree.parent(itemSelected):  # child item
@@ -984,6 +987,69 @@ class CtfEstimationListDialog(ListDialog):
                                 foreground='black')
         self.tree.bind("<Button-1>", self._createPloter, True)
 
+    def plotterChildItem(self, itemSelected):
+        plotterPanel = tk.Frame(self.bottomRightPanel)
+        if self._show2DPLot is None:
+            self.plotterParentItem(self.tree.parent(itemSelected))
+        else:
+            for ctfSerie in self.provider.getCTFSeries():
+                if ctfSerie.getTsId() in itemSelected:
+                    ctfId = int(itemSelected.split('.')[-1])
+                    # TODO: sort ctfSerie by id
+                    fig = self._show2DPLot(ctfSerie, ctfId)
+                    canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
+                    canvas.draw()
+                    canvas.get_tk_widget().pack(fill=BOTH, expand=0)
+                    break
+        plotterPanel.grid(row=0, column=1, sticky='news')
+
+    def plotterParentItem(self, itemSelected):
+        plotterPanel = tk.Frame(self.bottomRightPanel)
+        angList = []
+        defocusUList = []
+        phShList = []
+        resList = []
+
+        for ctfSerie in self.provider.getCTFSeries():
+            ts = ctfSerie.getTiltSeries()
+            if ctfSerie.getTsId() == itemSelected:
+                for item in ctfSerie.iterItems(orderBy='id'):
+                    index = int(item.getIndex())
+                    angList.append(int(ts[index].getTiltAngle()))
+                    defocusUList.append(item.getDefocusU())
+                    phShList.append(
+                        item.getPhaseShift() if item.hasPhaseShift() else 0)
+                    resList.append(item.getResolution())
+
+                fig = Figure(figsize=(7, 7), dpi=100)
+                defocusPlot = fig.add_subplot(111)
+                defocusPlot.grid()
+                defocusPlot.set_title(itemSelected)
+                defocusPlot.set_xlabel('Tilt angle')
+                defocusPlot.set_ylabel('DefocusU', color='tab:red')
+                defocusPlot.plot(angList, defocusUList, marker='.',
+                                 color='tab:red', label='DefocusU (A)')
+
+                if item.hasPhaseShift():
+                    phShPlot = defocusPlot.twinx()
+                    phShPlot.set_ylim(0, 180)
+                    phShPlot.set_ylabel('Phase shift', color='tab:green')
+                    phShPlot.plot(angList, phShList, marker='.',
+                                  color='tab:green', label='Phase shift (deg)')
+                else:  # no phase shift, plot resolution instead
+                    resPlot = defocusPlot.twinx()
+                    resPlot.set_ylim(0, 30)
+                    resPlot.set_ylabel('Resolution', color='tab:green')
+                    resPlot.plot(angList, resList, marker='.',
+                                 color='tab:green', label='Resolution (A)')
+
+                fig.legend()
+                canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
+                canvas.draw()
+                canvas.get_tk_widget().pack(fill=BOTH, expand=0)
+                plotterPanel.grid(row=0, column=1, sticky='news')
+                break
+
     def _createPloter(self, event):
         itemSelected = self.tree.getSelectedItem()
         obj = self.tree.getSelectedObj()
@@ -993,69 +1059,13 @@ class CtfEstimationListDialog(ListDialog):
         else:
             self.generateSubsetButton['state'] = tk.DISABLED
 
-        if self.tree.parent(itemSelected):  # child item
-            if obj is not None:
-                plotterPanel = tk.Frame(self.bottomRightPanel)
-                if self._show2DPLot is None:
-                    label = tk.Label(plotterPanel,
-                                     text='2D fit viewer is not '
-                                          'implemented by this plugin')
-                    label.grid(row=0, column=0, sticky='news')
-                else:
-                    for ctfSerie in self.provider.getCTFSeries():
-                        if ctfSerie.getTsId() in itemSelected:
-                            ctfId = int(itemSelected.split('.')[-1])
-                            # TODO: sort ctfSerie by id
-                            fig = self._show2DPLot(ctfSerie, ctfId)
-                            canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
-                            canvas.draw()
-                            canvas.get_tk_widget().pack(fill=BOTH, expand=0)
-                            break
-                plotterPanel.grid(row=0, column=1, sticky='news')
+        if obj is not None:
+            if self.tree.parent(itemSelected):  # child item
+                if self._show1DPLot is not None:
+                    self.createShowFitButton['state'] = tk.NORMAL
+                self.plotterChildItem(itemSelected)
 
-        else:  # parent item
-            if obj is not None:
-                plotterPanel = tk.Frame(self.bottomRightPanel)
-                angList = []
-                defocusUList = []
-                phShList = []
-                resList = []
-
-                for ctfSerie in self.provider.getCTFSeries():
-                    ts = ctfSerie.getTiltSeries()
-                    if ctfSerie.getTsId() == itemSelected:
-                        for item in ctfSerie.iterItems(orderBy='id'):
-                            index = int(item.getIndex())
-                            angList.append(int(ts[index].getTiltAngle()))
-                            defocusUList.append(item.getDefocusU())
-                            phShList.append(item.getPhaseShift() if item.hasPhaseShift() else 0)
-                            resList.append(item.getResolution())
-
-                        fig = Figure(figsize=(7, 7), dpi=100)
-                        defocusPlot = fig.add_subplot(111)
-                        defocusPlot.grid()
-                        defocusPlot.set_title(itemSelected)
-                        defocusPlot.set_xlabel('Tilt angle')
-                        defocusPlot.set_ylabel('Defocus', color='tab:red')
-                        defocusPlot.plot(angList, defocusUList, marker='.',
-                                         color='tab:red', label='Defocus (A)')
-
-                        if item.hasPhaseShift():
-                            phShPlot = defocusPlot.twinx()
-                            phShPlot.set_ylim(0, 180)
-                            phShPlot.set_ylabel('Phase shift', color='tab:green')
-                            phShPlot.plot(angList, phShList, marker='.',
-                                          color='tab:green', label='Phase shift (deg)')
-                        else:  # no phase shift, plot resolution instead
-                            resPlot = defocusPlot.twinx()
-                            resPlot.set_ylim(0, 30)
-                            resPlot.set_ylabel('Resolution', color='tab:green')
-                            resPlot.plot(angList, resList, marker='.',
-                                         color='tab:green', label='Resolution (A)')
-
-                        fig.legend()
-                        canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
-                        canvas.draw()
-                        canvas.get_tk_widget().pack(fill=BOTH, expand=0)
-                        plotterPanel.grid(row=0, column=1, sticky='news')
-                        break
+            else:  # parent item
+                if self._show1DPLot is not None:
+                    self.createShowFitButton['state'] = tk.DISABLED
+                self.plotterParentItem(itemSelected)

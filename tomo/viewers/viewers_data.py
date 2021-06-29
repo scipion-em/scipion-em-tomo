@@ -26,7 +26,10 @@
 
 import os
 
+import pyworkflow.utils as pwutils
+
 import pyworkflow.viewer as pwviewer
+from pwem.protocols import EMProtocol
 from pwem.viewers import ObjectView
 from pyworkflow.protocol import LabelParam
 
@@ -167,17 +170,35 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         return None
 
     def visualize(self, obj, windows=None, protocol=None):
+        if not isinstance(obj, EMProtocol):
+            self.visualizeSet(obj)
+        else:
+            for name, output in self._protocol._iterOutputsNew():
+                if isinstance(output, tomo.objects.SetOfCTFTomoSeries):
+                    self.visualizeSet(output)
+
+    def visualizeSet(self, obj):
         # JMRT: Local import to avoid importing Tkinter stuff at top level
-        from .views_tkinter_tree import CtfEstimationTreeProvider, CtfEstimationListDialog
-        objName = obj.getObjName().split('.')[1]
-        for output in self._protocol._iterOutputsNew():
-            if output[0] == objName:
-                self._outputSetOfCTFTomoSeries = output[1]
-                break
-        self._inputSetOfTiltSeries = self._outputSetOfCTFTomoSeries.getSetOfTiltSeries()
+        from .views_tkinter_tree import (CtfEstimationTreeProvider,
+                                         CtfEstimationListDialog)
+        self._inputSetOfTiltSeries = obj.getSetOfTiltSeries()
         self._provider = CtfEstimationTreeProvider(self._tkParent,
                                                    self._protocol,
-                                                   self._outputSetOfCTFTomoSeries)
+                                                   obj)
+
         CtfEstimationListDialog(self._tkParent, self._title, self._provider,
                                 self._protocol, self._inputSetOfTiltSeries,
-                                plot1Dfunc=self.plot1D, plot2Dfunc=self.plot2D)
+                                plot1Dfunc=self.getPlot1DCallback(),
+                                plot2Dfunc=self.getPlot2DCallback())
+
+    def getPlot1DCallback(self):
+        if not pwutils.isSameFunction(self.plot1D,
+                                      CtfEstimationTomoViewer.plot1D):
+            return self.plot1D
+        return None
+
+    def getPlot2DCallback(self):
+        if not pwutils.isSameFunction(self.plot2D,
+                                      CtfEstimationTomoViewer.plot2D):
+            return self.plot2D
+        return None
