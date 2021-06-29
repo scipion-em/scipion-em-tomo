@@ -268,7 +268,7 @@ class MeshesTreeProvider(TreeProvider):
         return [('Tomogram', 300), ('Number of Meshes', 150)]
 
     def getObjectInfo(self, obj):
-        if isinstance(obj, tomo.objects.Mesh):
+        if isinstance(obj, tomo.objects.MeshPoint):
             meshName = 'Mesh %d' % obj.getObjId()
             tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
             return {'key': tomoName + '-' + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
