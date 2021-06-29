@@ -98,14 +98,14 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
     _targets = [ProtTsCorrectMotion]
 
     def _defineParams(self, form):
-            form.addSection(label='Visualization of tilt series')
-            form.addParam('displayFullTiltSeries', LabelParam,
-                          label='Display f*ull* frame aligned tilt series',
-                          help='Shows full frames aligned set of tilt series')
-            if self.hasEvenSet():
-                form.addParam('displayEvenTiltSeries', LabelParam,
-                              label='Display *even* frames aligned tilt series',
-                              help='Shows even frames aligned set of tilt series')
+        form.addSection(label='Visualization of tilt series')
+        form.addParam('displayFullTiltSeries', LabelParam,
+                      label='Display f*ull* frame aligned tilt series',
+                      help='Shows full frames aligned set of tilt series')
+        if self.hasEvenSet():
+            form.addParam('displayEvenTiltSeries', LabelParam,
+                          label='Display *even* frames aligned tilt series',
+                          help='Shows even frames aligned set of tilt series')
 
             if self.hasOddSet():
                 form.addParam('displayOddTiltSeries', LabelParam,

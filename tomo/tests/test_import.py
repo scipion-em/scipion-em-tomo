@@ -38,18 +38,18 @@ import tomo.protocols
 class TestTomoImportSubTomograms(BaseTest):
     """ This class check if the protocol to import sub tomograms works
      properly."""
+
     @classmethod
     def setUpClass(cls):
-         setupTestProject(cls)
-         cls.dataset = DataSet.getDataSet('tomo-em')
-         # cls.tomogram = cls.dataset.getFile('tomo1')
-         # cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
-         cls.table = cls.dataset.getFile('initial.tbl')
-         cls.path = cls.dataset.getPath()
-         cls.subtomos = cls.dataset.getFile('basename.hdf')
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        # cls.tomogram = cls.dataset.getFile('tomo1')
+        # cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+        cls.table = cls.dataset.getFile('initial.tbl')
+        cls.path = cls.dataset.getPath()
+        cls.subtomos = cls.dataset.getFile('basename.hdf')
 
     def _runImportSubTomograms(self):
-
         # protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
         #                                       filesPath=self.tomogram,
         #                                       samplingRate=5)
@@ -66,12 +66,11 @@ class TestTomoImportSubTomograms(BaseTest):
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
                                       samplingRate=1.35)
-                                      # importCoordinates=protImportCoordinates3d.outputCoordinates)
+        # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
         return protImport
 
     def _runImportSubTomograms2(self):
-
         # protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
         #                                       filesPath=self.tomogram,
         #                                       filesPattern='',
@@ -89,43 +88,44 @@ class TestTomoImportSubTomograms(BaseTest):
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
                                       samplingRate=1.35)
-                                      # importCoordinates=protImportCoordinates3d.outputCoordinates)
+        # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
         return protImport
 
     def test_import_sub_tomograms(self):
-         protImport = self._runImportSubTomograms()
-         output = getattr(protImport, 'outputSubTomograms', None)
-         self.assertTrue(output.getSamplingRate() == 1.35)
-         self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
-         self.assertTrue(output.getDim()[0] == 32)
-         self.assertTrue(output.getDim()[1] == 32)
-         self.assertTrue(output.getDim()[2] == 32)
-         # self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
-         # self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
-         # self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
-         self.assertIsNotNone(output,
+        protImport = self._runImportSubTomograms()
+        output = getattr(protImport, 'outputSubTomograms', None)
+        self.assertTrue(output.getSamplingRate() == 1.35)
+        self.assertTrue(output.getFirstItem().getSamplingRate() == 1.35)
+        self.assertTrue(output.getDim()[0] == 32)
+        self.assertTrue(output.getDim()[1] == 32)
+        self.assertTrue(output.getDim()[2] == 32)
+        # self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
+        # self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
+        # self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
+        self.assertIsNotNone(output,
                              "There was a problem with Import SubTomograms protocol")
 
-         protImport2 = self._runImportSubTomograms2()
-         output2 = getattr(protImport2, 'outputSubTomograms', None)
-         self.assertIsNotNone(output2,
-                              "There was a problem with Import SubTomograms protocol")
-         self.assertTrue(output2.getSamplingRate() == 1.35)
-         self.assertTrue(output2.getDim()[0] == 32)
-         self.assertTrue(output2.getDim()[1] == 32)
-         self.assertTrue(output2.getDim()[2] == 32)
-         # for i, subtomo in enumerate(output2.iterItems()):
-         #     if i == 1:
-         #         self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
-         #         self.assertTrue(subtomo.getCoordinate3D().getY() == 172)
-         #         self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
-         #     if i == 0:
-         #         self.assertTrue(subtomo.getCoordinate3D().getX() == 314)
-         #         self.assertTrue(subtomo.getCoordinate3D().getY() == 350)
-         #         self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
+        protImport2 = self._runImportSubTomograms2()
+        output2 = getattr(protImport2, 'outputSubTomograms', None)
+        self.assertIsNotNone(output2,
+                             "There was a problem with Import SubTomograms protocol")
+        self.assertTrue(output2.getSamplingRate() == 1.35)
+        self.assertTrue(output2.getDim()[0] == 32)
+        self.assertTrue(output2.getDim()[1] == 32)
+        self.assertTrue(output2.getDim()[2] == 32)
+        # for i, subtomo in enumerate(output2.iterItems()):
+        #     if i == 1:
+        #         self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
+        #         self.assertTrue(subtomo.getCoordinate3D().getY() == 172)
+        #         self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
+        #     if i == 0:
+        #         self.assertTrue(subtomo.getCoordinate3D().getX() == 314)
+        #         self.assertTrue(subtomo.getCoordinate3D().getY() == 350)
+        #         self.assertTrue(subtomo.getCoordinate3D().getZ() == 256)
 
-         return output2
+        return output2
+
 
 class TestTomoImportSetOfCoordinates3D(BaseTest):
     """This class check if the protocol to import set of coordinates 3d works properly."""
@@ -149,12 +149,12 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                              "There was a problem with tomogram output")
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                 objLabel='Import from %s - %s' %(program, ext),
-                                 auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
-                                 filesPath=self.dataset.getPath(),
-                                 importTomograms=protImportTomogram.outputTomograms,
-                                 filesPattern=pattern, boxSize=32,
-                                 samplingRate=5.5)
+                                                   objLabel='Import from %s - %s' % (program, ext),
+                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
+                                                   filesPath=self.dataset.getPath(),
+                                                   importTomograms=protImportTomogram.outputTomograms,
+                                                   filesPattern=pattern, boxSize=32,
+                                                   samplingRate=5.5)
         self.launchProtocol(protImportCoordinates3d)
 
         return protImportCoordinates3d
@@ -178,13 +178,14 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
     def assertCoordinates(self, coordSet, size):
         self.assertTrue(coordSet,
                         "There was a problem with coordinates 3d output")
-        self.assertSetSize(coordSet,size=size)
+        self.assertSetSize(coordSet, size=size)
         self.assertTrue(coordSet.getBoxSize() == 32)
         self.assertTrue(coordSet.getSamplingRate() == 5.5)
 
 
 class TestTomoImportTomograms(BaseTest):
     """This class check if the protocol to import tomograms works properly."""
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
@@ -209,14 +210,15 @@ class TestTomoImportTomograms(BaseTest):
                              "There was a problem with Import Tomograms protocol")
 
         for tomogram in protImport.outputTomograms.iterItems():
-
             self.assertTrue(tomogram.getXDim() == 1024,
-                                "There was a problem with Import Tomograms protocol")
+                            "There was a problem with Import Tomograms protocol")
             self.assertIsNotNone(tomogram.getYDim() == 1024,
-                                "There was a problem with Import Tomograms protocol")
+                                 "There was a problem with Import Tomograms protocol")
 
-            self.assertTrue(tomogram.getAcquisition().getAngleMax() == 40, "There was a problem with the acquisition angle max")
-            self.assertTrue(tomogram.getAcquisition().getAngleMin() == -40, "There was a problem with the acquisition angle min")
+            self.assertTrue(tomogram.getAcquisition().getAngleMax() == 40,
+                            "There was a problem with the acquisition angle max")
+            self.assertTrue(tomogram.getAcquisition().getAngleMin() == -40,
+                            "There was a problem with the acquisition angle min")
 
             break
 
@@ -264,58 +266,58 @@ class TestTomoBaseProtocols(BaseTest):
 
 
 class TestTomoImportTsFromPattern(BaseTest):
-        @classmethod
-        def setUpClass(cls):
-            setupTestProject(cls)
-            cls.dataset = DataSet.getDataSet('tomo-em')
-            cls.getFile = cls.dataset.getFile('etomo')
-            cls.getFileM = cls.dataset.getFile('empiar')
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.getFile = cls.dataset.getFile('etomo')
+        cls.getFileM = cls.dataset.getFile('empiar')
 
-        def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
-            protImport = self.newProtocol(
-                tomo.protocols.ProtImportTsMovies,
-                filesPath=self.getFileM,
-                filesPattern=filesPattern,
-                voltage=300,
-                magnification=105000,
-                sphericalAberration=2.7,
-                amplitudeContrast=0.1,
-                samplingRate=1.35,
-                doseInitial=0,
-                dosePerFrame=0.3)
-            self.launchProtocol(protImport)
-            return protImport
+    def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTsMovies,
+            filesPath=self.getFileM,
+            filesPattern=filesPattern,
+            voltage=300,
+            magnification=105000,
+            sphericalAberration=2.7,
+            amplitudeContrast=0.1,
+            samplingRate=1.35,
+            doseInitial=0,
+            dosePerFrame=0.3)
+        self.launchProtocol(protImport)
+        return protImport
 
-        def _runImportTiltSeries(self):
-            protImport = self.newProtocol(
-                tomo.protocols.ProtImportTs,
-                filesPath=self.getFile,
-                filesPattern='BB{TS}.st',
-                minAngle=-55,
-                maxAngle=65,
-                stepAngle=2,
-                voltage=300,
-                magnification=105000,
-                sphericalAberration=2.7,
-                amplitudeContrast=0.1,
-                samplingRate=1.35,
-                doseInitial=0,
-                dosePerFrame=0.3)
-            self.launchProtocol(protImport)
-            return protImport
+    def _runImportTiltSeries(self):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTs,
+            filesPath=self.getFile,
+            filesPattern='BB{TS}.st',
+            minAngle=-55,
+            maxAngle=65,
+            stepAngle=2,
+            voltage=300,
+            magnification=105000,
+            sphericalAberration=2.7,
+            amplitudeContrast=0.1,
+            samplingRate=1.35,
+            doseInitial=0,
+            dosePerFrame=0.3)
+        self.launchProtocol(protImport)
+        return protImport
 
-        def test_importTiltSeriesM(self):
-            protImport = self._runImportTiltSeriesM()
-            self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
+    def test_importTiltSeriesM(self):
+        protImport = self._runImportTiltSeriesM()
+        self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
 
-            return protImport
+        return protImport
 
-        def test_importTiltSeries(self):
-            protImport = self._runImportTiltSeries()
-            self.checkTSSet(protImport.outputTiltSeries, 2, 61, checkIds=True)
+    def test_importTiltSeries(self):
+        protImport = self._runImportTiltSeries()
+        self.checkTSSet(protImport.outputTiltSeries, 2, 61, checkIds=True)
 
-        def checkTSSet(self, set, size, anglesCount, checkIds=False):
-            """
+    def checkTSSet(self, set, size, anglesCount, checkIds=False):
+        """
             Check basic attributes of a TS set
 
             :param set: TiltSeries set (Movies or Images)
@@ -325,22 +327,22 @@ class TestTomoImportTsFromPattern(BaseTest):
             :return: None
             """
 
-            self.assertSetSize(set, size)
-            for ts in set:
-                self.assertEquals(ts.getSize(), anglesCount, "Size of tilt images is wrong.")
-                for i, ti in enumerate(ts):
-                    self.assertFalse(os.path.isabs(ti.getFileName()),
-                                     "Tilt image file %s is not absolute!. Should be relative.")
-                    self.assertTrue(os.path.islink(ti.getFileName()),
-                                    "Tilt series file %s is not a link." % ti.getFileName())
+        self.assertSetSize(set, size)
+        for ts in set:
+            self.assertEquals(ts.getSize(), anglesCount, "Size of tilt images is wrong.")
+            for i, ti in enumerate(ts):
+                self.assertFalse(os.path.isabs(ti.getFileName()),
+                                 "Tilt image file %s is not absolute!. Should be relative.")
+                self.assertTrue(os.path.islink(ti.getFileName()),
+                                "Tilt series file %s is not a link." % ti.getFileName())
 
-                    # objId must start with 1 --> i +1
-                    # When using {TO} the objId ends up with that value. For Movies it is 0, 39, 40
-                    if checkIds:
-                        self.assertEqual(i+1, ti.getObjId(), "Tilt image Movie objId is incorrect")
+                # objId must start with 1 --> i +1
+                # When using {TO} the objId ends up with that value. For Movies it is 0, 39, 40
+                if checkIds:
+                    self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
+
 
 class TestTomoImportTsFromMdoc(BaseTest):
-
     VOLTAGE = 'voltage'
     MAGNIFICATION = 'magnification'
     SPH_ABERRATION = 'sphAberration'
@@ -371,11 +373,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
             # Each slice will be a stack of frames, which means a different file
             pattern = 'SKvesicles_Pertuzumab_tomo%2.0f_%03d_%1.1f.mrc'
 
-            return [ pattern % (tomoNum, i, angle)
+            return [pattern % (tomoNum, i, angle)
                     for i, angle in enumerate(angles)]
         else:
             # Each slice will be referred to the same stack file, the one which represents the tilt series
-            return [ 'stack%2.0f.mrcs' % tomoNum] * len(angles)
+            return ['stack%2.0f.mrcs' % tomoNum] * len(angles)
 
     @classmethod
     def _genTestDict(cls, **kwargs):
@@ -462,7 +464,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), accumDoseList[i], delta=0.0001)
                 self.assertAlmostEqual(tiM.getTiltAngle(), angleList[i], delta=0.0001)
                 # objId must start with 1 --> i +1
-                self.assertEqual(i+1, tiM.getObjId(), "Tilt image Movie objId is incorrect")
+                self.assertEqual(i + 1, tiM.getObjId(), "Tilt image Movie objId is incorrect")
                 # Acquisition order
                 self.assertEqual(tiM.getAcquisitionOrder(), acqOrderList[i])
 
@@ -500,8 +502,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
         ]
         VOLTAGE = '*Voltage*'
         expectedErrorKeyWordList = [
-            VOLTAGE,                      # Missing voltage
-            VOLTAGE                       # Missing voltage
+            VOLTAGE,  # Missing voltage
+            VOLTAGE  # Missing voltage
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -514,8 +516,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['noSamplingRateMdoc'])
         ]
         expectedErrorKeyWordList = [
-            '*Magnification*',          # Missing Magnification
-            '*PixelSpacing*'            # Missing Sampling Rate
+            '*Magnification*',  # Missing Magnification
+            '*PixelSpacing*'  # Missing Sampling Rate
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -529,8 +531,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['someMissingAnglesMdoc'])
         ]
         expectedErrorKeyWordList = [
-            ['*Voltage*', '*PixelSpacing*'],   # Missing voltage and sampling rate
-            '*TiltAngle*: 1 7 48'              # Missing tilt angles in slices 1, 7 and 48
+            ['*Voltage*', '*PixelSpacing*'],  # Missing voltage and sampling rate
+            '*TiltAngle*: 1 7 48'  # Missing tilt angles in slices 1, 7 and 48
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -549,4 +551,3 @@ class TestTomoImportTsFromMdoc(BaseTest):
                     self.assertTrue(errorKeyword in errorMsg)
             else:
                 self.assertTrue(not errorMsg)
-

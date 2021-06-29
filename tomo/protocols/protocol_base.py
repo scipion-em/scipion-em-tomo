@@ -74,7 +74,7 @@ class ProtTomoBase:
 
     def _createSetOfAverageSubTomograms(self, suffix=''):
         return self._createSet(tomo.objects.SetOfAverageSubTomograms,
-                                  'avgSubtomograms%s.sqlite', suffix)
+                               'avgSubtomograms%s.sqlite', suffix)
 
     def _createSetOfClassesSubTomograms(self, subTomograms, suffix=''):
         classes = self._createSet(tomo.objects.SetOfClassesSubTomograms,
@@ -104,10 +104,10 @@ class ProtTomoBase:
             try:
                 counter = int(suffix)
             except:
-                counter = 1 # when there is not number assume 1
+                counter = 1  # when there is not number assume 1
             maxCounter = max(counter, maxCounter)
 
-        return str(maxCounter+1) if maxCounter > 0 else '' # empty if not output
+        return str(maxCounter+1) if maxCounter > 0 else ''  # empty if not output
 
 
 class ProtTomoPicking(ProtImport, ProtTomoBase):
@@ -134,6 +134,7 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
             summary.append(Message.TEXT_NO_OUTPUT_CO)
         return summary
 
+
 class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
 
     def _defineParams(self, form):
@@ -148,16 +149,16 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
         importChoices = self._getImportChoices()
 
         form.addSection(label='Import')
-        if len(importChoices) > 1: # not only from files
+        if len(importChoices) > 1:  # not only from files
             form.addParam('importFrom', EnumParam,
                           choices=importChoices, default=self._getDefaultChoice(),
                           label='Import from',
                           help='Select the type of import.')
         else:
             form.addHidden('importFrom', EnumParam,
-                          choices=importChoices, default=self.IMPORT_FROM_FILES,
-                          label='Import from',
-                          help='Select the type of import.')
+                           choices=importChoices, default=self.IMPORT_FROM_FILES,
+                           label='Import from',
+                           help='Select the type of import.')
 
         form.addParam('filesPath', PathParam,
                       label="Files directory",

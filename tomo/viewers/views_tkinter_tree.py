@@ -331,7 +331,7 @@ class TomogramsDialog(ToolbarListDialog):
                                        **kwargs)
 
     def refresh_gui_viewer(self):
-        if self.proc.isAlive():
+        if self.proc.is_alive():
             self.after(1000, self.refresh_gui_viewer)
         else:
             pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
@@ -339,7 +339,7 @@ class TomogramsDialog(ToolbarListDialog):
 
     def refresh_gui(self):
         self.tree.update()
-        if self.proc.isAlive():
+        if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
             pwutils.cleanPath(self.macroPath)
@@ -852,9 +852,9 @@ class CtfEstimationListDialog(ListDialog):
 
     def _createShowFit(self, topRigthPanel):
         self.createShowFitButton = self._addButton(topRigthPanel, '1D fit',
-                        pwutils.Icon.ACTION_RESULTS, self._show1DFit,
-                        state=tk.DISABLED,
-                        sticky='ne')
+                                                   pwutils.Icon.ACTION_RESULTS, self._show1DFit,
+                                                   state=tk.DISABLED,
+                                                   sticky='ne')
 
     def _createViewerHelp(self, topRigthPanel):
         self._addButton(topRigthPanel, pwutils.Message.LABEL_HELP,

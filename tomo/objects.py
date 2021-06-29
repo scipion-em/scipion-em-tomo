@@ -646,7 +646,6 @@ class Tomogram(data.Volume):
         return None
 
 
-
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = True
@@ -707,16 +706,16 @@ class Coordinate3D(data.EMObject):
         self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
     def getX(self, originFunction):
-        ''' See getPosition method for a full description of how "originFunction"
-        works'''
+        """ See getPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[0]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[0] if aux is not None else -origin_Scipion
         return self._x.get() - origin - origin_Scipion
 
     def setX(self, x, originFunction):
-        ''' See setPosition method for a full description of how "originFunction"
-        works'''
+        """ See setPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[0]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[0] if aux is not None else -origin_Scipion
@@ -726,16 +725,16 @@ class Coordinate3D(data.EMObject):
         self._x.sum(shiftX)
 
     def getY(self, originFunction):
-        ''' See getPosition method for a full description of how "originFunction"
-        works'''
+        """ See getPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[1]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[1] if aux is not None else -origin_Scipion
         return self._y.get() - origin - origin_Scipion
 
     def setY(self, y, originFunction):
-        ''' See setPosition method for a full description of how "originFunction"
-        works'''
+        """ See setPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[1]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[1] if aux is not None else -origin_Scipion
@@ -745,16 +744,16 @@ class Coordinate3D(data.EMObject):
         self._y.sum(shiftY)
 
     def getZ(self, originFunction):
-        ''' See getPosition method for a full description of how "originFunction"
-        works'''
+        """ See getPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[2]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[2] if aux is not None else -origin_Scipion
         return self._z.get() - origin - origin_Scipion
 
     def setZ(self, z, originFunction):
-        ''' See setPosition method for a full description of how "originFunction"
-        works'''
+        """ See setPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[2]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[2] if aux is not None else -origin_Scipion
@@ -799,7 +798,7 @@ class Coordinate3D(data.EMObject):
         self._z.multiply(factor)
 
     def getPosition(self, originFunction):
-        '''Get the position a Coordinate3D refered to a given origin defined by originFunction.
+        """Get the position a Coordinate3D refered to a given origin defined by originFunction.
         The input of the method is a funtion (originFunction) which moves the coordinate
         position refered to the bottom left corner to other origin (retrieved by originFunction) in the grid.
 
@@ -815,7 +814,7 @@ class Coordinate3D(data.EMObject):
 
         Firstly, the Scipion origin vector stored in the Tomogram associated to the Coordinate3D
         will be applied to refer the current coordinate to the bottom left coordinate of the Tomogram.
-        '''
+        """
         return self.getX(originFunction), self.getY(originFunction), self.getZ(originFunction)
 
     def setPosition(self, x, y, z, originFunction):
@@ -910,10 +909,10 @@ class Coordinate3D(data.EMObject):
         return self._groupId is not None
 
     def getVolumeOrigin(self, angstrom=False):
-        '''Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the a vector that can be used to move the position of the Coordinate3D
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
-        '''
+        """
         if angstrom:
             return self.getVolume().getShiftsFromOrigin()
         else:
@@ -1056,7 +1055,7 @@ class SetOfCoordinates3D(data.EMSet):
         return coord
 
     def __getitem__(self, itemId):
-        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        """Add a pointer to a Tomogram before returning the Coordinate3D"""
         coord = data.EMSet.__getitem__(self, itemId)
         # In case pointer is lost in a for loop
         # clone = self.getPrecedents().getClass()()
@@ -1081,8 +1080,8 @@ class SubTomogram(data.Volume):
         self._coordinate = coordinate
 
     def getCoordinate3D(self):
-        '''Since the object Coordinate3D needs a volume, use the information stored in the
-        SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D'''
+        """Since the object Coordinate3D needs a volume, use the information stored in the
+        SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
         tomo = Tomogram()
         tomo.setOrigin(self.getOrigin())
         tomo.setLocation(self.getVolName())
@@ -1130,10 +1129,10 @@ class SubTomogram(data.Volume):
         self._volName.set(volName)
 
     def getVolumeOrigin(self, angstrom=False):
-        '''Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the a vector that can be used to move the position of the Coordinate3D
         associated to the SubTomogram (referred to the center of the Tomogram or other
         origin specified by the user) to the bottom left corner of the Tomogram
-        '''
+        """
         if angstrom:
             return self.getShiftsFromOrigin()
         else:
@@ -1830,7 +1829,7 @@ class CTFTomoSeries(data.EMSet):
         for ctfTomo in self.iterItems(iterate=False):
             ctfTomo._defocusUDeviation.set(ctfTomo.getDefocusUDeviation(mean))
             isDefocusUDeviationInRange = ctfTomo.isDefocusUDeviationInRange(mean,
-                                                    percentage=defocusUTolerance)
+                                                                            percentage=defocusUTolerance)
             if not isDefocusUDeviationInRange:
                 self._isDefocusUDeviationInRange.set(False)
             ctfTomo._isDefocusUDeviationInRange.set(isDefocusUDeviationInRange)
@@ -1846,7 +1845,7 @@ class CTFTomoSeries(data.EMSet):
         for ctfTomo in self.iterItems(iterate=False):
             ctfTomo._defocusVDeviation.set(ctfTomo.getDefocusVDeviation(mean))
             isDefocusVDeviationInRange = ctfTomo.isDefocusVDeviationInRange(mean,
-                                                    percentage=defocusVTolerance)
+                                                                            percentage=defocusVTolerance)
             if not isDefocusVDeviationInRange:
                 self._isDefocusVDeviationInRange.set(False)
             ctfTomo._isDefocusVDeviationInRange.set(isDefocusVDeviationInRange)
