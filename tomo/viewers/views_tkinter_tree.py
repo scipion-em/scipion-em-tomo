@@ -50,10 +50,8 @@ class TiltSeriesTreeProvider(TreeProvider):
     """
     COL_TS = 'Tilt Series'
     COL_TI = 'Path'
-    COL_TI_IX = 'Index'
-    COL_TI_ID = 'Order'
-    COL_TI_ANGLE = 'Angle'
-    COL_TI_DEFOCUS_U = 'Defocus'
+    COL_TI_ANGLE = 'Tilt Angle'
+    COL_TI_DEFOCUS_U = 'DefocusU (A)'
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
 
@@ -68,7 +66,6 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def getObjects(self):
         # Retrieve all objects of type className
-        project = self.protocol.getProject()
         objects = []
 
         orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
@@ -96,9 +93,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getColumns(self):
         cols = [
             (self.COL_TS, 100),
-            (self.COL_TI_ID, 50),
-            (self.COL_TI_ANGLE, 50),
-            (self.COL_TI_IX, 50),
+            (self.COL_TI_ANGLE, 100),
             (self.COL_TI, 400),
         ]
 
@@ -120,18 +115,17 @@ class TiltSeriesTreeProvider(TreeProvider):
         tsId = obj.getTsId()
 
         if isinstance(obj, tomo.objects.TiltSeriesBase):
-            key = obj.getObjId()
+            key = objId
             text = tsId
-            values = ['', '', '', str(obj)]
+            values = ['', str(obj)]
             opened = True
         else:  # TiltImageBase
-            key = '%s.%s' % (tsId, obj.getObjId())
-            text = ''
-            values = [objId, obj.getTiltAngle(),
-                      str(obj.getLocation()[0]),
-                      str(obj.getLocation()[1])]
+            key = '%s.%s' % (tsId, objId)
+            text = objId
+            values = [str("%0.2f" % obj.getTiltAngle()),
+                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
             if self._hasCtf:
-                values.insert(2, "%.03f" % obj.getCTF().getDefocusU())
+                values.insert(2, "%d" % obj.getCTF().getDefocusU())
             opened = False
 
         return {
@@ -613,7 +607,6 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
     CRITERIA_1 = 'Status'
-    COL_CTF_EST_IX = 'Index'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
     COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
     COL_CTF_EST_AST = 'Astigmatism (A)'
