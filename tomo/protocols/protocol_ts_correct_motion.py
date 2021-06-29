@@ -314,6 +314,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self._createOutput = False
 
         # Call the sub-class method to update the output
+        outputSet.setSamplingRate(self._getOutputSampling())
         self._updateOutputSet(outputSet, tsIdList)
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
@@ -360,6 +361,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         for tsId in tsIdList:
             ts = TiltSeries()
             ts.copyInfo(self._tsDict.getTs(tsId), copyId=True)
+            ts.setSamplingRate(self._getOutputSampling())
             outputSet.append(ts)
             tList = self._tsDict.getTiList(tsId)
             ind = np.argsort([ti.getTiltAngle() for ti in tList])
@@ -371,6 +373,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
                 tiOut.setAcquisition(ti.getAcquisition())
+                tiOut.setSamplingRate(self._getOutputSampling())
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1
@@ -398,6 +401,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     def _getInputTsPointer(self):
         return self.inputTiltSeriesM
+
+    def _getOutputSampling(self):
+        return self.inputTiltSeriesM.get().getSamplingRate() * self._getBinFactor()
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ This function should be implemented in subclasses to really provide
