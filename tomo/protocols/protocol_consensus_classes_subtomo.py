@@ -181,4 +181,4 @@ class ProtConsensusClassesSubtomo(EMProtocol, ProtTomoBase):
             clsId = clId2
             clsSize = size2
 
-        return (len(inter), inter, setId, clsId, clsSize)
+        return len(inter), inter, setId, clsId, clsSize

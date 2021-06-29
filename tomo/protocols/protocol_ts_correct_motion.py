@@ -116,10 +116,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         if self.evenOddCapable:
             form.addParam('splitEvenOdd', params.BooleanParam,
-                           default=False,
-                           label='Split & sum odd/even frames?',
-                           expertLevel=params.LEVEL_ADVANCED,
-                           help='(Used for denoising data preparation). If set to Yes, 2 additional movies/tilt '
+                          default=False,
+                          label='Split & sum odd/even frames?',
+                          expertLevel=params.LEVEL_ADVANCED,
+                          help='(Used for denoising data preparation). If set to Yes, 2 additional movies/tilt '
                                'series will be generated, one generated from the even frames and the other from the '
                                'odd ones using the same alignment for the whole stack of frames.')
 

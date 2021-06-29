@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 
-import pyworkflow.utils as pwutils
 from pwem.emlib.image import ImageHandler
 from .convert import *
 

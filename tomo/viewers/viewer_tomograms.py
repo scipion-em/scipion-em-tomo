@@ -36,7 +36,7 @@ import tempfile
 
 import pyworkflow.protocol.params as params
 from pwem.viewers import EmProtocolViewer, ChimeraView
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO, ProtocolViewer
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
 import pwem.viewers as viewers
 from pwem.emlib.image import ImageHandler
 
@@ -174,7 +174,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
         # Write an sqlite with all tomograms selected for visualization.
         sampling, setOfObjects = self._getSetAndSampling()
 
-        viewParams= {viewers.showj.MODE: viewers.showj.MODE_MD}
+        viewParams = {viewers.showj.MODE: viewers.showj.MODE_MD}
         view = viewers.views.ObjectView(self._project, setOfObjects.strId(),
                                         setOfObjects.getFileName(), viewParams=viewParams)
         view.setMemory(viewers.showj.getJvmMaxMemory() + 2)
