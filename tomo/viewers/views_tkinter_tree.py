@@ -127,7 +127,8 @@ class TiltSeriesTreeProvider(TreeProvider):
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, obj.getObjId())
             text = ''
-            values = [objId, obj.getTiltAngle(),
+            values = [getattr(obj, '_acqOrder', objId),
+                      obj.getTiltAngle(),
                       str(obj.getLocation()[0]),
                       str(obj.getLocation()[1])]
             if self._hasCtf:

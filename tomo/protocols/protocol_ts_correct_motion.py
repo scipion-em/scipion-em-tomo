@@ -265,9 +265,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOddFile = self.oddAvgFrameList[i]
                 tsM = self.tsMList[i]
                 # Even
-                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter, i)
+                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter, counter)
                 # Odd
-                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter, i)
+                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter, counter)
 
                 counter += 1
 
@@ -373,7 +373,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
                 tiOut.setAcquisition(ti.getAcquisition())
-                tiOut.setIndex(i)
+                tiOut.setIndex(counter)
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1
