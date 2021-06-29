@@ -71,7 +71,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                       pointerClass='SetOfTiltSeriesM',
                       important=True,
                       label='Input Tilt-Series (movies)',
-                      help='Select input tiltseries-movies that you want'
+                      help='Select input tilt-series movies that you want'
                            'to correct for beam-induced motion. ')
 
         group = form.addGroup('Alignment')
@@ -470,7 +470,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
     Simple protocol to average TiltSeries movies as basic
     motion correction. It is used mainly for testing purposes.
     """
-    _label = 'average tiltseries'
+    _label = 'average tilt-series'
     _devStatus = pw.BETA
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):

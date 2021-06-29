@@ -178,7 +178,8 @@ class TiltSeriesDialogView(pwviewer.View):
         self._provider = TiltSeriesTreeProvider(protocol, tiltSeries)
 
     def show(self):
-        dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider)
+        dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider,
+                         allowSelect=False, cancelButton=True)
 
 
 class TomogramsTreeProvider(TreeProvider):
