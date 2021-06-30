@@ -89,7 +89,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
         if downFactor != 1:
             # Replace extension by 'mrc' because there are some formats
             # that cannot be written (such as dm3)
-            ih.scaleFourier(ti, tiFn, downFactor)
+            ih.scaleFourier(ti.getFileName(), tiFn, downFactor)
         else:
             ih.convert(ti, tiFn, emlib.DT_FLOAT)
 
