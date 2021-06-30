@@ -72,7 +72,6 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         ProtTomoImportFiles.__init__(self, **args)
         self.OUTPUT_PREFIX = "outputCoordinates"
 
-
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
         form.addParam('boxSize', params.IntParam, label='Box size')
@@ -121,7 +120,6 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
         return self.hasAttribute('outputCoordinates3D')
-
 
     def _getCoordsMessage(self):
         return "Coordinates %s" % self.getObjectTag('outputCoordinates3D')
@@ -225,9 +223,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
         if importFrom == self.IMPORT_FROM_EMAN:
             EmanImport = Domain.importFromPlugin('emantomo.convert', 'EmanTomoImport',
-                                          errorMsg='Eman is needed to import .json or '
-                                                   '.box files',
-                                          doRaise=True)
+                                                 errorMsg='Eman is needed to import .json or '
+                                                          '.box files',
+                                                 doRaise=True)
             return EmanImport(self, None)
 
         elif importFrom == self.IMPORT_FROM_DYNAMO:

@@ -27,7 +27,7 @@
 # *
 # **************************************************************************
 
-from os.path import abspath, basename
+from os.path import basename
 
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
@@ -111,8 +111,8 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             origin = Transform()
 
             origin.setShifts(x/-2. * samplingRate,
-                        y/-2. * samplingRate,
-                        zDim/-2. * samplingRate)
+                             y/-2. * samplingRate,
+                             zDim/-2. * samplingRate)
 
             subtomo.setOrigin(origin)  # read origin from form
 
@@ -183,7 +183,7 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s"%extension
+            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
         else:
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 

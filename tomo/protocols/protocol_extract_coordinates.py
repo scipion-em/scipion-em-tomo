@@ -26,13 +26,10 @@
 # **************************************************************************
 
 import numpy as np
-import os
 
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
-
 import pyworkflow.utils as pwutils
-from pyworkflow.object import Integer
 
 from .protocol_base import ProtTomoPicking
 

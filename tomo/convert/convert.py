@@ -29,6 +29,7 @@ import pyworkflow.utils as pwutils
 
 import tomo.constants as const
 
+
 class TomoImport:
 
     def __init__(self, protocol):
@@ -57,6 +58,7 @@ class TomoImport:
 def getMeshVolFileName(volId):
     return 'Meshes_Vol%d.txt' % volId
 
+
 def setOfMeshes2Files(meshes, path):
 
     def writeFile():
@@ -68,7 +70,7 @@ def setOfMeshes2Files(meshes, path):
     coords = []
     for coor in meshes.iterCoordinates(orderBy="_volId"):
         if coor.getVolId() != currentVolId:
-            if currentVolId != None:
+            if currentVolId is not None:
                 writeFile()
             currentVolId = coor.getVolId()
             coords = []

@@ -521,7 +521,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         for file in files:
             if any(bannedWord in file for bannedWord in exclusionWordList):
-                print("%s excluded. Contains any of %s" % (file,exclusionWords))
+                print("%s excluded. Contains any of %s" % (file, exclusionWords))
                 continue
             allowedFiles.append(file)
 
@@ -600,7 +600,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     def _getCopyOrLink(self):
         """ Returns a function to copy or link files based on user selected option"""
 
-        if self.importAction.get()== self.IMPORT_COPY_FILES:
+        if self.importAction.get() == self.IMPORT_COPY_FILES:
             return pw.utils.copyFile
         elif self.importAction.get() == self.IMPORT_LINK_REL:
             return pw.utils.createLink
@@ -637,7 +637,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return True
 
     def _fillAcquisitionInfo(self, inputTs):
-        # TODO Acquisition is historically expected as one per set of tilt series movies, so the first one is hte one used, at least for now
+        # TODO Acquisition is historically expected as one per set of tilt series movies,
+        # so the first one is hte one used, at least for now
         if self.MDOC_DATA_SOURCE:
             firstTsId = list(self.acquisitions.keys())[0]
             acq = self.acquisitions[firstTsId]
@@ -823,7 +824,7 @@ class ProtImportTsMovies(ProtImportTsBase):
 
 class MDoc:
 
-    def __init__(self, fileName, voltage=None, magnification=None, samplingRate = None):
+    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None):
         self._mdocFileName = fileName
         self._tsId = None
         # Acquisition general attributes
