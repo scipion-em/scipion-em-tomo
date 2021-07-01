@@ -72,7 +72,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         direction = 'ASC' if self.isSortingAscending() else 'DESC'
 
         for ts in self.tiltseries:
-            tsObj = ts.clone()
+            tsObj = ts.clone(ignoreAttrs=[])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             objects.append(tsObj)

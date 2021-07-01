@@ -258,6 +258,12 @@ class TiltSeries(TiltSeriesBase):
         else:
             path.createLink(inputFilePath, outputFilePath)
 
+    def _dimStr(self):
+        """ Return the string representing the dimensions. """
+
+        return '%s x %s' % (self._firstDim[0],
+                                 self._firstDim[1])
+
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
@@ -353,23 +359,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def __str__(self):
-        """ String representation of a set of TiltSeries. """
-        sampling = self.getSamplingRate()
-
-        if not sampling:
-            print("FATAL ERROR: Object %s has no sampling rate!!!"
-                  % self.getName())
-            sampling = -999.0
-
-        s = "%s (%d items, %s x %s, %0.2f Å/px%s)" % \
-            (self.getClassName(), self.getSize(), self._anglesCount,
-             self._dimStr(), sampling, self._appendStreamState())
-        return s
-
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
+
+    def _dimStr(self):
+        """ Return the string representing the dimensions. """
+
+        return '%s x %s x %s' % (self._anglesCount, self._firstDim[0],
+                                 self._firstDim[1])
 
 
 class TiltImageM(data.Movie, TiltImageBase):
@@ -422,6 +420,11 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
         # self._firstFramesRange.set(other.getFramesRange())
+
+    def _dimStr(self):
+        """ Return the string representing the dimensions. """
+
+        return '%s x %s' % (self._anglesCount, self._firstDim)
 
 
 class TiltSeriesDict:
