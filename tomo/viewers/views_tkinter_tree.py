@@ -51,6 +51,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TS = 'Tilt Series'
     COL_TI = 'Path'
     COL_TI_ANGLE = 'Tilt Angle'
+    COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DEFOCUS_U = 'DefocusU (A)'
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
@@ -72,7 +73,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         direction = 'ASC' if self.isSortingAscending() else 'DESC'
 
         for ts in self.tiltseries:
-            tsObj = ts.clone(ignoreAttrs=[])
+            tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             objects.append(tsObj)
@@ -93,6 +94,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getColumns(self):
         cols = [
             (self.COL_TS, 100),
+            (self.COL_TI_ACQ_ORDER, 100),
             (self.COL_TI_ANGLE, 100),
             (self.COL_TI, 400),
         ]
@@ -117,12 +119,13 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = objId
             text = tsId
-            values = ['', str(obj)]
+            values = ['', '', str(obj)]
             opened = True
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
             text = objId
-            values = [str("%0.2f" % obj.getTiltAngle()),
+            values = [str("%d" % obj.getAcquisitionOrder()),
+                      str("%0.2f" % obj.getTiltAngle()),
                       "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
             if self._hasCtf:
                 values.insert(2, "%d" % obj.getCTF().getDefocusU())
