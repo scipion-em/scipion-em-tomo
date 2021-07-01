@@ -138,9 +138,9 @@ class TestTomoSubSetsTs(BaseTest):
             magnification=105000,
             sphericalAberration=2.7,
             amplitudeContrast=0.1,
-            samplingRate=1.35,
+            samplingRate=0.675,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.375)
         self.launchProtocol(protImport)
         return protImport
 
@@ -637,18 +637,18 @@ class TestTomoPreprocessing(BaseTest):
             magnification=105000,
             sphericalAberration=2.7,
             amplitudeContrast=0.1,
-            samplingRate=1.35,
+            samplingRate=0.675,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.375)
         self.launchProtocol(protImport)
         return protImport
 
     def test_preprocess1(self):
         try:
-            import gctf.protocols
-            import imod.protocols
+            import motioncorr.protocols
+            import cistem.protocols
         except ImportError:
-            print('To run this test scipion-em-gctf and scipion-em-imod plugins are required. '
+            print('To run this test scipion-em-cistem and scipion-em-motioncorr plugins are required. '
                   'This test will not be executed unless this plugins are installed')
             return
 
@@ -664,7 +664,7 @@ class TestTomoPreprocessing(BaseTest):
 
         # --------- Motion correction with motioncor2 for Tilt-series ------
         protMc = self.newProtocol(
-            tomo.protocols.ProtTsAverage,
+            motioncorr.protocols.ProtTsMotionCorr,
             inputTiltSeriesM=protImport.outputTiltSeriesM,
             binFactor=2.0,
             gpuList=gpuList,
@@ -672,27 +672,14 @@ class TestTomoPreprocessing(BaseTest):
         )
         self.launchProtocol(protMc)
 
-        # --------- CTF estimation with Gctf ------
-        protGctf = self.newProtocol(
-            gctf.protocols.ProtTsGctf,
+        # --------- CTF estimation with ctffind ------
+        protCtffind = self.newProtocol(
+            cistem.protocols.CistemProtTsCtffind,
             inputTiltSeries=protMc.outputTiltSeries,
-            gpuList=gpuList,
-            numberOfThreads=threads,
+            lowRes=50, minDefocus=30000,
+            numberOfThreads=threads
         )
-        self.launchProtocol(protGctf)
-
-        # # -------- Basic alignment and reconstruction with IMOD ------
-        # protImodAuto = self.newProtocol(
-        #     imod.protocols.ProtImodAuto3D,
-        #     inputTiltSeries=protGctf.outputTiltSeries,
-        #     excludeList=1,
-        #     rotationAngle=90,
-        #     zWidth=400,
-        #     useRaptor=True,
-        #     markersDiameter=20,
-        #     markersNumber=20
-        # )
-        # self.launchProtocol(protImodAuto)
+        self.launchProtocol(protCtffind)
 
 
 class TestTomoAssignAlignment(BaseTest):
