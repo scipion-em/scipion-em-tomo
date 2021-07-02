@@ -150,7 +150,8 @@ class ProtTsEstimateCTF(ProtTsProcess):
 
         if self._createOutput:
             self._defineOutputs(**{self._getOutputName(): outputSet})
-            self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+            self._defineSourceRelation(self._getInputTs(pointer=True),
+                                       outputSet)
             self._createOutput = False
         else:
             outputSet.write()
@@ -195,7 +196,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
         """
         outputSetOfCTFTomoSeries = SetOfCTFTomoSeries.create(self._getPath(),
                                                              template='CTFmodels%s.sqlite')
-        outputSetOfCTFTomoSeries.setSetOfTiltSeries(self._getInputTs())
+        outputSetOfCTFTomoSeries.setSetOfTiltSeries(self._getInputTs(pointer=True))
         outputSetOfCTFTomoSeries.setStreamState(Set.STREAM_OPEN)
         return outputSetOfCTFTomoSeries
 
@@ -227,10 +228,10 @@ class ProtTsEstimateCTF(ProtTsProcess):
     def _getInputTsPointer(self):
         return self.inputTiltSeries
 
-    def _getInputTs(self):
+    def _getInputTs(self, pointer=False):
         if isinstance(self.inputTiltSeries.get(), SetOfCTFTomoSeries):
-            return self.inputTiltSeries.get().getSetOfTiltSeries()
-        return self.inputTiltSeries.get()
+            return self.inputTiltSeries.get().getSetOfTiltSeries(pointer=pointer)
+        return self.inputTiltSeries.get() if not pointer else self.inputTiltSeries
 
     def _initialize(self):
         """ This function define a dictionary with parameters used

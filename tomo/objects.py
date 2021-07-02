@@ -1866,11 +1866,11 @@ class SetOfCTFTomoSeries(data.EMSet):
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
-        self._setOfTiltSeriesPointer.set(other.getSetOfTiltSeries())
+        self.setSetOfTiltSeries(other.getSetOfTiltSeries(pointer=True))
 
-    def getSetOfTiltSeries(self):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
-        return self._setOfTiltSeriesPointer.get()
+        return self._setOfTiltSeriesPointer.get() if not pointer else self._setOfTiltSeriesPointer
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the tilt-series from which this CTF model series were estimated.
