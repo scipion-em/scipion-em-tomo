@@ -71,7 +71,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
                       pointerClass='SetOfTiltSeriesM',
                       important=True,
                       label='Input Tilt-Series (movies)',
-                      help='Select input tiltseries-movies that you want'
+                      help='Select input tilt-series movies that you want'
                            'to correct for beam-induced motion. ')
 
         group = form.addGroup('Alignment')
@@ -116,10 +116,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         if self.evenOddCapable:
             form.addParam('splitEvenOdd', params.BooleanParam,
-                           default=False,
-                           label='Split & sum odd/even frames?',
-                           expertLevel=params.LEVEL_ADVANCED,
-                           help='(Used for denoising data preparation). If set to Yes, 2 additional movies/tilt '
+                          default=False,
+                          label='Split & sum odd/even frames?',
+                          expertLevel=params.LEVEL_ADVANCED,
+                          help='(Used for denoising data preparation). If set to Yes, 2 additional movies/tilt '
                                'series will be generated, one generated from the even frames and the other from the '
                                'odd ones using the same alignment for the whole stack of frames.')
 
@@ -182,7 +182,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     def processTiltSeriesStep(self, tsId):
         """ Create a single stack with the tiltseries. """
 
-        def addTiltImage(tiFile, tsObject, suffix, tsMov, tsIde, samplingRate, objId):
+        def addTiltImage(tiFile, tsObject, suffix, tsMov, tsIde, samplingRate, objId, index):
             """
             :param tiFile: aligned tilt image file
             :param tsObject: Tilt Series to which the new Ti Image will be added
@@ -191,12 +191,14 @@ class ProtTsCorrectMotion(ProtTsProcess):
             :param tsIde: Tilt series identifier
             :param samplingRate: current Tilt Series sampling rate
             :param objId: location of the Tilt Image which will be added
+            :param index: position of the slice in the generated slack
             """
             ta = tsMov.getTiltAngle()
             to = tsMov.getAcquisitionOrder()
             acq = tsMov.getAcquisition()
             ti = TiltImage(tiltAngle=ta, tsId=tsIde, acquisitionOrder=to)
             ti.setSamplingRate(samplingRate)
+            ti.setIndex(index)
             ti.setAcquisition(acq)
             newLocation = (objId, self._getExtraPath(tsIde + '_' + suffix + '.mrcs'))
             ih.convert(tiFile, newLocation)
@@ -263,9 +265,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOddFile = self.oddAvgFrameList[i]
                 tsM = self.tsMList[i]
                 # Even
-                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter)
+                addTiltImage(tiEvenFile, tsObjEven, EVEN, tsM, tsId, sRate, counter, counter)
                 # Odd
-                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter)
+                addTiltImage(tiOddFile, tsObjOdd, ODD, tsM, tsId, sRate, counter, counter)
 
                 counter += 1
 
@@ -314,6 +316,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self._createOutput = False
 
         # Call the sub-class method to update the output
+        outputSet.setSamplingRate(self._getOutputSampling())
         self._updateOutputSet(outputSet, tsIdList)
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
@@ -360,6 +363,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         for tsId in tsIdList:
             ts = TiltSeries()
             ts.copyInfo(self._tsDict.getTs(tsId), copyId=True)
+            ts.setSamplingRate(self._getOutputSampling())
             outputSet.append(ts)
             tList = self._tsDict.getTiList(tsId)
             ind = np.argsort([ti.getTiltAngle() for ti in tList])
@@ -371,6 +375,8 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOut = TiltImage(location=(counter, ti.getFileName()))
                 tiOut.copyInfo(ti, copyId=True)
                 tiOut.setAcquisition(ti.getAcquisition())
+                tiOut.setSamplingRate(self._getOutputSampling())
+                tiOut.setIndex(counter)
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1
@@ -398,6 +404,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     def _getInputTsPointer(self):
         return self.inputTiltSeriesM
+
+    def _getOutputSampling(self):
+        return self.inputTiltSeriesM.get().getSamplingRate() * self._getBinFactor()
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
         """ This function should be implemented in subclasses to really provide
@@ -464,7 +473,7 @@ class ProtTsAverage(ProtTsCorrectMotion):
     Simple protocol to average TiltSeries movies as basic
     motion correction. It is used mainly for testing purposes.
     """
-    _label = 'average tiltseries'
+    _label = 'average tilt-series'
     _devStatus = pw.BETA
 
     def _processTiltImageM(self, workingFolder, tiltImageM, *args):

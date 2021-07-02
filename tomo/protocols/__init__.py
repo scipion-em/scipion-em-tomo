@@ -24,8 +24,6 @@
 # *
 # **************************************************************************
 
-import pwem
-
 from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
