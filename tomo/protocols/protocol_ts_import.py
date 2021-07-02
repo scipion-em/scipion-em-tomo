@@ -281,6 +281,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     doseList = self.accumDoses[ts]
                     counter = 0
 
+                tiltSeriesObjList = []
+
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
                     try:
@@ -303,14 +305,22 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                                      tiltAngle=ta)
 
                         if self.MDOC_DATA_SOURCE:
-                            ti.setAcquisition(tsObj.getAcquisition())
+                            ti.setAcquisition(tsObj.getAcquisition().clone())
                             ti.getAcquisition().setDosePerFrame(doseList[counter])  # Accumulated dose in current ti
                             counter += 1
-                        tsObj.append(ti)
+                        tiltSeriesObjList.append(ti)
+
                     except OperationalError as e:
 
                         raise Exception("%s is an invalid for the {TS} field, it must be an alpha-numeric sequence "
                                         "(avoid symbols as -) that can not start with a number." % ts)
+
+                # Sort tilt image metadata if importing tilt series
+                if not self._isImportingTsMovies():
+                    tiltSeriesObjList.sort(key=lambda x: x.getTiltAngle(), reverse=False)
+
+                for ti in tiltSeriesObjList:
+                    tsObj.append(ti)
 
                 origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * self.samplingRate.get(),
                                  -tsObj.getFirstItem().getYDim() / 2 * self.samplingRate.get(),
@@ -863,13 +873,15 @@ class MDoc:
             tsFile = join(parentFolder, headerDict.get("ImageFile", None))
             if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.mrcs')
+            if not os.path.exists(tsFile):
+                tsFile = join(parentFolder, self._tsId + '.st')
             validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
 
         # Get acquisition specific (per angle) info
         self._getSlicesData(zSlices, tsFile)
 
         # Check Mdoc info read
-        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation)
+        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation or not isImportingTsMovies)
 
         # Check all the possible errors found
         exceptionMsg = ''
@@ -877,6 +889,13 @@ class MDoc:
             exceptionMsg += ' '.join(validateTSFromMdocErrMsgList)
         if validateMdocContentsErrorMsgList:
             exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
+
+        # If ts images we are assuming slices follow the angle order
+        if not isImportingTsMovies and not exceptionMsg:
+            self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
+                                     reverse=False)
+            for index, tiMd in enumerate(self._tiltsMetadata):
+                tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
 
         return exceptionMsg
 
