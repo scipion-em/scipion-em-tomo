@@ -25,23 +25,23 @@
 # **************************************************************************
 
 import glob
-import os
 import threading
-import numpy as np
+from tkinter import *
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from pwem.viewers import showj
 from pwem.viewers.showj import runJavaIJapp
+from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
-from pyworkflow.plugin import Domain
-from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog
+from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
 import pyworkflow.config as conf
-
 import pyworkflow.viewer as pwviewer
-
 import pyworkflow.utils as pwutils
+from pyworkflow.plugin import Domain
 
 import tomo.objects
-from tomo.convert.convert import getMeshVolFileName
+from ..convert.convert import getMeshVolFileName
 
 
 class TiltSeriesTreeProvider(TreeProvider):
@@ -51,12 +51,13 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TS = 'Tilt Series'
     COL_TI = 'Path'
     COL_TI_IX = 'Index'
-    COL_TI_ID = 'Order'
-    COL_TI_ANGLE = 'Angle'
+    COL_TI_ANGLE = 'Tilt Angle'
+    COL_TI_ACQ_ORDER = 'Order'
+    COL_TI_DEFOCUS_U = 'DefocusU (A)'
     COL_TI_DOSE = "Dose"
-    COL_TI_DEFOCUS_U = 'Defocus'
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
-                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
+                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
+                  COL_TI_DOSE: '_acquisition._dosePerFrame'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
@@ -69,14 +70,13 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def getObjects(self):
         # Retrieve all objects of type className
-        project = self.protocol.getProject()
         objects = []
 
         orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
         direction = 'ASC' if self.isSortingAscending() else 'DESC'
 
         for ts in self.tiltseries:
-            tsObj = ts.clone()
+            tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             objects.append(tsObj)
@@ -97,10 +97,9 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getColumns(self):
         cols = [
             (self.COL_TS, 100),
-            (self.COL_TI_ID, 50),
-            (self.COL_TI_ANGLE, 50),
+            (self.COL_TI_ACQ_ORDER, 100),
+            (self.COL_TI_ANGLE, 100),
             (self.COL_TI_DOSE, 50),
-            (self.COL_TI_IX, 50),
             (self.COL_TI, 400),
         ]
 
@@ -122,23 +121,25 @@ class TiltSeriesTreeProvider(TreeProvider):
         tsId = obj.getTsId()
 
         if isinstance(obj, tomo.objects.TiltSeriesBase):
-            key = obj.getObjId()
+            key = objId
             text = tsId
-            values = ['', '', '', '', str(obj)]
+            values = ['', '', '', str(obj)]
             opened = True
         else:  # TiltImageBase
-            key = '%s.%s' % (tsId, obj.getObjId())
-            text = ''
+            key = '%s.%s' % (tsId, objId)
+            text = objId
+
             dose = obj.getAcquisition().getDosePerFrame()
             if dose:
                 dose = round(dose, 2)
 
-            values = [obj.getAcquisitionOrder(), round(obj.getTiltAngle(), 2),
+            values = [str("%d" % obj.getAcquisitionOrder()),
+                      str("%0.2f" % obj.getTiltAngle()),
                       dose,
-                      str(obj.getLocation()[0]),
-                      str(obj.getLocation()[1])]
+                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1]),]
+
             if self._hasCtf:
-                values.insert(2, "%.03f" % obj.getCTF().getDefocusU())
+                values.insert(2, "%d" % obj.getCTF().getDefocusU())
             opened = False
 
         return {
@@ -159,7 +160,7 @@ class TiltSeriesTreeProvider(TreeProvider):
                 def createViewer(viewerClass, obj):
                     proj = self.protocol.getProject()
                     item = self.tiltseries[obj.getObjId()]  # to load mapper
-                    return lambda : viewerClass(project=proj).visualize(item)
+                    return lambda: viewerClass(project=proj).visualize(item)
                 actions.append(('Open with %s' % viewerClass.__name__,
                                 createViewer(viewerClass, obj)))
 
@@ -191,7 +192,8 @@ class TiltSeriesDialogView(pwviewer.View):
         self._provider = TiltSeriesTreeProvider(protocol, tiltSeries)
 
     def show(self):
-        dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider)
+        dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider,
+                         allowSelect=False, cancelButton=True)
 
 
 class TomogramsTreeProvider(TreeProvider):
@@ -250,6 +252,7 @@ class TomogramsTreeProvider(TreeProvider):
         tree.tag_configure("pending", foreground="red")
         tree.tag_configure("done", foreground="green")
 
+
 class MeshesTreeProvider(TreeProvider):
     """Populate tree from SetOfMeshes"""
 
@@ -274,7 +277,7 @@ class MeshesTreeProvider(TreeProvider):
         return [('Tomogram', 300), ('Number of Meshes', 150)]
 
     def getObjectInfo(self, obj):
-        if isinstance(obj, tomo.objects.Mesh):
+        if isinstance(obj, tomo.objects.MeshPoint):
             meshName = 'Mesh %d' % obj.getObjId()
             tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
             return {'key': tomoName + '-' + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
@@ -313,6 +316,7 @@ class MeshesTreeProvider(TreeProvider):
                 self._parentDict[obj.getObjId()] = self.tomoList[idx]
         return childs
 
+
 class TomogramsDialog(ToolbarListDialog):
     """
     This class extend from ListDialog to allow calling
@@ -336,7 +340,7 @@ class TomogramsDialog(ToolbarListDialog):
                                        **kwargs)
 
     def refresh_gui_viewer(self):
-        if self.proc.isAlive():
+        if self.proc.is_alive():
             self.after(1000, self.refresh_gui_viewer)
         else:
             pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
@@ -344,7 +348,7 @@ class TomogramsDialog(ToolbarListDialog):
 
     def refresh_gui(self):
         self.tree.update()
-        if self.proc.isAlive():
+        if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
             pwutils.cleanPath(self.macroPath)

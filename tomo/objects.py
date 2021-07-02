@@ -258,6 +258,12 @@ class TiltSeries(TiltSeriesBase):
         else:
             path.createLink(inputFilePath, outputFilePath)
 
+    def _dimStr(self):
+        """ Return the string representing the dimensions. """
+
+        return '%s x %s' % (self._firstDim[0],
+                                 self._firstDim[1])
+
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
@@ -268,6 +274,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
+        self._anglesCount = Integer()
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -305,9 +312,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC'):
+    def iterItems(self, orderBy='id', direction='ASC', iterate=True):
         for item in data.EMSet.iterItems(self, orderBy=orderBy,
-                                         direction=direction):
+                                         direction=direction,
+                                         iterate=iterate):
             self._setItemMapperPath(item)
             yield item
 
@@ -343,7 +351,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
-        self.setDim(self.getFirstItem().getDim())
+        firstItem = self.getFirstItem()
+        self.setDim(firstItem.getDim())
+        self._anglesCount.set(firstItem.getSize())
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
@@ -352,6 +362,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
+
+    def _dimStr(self):
+        """ Return the string representing the dimensions. """
+
+        return '%s x %s x %s' % (self._anglesCount, self._firstDim[0],
+                                 self._firstDim[1])
 
 
 class TiltImageM(data.Movie, TiltImageBase):
@@ -404,6 +420,11 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
         # self._firstFramesRange.set(other.getFramesRange())
+
+    def _dimStr(self):
+        """ Return the string representing the dimensions. """
+
+        return '%s x %s' % (self._anglesCount, self._firstDim)
 
 
 class TiltSeriesDict:
@@ -628,7 +649,6 @@ class Tomogram(data.Volume):
         return None
 
 
-
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = True
@@ -689,16 +709,16 @@ class Coordinate3D(data.EMObject):
         self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
     def getX(self, originFunction):
-        ''' See getPosition method for a full description of how "originFunction"
-        works'''
+        """ See getPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[0]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[0] if aux is not None else -origin_Scipion
         return self._x.get() - origin - origin_Scipion
 
     def setX(self, x, originFunction):
-        ''' See setPosition method for a full description of how "originFunction"
-        works'''
+        """ See setPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[0]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[0] if aux is not None else -origin_Scipion
@@ -708,16 +728,16 @@ class Coordinate3D(data.EMObject):
         self._x.sum(shiftX)
 
     def getY(self, originFunction):
-        ''' See getPosition method for a full description of how "originFunction"
-        works'''
+        """ See getPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[1]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[1] if aux is not None else -origin_Scipion
         return self._y.get() - origin - origin_Scipion
 
     def setY(self, y, originFunction):
-        ''' See setPosition method for a full description of how "originFunction"
-        works'''
+        """ See setPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[1]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[1] if aux is not None else -origin_Scipion
@@ -727,16 +747,16 @@ class Coordinate3D(data.EMObject):
         self._y.sum(shiftY)
 
     def getZ(self, originFunction):
-        ''' See getPosition method for a full description of how "originFunction"
-        works'''
+        """ See getPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[2]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[2] if aux is not None else -origin_Scipion
         return self._z.get() - origin - origin_Scipion
 
     def setZ(self, z, originFunction):
-        ''' See setPosition method for a full description of how "originFunction"
-        works'''
+        """ See setPosition method for a full description of how "originFunction"
+        works"""
         origin_Scipion = self.getVolumeOrigin()[2]
         aux = originFunction(self.getVolume().getDim())
         origin = aux[2] if aux is not None else -origin_Scipion
@@ -781,7 +801,7 @@ class Coordinate3D(data.EMObject):
         self._z.multiply(factor)
 
     def getPosition(self, originFunction):
-        '''Get the position a Coordinate3D refered to a given origin defined by originFunction.
+        """Get the position a Coordinate3D refered to a given origin defined by originFunction.
         The input of the method is a funtion (originFunction) which moves the coordinate
         position refered to the bottom left corner to other origin (retrieved by originFunction) in the grid.
 
@@ -797,7 +817,7 @@ class Coordinate3D(data.EMObject):
 
         Firstly, the Scipion origin vector stored in the Tomogram associated to the Coordinate3D
         will be applied to refer the current coordinate to the bottom left coordinate of the Tomogram.
-        '''
+        """
         return self.getX(originFunction), self.getY(originFunction), self.getZ(originFunction)
 
     def setPosition(self, x, y, z, originFunction):
@@ -892,10 +912,10 @@ class Coordinate3D(data.EMObject):
         return self._groupId is not None
 
     def getVolumeOrigin(self, angstrom=False):
-        '''Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the a vector that can be used to move the position of the Coordinate3D
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
-        '''
+        """
         if angstrom:
             return self.getVolume().getShiftsFromOrigin()
         else:
@@ -1038,7 +1058,7 @@ class SetOfCoordinates3D(data.EMSet):
         return coord
 
     def __getitem__(self, itemId):
-        '''Add a pointer to a Tomogram before returning the Coordinate3D'''
+        """Add a pointer to a Tomogram before returning the Coordinate3D"""
         coord = data.EMSet.__getitem__(self, itemId)
         # In case pointer is lost in a for loop
         # clone = self.getPrecedents().getClass()()
@@ -1063,8 +1083,8 @@ class SubTomogram(data.Volume):
         self._coordinate = coordinate
 
     def getCoordinate3D(self):
-        '''Since the object Coordinate3D needs a volume, use the information stored in the
-        SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D'''
+        """Since the object Coordinate3D needs a volume, use the information stored in the
+        SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
         tomo = Tomogram()
         tomo.setOrigin(self.getOrigin())
         tomo.setLocation(self.getVolName())
@@ -1112,10 +1132,10 @@ class SubTomogram(data.Volume):
         self._volName.set(volName)
 
     def getVolumeOrigin(self, angstrom=False):
-        '''Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the a vector that can be used to move the position of the Coordinate3D
         associated to the SubTomogram (referred to the center of the Tomogram or other
         origin specified by the user) to the bottom left corner of the Tomogram
-        '''
+        """
         if angstrom:
             return self.getShiftsFromOrigin()
         else:
@@ -1350,6 +1370,51 @@ class CTFTomo(data.CTFModel):
         self._defocusVDeviation = pwobj.Float()
         self._isDefocusVDeviationInRange = pwobj.Boolean(True)
 
+    def copyInfo(self, other, copyId=False):
+        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
+                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation')
+
+        self.setEnabled(other.isEnabled())
+
+        self.setIsDefocusUDeviationInRange(other.getIsDefocusUDeviationInRange())
+        self.setIsDefocusVDeviationInRange(other.getIsDefocusVDeviationInRange())
+
+        if other.hasPhaseShift():
+            self.setPhaseShift(other.getPhaseShift())
+
+        if other.hasEstimationInfoAsList():
+            if other.hasAstigmatismInfoAsList():
+                self._defocusUList = pwobj.CsvList(pType=float)
+                self._defocusVList = pwobj.CsvList(pType=float)
+                self._defocusAngleList = pwobj.CsvList(pType=float)
+                self.setDefocusUList(other.getDefocusUList())
+                self.setDefocusVList(other.getDefocusVList())
+                self.setDefocusAngleList(other.getDefocusAngleList())
+
+            else:
+                self._defocusUList = pwobj.CsvList(pType=float)
+                self.setDefocusUList(other.getDefocusUList())
+
+        if other.hasPhaseShiftInfoAsList():
+            self._phaseShiftList = pwobj.CsvList(pType=float)
+            self.setPhaseShiftList(other.getPhaseShiftList())
+
+        if other.hasCutOnFrequncyInfoAsList():
+            self._cutOnFreqList = pwobj.CsvList(pType=float)
+            self.setCutOnFreqList(other.getCutOnFreqList())
+            self.setCutOnFreq(other.getCutOnFreq())
+
+        if copyId:
+            self.copyObjId(other)
+
+    @staticmethod
+    def ctfModelToCtfTomo(ctfModel):
+        newCTFTomo = CTFTomo()
+        newCTFTomo.copyAttributes(ctfModel, '_defocusU', '_defocusV',
+                                  '_defocusAngle', '_defocusRatio', '_psdFile',
+                                  '_resolution',  '_fitQuality')
+        return newCTFTomo
+
     def getIndex(self):
         return self._index
 
@@ -1359,11 +1424,17 @@ class CTFTomo(data.CTFModel):
     def getdefocusUDeviation(self):
         return self._defocusUDeviation
 
+    def setIsDefocusUDeviationInRange(self, value):
+        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
 
     def getdefocusVDeviation(self):
         return self._defocusVDeviation
+
+    def setIsDefocusVDeviationInRange(self, value):
+        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
 
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
@@ -1437,7 +1508,21 @@ class CTFTomo(data.CTFModel):
         else:
             return False
 
-    # TODO: cut on frequency
+    def hasPhaseShiftInfoAsList(self):
+        """ This method checks if the CTFTomo object contains phase shift information in the form of a list. """
+
+        if hasattr(self, "_phaseShiftList"):
+            return True
+        else:
+            return False
+
+    def hasCutOnFrequncyInfoAsList(self):
+        """ This method checks if the CTFTomo object contains cut-on frequency information in the form of a list. """
+
+        if hasattr(self, "_cutOnFreqList"):
+            return True
+        else:
+            return False
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
@@ -1728,8 +1813,14 @@ class CTFTomoSeries(data.EMSet):
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
 
+    def setIsDefocusUDeviationInRange(self, value):
+        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
+
+    def setIsDefocusVDeviationInRange(self, value):
+        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
 
     def calculateDefocusUDeviation(self, defocusUTolerance=20):
         defocusUValueList = []
@@ -1741,7 +1832,7 @@ class CTFTomoSeries(data.EMSet):
         for ctfTomo in self.iterItems(iterate=False):
             ctfTomo._defocusUDeviation.set(ctfTomo.getDefocusUDeviation(mean))
             isDefocusUDeviationInRange = ctfTomo.isDefocusUDeviationInRange(mean,
-                                                    percentage=defocusUTolerance)
+                                                                            percentage=defocusUTolerance)
             if not isDefocusUDeviationInRange:
                 self._isDefocusUDeviationInRange.set(False)
             ctfTomo._isDefocusUDeviationInRange.set(isDefocusUDeviationInRange)
@@ -1757,7 +1848,7 @@ class CTFTomoSeries(data.EMSet):
         for ctfTomo in self.iterItems(iterate=False):
             ctfTomo._defocusVDeviation.set(ctfTomo.getDefocusVDeviation(mean))
             isDefocusVDeviationInRange = ctfTomo.isDefocusVDeviationInRange(mean,
-                                                    percentage=defocusVTolerance)
+                                                                            percentage=defocusVTolerance)
             if not isDefocusVDeviationInRange:
                 self._isDefocusVDeviationInRange.set(False)
             ctfTomo._isDefocusVDeviationInRange.set(isDefocusVDeviationInRange)
@@ -1775,11 +1866,11 @@ class SetOfCTFTomoSeries(data.EMSet):
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
-        self._setOfTiltSeriesPointer.set(other.getSetOfTiltSeries())
+        self.setSetOfTiltSeries(other.getSetOfTiltSeries(pointer=True))
 
-    def getSetOfTiltSeries(self):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
-        return self._setOfTiltSeriesPointer.get()
+        return self._setOfTiltSeriesPointer.get() if not pointer else self._setOfTiltSeriesPointer
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the tilt-series from which this CTF model series were estimated.
@@ -1820,7 +1911,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         classItem = data.EMSet.__getitem__(self, itemId)
 
         objId = None
-        for tiltSeries in self.getSetOfTiltSeries():
+        for tiltSeries in self.getSetOfTiltSeries().iterItems(iterate=False):
             if tiltSeries.getTsId() == classItem.getTsId():
                 objId = tiltSeries.getObjId()
 

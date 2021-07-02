@@ -26,7 +26,7 @@
 
 import pwem
 
-__version__ = '3.0.9'
+__version__ = '3.0.10'
 _logo = "icon.gif"
 _references = []
 

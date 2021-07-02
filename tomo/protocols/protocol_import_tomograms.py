@@ -26,17 +26,13 @@
 # **************************************************************************
 
 
-import re
 from os.path import abspath, basename
 
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-
 from pyworkflow import BETA
-import pyworkflow.utils as pwutils
 from pyworkflow.utils.path import createAbsLink
 import pyworkflow.protocol.params as params
-
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from ..objects import Tomogram
@@ -228,7 +224,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _getVolumeFileName(self, fileName, extension=None):
         if extension is not None:
-            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s"%extension
+            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
         else:
             baseFileName = "import_" + str(basename(fileName)).split(":")[0]
 
