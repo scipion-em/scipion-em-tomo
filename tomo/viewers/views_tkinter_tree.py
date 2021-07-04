@@ -135,7 +135,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             values = [str("%d" % obj.getAcquisitionOrder()),
                       str("%0.2f" % obj.getTiltAngle()),
                       dose,
-                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1]),]
+                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
 
             if self._hasCtf:
                 values.insert(2, "%d" % obj.getCTF().getDefocusU())

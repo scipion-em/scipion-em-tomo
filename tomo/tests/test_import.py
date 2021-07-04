@@ -399,7 +399,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
     def sortTestDataByAngle(self, testDataDict):
 
         for key in testDataDict:
-            testData= testDataDict[key]
+            testData = testDataDict[key]
             ind = numpy.argsort(testData[self.ANGLE_LIST])
 
             newDoses = []

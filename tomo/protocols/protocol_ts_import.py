@@ -373,6 +373,20 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                               state=outputSet.STREAM_CLOSED)
 
     # -------------------------- INFO functions -------------------------------
+    def _summary(self):
+        summary = []
+
+        if self.getOutputsSize():
+            for key, output in self.iterOutputAttributes():
+                summary.append("Imported tilt-series %s from: %s" % (
+                    "movies" if output.getLastName() == "outputTiltSeriesM" else "",
+                    self.filesPath.get()))
+                summary.append("Using pattern: %s" % self.filesPattern.get())
+                summary.append(u"Sampling rate: *%0.2f* (Å/px)" % output.getSamplingRate())
+        else:
+            summary.append(Message.TEXT_NO_OUTPUT_FILES)
+        return summary
+
     def _validate(self):
         self._initialize()
         try:
@@ -466,7 +480,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         validationErrors = []
 
         for mdoc in mdocList:
-            mdocObj = MDoc(mdoc, voltage=self.voltage.get(), magnification=self.magnification.get(), samplingRate=self.samplingRate.get())
+            mdocObj = MDoc(mdoc, voltage=self.voltage.get(),
+                           magnification=self.magnification.get(), samplingRate=self.samplingRate.get())
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
             if validationError:
                 validationErrors.append(validationError)
@@ -667,7 +682,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Return the list with all expected tilt angles. """
         offset = 1
         if self.minAngle.get() > self.maxAngle.get():
-            offset = -1 * offset
+            offset *= -1
         return np.arange(self.minAngle.get(),
                          self.maxAngle.get() + offset,  # also include last angle
                          self.stepAngle.get())
