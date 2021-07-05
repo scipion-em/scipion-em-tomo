@@ -200,7 +200,7 @@ class TiltSeriesBase(data.SetOfImages):
         t = Transform()
         x, y, z = self.getDim()
         if z > 1:
-            z = z / -2.
+            z /= -2.
         print(t)
         t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
         return t  # The identity matrix
@@ -262,7 +262,7 @@ class TiltSeries(TiltSeriesBase):
         """ Return the string representing the dimensions. """
 
         return '%s x %s' % (self._firstDim[0],
-                                 self._firstDim[1])
+                            self._firstDim[1])
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
