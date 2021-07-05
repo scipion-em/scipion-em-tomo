@@ -41,8 +41,7 @@ import pwem.viewers as viewers
 from pwem.emlib.image import ImageHandler
 
 
-from tomo.protocols import ProtImportTomograms, \
-    ProtImportSubTomograms
+from tomo.protocols import (ProtImportTomograms, ProtImportSubTomograms)
 from tomo.objects import SetOfSubTomograms
 
 
