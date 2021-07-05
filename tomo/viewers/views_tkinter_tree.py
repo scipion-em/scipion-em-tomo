@@ -129,12 +129,11 @@ class TiltSeriesTreeProvider(TreeProvider):
             text = objId
 
             dose = obj.getAcquisition().getDosePerFrame()
-            if dose:
-                dose = round(dose, 2)
+            adqOrder = obj.getAcquisitionOrder()
 
-            values = [str("%d" % obj.getAcquisitionOrder()),
+            values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
-                      dose,
+                      round(dose, 2) if dose is not None else "",
                       "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
 
             if self._hasCtf:
