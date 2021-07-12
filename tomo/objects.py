@@ -276,6 +276,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
 
+    def copyInfo(self, other):
+        """ Copy information (sampling rate and ctf)
+        from other set of images to current one"""
+        super().copyInfo(other)
+        self.copyAttributes(other, '_anglesCount')
+
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
         Params:
