@@ -1086,7 +1086,9 @@ class SubTomogram(data.Volume):
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
         tomo = Tomogram()
-        tomo.setOrigin(self.getOrigin())
+        subtomoOrigin = self.getOrigin()
+        if subtomoOrigin:
+            tomo.setOrigin(subtomoOrigin)
         tomo.setLocation(self.getVolName())
         tomo.setSamplingRate(self.getSamplingRate())
         coord = self._coordinate
