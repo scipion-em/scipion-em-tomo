@@ -53,8 +53,10 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ANGLE = 'Tilt Angle'
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DEFOCUS_U = 'DefocusU (A)'
+    COL_TI_DOSE = "Dose"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
-                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU'}
+                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
+                  COL_TI_DOSE: '_acquisition._dosePerFrame'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
@@ -96,6 +98,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TS, 100),
             (self.COL_TI_ACQ_ORDER, 100),
             (self.COL_TI_ANGLE, 100),
+            (self.COL_TI_DOSE, 50),
             (self.COL_TI, 400),
         ]
 
@@ -119,14 +122,20 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = objId
             text = tsId
-            values = ['', '', str(obj)]
+            values = ['', '', '', str(obj)]
             opened = True
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
             text = objId
-            values = [str("%d" % obj.getAcquisitionOrder()),
+
+            dose = obj.getAcquisition().getDosePerFrame()
+            adqOrder = obj.getAcquisitionOrder()
+
+            values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
+                      round(dose, 2) if dose is not None else "",
                       "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
+
             if self._hasCtf:
                 values.insert(2, "%d" % obj.getCTF().getDefocusU())
             opened = False

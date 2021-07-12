@@ -206,7 +206,9 @@ class TestTomoSubSetsTs(BaseTest):
         print(pwutils.magentaStr("\n==> Create the subset 2 of TiltSeriesM"))
         tsSubset2 = self.newProtocol(emprot.ProtSubSet,
                                      objLabel='subset 2',
-                                     chooseAtRandom=True,
+                                     chooseAtRandom=False,
+                                     inputSubSet=tsSubset1.outputTiltSeriesM,
+                                     setOperation=1,
                                      nElements=1)
 
         tsSubset2.inputFullSet.set(protImport.outputTiltSeriesM)
@@ -344,7 +346,9 @@ class TestTomoSubSetsTomograms(BaseTest):
         print(pwutils.magentaStr("\n==> Create the subset 2 of Tomograms"))
         tomoSubset2 = self.newProtocol(emprot.ProtSubSet,
                                        objLabel='subset 2',
-                                       chooseAtRandom=True,
+                                       chooseAtRandom=False,
+                                       inputSubSet=tomoSubset1.outputTomograms,
+                                       setOperation=1,
                                        nElements=1)
 
         tomoSubset2.inputFullSet.set(protImport.outputTomograms)
@@ -489,7 +493,9 @@ class TestTomoSubSetsSubTomograms(BaseTest):
         print(pwutils.magentaStr("\n==> Create the subset 2 of SubTomograms"))
         tomoSubset2 = self.newProtocol(emprot.ProtSubSet,
                                        objLabel='subset 2',
-                                       chooseAtRandom=True,
+                                       chooseAtRandom=False,
+                                       inputSubSet=tomoSubset1.outputSubTomograms,
+                                       setOperation=1,
                                        nElements=2)
 
         tomoSubset2.inputFullSet.set(protImport.outputSubTomograms)

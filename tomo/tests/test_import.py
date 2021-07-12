@@ -27,6 +27,7 @@ import glob
 import os
 from os.path import join
 
+import numpy
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols.protocol_ts_import import MDoc
 
@@ -395,8 +396,29 @@ class TestTomoImportTsFromMdoc(BaseTest):
             cls.ACQ_ORDER_LIST: kwargs.get(cls.ACQ_ORDER_LIST, None)
         }
 
+    def sortTestDataByAngle(self, testDataDict):
+
+        for key in testDataDict:
+            testData = testDataDict[key]
+            ind = numpy.argsort(testData[self.ANGLE_LIST])
+
+            newDoses = []
+            newAcqOrders = []
+            newAngles = []
+            newFiles = []
+            for index in ind:
+                newAcqOrders.append(testData[self.ACQ_ORDER_LIST][index])
+                newDoses.append(testData[self.ACCUM_DOSE_LIST][index])
+                newAngles.append(testData[self.ANGLE_LIST][index])
+                newFiles.append(testData[self.FILENAME_LIST][index])
+
+            testData[self.ANGLE_LIST] = newAngles
+            testData[self.ACCUM_DOSE_LIST] = newDoses
+            testData[self.ACQ_ORDER_LIST] = newAcqOrders
+
     def _genTestData(self, isTsMovie):
-        return {
+
+        testData = {
             'stack31': self._genTestDict(
                 voltage=300,
                 magnification=53000,
@@ -425,6 +447,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
             )
         }
 
+        if not isTsMovie:
+            self.sortTestDataByAngle(testData)
+
+        return testData
+
     def _runImportTiltSeries(self, isTsMovie=False):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
         protImport = self.newProtocol(
@@ -441,6 +468,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
         self.assertSetSize(outputSet, size=2)
         self.assertAlmostEqual(outputSet.getSamplingRate(), self.sRate, delta=0.001)
         self.assertEqual(outputSet.getDimensions(), dimensions)
+
         # Check tilt series movies
         for tsM in outputSet:
             testDataDict = testDict[tsM.getTsId()]
@@ -457,6 +485,9 @@ class TestTomoImportTsFromMdoc(BaseTest):
             accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
             angleList = testDataDict[self.ANGLE_LIST]
             acqOrderList = testDataDict[self.ACQ_ORDER_LIST]
+
+            previousAngle = None
+
             for i, tiM in enumerate(tsM):
                 self.assertEqual(tiM.getFileName(), prot._getExtraPath(filesList[i]))
                 self.assertTrue(os.path.islink(tiM.getFileName()),
@@ -467,6 +498,12 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertEqual(i + 1, tiM.getObjId(), "Tilt image Movie objId is incorrect")
                 # Acquisition order
                 self.assertEqual(tiM.getAcquisitionOrder(), acqOrderList[i])
+
+                if not isTsMovie:
+                    self.assertEqual(i+1, tiM.getIndex())
+                    if previousAngle is not None:
+                        self.assertTrue(previousAngle < tiM.getTiltAngle(), "Tilt images are not sorted by angle.")
+                    previousAngle = tiM.getTiltAngle()
 
     def test_importTiltSeriesM(self):
         isTsMovie = True

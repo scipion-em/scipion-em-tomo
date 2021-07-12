@@ -159,7 +159,7 @@ class TiltSeriesBase(data.SetOfImages):
 
         angleList = []
 
-        for ti in self:
+        for ti in self.iterItems(orderBy="_tiltAngle"):
             angleList.append(ti.getTiltAngle())
 
         if reverse:
@@ -200,7 +200,7 @@ class TiltSeriesBase(data.SetOfImages):
         t = Transform()
         x, y, z = self.getDim()
         if z > 1:
-            z = z / -2.
+            z /= -2.
         print(t)
         t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
         return t  # The identity matrix
@@ -262,7 +262,7 @@ class TiltSeries(TiltSeriesBase):
         """ Return the string representing the dimensions. """
 
         return '%s x %s' % (self._firstDim[0],
-                                 self._firstDim[1])
+                            self._firstDim[1])
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -275,6 +275,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
+
+    def copyInfo(self, other):
+        """ Copy information (sampling rate and ctf)
+        from other set of images to current one"""
+        super().copyInfo(other)
+        self.copyAttributes(other, '_anglesCount')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -1868,11 +1874,11 @@ class SetOfCTFTomoSeries(data.EMSet):
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
-        self._setOfTiltSeriesPointer.set(other.getSetOfTiltSeries())
+        self.setSetOfTiltSeries(other.getSetOfTiltSeries(pointer=True))
 
-    def getSetOfTiltSeries(self):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
-        return self._setOfTiltSeriesPointer.get()
+        return self._setOfTiltSeriesPointer.get() if not pointer else self._setOfTiltSeriesPointer
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the tilt-series from which this CTF model series were estimated.
