@@ -244,15 +244,13 @@ class ProtTomoImportAcquisition:
                       condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
 
         form.addParam('acquisitionAngleMax', FloatParam,
-                      allowsNull=True,
-                      default=90,
+                      default=60,
                       label='Acquisition angle max',
                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
                       help='Enter the positive limit of the acquisition angle')
 
         form.addParam('acquisitionAngleMin', FloatParam,
-                      allowsNull=True,
-                      default=-90,
+                      default=-60,
                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
                       label='Acquisition angle min',
                       help='Enter the negative limit of the acquisition angle')

@@ -88,7 +88,9 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
-                                      samplingRate=1.35)
+                                      samplingRate=1.35,
+                                      acquisitionAngleMax=40,
+                                      acquisitionAngleMin=-40)
         # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
         return protImport
@@ -101,6 +103,8 @@ class TestTomoImportSubTomograms(BaseTest):
         self.assertTrue(output.getDim()[0] == 32)
         self.assertTrue(output.getDim()[1] == 32)
         self.assertTrue(output.getDim()[2] == 32)
+        self.assertEqual(output.getFirstItem().getAcquisition().getAngleMax(), 60)
+        self.assertEqual(output.getFirstItem().getAcquisition().getAngleMin(), -60)
         # self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
         # self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
         # self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
@@ -115,6 +119,8 @@ class TestTomoImportSubTomograms(BaseTest):
         self.assertTrue(output2.getDim()[0] == 32)
         self.assertTrue(output2.getDim()[1] == 32)
         self.assertTrue(output2.getDim()[2] == 32)
+        self.assertEqual(output2.getFirstItem().getAcquisition().getAngleMax(), 40)
+        self.assertEqual(output2.getFirstItem().getAcquisition().getAngleMin(), -40)
         # for i, subtomo in enumerate(output2.iterItems()):
         #     if i == 1:
         #         self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
@@ -204,6 +210,15 @@ class TestTomoImportTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
+    def _runImportTomograms2(self):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTomograms,
+            filesPath=self.tomogram,
+            filesPattern='',
+            samplingRate=1.35)
+        self.launchProtocol(protImport)
+        return protImport
+
     def test_importTomograms(self):
         protImport = self._runImportTomograms()
         output = getattr(protImport, 'outputTomograms', None)
@@ -223,6 +238,23 @@ class TestTomoImportTomograms(BaseTest):
 
             break
 
+        protImport2 = self._runImportTomograms2()
+        output2 = getattr(protImport2, 'outputTomograms', None)
+        self.assertIsNotNone(output2,
+                             "There was a problem with Import Tomograms protocol")
+
+        for tomogram in protImport2.outputTomograms.iterItems():
+            self.assertTrue(tomogram.getXDim() == 1024,
+                            "There was a problem with Import Tomograms protocol")
+            self.assertIsNotNone(tomogram.getYDim() == 1024,
+                                 "There was a problem with Import Tomograms protocol")
+
+            self.assertTrue(tomogram.getAcquisition().getAngleMax() == 60,
+                            "There was a problem with the acquisition angle max")
+            self.assertTrue(tomogram.getAcquisition().getAngleMin() == -60,
+                            "There was a problem with the acquisition angle min")
+
+            break
 
 class TestTomoBaseProtocols(BaseTest):
     @classmethod
