@@ -929,10 +929,12 @@ class Coordinate3D(data.EMObject):
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
+        vol = self.getVolume()
+        if not vol:
+            raise Exception("3D coordinate must be referred to a volume to get its origin.")
         if angstrom:
-            return self.getVolume().getShiftsFromOrigin()
+            return vol.getShiftsFromOrigin()
         else:
-            vol = self.getVolume()
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
             return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
