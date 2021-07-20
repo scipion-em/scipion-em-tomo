@@ -32,6 +32,7 @@ from datetime import timedelta, datetime
 from collections import OrderedDict
 from os.path import join, exists
 from pathlib import PureWindowsPath
+from statistics import mean
 
 import numpy as np
 from sqlite3 import OperationalError
@@ -39,13 +40,15 @@ from sqlite3 import OperationalError
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
-from pwem.objects import Acquisition, Transform
+from pwem.objects import Transform
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 
 from tomo.convert import getAnglesFromHeader, getAnglesFromMdoc, getAnglesFromTlt
+from tomo.objects import TomoAcquisition
+
 from .protocol_base import ProtTomoBase
 
 
@@ -71,6 +74,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     acquisitions = None
     sRates = None
     accumDoses = None
+    incomingDose = None
     meanDosesPerFrame = None
 
     # -------------------------- DEFINE param functions -----------------------
@@ -222,7 +226,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        doseList = []
+        accumDoseList = []
+        incomingDoseList = []
         counter = 0
 
         if not self.MDOC_DATA_SOURCE:
@@ -278,7 +283,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 outputSet.append(tsObj)
 
                 if self.MDOC_DATA_SOURCE:
-                    doseList = self.accumDoses[ts]
+                    accumDoseList = self.accumDoses[ts]
+                    incomingDoseList = self.incomingDose[ts]
                     counter = 0
 
                 tiltSeriesObjList = []
@@ -306,7 +312,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
                         if self.MDOC_DATA_SOURCE:
                             ti.setAcquisition(tsObj.getAcquisition().clone())
-                            ti.getAcquisition().setDosePerFrame(doseList[counter])  # Accumulated dose in current ti
+                            ti.getAcquisition().setDosePerFrame(incomingDoseList[counter])  # Incoming dose in current ti
+                            ti.getAcquisition().setAccumDose(accumDoseList[counter])  # Accumulated dose in current ti
                             counter += 1
                         tiltSeriesObjList.append(ti)
 
@@ -330,7 +337,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     # Tilt series object dose per frame has been updated each time the tilt image dose per frame has
                     # been updated before, so the mean value is used to be the reference in the acquisition of the
                     # whole tilt series movie
-                    tsObj.getAcquisition().setDosePerFrame(self.meanDosesPerFrame[ts])
+                    tsObj.getAcquisition().setDosePerFrame(mean(incomingDoseList))
 
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
@@ -476,7 +483,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self.acquisitions = OrderedDict()
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
-        self.meanDosesPerFrame = OrderedDict()
+        self.incomingDose = OrderedDict()
         validationErrors = []
 
         for mdoc in mdocList:
@@ -492,6 +499,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             tsId = mdocObj.getTsId()
             fileOrderAngleList = []
             accumulatedDoseList = []
+            incomingDoseList = []
             for tiltMetadata in mdocObj.getTiltsMetadata():
                 fileOrderAngleList.append((
                     tiltMetadata.getAngleMovieFile(),                    # Filename
@@ -499,13 +507,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     tiltMetadata.getTiltAngle(),                         # Tilt angle
                 ))
                 accumulatedDoseList.append(tiltMetadata.getAccumDose())
+                incomingDoseList.append(tiltMetadata.getIncomingDose())
 
             # self._getTsIdFromMdocData(fileList)
             matchingFiles[tsId] = fileOrderAngleList
             self.acquisitions[tsId] = acquisition
             self.sRates[tsId] = mdocObj.getSamplingRate()
             self.accumDoses[tsId] = accumulatedDoseList
-            self.meanDosesPerFrame[tsId] = accumulatedDoseList[-1]/len(accumulatedDoseList)
+            self.incomingDose[tsId] = incomingDoseList
 
         if validationErrors:
             raise Exception(' '.join(validationErrors))
@@ -515,7 +524,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return True if type(self) is ProtImportTsMovies else False
 
     def _genTsAcquisitionFromMdoc(self, voltage, magnification):
-        acq = Acquisition()
+        acq = TomoAcquisition()
         acq.setVoltage(voltage)
         acq.setSphericalAberration(self.sphericalAberration.get())
         acq.setAmplitudeContrast(self.amplitudeContrast.get())
@@ -896,7 +905,8 @@ class MDoc:
         self._getSlicesData(zSlices, tsFile)
 
         # Check Mdoc info read
-        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation or not isImportingTsMovies)
+        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(
+            ignoreFilesValidation=ignoreFilesValidation or not isImportingTsMovies)
 
         # Check all the possible errors found
         exceptionMsg = ''
@@ -960,12 +970,14 @@ class MDoc:
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
-            accumulatedDose = self._getDoseFromMdoc(zSlice, accumulatedDose)
+            incomingDose = self._getDoseFromMdoc(zSlice)
+            accumulatedDose += incomingDose
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(parentFolder, zSlice, tsFile),
                 acqOrder=counter+1,
-                accumDose=accumulatedDose
+                accumDose=accumulatedDose,
+                incomingDose=incomingDose
             ))
 
     @staticmethod
@@ -977,7 +989,7 @@ class MDoc:
             return join(parentFolder, PureWindowsPath(zSlice['SubFramePath']).parts[-1])
 
     @staticmethod
-    def _getDoseFromMdoc(zSlice, accumulatedDose):
+    def _getDoseFromMdoc(zSlice):
         """It calculates the accumulated dose on the frames represented by zSlice, and add it to the
         previous accumulated dose"""
         EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
@@ -1027,7 +1039,7 @@ class MDoc:
                 meanVal = minMaxMean.split()[-1]  # Get the mean from a string like '-42 2441 51.7968'
                 newDose = (float(meanVal) / float(counts)) / float(pixelSize) ** 2
 
-        return newDose + accumulatedDose
+        return newDose
 
     @staticmethod
     def _validateTSFromMdoc(mdoc, tsFile):
@@ -1089,11 +1101,12 @@ class MDoc:
 
 class TiltMetadata:
 
-    def __init__(self, angle=None, angleFile=None, acqOrder=None, accumDose=None):
+    def __init__(self, angle=None, angleFile=None, acqOrder=None, accumDose=None, incomingDose=None):
         self._angle = angle
         self._angleFile = angleFile
         self._acqOrder = acqOrder
         self._accumDose = accumDose
+        self._incomingDose = incomingDose
 
     def setTiltAngle(self, tiltAngle):
         self._angle = tiltAngle
@@ -1107,6 +1120,9 @@ class TiltMetadata:
     def setAccumDose(self, accumDose):
         self._accumDose = accumDose
 
+    def setIncomingDose(self, incDose):
+        self._incomingDose = incDose
+
     def getTiltAngle(self):
         return self._angle
 
@@ -1118,3 +1134,10 @@ class TiltMetadata:
 
     def getAccumDose(self):
         return self._accumDose
+
+    def getAcqOrder(self):
+        return self._acqOrder
+
+    def getIncomingDose(self):
+        return self._incomingDose
+

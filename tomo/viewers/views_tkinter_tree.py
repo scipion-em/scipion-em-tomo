@@ -53,10 +53,10 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ANGLE = 'Tilt Angle'
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DEFOCUS_U = 'DefocusU (A)'
-    COL_TI_DOSE = "Dose"
+    COL_TI_DOSE = "AccumDose"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
-                  COL_TI_DOSE: '_acquisition._dosePerFrame'}
+                  COL_TI_DOSE: '_acquisition._accumDose'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
@@ -98,7 +98,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TS, 100),
             (self.COL_TI_ACQ_ORDER, 100),
             (self.COL_TI_ANGLE, 100),
-            (self.COL_TI_DOSE, 50),
+            (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
         ]
 
@@ -128,7 +128,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             key = '%s.%s' % (tsId, objId)
             text = objId
 
-            dose = obj.getAcquisition().getDosePerFrame()
+            dose = obj.getAcquisition().getAccumDose()
             adqOrder = obj.getAcquisitionOrder()
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
