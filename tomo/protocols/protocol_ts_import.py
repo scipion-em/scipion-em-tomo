@@ -124,6 +124,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                       label='Exclusion words:',
                       help="List of words separated by a space that the path should not have",
                       expertLevel=params.LEVEL_ADVANCED)
+        form.addParam('mdocInfo', params.LabelParam,
+                      condition='not (%s)' % self.NOT_MDOC_GUI_COND,
+                      label='Acquisition values provided below will override the mdoc corresponding values',
+                      important=True)
         self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
@@ -185,11 +189,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Define acq parameters, it can be overridden
         by subclasses to change what parameters to include.
         """
-        group = form.addGroup('Acquisition info',
-                              condition=True if self._isImportingTsMovies() else self.NOT_MDOC_GUI_COND)
-        group.addParam('voltage', params.FloatParam, default=300,
+        group = form.addGroup('Acquisition info - override mdoc values if provided')
+        group.addParam('voltage', params.FloatParam, # default=300,
                        label=Message.LABEL_VOLTAGE,
-                       condition=self.NOT_MDOC_GUI_COND,
+                       allowsNull=True,
                        help=Message.TEXT_VOLTAGE)
         group.addParam('sphericalAberration', params.FloatParam, default=2.7,
                        label=Message.LABEL_SPH_ABERRATION,
@@ -199,14 +202,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        label=Message.LABEL_AMPLITUDE,
                        expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_AMPLITUDE)
-        group.addParam('magnification', params.IntParam, default=50000,
+        group.addParam('magnification', params.IntParam, # default=50000,
                        label=Message.LABEL_MAGNI_RATE,
-                       condition=self.NOT_MDOC_GUI_COND,
+                       allowsNull=True,
                        help=Message.TEXT_MAGNI_RATE)
-        group.addParam('samplingRate', params.FloatParam, default=1.0,
+        group.addParam('samplingRate', params.FloatParam, # default=1.0,
                        important=True,
                        label=Message.LABEL_SAMP_RATE,
-                       condition=self.NOT_MDOC_GUI_COND,
+                       allowsNull=True,
                        help=Message.TEXT_SAMP_RATE)
 
         return group
@@ -228,6 +231,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """
         accumDoseList = []
         incomingDoseList = []
+        samplingRate = self.samplingRate.get()
         counter = 0
 
         if not self.MDOC_DATA_SOURCE:
@@ -273,8 +277,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
             for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
-
                 tsObj = tsClass(tsId=ts)
+                # Form value has higher priority than the mdoc values
+                samplingRate = float(samplingRate if samplingRate else self.sRates[ts])
 
                 origin = Transform()
                 tsObj.setOrigin(origin)
@@ -329,8 +334,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 for ti in tiltSeriesObjList:
                     tsObj.append(ti)
 
-                origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * self.samplingRate.get(),
-                                 -tsObj.getFirstItem().getYDim() / 2 * self.samplingRate.get(),
+                origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * samplingRate,
+                                 -tsObj.getFirstItem().getYDim() / 2 * samplingRate,
                                  0)
 
                 if self.MDOC_DATA_SOURCE:
@@ -414,7 +419,24 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self._firstMatch = list(matching.items())[0]
         self._tiltAngleList = self._getSortedAngles(self._firstMatch[1])
 
-        return self._validateAngles()
+        errMsg = []
+        errorMsgAngles = self._validateAngles()
+        if errorMsgAngles:
+            errMsg.append(errorMsgAngles)
+        # In the mdoc case, voltage, magnification and sampling rate are optional inputs. In the user introduces
+        # one of these values, it will be considered more prior than the corresponding value read from the mdoc file
+        if not self.MDOC_DATA_SOURCE:
+            voltage = self.voltage.get()
+            magnification = self.magnification.get()
+            samplingRate = self.samplingRate.get()
+            if not voltage:
+                errMsg.append('Voltage should be a float')
+            if not magnification:
+                errMsg.append('Magnification should be an integer')
+            if not samplingRate:
+                errMsg.append('Sampling rate should be a float')
+
+        return errMsg
 
     def _validateAngles(self):
         """ Function to be implemented in subclass to validate
@@ -487,14 +509,19 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         validationErrors = []
 
         for mdoc in mdocList:
-            mdocObj = MDoc(mdoc, voltage=self.voltage.get(),
-                           magnification=self.magnification.get(), samplingRate=self.samplingRate.get())
+            # Note: voltage, magnification and sampling rate values are the ones introduced by the user in the
+            # protocol's form. Otherwise, the corresponding values considered will be the ones read from the mdoc.
+            # This is because because you can't trust mdoc (often dose is not calibrated in serialem, so you get 0;
+            # pixel size might be binned as mdoc comes from a binned record not movie and  there are no Cs and amp
+            # contrast fields in mdoc)
+            mdocObj = MDoc(mdoc, voltage=self.voltage.get() if self.voltage.get() else None,
+                           magnification=self.magnification.get() if self.magnification.get() else None,
+                           samplingRate=self.samplingRate.get() if self.samplingRate.get() else None)
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
             if validationError:
                 validationErrors.append(validationError)
                 # Continue parsing the remaining mdoc files to provide a fully detailed error message
                 continue
-
             acquisition = self._genTsAcquisitionFromMdoc(mdocObj.getVoltage(), mdocObj.getMagnification())
             tsId = mdocObj.getTsId()
             fileOrderAngleList = []
@@ -785,7 +812,8 @@ class ProtImportTs(ProtImportTsBase):
                 return ['Tilt-series %s stack has different number of images (%d) '
                         'than the expected number of tilt angles (%d). '
                         % (fileName, nImages, nAngles)]
-        return []
+        else:
+            return []
 
 
 class ProtImportTsMovies(ProtImportTsBase):
@@ -813,7 +841,6 @@ class ProtImportTsMovies(ProtImportTsBase):
         group = ProtImportTsBase._defineAcquisitionParams(self, form)
 
         line = group.addLine('Dose (e/A^2)',
-                             condition=self.NOT_MDOC_GUI_COND,
                              help="Initial accumulated dose (usually 0) and "
                                   "dose per frame. ")
         line.addParam('doseInitial', params.FloatParam, default=0,
@@ -853,7 +880,8 @@ class ProtImportTsMovies(ProtImportTsBase):
             if not self._anglesInPattern():
                 return ['When importing movies, {TA} and {TO} should be in the '
                         'files pattern.']
-        return []
+        else:
+            return []
 
 
 class MDoc:
@@ -957,14 +985,18 @@ class MDoc:
 
     def _getAcquisitionInfoFromMdoc(self, headerDict, firstSlice):
         """Acquisition data is read from to data sources (from higher to lower priority):
+            - From the values introduced in the form by the user (introduced as attributes of the MDoc object)
             - From the first ZSlice data.
             - From the file header data."""
-        VOLTAGE = 'Voltage'
-        MAGNIFICATION = 'Magnification'
-        PIXEL_SPACING = 'PixelSpacing'
-        self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, self._voltage))
-        self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, self._magnification))
-        self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
+        if not self.getVoltage():
+            VOLTAGE = 'Voltage'
+            self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, self._voltage))
+        if not self.getMagnification():
+            MAGNIFICATION = 'Magnification'
+            self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, self._magnification))
+        if not self.getSamplingRate():
+            PIXEL_SPACING = 'PixelSpacing'
+            self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
 
     def _getSlicesData(self, zSlices, tsFile):
         parentFolder = getParentFolder(self._mdocFileName)
