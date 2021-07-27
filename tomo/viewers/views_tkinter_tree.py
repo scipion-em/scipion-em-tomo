@@ -48,12 +48,12 @@ class TiltSeriesTreeProvider(TreeProvider):
     """ Model class that will retrieve the information from TiltSeries and
     prepare the columns/rows models required by the TreeDialog GUI.
     """
-    COL_TS = 'Tilt Series'
+    COL_TS = 'Tilt series'
     COL_TI = 'Path'
-    COL_TI_ANGLE = 'Tilt Angle'
+    COL_TI_ANGLE = 'Tilt angle'
     COL_TI_ACQ_ORDER = 'Order'
-    COL_TI_DEFOCUS_U = 'DefocusU (A)'
-    COL_TI_DOSE = "AccumDose"
+    COL_TI_DEFOCUS_U = 'Defocus U (A)'
+    COL_TI_DOSE = "Accum. dose"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
                   COL_TI_DOSE: '_acquisition._accumDose'}

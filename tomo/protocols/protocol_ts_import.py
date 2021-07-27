@@ -207,7 +207,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        allowsNull=True,
                        help=Message.TEXT_MAGNI_RATE)
         group.addParam('samplingRate', params.FloatParam, # default=1.0,
-                       important=True,
                        label=Message.LABEL_SAMP_RATE,
                        allowsNull=True,
                        help=Message.TEXT_SAMP_RATE)
