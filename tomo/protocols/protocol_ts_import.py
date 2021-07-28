@@ -288,6 +288,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
                 if self.MDOC_DATA_SOURCE:
                     accumDoseList = self.accumDoses[ts]
+                    tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
                     incomingDoseList = self.incomingDose[ts]
                     counter = 0
 

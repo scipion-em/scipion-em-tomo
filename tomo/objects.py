@@ -116,6 +116,7 @@ class TiltSeriesBase(data.SetOfImages):
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
         self._origin = None
+        self._acquisition = TomoAcquisition()
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -274,6 +275,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
+        self._acquisition = TomoAcquisition()
 
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
