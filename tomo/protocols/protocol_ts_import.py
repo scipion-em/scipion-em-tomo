@@ -333,8 +333,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 for ti in tiltSeriesObjList:
                     tsObj.append(ti)
 
-                origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * samplingRate,
-                                 -tsObj.getFirstItem().getYDim() / 2 * samplingRate,
+                tsObjFirstItem = tsObj.getFirstItem()
+                origin.setShifts(-tsObjFirstItem.getXDim() / 2 * samplingRate,
+                                 -tsObjFirstItem.getYDim() / 2 * samplingRate,
                                  0)
 
                 if self.MDOC_DATA_SOURCE:
