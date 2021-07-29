@@ -115,8 +115,8 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
-        self._origin = None
         self._acquisition = TomoAcquisition()
+        self._origin = Transform()
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
