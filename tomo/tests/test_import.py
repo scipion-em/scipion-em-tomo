@@ -32,6 +32,7 @@ from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
+from ..constants import BOTTOM_LEFT_CORNER
 from ..utils import existsPlugin
 import tomo.protocols
 
@@ -176,6 +177,15 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
             output = getattr(protCoordinates, 'outputCoordinates', None)
             self.assertCoordinates(output, 19)
+
+            # Check se are not loosing precision
+            firstCoord = output.getFirstItem()
+            # First row --> 224, 316, 260
+            emanCoords = [224, 316, 260]
+            self.assertEqual(firstCoord.getX(BOTTOM_LEFT_CORNER), emanCoords[0], "eman coordinate x has a wrong value")
+            self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
+            self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
+
 
         if existsPlugin('dynamo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
