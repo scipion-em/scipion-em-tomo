@@ -1003,7 +1003,7 @@ class MDoc:
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
-            incomingDose = self._getDoseFromMdoc(zSlice)
+            incomingDose = self._getDoseFromMdoc(zSlice, self.getSamplingRate())
             accumulatedDose += incomingDose
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
@@ -1022,17 +1022,18 @@ class MDoc:
             return join(parentFolder, PureWindowsPath(zSlice['SubFramePath']).parts[-1])
 
     @staticmethod
-    def _getDoseFromMdoc(zSlice):
+    def _getDoseFromMdoc(zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by zSlice, and add it to the
         previous accumulated dose"""
+
         EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
         FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'  # Dose per frame in electrons per square Angstrom followed
         # by number of frames at that dose
         DOSE_RATE = 'DoseRate'  # Dose rate to the camera, in electrons per unbinned pixel per second
         EXPOSURE_TIME = 'ExposureTime'  # Image exposure time
         MIN_MAX_MEAN = 'MinMaxMean'  # Minimum, maximum, and mean value for this image
-        PIXEL_SIZE = 'PixelSpacing'  # Pixel spacing in Angstroms for individual image
         COUNTS_PER_ELECTRON = 'CountsPerElectron'
+        DIVIDED_BY_TWO = 'DividedBy2'
 
         def _keysInDict(listOfKeys):
             return all([key in zSlice.keys() for key in listOfKeys])
@@ -1040,6 +1041,12 @@ class MDoc:
         # Different ways of calculating the dose, ordered by priority considering the possible variability between
         # different mdoc files
         newDose = 0
+
+        if pixelSize:
+            pixelSize = float(pixelSize)
+        else:
+            pixelSize = 1  # This case cover the possibility of no sampling rate in form nor mdoc, avoiding the error
+            # execution before the whole information is gathered and the exception is raised
 
         # Directly from field ExposureDose
         if EXPOSURE_DOSE in zSlice:
@@ -1061,18 +1068,32 @@ class MDoc:
             doseRate = zSlice[DOSE_RATE]
             expTime = zSlice[EXPOSURE_TIME]
             if doseRate and expTime:
-                newDose = float(doseRate) * float(expTime)
+                newDose = float(doseRate) * float(expTime) / pixelSize ** 2
 
         # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
-        if not newDose and _keysInDict([MIN_MAX_MEAN, PIXEL_SIZE, COUNTS_PER_ELECTRON]):
+        if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON]):
             minMaxMean = zSlice[MIN_MAX_MEAN]
-            pixelSize = zSlice[PIXEL_SIZE]
             counts = zSlice[COUNTS_PER_ELECTRON]
             if all([minMaxMean, pixelSize, counts]):
                 meanVal = minMaxMean.split()[-1]  # Get the mean from a string like '-42 2441 51.7968'
-                newDose = (float(meanVal) / float(counts)) / float(pixelSize) ** 2
+                newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
 
-        return newDose
+        # # Calculated as in Grigorieff paper --> https://doi.org/10.7554/eLife.06980.001
+        # if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON, EXPOSURE_TIME, DIVIDED_BY_TWO]):
+        #     minMaxMean = zSlice[MIN_MAX_MEAN]
+        #     counts = zSlice[COUNTS_PER_ELECTRON]
+        #     expTime = zSlice[EXPOSURE_TIME]
+        #     divByTwo = zSlice[DIVIDED_BY_TWO]
+        #     if all([minMaxMean, counts, expTime]):
+        #         meanVal = minMaxMean.split()[-1]  # Get the mean from a string like '-42 2441 51.7968'
+        #         newDose = _getDivByTwoFactor(divByTwo) * float(meanVal) / (float(counts) * float(expTime))
+
+        divByTwo = 0
+        if _keysInDict([DIVIDED_BY_TWO]):
+            divByTwo = int(zSlice[DIVIDED_BY_TWO])
+        divByTwoFactor = 2 if divByTwo else 1
+
+        return newDose * divByTwoFactor
 
     @staticmethod
     def _validateTSFromMdoc(mdoc, tsFile):
