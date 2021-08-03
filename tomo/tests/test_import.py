@@ -381,6 +381,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
     SPH_ABERRATION = 'sphAberration'
     AMP_CONTRAST = 'ampContrast'
     DOSE_PER_FRAME = 'dosePerFrame'
+    ACCUM_DOSE = 'accumDose'
     PIXEL_SIZE = 'pixelSize'
     SIZE = 'size'
     FILENAME_LIST = 'filenames'
@@ -421,6 +422,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             cls.SPH_ABERRATION: kwargs.get(cls.SPH_ABERRATION, None),
             cls.AMP_CONTRAST: kwargs.get(cls.AMP_CONTRAST, None),
             cls.DOSE_PER_FRAME: kwargs.get(cls.DOSE_PER_FRAME, None),
+            cls.ACCUM_DOSE: kwargs.get(cls.ACCUM_DOSE, None),
             cls.PIXEL_SIZE: kwargs.get(cls.PIXEL_SIZE, None),
             cls.SIZE: kwargs.get(cls.SIZE, None),
             cls.FILENAME_LIST: kwargs.get(cls.FILENAME_LIST, None),
@@ -461,12 +463,13 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 magnification=53000,
                 sphAberration=2.7,
                 ampContrast=0.1,
-                dosePerFrame=1.1048,
+                dosePerFrame=2.2096,
+                accumDose=11.0479,
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
-                incDoses=[1.1044, 1.0988, 1.1122, 1.1138, 1.0948],
-                accumDoses=[1.1044, 2.2032, 3.3154, 4.4292, 5.5239],
+                incDoses=[2.2088, 2.1975, 2.2245, 2.2275, 2.1895],
+                accumDoses=[2.2088, 4.4063, 6.6308, 8.8583, 11.0479],
                 angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             ),
@@ -475,12 +478,13 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 magnification=53000,
                 sphAberration=2.7,
                 ampContrast=0.1,
-                dosePerFrame=1.1703,
+                dosePerFrame=2.3406,
+                accumDose=11.7028,
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
-                incDoses=[1.1722, 1.171, 1.1713, 1.1686, 1.1683],
-                accumDoses=[1.1722, 2.3432, 3.5145, 4.6831, 5.8514],
+                incDoses=[2.3443, 2.3421, 2.3425, 2.3373, 2.3366],
+                accumDoses=[2.3443, 4.6864, 7.0289, 9.3662, 11.7028],
                 angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             )
@@ -519,6 +523,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             self.assertAlmostEqual(acq.getSphericalAberration(), testDataDict[self.SPH_ABERRATION], delta=0.01)
             self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
+            self.assertAlmostEqual(acq.getAccumDose(), testDataDict[self.ACCUM_DOSE], delta=0.0001)
             # Check angles and accumulated dose per angular acquisition (tilt series image)
             filesList = testDataDict[self.FILENAME_LIST]
             incDoseList = testDataDict[self.INCOMING_DOSE_LIST]
