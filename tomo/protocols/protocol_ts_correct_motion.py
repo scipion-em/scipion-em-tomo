@@ -240,19 +240,19 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 self.outputSetEven.enableAppend()
             else:
                 self.outputSetEven = SetOfTiltSeries.create(self._getPath(), template=template, suffix=EVEN)
-                self.outputSetEven.setAcquisition(acq)
                 self.outputSetEven.setSamplingRate(sRate)
             # Odd
             if self.outputSetOdd:
                 self.outputSetOdd.enableAppend()
             else:
                 self.outputSetOdd = SetOfTiltSeries.create(self._getPath(), template=template, suffix=ODD)
-                self.outputSetOdd.setAcquisition(acq)
                 self.outputSetOdd.setSamplingRate(sRate)
 
             tsClass = self.outputSetEven.ITEM_TYPE
             tsObjEven = tsClass(tsId=tsId)
             tsObjOdd = tsClass(tsId=tsId)
+            tsObjEven.setAcquisition(ts.getAcquisition())
+            tsObjOdd.setAcquisition(ts.getAcquisition())
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 

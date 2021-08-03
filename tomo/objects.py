@@ -115,8 +115,8 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
-
-        self._origin = None
+        self._acquisition = TomoAcquisition()
+        self._origin = Transform()
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -275,6 +275,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
+        self._acquisition = TomoAcquisition()
 
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
@@ -562,13 +563,15 @@ class TiltSeriesDict:
 
 
 class TomoAcquisition(data.Acquisition):
-    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None, angleAxis2=None, **kwargs):
+    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None,
+                 angleAxis2=None, accumDose=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = pwobj.Float(angleMin)
         self._angleMax = pwobj.Float(angleMax)
         self._step = pwobj.Float(step)
         self._angleAxis1 = pwobj.Float(angleAxis1)
         self._angleAxis2 = pwobj.Float(angleAxis2)
+        self._accumDose = pwobj.Float(accumDose)
 
     def getAngleMax(self):
         return self._angleMax.get()
@@ -599,6 +602,12 @@ class TomoAcquisition(data.Acquisition):
 
     def setAngleAxis2(self, value):
         self._angleAxis2.set(value)
+
+    def getAccumDose(self):
+        return self._accumDose.get()
+
+    def setAccumDose(self, value):
+        self._accumDose.set(value)
 
 
 class Tomogram(data.Volume):
@@ -922,10 +931,12 @@ class Coordinate3D(data.EMObject):
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
+        vol = self.getVolume()
+        if not vol:
+            raise Exception("3D coordinate must be referred to a volume to get its origin.")
         if angstrom:
-            return self.getVolume().getShiftsFromOrigin()
+            return vol.getShiftsFromOrigin()
         else:
-            vol = self.getVolume()
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
             return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
