@@ -524,6 +524,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             """
         fpath = self.filesPath.get()
         mdocList = glob(join(fpath, self.filesPattern.get()))
+        hasDoseList = []
         if not mdocList:
             raise Exception('No mdoc files were found in the introduced path:\n%s' % fpath)
 
@@ -546,6 +547,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            magnification=self.magnification.get() if self.magnification.get() else None,
                            samplingRate=self.samplingRate.get() if self.samplingRate.get() else None)
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
+            hasDoseList.append(mdocObj.hasDose)
             if validationError:
                 warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
                 warningDetailedMsg.append(validationError)
@@ -582,8 +584,20 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     print(warningHeadMsg + ' '.join(warningDetailedMsg))
                 return matchingFiles
             else:
-                raise Exception('*All the mdoc files introduced present validation errors.*\n\n%s' %
-                                (warningHeadMsg + ' '.join(warningDetailedMsg)))
+                # If the only info missing is the dose related data, it's suggested to introduce it manually
+                if not any(hasDoseList):
+                    raise Exception('*The dose was not possible to be obtained from any of the provided mdoc files.\n'
+                                    'Please check the data of your mdoc files or introduce a dose value in the '
+                                    'protocol form.\n\n'
+                                    'Dose related mdoc labels are:\n\n'
+                                    '- ExposureDose or\n'
+                                    '- FrameDosesAndNumber or\n'
+                                    '- DoseRate and ExposureTime or\n'
+                                    '- MinMaxMean and CountsPerElectron'
+                                    )
+                else:
+                    raise Exception('*All the mdoc files introduced present validation errors.*\n\n%s' %
+                                    (warningHeadMsg + ' '.join(warningDetailedMsg)))
         else:
             return matchingFiles
 
@@ -921,6 +935,7 @@ class MDoc:
         self._mdocFileName = fileName
         self._tsId = None
         # Acquisition general attributes
+        self.hasDose = False
         self._voltage = voltage
         self._magnification = magnification
         self._samplingRate = samplingRate
@@ -961,7 +976,7 @@ class MDoc:
             validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
 
         # Get acquisition specific (per angle) info
-        self._getSlicesData(zSlices, tsFile)
+        validateDoseErrMsg = self._getSlicesData(zSlices, tsFile)
 
         # Check Mdoc info read
         validateMdocContentsErrorMsgList = self._validateMdocInfoRead(
@@ -971,6 +986,8 @@ class MDoc:
         exceptionMsg = ''
         if validateTSFromMdocErrMsgList:
             exceptionMsg += validateTSFromMdocErrMsgList
+        if validateDoseErrMsg:
+            exceptionMsg += validateDoseErrMsg
         if validateMdocContentsErrorMsgList:
             exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
 
@@ -1030,6 +1047,7 @@ class MDoc:
             self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
 
     def _getSlicesData(self, zSlices, tsFile):
+        errorMsg = ''
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
@@ -1042,6 +1060,12 @@ class MDoc:
                 accumDose=accumulatedDose,
                 incomingDose=incomingDose
             ))
+        if round(accumulatedDose) > 0:  # round is used to make the condition more robust, for cases like 0.0000000001
+            self.hasDose = True
+        else:
+            errorMsg += 'Not able to get the *dose* with the data read. '
+
+        return errorMsg
 
     @staticmethod
     def _getAngleMovieFileName(parentFolder, zSlice, tsFile):

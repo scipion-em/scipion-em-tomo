@@ -596,11 +596,13 @@ class TestTomoImportTsFromMdoc(BaseTest):
         simErrorMdocDir = self.dataset.getFile('simErrorMdocDir')
         mdocList = [
             join(simErrorMdocDir, dataSet['noMaginficationMdoc']),
-            join(simErrorMdocDir, dataSet['noSamplingRateMdoc'])
+            join(simErrorMdocDir, dataSet['noSamplingRateMdoc']),
+            join(simErrorMdocDir, dataSet['noDoseMdoc'])
         ]
         expectedErrorKeyWordList = [
             '*Magnification*',  # Missing Magnification
-            '*PixelSpacing*'  # Missing Sampling Rate
+            '*PixelSpacing*',  # Missing Sampling Rate
+            '*dose*'  # Not able to get the dose
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
