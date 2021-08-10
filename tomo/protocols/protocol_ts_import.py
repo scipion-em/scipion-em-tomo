@@ -545,9 +545,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             # contrast fields in mdoc)
             mdocObj = MDoc(mdoc, voltage=self.voltage.get() if self.voltage.get() else None,
                            magnification=self.magnification.get() if self.magnification.get() else None,
-                           samplingRate=self.samplingRate.get() if self.samplingRate.get() else None)
+                           samplingRate=self.samplingRate.get() if self.samplingRate.get() else None,
+                           doseProvidedByUser=self.dosePerFrame.get() if self.dosePerFrame.get() else None)
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
-            hasDoseList.append(mdocObj.hasDose)
+            hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
                 warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
                 warningDetailedMsg.append(validationError)
@@ -931,11 +932,13 @@ class ProtImportTsMovies(ProtImportTsBase):
 
 class MDoc:
 
-    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None):
+    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None, doseProvidedByUser=None):
         self._mdocFileName = fileName
         self._tsId = None
+        # Dose related attributes
+        self.doseProvidedByUser = doseProvidedByUser
+        self.mdocHasDose = False
         # Acquisition general attributes
-        self.hasDose = False
         self._voltage = voltage
         self._magnification = magnification
         self._samplingRate = samplingRate
@@ -971,6 +974,8 @@ class MDoc:
             tsFile = join(parentFolder, headerDict.get("ImageFile", None))
             if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.mrcs')
+            if not os.path.exists(tsFile):
+                tsFile = join(parentFolder, self._tsId + '.mrc')
             if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.st')
             validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
@@ -1051,7 +1056,10 @@ class MDoc:
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
-            incomingDose = self._getDoseFromMdoc(zSlice, self.getSamplingRate())
+            if self.doseProvidedByUser:
+                incomingDose = self.doseProvidedByUser
+            else:
+                incomingDose = self._getDoseFromMdoc(zSlice, self.getSamplingRate())
             accumulatedDose += incomingDose
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
@@ -1061,7 +1069,7 @@ class MDoc:
                 incomingDose=incomingDose
             ))
         if round(accumulatedDose) > 0:  # round is used to make the condition more robust, for cases like 0.0000000001
-            self.hasDose = True
+            self.mdocHasDose = True
         else:
             errorMsg += 'Not able to get the *dose* with the data read. '
 
