@@ -216,6 +216,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        label=Message.LABEL_SAMP_RATE,
                        allowsNull=True,
                        help=Message.TEXT_SAMP_RATE)
+        group.addParam('tiltAxisAngle', params.FloatParam,
+                       label='Tilt axis angle (deg.)',
+                       allowsNull=True)
         line = group.addLine('Dose (electrons/sq.Å)',
                              help="Initial accumulated dose (usually 0) and "
                                   "dose per tilt image (electrons/sq.Å). ")
@@ -297,6 +300,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
                 origin = Transform()
                 tsObj.setOrigin(origin)
+                tsObj.setAnglesCount(len(tiltSeriesList))
 
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
@@ -461,6 +465,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 errMsg.append('Sampling rate should be a float')
             if not self.dosePerFrame.get():
                 errMsg.append('Dose per frame should be a float')
+            if not self.tiltAxisAngle.get():
+                errMsg.append('Tilt axis angle should be a float')
 
         return errMsg
 
@@ -546,7 +552,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             mdocObj = MDoc(mdoc, voltage=self.voltage.get() if self.voltage.get() else None,
                            magnification=self.magnification.get() if self.magnification.get() else None,
                            samplingRate=self.samplingRate.get() if self.samplingRate.get() else None,
-                           doseProvidedByUser=self.dosePerFrame.get() if self.dosePerFrame.get() else None)
+                           doseProvidedByUser=self.dosePerFrame.get() if self.dosePerFrame.get() else None,
+                           tiltAngleProvidedByUser=self.tiltAxisAngle.get() if self.tiltAxisAngle.get() else None)
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
             hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
@@ -556,7 +563,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 # validationErrors.append(validationError)
                 # Continue parsing the remaining mdoc files to provide a fully detailed error message
                 continue
-            acquisition = self._genTsAcquisitionFromMdoc(mdocObj.getVoltage(), mdocObj.getMagnification())
+            acquisition = self._genTsAcquisitionFromMdoc(mdocObj)
             tsId = mdocObj.getTsId()
             fileOrderAngleList = []
             accumulatedDoseList = []
@@ -605,12 +612,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     def _isImportingTsMovies(self):
         return True if type(self) is ProtImportTsMovies else False
 
-    def _genTsAcquisitionFromMdoc(self, voltage, magnification):
-        acq = TomoAcquisition()
-        acq.setVoltage(voltage)
-        acq.setSphericalAberration(self.sphericalAberration.get())
-        acq.setAmplitudeContrast(self.amplitudeContrast.get())
-        acq.setMagnification(magnification)
+    def _genTsAcquisitionFromMdoc(self, mdocObj):
+        acq = TomoAcquisition(voltage=mdocObj.getVoltage(),
+                              sphericalAberration=self.sphericalAberration.get(),
+                              amplitudeContrast=self.amplitudeContrast.get(),
+                              magnification=mdocObj.getMagnification(),
+                              tiltAxisAngle=mdocObj.getTiltAxisAngle()
+                              )
+
         if hasattr(self, 'doseInitial'):  # This field is only present in the form for TsM import
             acq.setDoseInitial(self.doseInitial.get())
 
@@ -932,7 +941,9 @@ class ProtImportTsMovies(ProtImportTsBase):
 
 class MDoc:
 
-    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None, doseProvidedByUser=None):
+    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None,
+                 doseProvidedByUser=None, tiltAngleProvidedByUser=None):
+
         self._mdocFileName = fileName
         self._tsId = None
         # Dose related attributes
@@ -942,6 +953,7 @@ class MDoc:
         self._voltage = voltage
         self._magnification = magnification
         self._samplingRate = samplingRate
+        self._tiltAxisAngle = tiltAngleProvidedByUser
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
@@ -960,7 +972,7 @@ class MDoc:
         return normTSID
 
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
-        validateTSFromMdocErrMsgList = ''
+        validateTSFromMdocErrMsg = ''
         tsFile = None
         mdoc = self._mdocFileName
         headerDict, zSlices = self._parseMdoc()
@@ -978,10 +990,10 @@ class MDoc:
                 tsFile = join(parentFolder, self._tsId + '.mrc')
             if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.st')
-            validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
+            validateTSFromMdocErrMsg = self._validateTSFromMdoc(mdoc, tsFile)
 
         # Get acquisition specific (per angle) info
-        validateDoseErrMsg = self._getSlicesData(zSlices, tsFile)
+        self._getSlicesData(zSlices, tsFile)
 
         # Check Mdoc info read
         validateMdocContentsErrorMsgList = self._validateMdocInfoRead(
@@ -989,10 +1001,8 @@ class MDoc:
 
         # Check all the possible errors found
         exceptionMsg = ''
-        if validateTSFromMdocErrMsgList:
-            exceptionMsg += validateTSFromMdocErrMsgList
-        if validateDoseErrMsg:
-            exceptionMsg += validateDoseErrMsg
+        if validateTSFromMdocErrMsg:
+            exceptionMsg += validateTSFromMdocErrMsg
         if validateMdocContentsErrorMsgList:
             exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
 
@@ -1050,9 +1060,12 @@ class MDoc:
         if not self.getSamplingRate():
             PIXEL_SPACING = 'PixelSpacing'
             self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
+        if not self.getTiltAxisAngle():
+            ROTATION_ANGLE = 'RotationAngle'
+            rotAngle = firstSlice.get(ROTATION_ANGLE, headerDict.get(ROTATION_ANGLE, self._tiltAxisAngle))
+            self._tiltAxisAngle = (float(rotAngle) - 90) if rotAngle else None
 
     def _getSlicesData(self, zSlices, tsFile):
-        errorMsg = ''
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
@@ -1070,10 +1083,7 @@ class MDoc:
             ))
         if round(accumulatedDose) > 0:  # round is used to make the condition more robust, for cases like 0.0000000001
             self.mdocHasDose = True
-        else:
-            errorMsg += 'Not able to get the *dose* with the data read. '
 
-        return errorMsg
 
     @staticmethod
     def _getAngleMovieFileName(parentFolder, zSlice, tsFile):
@@ -1187,6 +1197,16 @@ class MDoc:
             msg.append('*Magnification*\n')
         if not self._samplingRate:
             msg.append('*PixelSpacing*\n')
+        if not self.mdocHasDose:
+            msg.append('Not able to get the *dose* with the data read.\n'
+                       'Dose related mdoc labels are:\n\n'
+                       '- ExposureDose or\n'
+                       '- FrameDosesAndNumber or\n'
+                       '- DoseRate and ExposureTime or\n'
+                       '- MinMaxMean and CountsPerElectron'
+                       )
+        if not self.getTiltAxisAngle():
+            msg.append('*RotationAngle (tilt axis angle)*')
         if missingAnglesIndices:
             msg.append('*TiltAngle*: %s\n' % ' '.join(missingAnglesIndices))
         if missingFiles:
@@ -1213,6 +1233,9 @@ class MDoc:
 
     def getTiltsMetadata(self):
         return self._tiltsMetadata
+
+    def getTiltAxisAngle(self):
+        return self._tiltAxisAngle
 
 
 class TiltMetadata:

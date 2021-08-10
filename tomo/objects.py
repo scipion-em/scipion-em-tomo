@@ -117,6 +117,13 @@ class TiltSeriesBase(data.SetOfImages):
         self._mapperPath.setStore(False)
         self._acquisition = TomoAcquisition()
         self._origin = Transform()
+        self._anglesCount = Integer()
+
+    def getAnglesCount(self):
+        return self._anglesCount
+
+    def setAnglesCount(self, value):
+        self._anglesCount = value
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -132,6 +139,7 @@ class TiltSeriesBase(data.SetOfImages):
         not _mapperPath or _size from other set of tomograms to current one.
         """
         self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
+        self.copyAttributes(other, ['_tsId', '_anglesCount'])
 
     def append(self, tiltImage):
         tiltImage.setTsId(self.getTsId())
@@ -276,6 +284,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
+
+    def getAnglesCount(self):
+        return self._anglesCount.get()
+
+    def setAnglesCount(self, value):
+        self._anglesCount.set(value)
 
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
@@ -564,7 +578,7 @@ class TiltSeriesDict:
 
 class TomoAcquisition(data.Acquisition):
     def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None,
-                 angleAxis2=None, accumDose=None, **kwargs):
+                 angleAxis2=None, accumDose=None, tiltAxisAngle=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = pwobj.Float(angleMin)
         self._angleMax = pwobj.Float(angleMax)
@@ -572,6 +586,13 @@ class TomoAcquisition(data.Acquisition):
         self._angleAxis1 = pwobj.Float(angleAxis1)
         self._angleAxis2 = pwobj.Float(angleAxis2)
         self._accumDose = pwobj.Float(accumDose)
+        self._tiltAxisAngle = pwobj.Float(tiltAxisAngle)
+
+    def getTiltAxisAngle(self):
+        return self._tiltAxisAngle.get()
+
+    def setTiltAxisAngle(self, value):
+        self._tiltAxisAngle.set(value)
 
     def getAngleMax(self):
         return self._angleMax.get()
