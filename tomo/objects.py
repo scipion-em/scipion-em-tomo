@@ -139,7 +139,7 @@ class TiltSeriesBase(data.SetOfImages):
         not _mapperPath or _size from other set of tomograms to current one.
         """
         self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
-        self.copyAttributes(other, ['_tsId', '_anglesCount'])
+        # self.copyAttributes(other, ['_tsId', '_anglesCount'])
 
     def append(self, tiltImage):
         tiltImage.setTsId(self.getTsId())

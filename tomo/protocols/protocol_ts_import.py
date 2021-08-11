@@ -1036,13 +1036,22 @@ class MDoc:
                         raise Exception("Unexpected ZValue = %d" % zvalue)
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
-                else:
-                    if not line.startswith('[T') and line.strip():
-                        key, value = line.split('=')
-                        if not headerParsed:
-                            headerDict[key.strip()] = value.strip()
-                        if zvalueList:
-                            zvalueDict[key.strip()] = value.strip()
+                elif line.startswith('[T') and not self.getTiltAxisAngle():
+                    strLine = line.strip().replace(' ', '').lower()
+                    pattern = 'tiltaxisangle='
+                    if pattern in strLine:
+                        # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
+                        # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
+                        tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
+                        # Check if it's a string which represents a float or not
+                        if tiltAxisAngle.replace('.', '', 1).isdigit():
+                            self._tiltAxisAngle = float(tiltAxisAngle)
+                elif line.strip():
+                    key, value = line.split('=')
+                    if not headerParsed:
+                        headerDict[key.strip()] = value.strip()
+                    if zvalueList:
+                        zvalueDict[key.strip()] = value.strip()
 
         return headerDict, zvalueList
 
@@ -1060,10 +1069,6 @@ class MDoc:
         if not self.getSamplingRate():
             PIXEL_SPACING = 'PixelSpacing'
             self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
-        if not self.getTiltAxisAngle():
-            ROTATION_ANGLE = 'RotationAngle'
-            rotAngle = firstSlice.get(ROTATION_ANGLE, headerDict.get(ROTATION_ANGLE, self._tiltAxisAngle))
-            self._tiltAxisAngle = (float(rotAngle) - 90) if rotAngle else None
 
     def _getSlicesData(self, zSlices, tsFile):
         parentFolder = getParentFolder(self._mdocFileName)
