@@ -319,10 +319,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC', iterate=True):
-        for item in data.EMSet.iterItems(self, orderBy=orderBy,
-                                         direction=direction,
-                                         iterate=iterate):
+    def iterItems(self, **kwargs):
+        for item in data.EMSet.iterItems(self, **kwargs):
             self._setItemMapperPath(item)
             yield item
 
@@ -1238,9 +1236,23 @@ class LandmarkModel(data.EMObject):
 
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
+        self._tiltSeries = pwobj.Pointer(objDoStore=False)
         self._tsId = pwobj.String(tsId)
         self._fileName = pwobj.String(fileName)
         self._modelName = pwobj.String(modelName)
+
+    def getTiltSeries(self):
+        """ Return the tilt-series associated with this CTF model series. """
+        return self._tiltSeries.get()
+
+    def setTiltSeries(self, tiltSeries):
+        """ Set the tilt-series from which this CTF model series were estimated.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+        if tiltSeries.isPointer():
+            self._tiltSeries.copy(tiltSeries)
+        else:
+            self._tiltSeries.set(tiltSeries)
 
     def getTsId(self):
         return str(self._tsId)
@@ -1302,7 +1314,36 @@ class SetOfLandmarkModels(data.EMSet):
     ITEM_TYPE = LandmarkModel
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self._setOfTiltSeriesPointer = pwobj.Pointer()
+
+    def __getitem__(self, itemId):
+        """***"""
+        lm = super().__getitem__(itemId)
+
+        return self.completeLandmarkModel(lm)
+
+    def completeLandmarkModel(self, lm):
+        tsId = lm.getTsId()
+
+        # Check for tilt series in set with coincident tsId
+        for ts in self.getSetOfTiltSeries().iterItems(where="_tsId=='%s'" % tsId):
+            lm.setTiltSeries(ts)
+
+        return lm
+
+    def getSetOfTiltSeries(self):
+        """ Return the tilt-series associated with this CTF model series. """
+        return self._setOfTiltSeriesPointer.get()
+
+    def setSetOfTiltSeries(self, setOfTiltSeries):
+        """ Set the tilt-series from which this CTF model series were estimated.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+        if setOfTiltSeries.isPointer():
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+        else:
+            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
 
 class MeshPoint(Coordinate3D):
