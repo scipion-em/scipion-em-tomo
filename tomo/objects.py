@@ -1342,6 +1342,14 @@ class SetOfLandmarkModels(data.EMSet):
 
         return lm
 
+    def getLandmarkModelFromTsId(self, tsId):
+        """ This method return the landmark model belonging to the set that has a coincident input tsId.
+
+        :param tsId: tilt-series ID to search the landmark model into the set."""
+
+        for lm in self.iterItems(where="_tsId=='%s'" % tsId):
+            return lm
+
     def getSetOfTiltSeries(self, pointer = False):
         """ Return the set of tilt-series associated with this set of landmark models. """
 
