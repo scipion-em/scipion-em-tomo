@@ -1342,10 +1342,14 @@ class SetOfLandmarkModels(data.EMSet):
 
         return lm
 
-    def getSetOfTiltSeries(self):
+    def getSetOfTiltSeries(self, pointer = False):
         """ Return the set of tilt-series associated with this set of landmark models. """
 
-        return self._setOfTiltSeriesPointer.get()
+        if pointer:
+            return self._setOfTiltSeriesPointer
+
+        else:
+            return self._setOfTiltSeriesPointer.get()
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the set of tilt-series from which this set of landmark models were calculted.
