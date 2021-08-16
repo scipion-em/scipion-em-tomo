@@ -1242,15 +1242,18 @@ class LandmarkModel(data.EMObject):
         self._modelName = pwobj.String(modelName)
 
     def getTiltSeries(self):
-        """ Return the tilt-series associated with this CTF model series. """
+        """ Return the tilt-series associated with this landmark model. """
+
         return self._tiltSeries.get()
 
     def setTiltSeries(self, tiltSeries):
-        """ Set the tilt-series from which this CTF model series were estimated.
+        """ Set the tilt-series from which this landmark model were calculated.
         :param tiltSeries: Either a TiltSeries object or a pointer to it.
         """
+
         if tiltSeries.isPointer():
             self._tiltSeries.copy(tiltSeries)
+
         else:
             self._tiltSeries.set(tiltSeries)
 
@@ -1318,12 +1321,19 @@ class SetOfLandmarkModels(data.EMSet):
         self._setOfTiltSeriesPointer = pwobj.Pointer()
 
     def __getitem__(self, itemId):
-        """***"""
+        """Add a pointer to a tilt-series before returning the landmark model"""
+
         lm = super().__getitem__(itemId)
 
         return self.completeLandmarkModel(lm)
 
     def completeLandmarkModel(self, lm):
+        """This method completes a landmark model object setting in execution time the tilt-series associated to it,
+        since it is not possible to save pointers in the item classes of the set.
+
+        IMPORTANT: this method must be implement every time it is necesary to retrive information from the tilt-series
+        associated to the landmark models that compose the set."""
+
         tsId = lm.getTsId()
 
         # Check for tilt series in set with coincident tsId
@@ -1333,15 +1343,18 @@ class SetOfLandmarkModels(data.EMSet):
         return lm
 
     def getSetOfTiltSeries(self):
-        """ Return the tilt-series associated with this CTF model series. """
+        """ Return the set of tilt-series associated with this set of landmark models. """
+
         return self._setOfTiltSeriesPointer.get()
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
-        """ Set the tilt-series from which this CTF model series were estimated.
+        """ Set the set of tilt-series from which this set of landmark models were calculted.
         :param tiltSeries: Either a TiltSeries object or a pointer to it.
         """
+
         if setOfTiltSeries.isPointer():
             self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
