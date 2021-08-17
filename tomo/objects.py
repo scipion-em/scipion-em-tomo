@@ -927,7 +927,7 @@ class Coordinate3D(data.EMObject):
             vol = self.getVolume()
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
-            return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
+            return origin[0] / sr, origin[1] / sr, origin[2] / sr
 
 
 class SetOfCoordinates3D(data.EMSet):
