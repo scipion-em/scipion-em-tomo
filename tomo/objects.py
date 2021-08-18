@@ -319,10 +319,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC', iterate=True):
-        for item in data.EMSet.iterItems(self, orderBy=orderBy,
-                                         direction=direction,
-                                         iterate=iterate):
+    def iterItems(self, **kwargs):
+        for item in data.EMSet.iterItems(self, **kwargs):
             self._setItemMapperPath(item)
             yield item
 
@@ -1238,9 +1236,26 @@ class LandmarkModel(data.EMObject):
 
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
+        self._tiltSeries = pwobj.Pointer(objDoStore=False)
         self._tsId = pwobj.String(tsId)
         self._fileName = pwobj.String(fileName)
         self._modelName = pwobj.String(modelName)
+
+    def getTiltSeries(self):
+        """ Return the tilt-series associated with this landmark model. """
+
+        return self._tiltSeries.get()
+
+    def setTiltSeries(self, tiltSeries):
+        """ Set the tilt-series from which this landmark model were calculated.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+
+        if tiltSeries.isPointer():
+            self._tiltSeries.copy(tiltSeries)
+
+        else:
+            self._tiltSeries.set(tiltSeries)
 
     def getTsId(self):
         return str(self._tsId)
@@ -1302,7 +1317,58 @@ class SetOfLandmarkModels(data.EMSet):
     ITEM_TYPE = LandmarkModel
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self._setOfTiltSeriesPointer = pwobj.Pointer()
+
+    def __getitem__(self, itemId):
+        """Add a pointer to a tilt-series before returning the landmark model"""
+
+        lm = super().__getitem__(itemId)
+
+        return self.completeLandmarkModel(lm)
+
+    def completeLandmarkModel(self, lm):
+        """This method completes a landmark model object setting in execution time the tilt-series associated to it,
+        since it is not possible to save pointers in the item classes of the set.
+
+        IMPORTANT: this method must be implement every time it is necesary to retrive information from the tilt-series
+        associated to the landmark models that compose the set."""
+
+        tsId = lm.getTsId()
+
+        # Check for tilt series in set with coincident tsId
+        for ts in self.getSetOfTiltSeries().iterItems(where="_tsId=='%s'" % tsId):
+            lm.setTiltSeries(ts)
+
+        return lm
+
+    def getLandmarkModelFromTsId(self, tsId):
+        """ This method return the landmark model belonging to the set that has a coincident input tsId.
+
+        :param tsId: tilt-series ID to search the landmark model into the set."""
+
+        for lm in self.iterItems(where="_tsId=='%s'" % tsId):
+            return lm
+
+    def getSetOfTiltSeries(self, pointer = False):
+        """ Return the set of tilt-series associated with this set of landmark models. """
+
+        if pointer:
+            return self._setOfTiltSeriesPointer
+
+        else:
+            return self._setOfTiltSeriesPointer.get()
+
+    def setSetOfTiltSeries(self, setOfTiltSeries):
+        """ Set the set of tilt-series from which this set of landmark models were calculted.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+
+        if setOfTiltSeries.isPointer():
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+
+        else:
+            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
 
 class MeshPoint(Coordinate3D):
