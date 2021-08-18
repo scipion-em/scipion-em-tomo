@@ -394,7 +394,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
     PIXEL_SIZE = 'pixelSize'
     SIZE = 'size'
     FILENAME_LIST = 'filenames'
-    ACCUM_DOSE_LIST = 'doses'
+    INCOMING_DOSE_LIST = 'incDoses'
+    ACCUM_DOSE_LIST = 'accumDoses'
     ANGLE_LIST = 'angles'
     ACQ_ORDER_LIST = 'acqOrder'
 
@@ -433,6 +434,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             cls.PIXEL_SIZE: kwargs.get(cls.PIXEL_SIZE, None),
             cls.SIZE: kwargs.get(cls.SIZE, None),
             cls.FILENAME_LIST: kwargs.get(cls.FILENAME_LIST, None),
+            cls.INCOMING_DOSE_LIST: kwargs.get(cls.INCOMING_DOSE_LIST, None),
             cls.ACCUM_DOSE_LIST: kwargs.get(cls.ACCUM_DOSE_LIST, None),
             cls.ANGLE_LIST: kwargs.get(cls.ANGLE_LIST, None),
             cls.ACQ_ORDER_LIST: kwargs.get(cls.ACQ_ORDER_LIST, None)
@@ -444,18 +446,21 @@ class TestTomoImportTsFromMdoc(BaseTest):
             testData = testDataDict[key]
             ind = numpy.argsort(testData[self.ANGLE_LIST])
 
-            newDoses = []
+            incDoses = []
+            accumDoses = []
             newAcqOrders = []
             newAngles = []
             newFiles = []
             for index in ind:
                 newAcqOrders.append(testData[self.ACQ_ORDER_LIST][index])
-                newDoses.append(testData[self.ACCUM_DOSE_LIST][index])
+                incDoses.append(testData[self.INCOMING_DOSE_LIST][index])
+                accumDoses.append(testData[self.ACCUM_DOSE_LIST][index])
                 newAngles.append(testData[self.ANGLE_LIST][index])
                 newFiles.append(testData[self.FILENAME_LIST][index])
 
             testData[self.ANGLE_LIST] = newAngles
-            testData[self.ACCUM_DOSE_LIST] = newDoses
+            testData[self.INCOMING_DOSE_LIST] = incDoses
+            testData[self.ACCUM_DOSE_LIST] = accumDoses
             testData[self.ACQ_ORDER_LIST] = newAcqOrders
 
     def _genTestData(self, isTsMovie):
@@ -470,7 +475,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
-                doses=[1.1044, 2.2032, 3.3154, 4.4292, 5.5239],
+                incDoses=[1.1044, 1.0988, 1.1122, 1.1138, 1.0948],
+                accumDoses=[1.1044, 2.2032, 3.3154, 4.4292, 5.5239],
                 angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             ),
@@ -483,7 +489,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
-                doses=[1.1722, 2.3432, 3.5145, 4.6831, 5.8514],
+                incDoses=[1.1722, 1.171, 1.1713, 1.1686, 1.1683],
+                accumDoses=[1.1722, 2.3432, 3.5145, 4.6831, 5.8514],
                 angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             )
@@ -524,6 +531,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
             # Check angles and accumulated dose per angular acquisition (tilt series image)
             filesList = testDataDict[self.FILENAME_LIST]
+            incDoseList = testDataDict[self.INCOMING_DOSE_LIST]
             accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
             angleList = testDataDict[self.ANGLE_LIST]
             acqOrderList = testDataDict[self.ACQ_ORDER_LIST]
@@ -534,7 +542,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertEqual(tiM.getFileName(), prot._getExtraPath(filesList[i]))
                 self.assertTrue(os.path.islink(tiM.getFileName()),
                                 "Tilt series file %s is not a link." % tiM.getFileName())
-                self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), accumDoseList[i], delta=0.0001)
+                self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), incDoseList[i], delta=0.0001)
+                self.assertAlmostEqual(tiM.getAcquisition().getAccumDose(), accumDoseList[i], delta=0.0001)
                 self.assertAlmostEqual(tiM.getTiltAngle(), angleList[i], delta=0.0001)
                 # objId must start with 1 --> i +1
                 self.assertEqual(i + 1, tiM.getObjId(), "Tilt image Movie objId is incorrect")

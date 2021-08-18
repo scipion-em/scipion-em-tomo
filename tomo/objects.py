@@ -114,8 +114,8 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
-
-        self._origin = None
+        self._acquisition = TomoAcquisition()
+        self._origin = Transform()
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -274,6 +274,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
+        self._acquisition = TomoAcquisition()
 
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
@@ -317,10 +318,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC', iterate=True):
-        for item in data.EMSet.iterItems(self, orderBy=orderBy,
-                                         direction=direction,
-                                         iterate=iterate):
+    def iterItems(self, **kwargs):
+        for item in data.EMSet.iterItems(self, **kwargs):
             self._setItemMapperPath(item)
             yield item
 
@@ -561,13 +560,15 @@ class TiltSeriesDict:
 
 
 class TomoAcquisition(data.Acquisition):
-    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None, angleAxis2=None, **kwargs):
+    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None,
+                 angleAxis2=None, accumDose=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = Float(angleMin)
         self._angleMax = Float(angleMax)
         self._step = Float(step)
         self._angleAxis1 = Float(angleAxis1)
         self._angleAxis2 = Float(angleAxis2)
+        self._accumDose = Float(accumDose)
 
     def getAngleMax(self):
         return self._angleMax.get()
@@ -598,6 +599,12 @@ class TomoAcquisition(data.Acquisition):
 
     def setAngleAxis2(self, value):
         self._angleAxis2.set(value)
+
+    def getAccumDose(self):
+        return self._accumDose.get()
+
+    def setAccumDose(self, value):
+        self._accumDose.set(value)
 
 
 class Tomogram(data.Volume):
@@ -921,10 +928,12 @@ class Coordinate3D(data.EMObject):
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
+        vol = self.getVolume()
+        if not vol:
+            raise Exception("3D coordinate must be referred to a volume to get its origin.")
         if angstrom:
-            return self.getVolume().getShiftsFromOrigin()
+            return vol.getShiftsFromOrigin()
         else:
-            vol = self.getVolume()
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
             return origin[0] / sr, origin[1] / sr, origin[2] / sr
@@ -1229,6 +1238,24 @@ class LandmarkModel(data.EMObject):
         self._tsId = String(tsId)
         self._fileName = String(fileName)
         self._modelName = String(modelName)
+        self._tiltSeries = Pointer(objDoStore=False)
+
+
+    def getTiltSeries(self):
+        """ Return the tilt-series associated with this landmark model. """
+
+        return self._tiltSeries.get()
+
+    def setTiltSeries(self, tiltSeries):
+        """ Set the tilt-series from which this landmark model were calculated.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+
+        if tiltSeries.isPointer():
+            self._tiltSeries.copy(tiltSeries)
+
+        else:
+            self._tiltSeries.set(tiltSeries)
 
     def getTsId(self):
         return str(self._tsId)
@@ -1290,7 +1317,58 @@ class SetOfLandmarkModels(data.EMSet):
     ITEM_TYPE = LandmarkModel
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self._setOfTiltSeriesPointer = pwobj.Pointer()
+
+    def __getitem__(self, itemId):
+        """Add a pointer to a tilt-series before returning the landmark model"""
+
+        lm = super().__getitem__(itemId)
+
+        return self.completeLandmarkModel(lm)
+
+    def completeLandmarkModel(self, lm):
+        """This method completes a landmark model object setting in execution time the tilt-series associated to it,
+        since it is not possible to save pointers in the item classes of the set.
+
+        IMPORTANT: this method must be implement every time it is necesary to retrive information from the tilt-series
+        associated to the landmark models that compose the set."""
+
+        tsId = lm.getTsId()
+
+        # Check for tilt series in set with coincident tsId
+        for ts in self.getSetOfTiltSeries().iterItems(where="_tsId=='%s'" % tsId):
+            lm.setTiltSeries(ts)
+
+        return lm
+
+    def getLandmarkModelFromTsId(self, tsId):
+        """ This method return the landmark model belonging to the set that has a coincident input tsId.
+
+        :param tsId: tilt-series ID to search the landmark model into the set."""
+
+        for lm in self.iterItems(where="_tsId=='%s'" % tsId):
+            return lm
+
+    def getSetOfTiltSeries(self, pointer = False):
+        """ Return the set of tilt-series associated with this set of landmark models. """
+
+        if pointer:
+            return self._setOfTiltSeriesPointer
+
+        else:
+            return self._setOfTiltSeriesPointer.get()
+
+    def setSetOfTiltSeries(self, setOfTiltSeries):
+        """ Set the set of tilt-series from which this set of landmark models were calculted.
+        :param tiltSeries: Either a TiltSeries object or a pointer to it.
+        """
+
+        if setOfTiltSeries.isPointer():
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
+
+        else:
+            self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
 
 class MeshPoint(Coordinate3D):
