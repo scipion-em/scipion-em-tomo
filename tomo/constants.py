@@ -34,7 +34,7 @@
 # This functions return the vector in VOXELS. No decimal places allowed --> (int(vx), int(vy), int(vz))
 BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp, Imod
 TOP_LEFT_CORNER = lambda dim: (0, dim[1], 0)
-CENTER_GRAVITY = lambda dim: (int(0.5 * dim[0]), int(0.5 * dim[1]), int(0.5 * dim[2]))
+CENTER_GRAVITY = lambda dim: (0.5 * dim[0], 0.5 * dim[1], 0.5 * dim[2])
 
 # This is a bit different as we do not know beforehand where te
 # user has set the origin (Coordinate3D methods will use the None
