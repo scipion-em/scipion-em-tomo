@@ -1318,7 +1318,7 @@ class SetOfLandmarkModels(data.EMSet):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._setOfTiltSeriesPointer = pwobj.Pointer()
+        self._setOfTiltSeriesPointer = Pointer()
 
     def __getitem__(self, itemId):
         """Add a pointer to a tilt-series before returning the landmark model"""
