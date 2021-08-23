@@ -140,7 +140,9 @@ class TestTomoSubSetsTs(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=0.675,
             doseInitial=0,
-            dosePerFrame=0.375)
+            dosePerFrame=0.375,
+            tiltAxisAngle=84.7
+        )
         self.launchProtocol(protImport)
         return protImport
 
@@ -158,7 +160,9 @@ class TestTomoSubSetsTs(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=1.35,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.3,
+            tiltAxisAngle=84.7
+        )
         self.launchProtocol(protImport)
         return protImport
 
