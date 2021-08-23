@@ -34,8 +34,7 @@ import math
 import statistics
 import csv
 
-from pyworkflow.object import Integer
-import pyworkflow.object as pwobj
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 from pwem.objects import Transform
 import pyworkflow.utils.path as path
 import pwem.objects.data as data
@@ -49,9 +48,9 @@ class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
 
     def __init__(self, tsId=None, tiltAngle=None, acquisitionOrder=None, **kwargs):
-        self._tiltAngle = pwobj.Float(tiltAngle)
-        self._tsId = pwobj.String(tsId)
-        self._acqOrder = pwobj.Integer(acquisitionOrder)
+        self._tiltAngle = Float(tiltAngle)
+        self._tsId = String(tsId)
+        self._acqOrder = Integer(acquisitionOrder)
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -111,7 +110,7 @@ class TiltImage(data.Image, TiltImageBase):
 class TiltSeriesBase(data.SetOfImages):
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
-        self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._tsId = String(kwargs.get('tsId', None))
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
         self._mapperPath.setStore(False)
@@ -410,8 +409,8 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
 
     def __init__(self, **kwargs):
         SetOfTiltSeriesBase.__init__(self, **kwargs)
-        self._gainFile = pwobj.String()
-        self._darkFile = pwobj.String()
+        self._gainFile = String()
+        self._darkFile = String()
         # Store the frames range to avoid loading the items
         self._firstFramesRange = data.FramesRange()
 
@@ -578,13 +577,13 @@ class TomoAcquisition(data.Acquisition):
     def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None,
                  angleAxis2=None, accumDose=None, tiltAxisAngle=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
-        self._angleMin = pwobj.Float(angleMin)
-        self._angleMax = pwobj.Float(angleMax)
-        self._step = pwobj.Float(step)
-        self._angleAxis1 = pwobj.Float(angleAxis1)
-        self._angleAxis2 = pwobj.Float(angleAxis2)
-        self._accumDose = pwobj.Float(accumDose)
-        self._tiltAxisAngle = pwobj.Float(tiltAxisAngle)
+        self._angleMin = Float(angleMin)
+        self._angleMax = Float(angleMax)
+        self._step = Float(step)
+        self._angleAxis1 = Float(angleAxis1)
+        self._angleAxis2 = Float(angleAxis2)
+        self._accumDose = Float(accumDose)
+        self._tiltAxisAngle = Float(tiltAxisAngle)
 
     def getTiltAxisAngle(self):
         return self._tiltAxisAngle.get()
@@ -638,7 +637,7 @@ class Tomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
-        self._tsId = pwobj.String(kwargs.get('tsId', None))
+        self._tsId = String(kwargs.get('tsId', None))
         self._dim = None
 
     def getTsId(self):
@@ -701,7 +700,7 @@ class TomoMask(Tomogram):
     """
     def __init__(self, **kwargs):
         Tomogram.__init__(self, **kwargs)
-        self._volName = pwobj.String()
+        self._volName = String()
 
     def getVolName(self):
         """ Get the reference tomogram file for the current tomoMask.
@@ -734,13 +733,13 @@ class Coordinate3D(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
-        self._volumePointer = pwobj.Pointer(objDoStore=False)
-        self._x = Integer()
-        self._y = Integer()
-        self._z = Integer()
-        self._volId = pwobj.Integer()
+        self._volumePointer = Pointer(objDoStore=False)
+        self._x = Float()
+        self._y = Float()
+        self._z = Float()
+        self._volId = Integer()
         self._eulerMatrix = data.Transform()
-        self._groupId = pwobj.Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
+        self._groupId = Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
 
     def getX(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
@@ -958,7 +957,7 @@ class Coordinate3D(data.EMObject):
         else:
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
-            return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
+            return origin[0] / sr, origin[1] / sr, origin[2] / sr
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -970,9 +969,9 @@ class SetOfCoordinates3D(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._boxSize = pwobj.Integer()
-        self._samplingRate = pwobj.Float()
-        self._precedentsPointer = pwobj.Pointer()
+        self._boxSize = Integer()
+        self._samplingRate = Float()
+        self._precedentsPointer = Pointer()
 
     def getBoxSize(self):
         """ Return the box size of the particles.
@@ -1110,7 +1109,7 @@ class SubTomogram(data.Volume):
         self._acquisition = None
         self._coordinate = None
         self._volId = Integer()
-        self._volName = pwobj.String()
+        self._volName = String()
 
     def hasCoordinate3D(self):
         return self._coordinate is not None
@@ -1189,7 +1188,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
     def __init__(self, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
-        self._coordsPointer = pwobj.Pointer()
+        self._coordsPointer = Pointer()
 
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
@@ -1257,10 +1256,11 @@ class LandmarkModel(data.EMObject):
 
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
-        self._tiltSeries = pwobj.Pointer(objDoStore=False)
-        self._tsId = pwobj.String(tsId)
-        self._fileName = pwobj.String(fileName)
-        self._modelName = pwobj.String(modelName)
+        self._tsId = String(tsId)
+        self._fileName = String(fileName)
+        self._modelName = String(modelName)
+        self._tiltSeries = Pointer(objDoStore=False)
+
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1288,13 +1288,13 @@ class LandmarkModel(data.EMObject):
         return str(self._modelName)
 
     def setTsId(self, tsId):
-        self._tsId = pwobj.String(tsId)
+        self._tsId = String(tsId)
 
     def setFileName(self, fileName):
-        self._fileName = pwobj.String(fileName)
+        self._fileName = String(fileName)
 
     def setModelName(self, modelName):
-        self._modelName = pwobj.String(modelName)
+        self._modelName = String(modelName)
 
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
@@ -1400,7 +1400,7 @@ class MeshPoint(Coordinate3D):
 
     def __init__(self, **kwargs):
         Coordinate3D.__init__(self, **kwargs)
-        self._volumeName = pwobj.String()
+        self._volumeName = String()
         self._description = None  # Algebraic description of fitted mesh
 
     def getVolumeName(self):
@@ -1425,7 +1425,7 @@ class SetOfMeshes(SetOfCoordinates3D):
 
     def __init__(self, **kwargs):
         SetOfCoordinates3D.__init__(self, **kwargs)
-        self._numberOfMeshes = pwobj.Integer()  # Indicates how many meshes are in the set
+        self._numberOfMeshes = Integer()  # Indicates how many meshes are in the set
 
     def getNumberOfMeshes(self):
         return self._numberOfMeshes.get()
@@ -1439,9 +1439,9 @@ class Ellipsoid(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
-        self._center = pwobj.String()
-        self._radii = pwobj.String()
-        self._algebraicDesc = pwobj.String()
+        self._center = String()
+        self._radii = String()
+        self._algebraicDesc = String()
 
     def getCenter(self):
         return self._center.get()
@@ -1470,11 +1470,11 @@ class CTFTomo(data.CTFModel):
 
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
-        self._index = pwobj.Integer(kwargs.get('index', None))
-        self._defocusUDeviation = pwobj.Float()
-        self._isDefocusUDeviationInRange = pwobj.Boolean(True)
-        self._defocusVDeviation = pwobj.Float()
-        self._isDefocusVDeviationInRange = pwobj.Boolean(True)
+        self._index = Integer(kwargs.get('index', None))
+        self._defocusUDeviation = Float()
+        self._isDefocusUDeviationInRange = Boolean(True)
+        self._defocusVDeviation = Float()
+        self._isDefocusVDeviationInRange = Boolean(True)
 
     def copyInfo(self, other, copyId=False):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
@@ -1490,23 +1490,23 @@ class CTFTomo(data.CTFModel):
 
         if other.hasEstimationInfoAsList():
             if other.hasAstigmatismInfoAsList():
-                self._defocusUList = pwobj.CsvList(pType=float)
-                self._defocusVList = pwobj.CsvList(pType=float)
-                self._defocusAngleList = pwobj.CsvList(pType=float)
+                self._defocusUList = CsvList(pType=float)
+                self._defocusVList = CsvList(pType=float)
+                self._defocusAngleList = CsvList(pType=float)
                 self.setDefocusUList(other.getDefocusUList())
                 self.setDefocusVList(other.getDefocusVList())
                 self.setDefocusAngleList(other.getDefocusAngleList())
 
             else:
-                self._defocusUList = pwobj.CsvList(pType=float)
+                self._defocusUList = CsvList(pType=float)
                 self.setDefocusUList(other.getDefocusUList())
 
         if other.hasPhaseShiftInfoAsList():
-            self._phaseShiftList = pwobj.CsvList(pType=float)
+            self._phaseShiftList = CsvList(pType=float)
             self.setPhaseShiftList(other.getPhaseShiftList())
 
         if other.hasCutOnFrequncyInfoAsList():
-            self._cutOnFreqList = pwobj.CsvList(pType=float)
+            self._cutOnFreqList = CsvList(pType=float)
             self.setCutOnFreqList(other.getCutOnFreqList())
             self.setCutOnFreq(other.getCutOnFreq())
 
@@ -1525,13 +1525,13 @@ class CTFTomo(data.CTFModel):
         return self._index
 
     def setIndex(self, value):
-        self._index = pwobj.Integer(value)
+        self._index = Integer(value)
 
     def getdefocusUDeviation(self):
         return self._defocusUDeviation
 
     def setIsDefocusUDeviationInRange(self, value):
-        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+        self._isDefocusUDeviationInRange = Boolean(value)
 
     def getIsDefocusUDeviationInRange(self):
         return self._isDefocusUDeviationInRange
@@ -1540,7 +1540,7 @@ class CTFTomo(data.CTFModel):
         return self._defocusVDeviation
 
     def setIsDefocusVDeviationInRange(self, value):
-        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
+        self._isDefocusVDeviationInRange = Boolean(value)
 
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
@@ -1549,7 +1549,7 @@ class CTFTomo(data.CTFModel):
         return self._cutOnFreq
 
     def setCutOnFreq(self, value):
-        self._cutOnFreq = pwobj.Float(value)
+        self._cutOnFreq = Float(value)
 
     " List data methods allow compatibility with IMOD metadata. "
 
@@ -1805,10 +1805,10 @@ class CTFTomoSeries(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
-        self._tsId = pwobj.String(kwargs.get('tsId', None))
-        self._isDefocusUDeviationInRange = pwobj.Boolean(True)
-        self._isDefocusVDeviationInRange = pwobj.Boolean(True)
+        self._tiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._tsId = String(kwargs.get('tsId', None))
+        self._isDefocusUDeviationInRange = Boolean(True)
+        self._isDefocusVDeviationInRange = Boolean(True)
 
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do no store the mapper path by default
@@ -1853,7 +1853,7 @@ class CTFTomoSeries(data.EMSet):
         """ Set the tilt-images range size used for estimation.
         :param estimationRange: Integer of the range size. """
 
-        self._estimationsInRange = pwobj.Integer(estimationRange)
+        self._estimationsInRange = Integer(estimationRange)
 
     def getIMODDefocusFileFlag(self):
         """ Return the format file from which the CTF estimation information has been acquired. This parameter is
@@ -1892,7 +1892,7 @@ class CTFTomoSeries(data.EMSet):
 
              from https://bio3d.colorado.edu/imod/doc/man/ctfphaseflip.html """
 
-        self._IMODDefocusFileFlag = pwobj.Integer(flag)
+        self._IMODDefocusFileFlag = Integer(flag)
 
     def setNumberOfEstimationsInRangeFromDefocusList(self):
         """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
@@ -1920,13 +1920,13 @@ class CTFTomoSeries(data.EMSet):
         return self._isDefocusUDeviationInRange
 
     def setIsDefocusUDeviationInRange(self, value):
-        self._isDefocusUDeviationInRange = pwobj.Boolean(value)
+        self._isDefocusUDeviationInRange = Boolean(value)
 
     def getIsDefocusVDeviationInRange(self):
         return self._isDefocusVDeviationInRange
 
     def setIsDefocusVDeviationInRange(self, value):
-        self._isDefocusVDeviationInRange = pwobj.Boolean(value)
+        self._isDefocusVDeviationInRange = Boolean(value)
 
     def calculateDefocusUDeviation(self, defocusUTolerance=20):
         defocusUValueList = []
@@ -1968,7 +1968,7 @@ class SetOfCTFTomoSeries(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._setOfTiltSeriesPointer = pwobj.Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
