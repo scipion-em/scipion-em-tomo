@@ -1335,6 +1335,10 @@ class SetOfLandmarkModels(data.EMSet):
 
         tsId = lm.getTsId()
 
+        print("---------------------------")
+        print(tsId)
+        print(self.getSetOfTiltSeries())
+
         # Check for tilt series in set with coincident tsId
         for ts in self.getSetOfTiltSeries().iterItems(where="_tsId=='%s'" % tsId):
             lm.setTiltSeries(ts)
@@ -1349,7 +1353,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer = False):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:
