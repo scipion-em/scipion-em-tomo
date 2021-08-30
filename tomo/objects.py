@@ -1310,6 +1310,30 @@ class LandmarkModel(data.EMObject):
 
         return outputInfo
 
+    def retrieveLandmarkModelChains(self):
+        """ This method returns a list of list of landmarks containing all the information of the model split by
+        chain ID. """
+
+        lmInfoTable = self.retrieveInfoTable()
+
+        listOfLMChainsMatrix = []
+        listOfLMChains = []
+
+        prevChainId = 1
+
+        for line in lmInfoTable:
+            chainId = line[3]
+
+            if chainId == prevChainId:
+                listOfLMChains.append(line)
+
+            else:
+                prevChainId = chainId
+                listOfLMChainsMatrix.append(listOfLMChains)
+                listOfLMChains = []
+
+        return listOfLMChainsMatrix
+
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
