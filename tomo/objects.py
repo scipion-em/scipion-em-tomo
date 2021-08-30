@@ -1319,12 +1319,12 @@ class LandmarkModel(data.EMObject):
         listOfLMChainsMatrix = []
         listOfLMChains = []
 
-        prevChainId = 1
+        prevChainId = lmInfoTable[0][3]
 
         for line in lmInfoTable:
             chainId = line[3]
 
-            if chainId == prevChainId:
+            if prevChainId == chainId:
                 listOfLMChains.append(line)
 
             else:
