@@ -1359,7 +1359,7 @@ class SetOfLandmarkModels(data.EMSet):
             return self._setOfTiltSeriesPointer.get()
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
-        """ Set the set of tilt-series from which this set of landmark models were calculted.
+        """ Set the set of tilt-series from which this set of landmark models were calculated.
         :param setOfTiltSeries: Either a TiltSeries object or a pointer to it.
         """
 
