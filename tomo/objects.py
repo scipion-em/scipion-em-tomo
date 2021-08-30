@@ -1240,7 +1240,6 @@ class LandmarkModel(data.EMObject):
         self._modelName = String(modelName)
         self._tiltSeries = Pointer(objDoStore=False)
 
-
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
 
