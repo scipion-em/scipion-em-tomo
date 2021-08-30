@@ -66,7 +66,7 @@ class ImportOriginTomoWizard(pwizard.Wizard):
     def _halfOriginCoordinates(cls, volume, sampling):
         xdim, ydim, zdim = volume.getDim()
         if zdim > 1:
-            zdim = zdim / 2.
+            zdim /= 2.
         x = xdim / 2. * sampling
         y = ydim / 2. * sampling
         z = zdim * sampling

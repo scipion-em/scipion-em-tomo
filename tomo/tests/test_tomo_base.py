@@ -140,7 +140,9 @@ class TestTomoSubSetsTs(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=0.675,
             doseInitial=0,
-            dosePerFrame=0.375)
+            dosePerFrame=0.375,
+            tiltAxisAngle=84.7
+        )
         self.launchProtocol(protImport)
         return protImport
 
@@ -158,7 +160,9 @@ class TestTomoSubSetsTs(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=1.35,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.3,
+            tiltAxisAngle=84.7
+        )
         self.launchProtocol(protImport)
         return protImport
 
@@ -206,7 +210,9 @@ class TestTomoSubSetsTs(BaseTest):
         print(pwutils.magentaStr("\n==> Create the subset 2 of TiltSeriesM"))
         tsSubset2 = self.newProtocol(emprot.ProtSubSet,
                                      objLabel='subset 2',
-                                     chooseAtRandom=True,
+                                     chooseAtRandom=False,
+                                     inputSubSet=tsSubset1.outputTiltSeriesM,
+                                     setOperation=1,
                                      nElements=1)
 
         tsSubset2.inputFullSet.set(protImport.outputTiltSeriesM)
@@ -344,7 +350,9 @@ class TestTomoSubSetsTomograms(BaseTest):
         print(pwutils.magentaStr("\n==> Create the subset 2 of Tomograms"))
         tomoSubset2 = self.newProtocol(emprot.ProtSubSet,
                                        objLabel='subset 2',
-                                       chooseAtRandom=True,
+                                       chooseAtRandom=False,
+                                       inputSubSet=tomoSubset1.outputTomograms,
+                                       setOperation=1,
                                        nElements=1)
 
         tomoSubset2.inputFullSet.set(protImport.outputTomograms)
@@ -489,7 +497,9 @@ class TestTomoSubSetsSubTomograms(BaseTest):
         print(pwutils.magentaStr("\n==> Create the subset 2 of SubTomograms"))
         tomoSubset2 = self.newProtocol(emprot.ProtSubSet,
                                        objLabel='subset 2',
-                                       chooseAtRandom=True,
+                                       chooseAtRandom=False,
+                                       inputSubSet=tomoSubset1.outputSubTomograms,
+                                       setOperation=1,
                                        nElements=2)
 
         tomoSubset2.inputFullSet.set(protImport.outputSubTomograms)
@@ -552,72 +562,6 @@ class TestTomoSubSetsSubTomograms(BaseTest):
                 self.assertTrue(elem.getObjId() in setSubIds,
                                 'object id %s not in set: %s'
                                 % (elem.getObjId(), setSubIds))
-
-
-class TestTomoImportSetOfCoordinates3D(BaseTest):
-    """This class check if the protocol to import set of coordinates 3d works properly."""
-
-    @classmethod
-    def setUpClass(cls):
-        setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
-        cls.tomogram = cls.dataset.getFile('tomo1')
-
-    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
-        protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
-                                              filesPath=self.tomogram,
-                                              samplingRate=5)
-
-        self.launchProtocol(protImportTomogram)
-
-        output = getattr(protImportTomogram, 'outputTomograms', None)
-
-        self.assertIsNotNone(output,
-                             "There was a problem with tomogram output")
-
-        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   objLabel='Import from %s - %s' % (program, ext),
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
-                                                   filesPath=self.dataset.getPath(),
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern=pattern, boxSize=32,
-                                                   samplingRate=5.5)
-        self.launchProtocol(protImportCoordinates3d)
-
-        return protImportCoordinates3d
-
-    def test_import_set_of_coordinates_3D(self):
-        outputs = []
-        if existsPlugin('emantomo'):
-            protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
-            output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertTrue(output,
-                            "There was a problem with coordinates 3d output")
-            self.assertTrue(output.getSize() == 19)
-            self.assertTrue(output.getBoxSize() == 32)
-            self.assertTrue(output.getSamplingRate() == 5.5)
-            outputs.append(output)
-
-        protCoordinates2 = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
-        output2 = getattr(protCoordinates2, 'outputCoordinates', None)
-        self.assertTrue(output2,
-                        "There was a problem with coordinates 3d output")
-        self.assertTrue(output2.getSize() == 5)
-        self.assertTrue(output2.getBoxSize() == 32)
-        self.assertTrue(output2.getSamplingRate() == 5.5)
-        outputs.append(output2)
-
-        if existsPlugin('dynamo'):
-            protCoordinates2 = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
-            output3 = getattr(protCoordinates2, 'outputCoordinates', None)
-            self.assertTrue(output2,
-                            "There was a problem with coordinates 3d output")
-            self.assertTrue(output2.getSize() == 5)
-            self.assertTrue(output2.getBoxSize() == 32)
-            self.assertTrue(output2.getSamplingRate() == 5.5)
-            outputs.append(output3)
-
-        return outputs
 
 
 class TestTomoPreprocessing(BaseTest):

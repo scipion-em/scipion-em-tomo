@@ -32,6 +32,7 @@ from datetime import timedelta, datetime
 from collections import OrderedDict
 from os.path import join, exists
 from pathlib import PureWindowsPath
+from statistics import mean
 
 import numpy as np
 from sqlite3 import OperationalError
@@ -39,13 +40,16 @@ from sqlite3 import OperationalError
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
-from pwem.objects import Acquisition, Transform
-from pyworkflow.utils import getParentFolder, removeBaseExt
+from pwem.objects import Transform
+from pyworkflow.object import Integer
+from pyworkflow.utils import getParentFolder, removeBaseExt, yellowStr
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 
 from tomo.convert import getAnglesFromHeader, getAnglesFromMdoc, getAnglesFromTlt
+from tomo.objects import TomoAcquisition
+
 from .protocol_base import ProtTomoBase
 
 
@@ -71,7 +75,13 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     acquisitions = None
     sRates = None
     accumDoses = None
+    incomingDose = None
     meanDosesPerFrame = None
+
+    def __init__(self, **args):
+        ProtImport.__init__(self, **args)
+        ProtTomoBase.__init__(self)
+        self.skippedMdocs = Integer()
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -120,6 +130,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                       label='Exclusion words:',
                       help="List of words separated by a space that the path should not have",
                       expertLevel=params.LEVEL_ADVANCED)
+        form.addParam('mdocInfo', params.LabelParam,
+                      condition='not (%s)' % self.NOT_MDOC_GUI_COND,
+                      label='Acquisition values provided below will override the mdoc corresponding values',
+                      important=True)
         self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
                       default=self.IMPORT_LINK_REL,
@@ -181,11 +195,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Define acq parameters, it can be overridden
         by subclasses to change what parameters to include.
         """
-        group = form.addGroup('Acquisition info',
-                              condition=True if self._isImportingTsMovies() else self.NOT_MDOC_GUI_COND)
-        group.addParam('voltage', params.FloatParam, default=300,
+        group = form.addGroup('Acquisition info - override mdoc values if provided')
+        group.addParam('voltage', params.FloatParam,
                        label=Message.LABEL_VOLTAGE,
-                       condition=self.NOT_MDOC_GUI_COND,
+                       allowsNull=True,
                        help=Message.TEXT_VOLTAGE)
         group.addParam('sphericalAberration', params.FloatParam, default=2.7,
                        label=Message.LABEL_SPH_ABERRATION,
@@ -195,15 +208,26 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        label=Message.LABEL_AMPLITUDE,
                        expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_AMPLITUDE)
-        group.addParam('magnification', params.IntParam, default=50000,
+        group.addParam('magnification', params.IntParam,
                        label=Message.LABEL_MAGNI_RATE,
-                       condition=self.NOT_MDOC_GUI_COND,
+                       allowsNull=True,
                        help=Message.TEXT_MAGNI_RATE)
-        group.addParam('samplingRate', params.FloatParam, default=1.0,
-                       important=True,
+        group.addParam('samplingRate', params.FloatParam,
                        label=Message.LABEL_SAMP_RATE,
-                       condition=self.NOT_MDOC_GUI_COND,
+                       allowsNull=True,
                        help=Message.TEXT_SAMP_RATE)
+        group.addParam('tiltAxisAngle', params.FloatParam,
+                       label='Tilt axis angle (deg.)',
+                       allowsNull=True)
+        line = group.addLine('Dose (electrons/sq.Å)',
+                             help="Initial accumulated dose (usually 0) and "
+                                  "dose per tilt image (electrons/sq.Å). ")
+        line.addParam('doseInitial', params.FloatParam,
+                      default=0,
+                      label='Initial dose')
+        line.addParam('dosePerFrame', params.FloatParam,
+                      allowsNull=True,
+                      label='Dose per tilt image')
 
         return group
 
@@ -222,7 +246,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        doseList = []
+        accumDoseList = []
+        incomingDoseList = []
+        samplingRate = self.samplingRate.get()
         counter = 0
 
         if not self.MDOC_DATA_SOURCE:
@@ -268,21 +294,25 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
             for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
-
                 tsObj = tsClass(tsId=ts)
+                # Form value has higher priority than the mdoc values
+                samplingRate = float(samplingRate if samplingRate else self.sRates[ts])
 
                 origin = Transform()
                 tsObj.setOrigin(origin)
+                tsObj.setAnglesCount(len(tiltSeriesList))
 
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
 
                 if self.MDOC_DATA_SOURCE:
-                    doseList = self.accumDoses[ts]
+                    accumDoseList = self.accumDoses[ts]
+                    # tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
+                    incomingDoseList = self.incomingDose[ts]
                     counter = 0
 
                 tiltSeriesObjList = []
-
+                toList = [ti[1] for ti in tiltSeriesList]
                 # Add tilt images to the tiltSeries
                 for f, to, ta in tiltSeriesList:
                     try:
@@ -304,11 +334,20 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                                      acquisitionOrder=to,
                                      tiltAngle=ta)
 
+                        ti.setAcquisition(tsObj.getAcquisition().clone())
                         if self.MDOC_DATA_SOURCE:
-                            ti.setAcquisition(tsObj.getAcquisition().clone())
-                            ti.getAcquisition().setDosePerFrame(doseList[counter])  # Accumulated dose in current ti
-                            counter += 1
+                            dosePerFrame = incomingDoseList[counter]
+                            accumDose = accumDoseList[counter]
+                        else:
+                            dosePerFrame = self.dosePerFrame.get()
+                            accumDose = self.dosePerFrame.get() * int(to if min(toList) == 1 else (int(to) + 1))
+
+                        # Incoming dose in current ti
+                        ti.getAcquisition().setDosePerFrame(dosePerFrame)
+                        # Accumulated dose in current ti
+                        ti.getAcquisition().setAccumDose(accumDose)
                         tiltSeriesObjList.append(ti)
+                        counter += 1
 
                     except OperationalError as e:
 
@@ -322,15 +361,20 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 for ti in tiltSeriesObjList:
                     tsObj.append(ti)
 
-                origin.setShifts(-tsObj.getFirstItem().getXDim() / 2 * self.samplingRate.get(),
-                                 -tsObj.getFirstItem().getYDim() / 2 * self.samplingRate.get(),
+                tsObjFirstItem = tsObj.getFirstItem()
+                origin.setShifts(-tsObjFirstItem.getXDim() / 2 * samplingRate,
+                                 -tsObjFirstItem.getYDim() / 2 * samplingRate,
                                  0)
 
                 if self.MDOC_DATA_SOURCE:
+                    tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
                     # Tilt series object dose per frame has been updated each time the tilt image dose per frame has
                     # been updated before, so the mean value is used to be the reference in the acquisition of the
                     # whole tilt series movie
-                    tsObj.getAcquisition().setDosePerFrame(self.meanDosesPerFrame[ts])
+                    tsObj.getAcquisition().setDosePerFrame(mean(incomingDoseList))
+                else:
+                    tsObj.getAcquisition().setDosePerFrame(self.dosePerFrame.get())
+                    tsObj.getAcquisition().setAccumDose(self.dosePerFrame.get() * len(tiltSeriesList))
 
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
@@ -373,18 +417,31 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                               state=outputSet.STREAM_CLOSED)
 
     # -------------------------- INFO functions -------------------------------
+    def _summary(self):
+        summary = []
+
+        if self.getOutputsSize():
+            for key, output in self.iterOutputAttributes():
+                summary.append("Imported tilt-series %s from: %s" % (
+                    "movies" if output.getLastName() == "outputTiltSeriesM" else "",
+                    self.filesPath.get()))
+                summary.append("Using pattern: %s" % self.filesPattern.get())
+                summary.append(u"Sampling rate: *%0.2f* (Å/px)" % output.getSamplingRate())
+        else:
+            summary.append(Message.TEXT_NO_OUTPUT_FILES)
+        if self.skippedMdocs.get():
+            summary.append('*%i* mdoc files were skipped --> check the Output Log tab for more details.'
+                           % self.skippedMdocs.get())
+        return summary
+
     def _validate(self):
         self._initialize()
         try:
-            matching = self.getMatchingFiles()
+            matching = self.getMatchingFiles(isValidation=True)
 
         except Exception as e:
             errorStr = str(e)
             return [errorStr]
-            # if 'Missing angles file: ' in errorStr:
-            #     return [errorStr]
-            # else:
-            #     raise e
 
         if not matching:
             return ["There are no files matching the pattern %s"
@@ -393,7 +450,25 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self._firstMatch = list(matching.items())[0]
         self._tiltAngleList = self._getSortedAngles(self._firstMatch[1])
 
-        return self._validateAngles()
+        errMsg = []
+        errorMsgAngles = self._validateAngles()
+        if errorMsgAngles:
+            errMsg.append(errorMsgAngles)
+        # In the mdoc case, voltage, magnification and sampling rate are optional inputs. In the user introduces
+        # one of these values, it will be considered more prior than the corresponding value read from the mdoc file
+        if not self.MDOC_DATA_SOURCE:
+            if not self.voltage.get():
+                errMsg.append('Voltage should be a float')
+            if not self.magnification.get():
+                errMsg.append('Magnification should be an integer')
+            if not self.samplingRate.get():
+                errMsg.append('Sampling rate should be a float')
+            if not self.dosePerFrame.get():
+                errMsg.append('Dose per frame should be a float')
+            if not self.tiltAxisAngle.get():
+                errMsg.append('Tilt axis angle should be a float')
+
+        return errMsg
 
     def _validateAngles(self):
         """ Function to be implemented in subclass to validate
@@ -446,7 +521,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ This function should be called after a call to _initialize"""
         return '{TA}' in self._pattern and '{TO}' in self._pattern
 
-    def _getMatchingFilesFromMdoc(self):
+    def _getMatchingFilesFromMdoc(self, isValidation):
         """If the list of files provided by the user is a list of mdoc files, then the tilt series movies
         are built from them, following the considerations listed below:
             - For each mdoc file, it and the corresponding movie files must be in the same directory.
@@ -455,6 +530,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             """
         fpath = self.filesPath.get()
         mdocList = glob(join(fpath, self.filesPattern.get()))
+        hasDoseList = []
         if not mdocList:
             raise Exception('No mdoc files were found in the introduced path:\n%s' % fpath)
 
@@ -462,21 +538,36 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self.acquisitions = OrderedDict()
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
-        self.meanDosesPerFrame = OrderedDict()
-        validationErrors = []
+        self.incomingDose = OrderedDict()
+        warningHeadMsg = yellowStr('The following mdoc files were skipped. See details below:\n\n')
+        warningDetailedMsg = []
+        skippedMdocs = 0
 
         for mdoc in mdocList:
-            mdocObj = MDoc(mdoc, voltage=self.voltage.get(), magnification=self.magnification.get(), samplingRate=self.samplingRate.get())
+            # Note: voltage, magnification and sampling rate values are the ones introduced by the user in the
+            # protocol's form. Otherwise, the corresponding values considered will be the ones read from the mdoc.
+            # This is because because you can't trust mdoc (often dose is not calibrated in serialem, so you get 0;
+            # pixel size might be binned as mdoc comes from a binned record not movie and  there are no Cs and amp
+            # contrast fields in mdoc)
+            mdocObj = MDoc(mdoc, voltage=self.voltage.get() if self.voltage.get() else None,
+                           magnification=self.magnification.get() if self.magnification.get() else None,
+                           samplingRate=self.samplingRate.get() if self.samplingRate.get() else None,
+                           doseProvidedByUser=self.dosePerFrame.get() if self.dosePerFrame.get() else None,
+                           tiltAngleProvidedByUser=self.tiltAxisAngle.get() if self.tiltAxisAngle.get() else None)
             validationError = mdocObj.read(isImportingTsMovies=self._isImportingTsMovies())
+            hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
-                validationErrors.append(validationError)
+                warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
+                warningDetailedMsg.append(validationError)
+                skippedMdocs += 1
+                # validationErrors.append(validationError)
                 # Continue parsing the remaining mdoc files to provide a fully detailed error message
                 continue
-
-            acquisition = self._genTsAcquisitionFromMdoc(mdocObj.getVoltage(), mdocObj.getMagnification())
+            acquisition = self._genTsAcquisitionFromMdoc(mdocObj)
             tsId = mdocObj.getTsId()
             fileOrderAngleList = []
             accumulatedDoseList = []
+            incomingDoseList = []
             for tiltMetadata in mdocObj.getTiltsMetadata():
                 fileOrderAngleList.append((
                     tiltMetadata.getAngleMovieFile(),                    # Filename
@@ -484,40 +575,55 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     tiltMetadata.getTiltAngle(),                         # Tilt angle
                 ))
                 accumulatedDoseList.append(tiltMetadata.getAccumDose())
+                incomingDoseList.append(tiltMetadata.getIncomingDose())
 
             # self._getTsIdFromMdocData(fileList)
             matchingFiles[tsId] = fileOrderAngleList
             self.acquisitions[tsId] = acquisition
             self.sRates[tsId] = mdocObj.getSamplingRate()
             self.accumDoses[tsId] = accumulatedDoseList
-            self.meanDosesPerFrame[tsId] = accumulatedDoseList[-1]/len(accumulatedDoseList)
+            self.incomingDose[tsId] = incomingDoseList
 
-        if validationErrors:
-            raise Exception(' '.join(validationErrors))
-        return matchingFiles
+        if isValidation:
+            if matchingFiles:
+                if warningDetailedMsg:
+                    self.skippedMdocs.set(skippedMdocs)
+                    self._store(self.skippedMdocs)
+                    print(warningHeadMsg + ' '.join(warningDetailedMsg))
+                return matchingFiles
+            else:
+                # If the only info missing is the dose related data, it's suggested to introduce it manually
+                if not any(hasDoseList):
+                    raise Exception('*The dose was not possible to be obtained from any of the provided mdoc files.\n'
+                                    'Please check the data of your mdoc files or introduce a dose value in the '
+                                    'protocol form.\n\n'
+                                    'Dose related mdoc labels are:\n\n'
+                                    '- ExposureDose or\n'
+                                    '- FrameDosesAndNumber or\n'
+                                    '- DoseRate and ExposureTime or\n'
+                                    '- MinMaxMean and CountsPerElectron'
+                                    )
+                else:
+                    raise Exception('*All the mdoc files introduced present validation errors.*\n\n%s' %
+                                    (warningHeadMsg + ' '.join(warningDetailedMsg)))
+        else:
+            return matchingFiles
 
     def _isImportingTsMovies(self):
         return True if type(self) is ProtImportTsMovies else False
 
-    def _genTsAcquisitionFromMdoc(self, voltage, magnification):
-        acq = Acquisition()
-        acq.setVoltage(voltage)
-        acq.setSphericalAberration(self.sphericalAberration.get())
-        acq.setAmplitudeContrast(self.amplitudeContrast.get())
-        acq.setMagnification(magnification)
+    def _genTsAcquisitionFromMdoc(self, mdocObj):
+        acq = TomoAcquisition(voltage=mdocObj.getVoltage(),
+                              sphericalAberration=self.sphericalAberration.get(),
+                              amplitudeContrast=self.amplitudeContrast.get(),
+                              magnification=mdocObj.getMagnification(),
+                              tiltAxisAngle=mdocObj.getTiltAxisAngle()
+                              )
+
         if hasattr(self, 'doseInitial'):  # This field is only present in the form for TsM import
             acq.setDoseInitial(self.doseInitial.get())
 
         return acq
-
-    def getMatchingFiles(self, fileTimeOut=None):
-        """ Return an ordered dict with TiltSeries found in the files as key
-        and a list of all tilt images of that series as value.
-        """
-        if self.MDOC_DATA_SOURCE:
-            return self._getMatchingFilesFromMdoc()
-        else:
-            return self._getMatchingFilesFromRegExPattern(fileTimeOut=fileTimeOut)
 
     def _excludeByWords(self, files):
         exclusionWords = self.exclusionWords.get()
@@ -536,6 +642,15 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             allowedFiles.append(file)
 
         return allowedFiles
+
+    def getMatchingFiles(self, fileTimeOut=None, isValidation=False):
+        """ Return an ordered dict with TiltSeries found in the files as key
+        and a list of all tilt images of that series as value.
+        """
+        if self.MDOC_DATA_SOURCE:
+            return self._getMatchingFilesFromMdoc(isValidation=isValidation)
+        else:
+            return self._getMatchingFilesFromRegExPattern(fileTimeOut=fileTimeOut)
 
     def _getMatchingFilesFromRegExPattern(self, fileTimeOut):
         filePaths = glob(self._globPattern)
@@ -667,7 +782,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Return the list with all expected tilt angles. """
         offset = 1
         if self.minAngle.get() > self.maxAngle.get():
-            offset = -1 * offset
+            offset *= -1
         return np.arange(self.minAngle.get(),
                          self.maxAngle.get() + offset,  # also include last angle
                          self.stepAngle.get())
@@ -761,7 +876,8 @@ class ProtImportTs(ProtImportTsBase):
                 return ['Tilt-series %s stack has different number of images (%d) '
                         'than the expected number of tilt angles (%d). '
                         % (fileName, nImages, nAngles)]
-        return []
+        else:
+            return []
 
 
 class ProtImportTsMovies(ProtImportTsBase):
@@ -787,16 +903,6 @@ class ProtImportTsMovies(ProtImportTsBase):
     def _defineAcquisitionParams(self, form):
         """ Add movie specific options to the acquisition section. """
         group = ProtImportTsBase._defineAcquisitionParams(self, form)
-
-        line = group.addLine('Dose (e/A^2)',
-                             condition=self.NOT_MDOC_GUI_COND,
-                             help="Initial accumulated dose (usually 0) and "
-                                  "dose per frame. ")
-        line.addParam('doseInitial', params.FloatParam, default=0,
-                      label='Initial')
-        line.addParam('dosePerFrame', params.FloatParam, default=None,
-                      allowsNull=True,
-                      label='Per frame')
         group.addParam('gainFile', params.FileParam,
                        label='Gain image',
                        help='A gain reference related to a set of movies '
@@ -829,18 +935,25 @@ class ProtImportTsMovies(ProtImportTsBase):
             if not self._anglesInPattern():
                 return ['When importing movies, {TA} and {TO} should be in the '
                         'files pattern.']
-        return []
+        else:
+            return []
 
 
 class MDoc:
 
-    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None):
+    def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None,
+                 doseProvidedByUser=None, tiltAngleProvidedByUser=None):
+
         self._mdocFileName = fileName
         self._tsId = None
+        # Dose related attributes
+        self.doseProvidedByUser = doseProvidedByUser
+        self.mdocHasDose = False
         # Acquisition general attributes
         self._voltage = voltage
         self._magnification = magnification
         self._samplingRate = samplingRate
+        self._tiltAxisAngle = tiltAngleProvidedByUser
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
@@ -859,7 +972,7 @@ class MDoc:
         return normTSID
 
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
-        validateTSFromMdocErrMsgList = ''
+        validateTSFromMdocErrMsg = ''
         tsFile = None
         mdoc = self._mdocFileName
         headerDict, zSlices = self._parseMdoc()
@@ -874,19 +987,22 @@ class MDoc:
             if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.mrcs')
             if not os.path.exists(tsFile):
+                tsFile = join(parentFolder, self._tsId + '.mrc')
+            if not os.path.exists(tsFile):
                 tsFile = join(parentFolder, self._tsId + '.st')
-            validateTSFromMdocErrMsgList = self._validateTSFromMdoc(mdoc, tsFile)
+            validateTSFromMdocErrMsg = self._validateTSFromMdoc(mdoc, tsFile)
 
         # Get acquisition specific (per angle) info
         self._getSlicesData(zSlices, tsFile)
 
         # Check Mdoc info read
-        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(ignoreFilesValidation=ignoreFilesValidation or not isImportingTsMovies)
+        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(
+            ignoreFilesValidation=ignoreFilesValidation or not isImportingTsMovies)
 
         # Check all the possible errors found
         exceptionMsg = ''
-        if validateTSFromMdocErrMsgList:
-            exceptionMsg += ' '.join(validateTSFromMdocErrMsgList)
+        if validateTSFromMdocErrMsg:
+            exceptionMsg += validateTSFromMdocErrMsg
         if validateMdocContentsErrorMsgList:
             exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
 
@@ -920,38 +1036,59 @@ class MDoc:
                         raise Exception("Unexpected ZValue = %d" % zvalue)
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
-                else:
-                    if not line.startswith('[T') and line.strip():
-                        key, value = line.split('=')
-                        if not headerParsed:
-                            headerDict[key.strip()] = value.strip()
-                        if zvalueList:
-                            zvalueDict[key.strip()] = value.strip()
+                elif line.startswith('[T') and not self.getTiltAxisAngle():
+                    strLine = line.strip().replace(' ', '').lower()
+                    pattern = 'tiltaxisangle='
+                    if pattern in strLine:
+                        # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
+                        # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
+                        tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
+                        # Check if it's a string which represents a float or not
+                        if tiltAxisAngle.replace('.', '', 1).isdigit():
+                            self._tiltAxisAngle = float(tiltAxisAngle)
+                elif line.strip():
+                    key, value = line.split('=')
+                    if not headerParsed:
+                        headerDict[key.strip()] = value.strip()
+                    if zvalueList:
+                        zvalueDict[key.strip()] = value.strip()
 
         return headerDict, zvalueList
 
     def _getAcquisitionInfoFromMdoc(self, headerDict, firstSlice):
         """Acquisition data is read from to data sources (from higher to lower priority):
+            - From the values introduced in the form by the user (introduced as attributes of the MDoc object)
             - From the first ZSlice data.
             - From the file header data."""
-        VOLTAGE = 'Voltage'
-        MAGNIFICATION = 'Magnification'
-        PIXEL_SPACING = 'PixelSpacing'
-        self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, self._voltage))
-        self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, self._magnification))
-        self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
+        if not self.getVoltage():
+            VOLTAGE = 'Voltage'
+            self._voltage = firstSlice.get(VOLTAGE, headerDict.get(VOLTAGE, self._voltage))
+        if not self.getMagnification():
+            MAGNIFICATION = 'Magnification'
+            self._magnification = firstSlice.get(MAGNIFICATION, headerDict.get(MAGNIFICATION, self._magnification))
+        if not self.getSamplingRate():
+            PIXEL_SPACING = 'PixelSpacing'
+            self._samplingRate = firstSlice.get(PIXEL_SPACING, headerDict.get(PIXEL_SPACING, self._samplingRate))
 
     def _getSlicesData(self, zSlices, tsFile):
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
-            accumulatedDose = self._getDoseFromMdoc(zSlice, accumulatedDose)
+            if self.doseProvidedByUser:
+                incomingDose = self.doseProvidedByUser
+            else:
+                incomingDose = self._getDoseFromMdoc(zSlice, self.getSamplingRate())
+            accumulatedDose += incomingDose
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(parentFolder, zSlice, tsFile),
                 acqOrder=counter+1,
-                accumDose=accumulatedDose
+                accumDose=accumulatedDose,
+                incomingDose=incomingDose
             ))
+        if round(accumulatedDose) > 0:  # round is used to make the condition more robust, for cases like 0.0000000001
+            self.mdocHasDose = True
+
 
     @staticmethod
     def _getAngleMovieFileName(parentFolder, zSlice, tsFile):
@@ -962,17 +1099,18 @@ class MDoc:
             return join(parentFolder, PureWindowsPath(zSlice['SubFramePath']).parts[-1])
 
     @staticmethod
-    def _getDoseFromMdoc(zSlice, accumulatedDose):
+    def _getDoseFromMdoc(zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by zSlice, and add it to the
         previous accumulated dose"""
+
         EXPOSURE_DOSE = 'ExposureDose'  # Dose on specimen during camera exposure in electrons/sq. Angstrom
         FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'  # Dose per frame in electrons per square Angstrom followed
         # by number of frames at that dose
         DOSE_RATE = 'DoseRate'  # Dose rate to the camera, in electrons per unbinned pixel per second
         EXPOSURE_TIME = 'ExposureTime'  # Image exposure time
         MIN_MAX_MEAN = 'MinMaxMean'  # Minimum, maximum, and mean value for this image
-        PIXEL_SIZE = 'PixelSpacing'  # Pixel spacing in Angstroms for individual image
         COUNTS_PER_ELECTRON = 'CountsPerElectron'
+        DIVIDED_BY_TWO = 'DividedBy2'
 
         def _keysInDict(listOfKeys):
             return all([key in zSlice.keys() for key in listOfKeys])
@@ -980,6 +1118,12 @@ class MDoc:
         # Different ways of calculating the dose, ordered by priority considering the possible variability between
         # different mdoc files
         newDose = 0
+
+        if pixelSize:
+            pixelSize = float(pixelSize)
+        else:
+            pixelSize = 1  # This case cover the possibility of no sampling rate in form nor mdoc, avoiding the error
+            # execution before the whole information is gathered and the exception is raised
 
         # Directly from field ExposureDose
         if EXPOSURE_DOSE in zSlice:
@@ -1001,18 +1145,32 @@ class MDoc:
             doseRate = zSlice[DOSE_RATE]
             expTime = zSlice[EXPOSURE_TIME]
             if doseRate and expTime:
-                newDose = float(doseRate) * float(expTime)
+                newDose = float(doseRate) * float(expTime) / pixelSize ** 2
 
         # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
-        if not newDose and _keysInDict([MIN_MAX_MEAN, PIXEL_SIZE, COUNTS_PER_ELECTRON]):
+        if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON]):
             minMaxMean = zSlice[MIN_MAX_MEAN]
-            pixelSize = zSlice[PIXEL_SIZE]
             counts = zSlice[COUNTS_PER_ELECTRON]
             if all([minMaxMean, pixelSize, counts]):
                 meanVal = minMaxMean.split()[-1]  # Get the mean from a string like '-42 2441 51.7968'
-                newDose = (float(meanVal) / float(counts)) / float(pixelSize) ** 2
+                newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
 
-        return newDose + accumulatedDose
+        # # Calculated as in Grigorieff paper --> https://doi.org/10.7554/eLife.06980.001
+        # if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON, EXPOSURE_TIME, DIVIDED_BY_TWO]):
+        #     minMaxMean = zSlice[MIN_MAX_MEAN]
+        #     counts = zSlice[COUNTS_PER_ELECTRON]
+        #     expTime = zSlice[EXPOSURE_TIME]
+        #     divByTwo = zSlice[DIVIDED_BY_TWO]
+        #     if all([minMaxMean, counts, expTime]):
+        #         meanVal = minMaxMean.split()[-1]  # Get the mean from a string like '-42 2441 51.7968'
+        #         newDose = _getDivByTwoFactor(divByTwo) * float(meanVal) / (float(counts) * float(expTime))
+
+        divByTwo = 0
+        if _keysInDict([DIVIDED_BY_TWO]):
+            divByTwo = int(zSlice[DIVIDED_BY_TWO])
+        divByTwoFactor = 2 if divByTwo else 1
+
+        return newDose * divByTwoFactor
 
     @staticmethod
     def _validateTSFromMdoc(mdoc, tsFile):
@@ -1044,6 +1202,16 @@ class MDoc:
             msg.append('*Magnification*\n')
         if not self._samplingRate:
             msg.append('*PixelSpacing*\n')
+        if not self.mdocHasDose:
+            msg.append('Not able to get the *dose* with the data read.\n'
+                       'Dose related mdoc labels are:\n\n'
+                       '- ExposureDose or\n'
+                       '- FrameDosesAndNumber or\n'
+                       '- DoseRate and ExposureTime or\n'
+                       '- MinMaxMean and CountsPerElectron'
+                       )
+        if not self.getTiltAxisAngle():
+            msg.append('*RotationAngle (tilt axis angle)*')
         if missingAnglesIndices:
             msg.append('*TiltAngle*: %s\n' % ' '.join(missingAnglesIndices))
         if missingFiles:
@@ -1071,14 +1239,18 @@ class MDoc:
     def getTiltsMetadata(self):
         return self._tiltsMetadata
 
+    def getTiltAxisAngle(self):
+        return self._tiltAxisAngle
+
 
 class TiltMetadata:
 
-    def __init__(self, angle=None, angleFile=None, acqOrder=None, accumDose=None):
+    def __init__(self, angle=None, angleFile=None, acqOrder=None, accumDose=None, incomingDose=None):
         self._angle = angle
         self._angleFile = angleFile
         self._acqOrder = acqOrder
         self._accumDose = accumDose
+        self._incomingDose = incomingDose
 
     def setTiltAngle(self, tiltAngle):
         self._angle = tiltAngle
@@ -1092,6 +1264,9 @@ class TiltMetadata:
     def setAccumDose(self, accumDose):
         self._accumDose = accumDose
 
+    def setIncomingDose(self, incDose):
+        self._incomingDose = incDose
+
     def getTiltAngle(self):
         return self._angle
 
@@ -1103,3 +1278,10 @@ class TiltMetadata:
 
     def getAccumDose(self):
         return self._accumDose
+
+    def getAcqOrder(self):
+        return self._acqOrder
+
+    def getIncomingDose(self):
+        return self._incomingDose
+

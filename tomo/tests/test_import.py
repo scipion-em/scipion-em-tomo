@@ -32,6 +32,7 @@ from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
+from ..constants import BOTTOM_LEFT_CORNER
 from ..utils import existsPlugin
 import tomo.protocols
 
@@ -88,7 +89,9 @@ class TestTomoImportSubTomograms(BaseTest):
 
         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
                                       filesPath=self.subtomos,
-                                      samplingRate=1.35)
+                                      samplingRate=1.35,
+                                      acquisitionAngleMax=40,
+                                      acquisitionAngleMin=-40)
         # importCoordinates=protImportCoordinates3d.outputCoordinates)
         self.launchProtocol(protImport)
         return protImport
@@ -101,6 +104,8 @@ class TestTomoImportSubTomograms(BaseTest):
         self.assertTrue(output.getDim()[0] == 32)
         self.assertTrue(output.getDim()[1] == 32)
         self.assertTrue(output.getDim()[2] == 32)
+        self.assertEqual(output.getFirstItem().getAcquisition().getAngleMax(), 60)
+        self.assertEqual(output.getFirstItem().getAcquisition().getAngleMin(), -60)
         # self.assertTrue(output.getFirstItem().getCoordinate3D().getX() == 314)
         # self.assertTrue(output.getFirstItem().getCoordinate3D().getY() == 350)
         # self.assertTrue(output.getFirstItem().getCoordinate3D().getZ() == 256)
@@ -115,6 +120,8 @@ class TestTomoImportSubTomograms(BaseTest):
         self.assertTrue(output2.getDim()[0] == 32)
         self.assertTrue(output2.getDim()[1] == 32)
         self.assertTrue(output2.getDim()[2] == 32)
+        self.assertEqual(output2.getFirstItem().getAcquisition().getAngleMax(), 40)
+        self.assertEqual(output2.getFirstItem().getAcquisition().getAngleMin(), -40)
         # for i, subtomo in enumerate(output2.iterItems()):
         #     if i == 1:
         #         self.assertTrue(subtomo.getCoordinate3D().getX() == 174)
@@ -171,6 +178,15 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             output = getattr(protCoordinates, 'outputCoordinates', None)
             self.assertCoordinates(output, 19)
 
+            # Check se are not loosing precision
+            firstCoord = output.getFirstItem()
+            # First row --> 224, 316, 260
+            emanCoords = [224, 316, 260]
+            self.assertEqual(firstCoord.getX(BOTTOM_LEFT_CORNER), emanCoords[0], "eman coordinate x has a wrong value")
+            self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
+            self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
+
+
         if existsPlugin('dynamo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
             output = getattr(protCoordinates, 'outputCoordinates', None)
@@ -204,6 +220,15 @@ class TestTomoImportTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
+    def _runImportTomograms2(self):
+        protImport = self.newProtocol(
+            tomo.protocols.ProtImportTomograms,
+            filesPath=self.tomogram,
+            filesPattern='',
+            samplingRate=1.35)
+        self.launchProtocol(protImport)
+        return protImport
+
     def test_importTomograms(self):
         protImport = self._runImportTomograms()
         output = getattr(protImport, 'outputTomograms', None)
@@ -223,6 +248,23 @@ class TestTomoImportTomograms(BaseTest):
 
             break
 
+        protImport2 = self._runImportTomograms2()
+        output2 = getattr(protImport2, 'outputTomograms', None)
+        self.assertIsNotNone(output2,
+                             "There was a problem with Import Tomograms protocol")
+
+        for tomogram in protImport2.outputTomograms.iterItems():
+            self.assertTrue(tomogram.getXDim() == 1024,
+                            "There was a problem with Import Tomograms protocol")
+            self.assertIsNotNone(tomogram.getYDim() == 1024,
+                                 "There was a problem with Import Tomograms protocol")
+
+            self.assertTrue(tomogram.getAcquisition().getAngleMax() == 60,
+                            "There was a problem with the acquisition angle max")
+            self.assertTrue(tomogram.getAcquisition().getAngleMin() == -60,
+                            "There was a problem with the acquisition angle min")
+
+            break
 
 class TestTomoBaseProtocols(BaseTest):
     @classmethod
@@ -243,7 +285,9 @@ class TestTomoBaseProtocols(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=0.675,
             doseInitial=0,
-            dosePerFrame=0.375)
+            dosePerFrame=0.375,
+            tiltAxisAngle=84.1
+        )
         self.launchProtocol(protImport)
         return protImport
 
@@ -285,7 +329,9 @@ class TestTomoImportTsFromPattern(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=0.675,
             doseInitial=0,
-            dosePerFrame=0.375)
+            dosePerFrame=0.375,
+            tiltAxisAngle=84.1
+        )
         self.launchProtocol(protImport)
         return protImport
 
@@ -303,7 +349,8 @@ class TestTomoImportTsFromPattern(BaseTest):
             amplitudeContrast=0.1,
             samplingRate=1.35,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.3,
+            tiltAxisAngle=84.1)
         self.launchProtocol(protImport)
         return protImport
 
@@ -349,10 +396,12 @@ class TestTomoImportTsFromMdoc(BaseTest):
     SPH_ABERRATION = 'sphAberration'
     AMP_CONTRAST = 'ampContrast'
     DOSE_PER_FRAME = 'dosePerFrame'
+    ACCUM_DOSE = 'accumDose'
     PIXEL_SIZE = 'pixelSize'
     SIZE = 'size'
     FILENAME_LIST = 'filenames'
-    ACCUM_DOSE_LIST = 'doses'
+    INCOMING_DOSE_LIST = 'incDoses'
+    ACCUM_DOSE_LIST = 'accumDoses'
     ANGLE_LIST = 'angles'
     ACQ_ORDER_LIST = 'acqOrder'
 
@@ -388,9 +437,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
             cls.SPH_ABERRATION: kwargs.get(cls.SPH_ABERRATION, None),
             cls.AMP_CONTRAST: kwargs.get(cls.AMP_CONTRAST, None),
             cls.DOSE_PER_FRAME: kwargs.get(cls.DOSE_PER_FRAME, None),
+            cls.ACCUM_DOSE: kwargs.get(cls.ACCUM_DOSE, None),
             cls.PIXEL_SIZE: kwargs.get(cls.PIXEL_SIZE, None),
             cls.SIZE: kwargs.get(cls.SIZE, None),
             cls.FILENAME_LIST: kwargs.get(cls.FILENAME_LIST, None),
+            cls.INCOMING_DOSE_LIST: kwargs.get(cls.INCOMING_DOSE_LIST, None),
             cls.ACCUM_DOSE_LIST: kwargs.get(cls.ACCUM_DOSE_LIST, None),
             cls.ANGLE_LIST: kwargs.get(cls.ANGLE_LIST, None),
             cls.ACQ_ORDER_LIST: kwargs.get(cls.ACQ_ORDER_LIST, None)
@@ -399,21 +450,24 @@ class TestTomoImportTsFromMdoc(BaseTest):
     def sortTestDataByAngle(self, testDataDict):
 
         for key in testDataDict:
-            testData= testDataDict[key]
+            testData = testDataDict[key]
             ind = numpy.argsort(testData[self.ANGLE_LIST])
 
-            newDoses = []
+            incDoses = []
+            accumDoses = []
             newAcqOrders = []
             newAngles = []
             newFiles = []
             for index in ind:
                 newAcqOrders.append(testData[self.ACQ_ORDER_LIST][index])
-                newDoses.append(testData[self.ACCUM_DOSE_LIST][index])
+                incDoses.append(testData[self.INCOMING_DOSE_LIST][index])
+                accumDoses.append(testData[self.ACCUM_DOSE_LIST][index])
                 newAngles.append(testData[self.ANGLE_LIST][index])
                 newFiles.append(testData[self.FILENAME_LIST][index])
 
             testData[self.ANGLE_LIST] = newAngles
-            testData[self.ACCUM_DOSE_LIST] = newDoses
+            testData[self.INCOMING_DOSE_LIST] = incDoses
+            testData[self.ACCUM_DOSE_LIST] = accumDoses
             testData[self.ACQ_ORDER_LIST] = newAcqOrders
 
     def _genTestData(self, isTsMovie):
@@ -424,11 +478,13 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 magnification=53000,
                 sphAberration=2.7,
                 ampContrast=0.1,
-                dosePerFrame=1.1048,
+                dosePerFrame=2.2096,
+                accumDose=11.0479,
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
-                doses=[1.1044, 2.2032, 3.3154, 4.4292, 5.5239],
+                incDoses=[2.2088, 2.1975, 2.2245, 2.2275, 2.1895],
+                accumDoses=[2.2088, 4.4063, 6.6308, 8.8583, 11.0479],
                 angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             ),
@@ -437,11 +493,13 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 magnification=53000,
                 sphAberration=2.7,
                 ampContrast=0.1,
-                dosePerFrame=1.1703,
+                dosePerFrame=2.3406,
+                accumDose=11.7028,
                 pixelSize=self.sRate,
                 size=5,
                 filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
-                doses=[1.1722, 2.3432, 3.5145, 4.6831, 5.8514],
+                incDoses=[2.3443, 2.3421, 2.3425, 2.3373, 2.3366],
+                accumDoses=[2.3443, 4.6864, 7.0289, 9.3662, 11.7028],
                 angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684],
                 acqOrder=[1, 2, 3, 4, 5]
             )
@@ -480,8 +538,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
             self.assertAlmostEqual(acq.getSphericalAberration(), testDataDict[self.SPH_ABERRATION], delta=0.01)
             self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
+            self.assertAlmostEqual(acq.getAccumDose(), testDataDict[self.ACCUM_DOSE], delta=0.0001)
             # Check angles and accumulated dose per angular acquisition (tilt series image)
             filesList = testDataDict[self.FILENAME_LIST]
+            incDoseList = testDataDict[self.INCOMING_DOSE_LIST]
             accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
             angleList = testDataDict[self.ANGLE_LIST]
             acqOrderList = testDataDict[self.ACQ_ORDER_LIST]
@@ -492,7 +552,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertEqual(tiM.getFileName(), prot._getExtraPath(filesList[i]))
                 self.assertTrue(os.path.islink(tiM.getFileName()),
                                 "Tilt series file %s is not a link." % tiM.getFileName())
-                self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), accumDoseList[i], delta=0.0001)
+                self.assertAlmostEqual(tiM.getAcquisition().getDosePerFrame(), incDoseList[i], delta=0.0001)
+                self.assertAlmostEqual(tiM.getAcquisition().getAccumDose(), accumDoseList[i], delta=0.0001)
                 self.assertAlmostEqual(tiM.getTiltAngle(), angleList[i], delta=0.0001)
                 # objId must start with 1 --> i +1
                 self.assertEqual(i + 1, tiM.getObjId(), "Tilt image Movie objId is incorrect")
@@ -550,11 +611,13 @@ class TestTomoImportTsFromMdoc(BaseTest):
         simErrorMdocDir = self.dataset.getFile('simErrorMdocDir')
         mdocList = [
             join(simErrorMdocDir, dataSet['noMaginficationMdoc']),
-            join(simErrorMdocDir, dataSet['noSamplingRateMdoc'])
+            join(simErrorMdocDir, dataSet['noSamplingRateMdoc']),
+            join(simErrorMdocDir, dataSet['noDoseMdoc'])
         ]
         expectedErrorKeyWordList = [
             '*Magnification*',  # Missing Magnification
-            '*PixelSpacing*'  # Missing Sampling Rate
+            '*PixelSpacing*',  # Missing Sampling Rate
+            '*dose*'  # Not able to get the dose
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
