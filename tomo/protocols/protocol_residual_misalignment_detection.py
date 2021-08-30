@@ -25,6 +25,8 @@
 # **************************************************************************
 
 from pyworkflow import BETA
+import pyworkflow.protocol.params as params
+from pyworkflow.utils import path
 from pwem.protocols import EMProtocol
 from tomo.protocols import ProtTomoBase
 
@@ -36,3 +38,85 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
     _label = 'Residual misalignment detection'
     _devStatus = BETA
+
+    def _defineParams(self, form):
+        form.addSection('Input')
+
+        form.addParam('inputSetOfLandmarkModels',
+                      params.PointerParam,
+                      pointerClass='SetOfLandmarkModels',
+                      important=True,
+                      label='Input set of fiducial models containing residual information.')
+
+        form.addParam('inputSetOfTiltSeries',
+                      params.PointerParam,
+                      pointerClass='SetOfTiltSeries',
+                      important=True,
+                      label='Input set of tilt-series.')
+
+    # -------------------------- INSERT steps functions ---------------------
+    def _insertAllSteps(self):
+        for lm in self.inputSetOfLandmarkModels.get():
+            lmObjId = lm.getObjId()
+            self._insertFunctionStep(self.generateResidualList, lmObjId)
+
+        # self._insertFunctionStep(self.createOutputStep)
+
+    # --------------------------- STEPS functions ----------------------------
+    def generateResidualList(self, lmObjId):
+        """ This method generates a residual list from each landmark model input set"""
+        lm = self.inputSetOfLandmarkModels.get()[lmObjId]
+
+        tsId = lm.getTsId()
+
+        extraPrefix = self._getExtraPath(tsId)
+        tmpPrefix = self._getTmpPath(tsId)
+
+        path.makePath(tmpPrefix)
+        path.makePath(extraPrefix)
+
+        listOfLMChainsMatrix = lm.retrieveLandmarkModelChains()
+
+        listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix)
+
+    # --------------------------- UTILS functions ----------------------------
+    @staticmethod
+    def normalizeResiduals(listOfLMChainsMatrix, sr):
+        """ This method multiplies the residual values by the sampling rate of the tilt-series to normalize its values to
+        a common scale.
+        :param listOfLMChainsMatrix: input set of landmark models separated by chainID.
+        :param sr: sampling rate.
+        """
+
+        for listOfLMChains in listOfLMChainsMatrix:
+            for lm in listOfLMChains:
+                lm[4] *= sr
+                lm[5] *= sr
+
+        return listOfLMChainsMatrix
+
+
+    # @staticmethod
+    # def getLandMarkModelFromTs(SoLM, tsId):
+    #     """ This method inputs a set of Landmark Models and the TsId and search for a Landmark Model with a coincident
+    #     tsId.
+    #     :param SoLM: input set of landmark models.
+    #     :param tsId: is of the landmark to search.
+    #     """
+    #
+    #     for lm in SoLM:
+    #         if lm.getTsId() == tsId:
+    #             return lm
+    #
+    # @staticmethod
+    # def getTiltSeriesFromTs(SoTS, tsId):
+    #     """ This method inputs a set of Landmark Models and the TsId and search for a Landmark Model with a coincident
+    #     tsId.
+    #     :param SoTS: input set of landmark models.
+    #     :param tsId: is of the landmark to search.
+    #     """
+    #
+    #     for ts in SoTS:
+    #         if ts.getTsId() == tsId:
+    #             return ts
+
