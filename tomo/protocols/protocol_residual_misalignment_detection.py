@@ -86,20 +86,24 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix, sr)
 
         for listOfLMChainsNorm in listOfLMChainsMatrixNorm:
-            chArea, chPerimeter = self.getResidualStatistics(listOfLMChainsNorm)
+
+            listOfLMResid = []
+
+            for lm in listOfLMChainsNorm:
+                listOfLMResid.append([lm[4], lm[5]])
+
+            chArea, chPerimeter = self.getResidualStatistics(listOfLMResid)
+
+            maxDistance = self.getMaximumDistance(listOfLMResid)
 
             print(chArea)
             print(chPerimeter)
+            print(maxDistance)
             print("-------------------------")
 
-    def getResidualStatistics(self, listOfLMChainsNorm):
+    def getResidualStatistics(self, listOfLMResid):
         """ This method calculate the statistics from each chain of residual to filter the properly aligned set of
         tilt series. """
-
-        listOfLMResid = []
-
-        for lm in listOfLMChainsNorm:
-            listOfLMResid.append([lm[4], lm[5]])
 
         convexHullArea, convexHullPerimeter = self.getConvexHullAreaAndPerimeter(listOfLMResid)
 
@@ -126,7 +130,7 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         hull = ConvexHull(listOfLMResid)
 
-        # For 2-Dimensional convex hulls volume attribute equals ot the area.
+        # For 2-Dimensional convex hulls volume attribute equals to the area.
         area = hull.volume
         perimeter = 0
 
@@ -140,6 +144,19 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
             perimeter += self.getDistance2D(np.array(hullVertices[i]), np.array(hullVertices[shiftedIndex]))
 
         return area, perimeter
+
+    def getMaximumDistance(self, listOfLMResid):
+        """ Method to calculate the maximum residual distance belonging to the same landmark chain. """
+
+        maxDistance = 0
+
+        for resid in listOfLMResid:
+            distance = self.getDistance2D(np.array([0, 0]), resid)
+
+            if distance > maxDistance:
+                maxDistance = distance
+
+        return maxDistance
 
     @staticmethod
     def getDistance2D(coordinate2Da, coordinate2Db):
