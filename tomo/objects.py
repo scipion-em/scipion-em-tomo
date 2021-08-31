@@ -1334,6 +1334,18 @@ class LandmarkModel(data.EMObject):
 
         return listOfLMChainsMatrix
 
+    def getNumberOfChains(self):
+        """ This method returns the number of chains that make up the landmark model. """
+
+        fileName = self.getFileName()
+
+        with open(fileName) as f:
+            reader = f.readlines()
+
+            vector = reader[-1].split()
+
+            return vector[3]
+
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
