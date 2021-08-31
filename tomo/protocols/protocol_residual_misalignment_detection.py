@@ -24,6 +24,10 @@
 # *
 # **************************************************************************
 
+
+import numpy as np
+from scipy.spatial import ConvexHull
+
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pyworkflow.utils import path
@@ -67,6 +71,8 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         """ This method generates a residual list from each landmark model input set"""
         lm = self.inputSetOfLandmarkModels.get()[lmObjId]
 
+        sr = lm.getTiltSeries().getSamplingRate()
+
         tsId = lm.getTsId()
 
         extraPrefix = self._getExtraPath(tsId)
@@ -77,24 +83,73 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         listOfLMChainsMatrix = lm.retrieveLandmarkModelChains()
 
-        listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix)
+        listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix, sr)
+
+        for listOfLMChainsNorm in listOfLMChainsMatrixNorm:
+            chArea, chPerimeter = self.getResidualStatistics(listOfLMChainsNorm)
+
+            print(chArea)
+            print(chPerimeter)
+            print("-------------------------")
+
+    def getResidualStatistics(self, listOfLMChainsNorm):
+        """ This method calculate the statistics from each chain of residual to filter the properly aligned set of
+        tilt series. """
+
+        listOfLMResid = []
+
+        for lm in listOfLMChainsNorm:
+            listOfLMResid.append([lm[4], lm[5]])
+
+        convexHullArea, convexHullPerimeter = self.getConvexHullAreaAndPerimeter(listOfLMResid)
+
+        return convexHullArea, convexHullPerimeter
 
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
     def normalizeResiduals(listOfLMChainsMatrix, sr):
-        """ This method multiplies the residual values by the sampling rate of the tilt-series to normalize its values to
-        a common scale.
+        """ This method multiplies the residual values by the sampling rate of the tilt-series to normalize its values
+        to a common scale.
         :param listOfLMChainsMatrix: input set of landmark models separated by chainID.
         :param sr: sampling rate.
         """
 
         for listOfLMChains in listOfLMChainsMatrix:
             for lm in listOfLMChains:
-                lm[4] *= sr
-                lm[5] *= sr
+                lm[4] = float(lm[4]) * sr
+                lm[5] = float(lm[5]) * sr
 
         return listOfLMChainsMatrix
 
+    def getConvexHullAreaAndPerimeter(self, listOfLMResid):
+        """ Method to calculate the convex hull area and perimeter containing the residuals """
+
+        hull = ConvexHull(listOfLMResid)
+
+        # For 2-Dimensional convex hulls volume attribute equals ot the area.
+        area = hull.volume
+        perimeter = 0
+
+        hullVertices = []
+
+        for position in hull.vertices:
+            hullVertices.append(hull.points[position])
+
+        for i in range(len(hullVertices)):
+            shiftedIndex = (i + 1) % len(hullVertices)
+            perimeter += self.getDistance2D(np.array(hullVertices[i]), np.array(hullVertices[shiftedIndex]))
+
+        return area, perimeter
+
+    @staticmethod
+    def getDistance2D(coordinate2Da, coordinate2Db):
+        """ Method to calculate the distance between two 2D coordinates. """
+
+        distanceVector = coordinate2Da - coordinate2Db
+        distanceVector = [i ** 2 for i in distanceVector]
+        distance = np.sqrt(sum(distanceVector))
+
+        return distance
 
     # @staticmethod
     # def getLandMarkModelFromTs(SoLM, tsId):
@@ -119,4 +174,3 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
     #     for ts in SoTS:
     #         if ts.getTsId() == tsId:
     #             return ts
-
