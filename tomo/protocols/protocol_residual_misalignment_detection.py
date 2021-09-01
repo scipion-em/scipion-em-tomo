@@ -53,18 +53,16 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
                       important=True,
                       label='Input set of fiducial models containing residual information.')
 
-
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         for lm in self.inputSetOfLandmarkModels.get():
             lmObjId = lm.getObjId()
-            self._insertFunctionStep(self.generateResidualList, lmObjId)
+            self._insertFunctionStep(self.filterLandmarkModelsByResidualStatistics, lmObjId)
 
         # self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions ----------------------------
-    def generateResidualList(self, lmObjId):
-        """ This method generates a residual list from each landmark model input set"""
+    def filterLandmarkModelsByResidualStatistics(self, lmObjId):
         lm = self.inputSetOfLandmarkModels.get()[lmObjId]
         ts = lm.getTiltSeries()
 
@@ -76,6 +74,11 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         path.makePath(tmpPrefix)
         path.makePath(extraPrefix)
 
+        residualStatistics = self.getResidualStatistics(lm, ts)
+
+    # --------------------------- UTILS functions ----------------------------
+    def generateResidualList(self, lm, ts):
+        """ This method generates a residual list from each landmark model input set"""
         firstItem = ts.getFirstItem()
 
         listOfLMChainsMatrix = lm.retrieveLandmarkModelChains()
@@ -84,6 +87,10 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         yDim = firstItem.getYDim()
 
         listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix, xDim, yDim)
+
+        # Vector containing the statistical features calculated for the set of residuals from each landmark chain
+        # belonging to the landmark model
+        residualStatistics = []
 
         for listOfLMChainsNorm in listOfLMChainsMatrixNorm:
 
@@ -98,11 +105,11 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
             totalDistance = self.getTotalDistance(listOfLMResid)
 
-            print(chArea)
-            print(chPerimeter)
-            print(maxDistance)
-            print(totalDistance)
-            print("-------------------------")
+            pca = self.getPCA(listOfLMResid)
+
+            residualStatistics.append([totalDistance, maxDistance, chArea, chPerimeter, pca[0], pca[1]])
+
+        return residualStatistics
 
     def getResidualStatistics(self, listOfLMResid):
         """ This method calculate the statistics from each chain of residual to filter the properly aligned set of
@@ -112,7 +119,6 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         return convexHullArea, convexHullPerimeter
 
-    # --------------------------- UTILS functions ----------------------------
     @staticmethod
     def normalizeResiduals(listOfLMChainsMatrix, xDim, yDim):
         """ This method multiplies the residual values by the sampling rate of the tilt-series to normalize its values
@@ -172,6 +178,15 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         return totalDistance
 
+    @staticmethod
+    def getPCA(listOfLMResid):
+        """ Method to calculate the PCA of the scatter cloud formed by the residual vectors. """
+
+        pca = PCA(n_components=2)
+        pca.fit(listOfLMResid)
+
+        # Return only the first component (remove redundant information)
+        return pca.components_[0]
 
     @staticmethod
     def getDistance2D(coordinate2Da, coordinate2Db):
