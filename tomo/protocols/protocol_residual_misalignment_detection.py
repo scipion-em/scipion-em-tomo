@@ -27,6 +27,7 @@
 
 import numpy as np
 from scipy.spatial import ConvexHull
+from sklearn.decomposition import PCA
 
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
@@ -52,11 +53,6 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
                       important=True,
                       label='Input set of fiducial models containing residual information.')
 
-        form.addParam('inputSetOfTiltSeries',
-                      params.PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      label='Input set of tilt-series.')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
@@ -70,8 +66,7 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
     def generateResidualList(self, lmObjId):
         """ This method generates a residual list from each landmark model input set"""
         lm = self.inputSetOfLandmarkModels.get()[lmObjId]
-
-        sr = lm.getTiltSeries().getSamplingRate()
+        ts = lm.getTiltSeries()
 
         tsId = lm.getTsId()
 
@@ -81,9 +76,14 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         path.makePath(tmpPrefix)
         path.makePath(extraPrefix)
 
+        firstItem = ts.getFirstItem()
+
         listOfLMChainsMatrix = lm.retrieveLandmarkModelChains()
 
-        listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix, sr)
+        xDim = firstItem.getXDim()
+        yDim = firstItem.getYDim()
+
+        listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix, xDim, yDim)
 
         for listOfLMChainsNorm in listOfLMChainsMatrixNorm:
 
@@ -96,9 +96,12 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
             maxDistance = self.getMaximumDistance(listOfLMResid)
 
+            totalDistance = self.getTotalDistance(listOfLMResid)
+
             print(chArea)
             print(chPerimeter)
             print(maxDistance)
+            print(totalDistance)
             print("-------------------------")
 
     def getResidualStatistics(self, listOfLMResid):
@@ -111,17 +114,18 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
-    def normalizeResiduals(listOfLMChainsMatrix, sr):
+    def normalizeResiduals(listOfLMChainsMatrix, xDim, yDim):
         """ This method multiplies the residual values by the sampling rate of the tilt-series to normalize its values
         to a common scale.
         :param listOfLMChainsMatrix: input set of landmark models separated by chainID.
-        :param sr: sampling rate.
+        :param xDim: X dimension of the input tilt-image used as a normalization factor.
+        :param yDim: Y dimension of the input tilt-image used as a normalization factor.
         """
 
         for listOfLMChains in listOfLMChainsMatrix:
             for lm in listOfLMChains:
-                lm[4] = float(lm[4]) * sr
-                lm[5] = float(lm[5]) * sr
+                lm[4] = (float(lm[4]) / xDim) * 100
+                lm[5] = (float(lm[5]) / yDim) * 100
 
         return listOfLMChainsMatrix
 
@@ -157,6 +161,17 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
                 maxDistance = distance
 
         return maxDistance
+
+    def getTotalDistance(self, listOfLMResid):
+        """ Method to calculate the total distance of the trajectory """
+
+        totalDistance = 0
+
+        for resid in listOfLMResid:
+            totalDistance += self.getDistance2D(np.array([0, 0]), resid)
+
+        return totalDistance
+
 
     @staticmethod
     def getDistance2D(coordinate2Da, coordinate2Db):
