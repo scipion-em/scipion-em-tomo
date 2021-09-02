@@ -58,12 +58,18 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         for lm in self.inputSetOfLandmarkModels.get():
             lmObjId = lm.getObjId()
             self._insertFunctionStep(self.filterLandmarkModelsByResidualStatistics, lmObjId)
+            self._insertFunctionStep(self.filterImageAlignmentByResidualStatistics, lmObjId)
 
         # self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions ----------------------------
     def filterLandmarkModelsByResidualStatistics(self, lmObjId):
+        """ This method will evaluate the alignment quality of a tilt series based of the statistics of the residuals
+        from the landmark chains obtained in the alignment process. """
+
         lm = self.inputSetOfLandmarkModels.get()[lmObjId]
+        lm._infoTable = None
+
         ts = lm.getTiltSeries()
 
         tsId = lm.getTsId()
@@ -74,11 +80,25 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         path.makePath(tmpPrefix)
         path.makePath(extraPrefix)
 
-        residualStatistics = self.getResidualStatistics(lm, ts)
+        residualStatistics = self.calculateResidualStatistics(lm, ts)
+
+        # print(residualStatistics)
+
+    def filterImageAlignmentByResidualStatistics(self, lmObjId):
+        """ This method will evaluate the alignment quality of a tilt series based of the statistics of the residuals
+        from the landmark chains obtained in the alignment process. """
+
+        lm = self.inputSetOfLandmarkModels.get()[lmObjId]
+
+        ts = lm.getTiltSeries()
+
+        imageResidualStatistics = self.calculateImageResidualStatistics(lm, ts)
+
+        # print(imageResidualStatistics)
 
     # --------------------------- UTILS functions ----------------------------
-    def generateResidualList(self, lm, ts):
-        """ This method generates a residual list from each landmark model input set"""
+    def calculateResidualStatistics(self, lm, ts):
+        """ This method calculates the residual statistics from each landmark model chain from input set"""
         firstItem = ts.getFirstItem()
 
         listOfLMChainsMatrix = lm.retrieveLandmarkModelChains()
@@ -86,7 +106,10 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         xDim = firstItem.getXDim()
         yDim = firstItem.getYDim()
 
-        listOfLMChainsMatrixNorm = self.normalizeResiduals(listOfLMChainsMatrix, xDim, yDim)
+        listOfLMChainsMatrixNorm = []
+
+        for listOfLMChains in listOfLMChainsMatrix:
+             listOfLMChainsMatrixNorm.append(self.normalizeResiduals(listOfLMChains, xDim, yDim))
 
         # Vector containing the statistical features calculated for the set of residuals from each landmark chain
         # belonging to the landmark model
@@ -94,46 +117,69 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         for listOfLMChainsNorm in listOfLMChainsMatrixNorm:
 
-            listOfLMResid = []
+            listOfLMResidNorm = []
 
             for lm in listOfLMChainsNorm:
-                listOfLMResid.append([lm[4], lm[5]])
+                listOfLMResidNorm.append([lm[4], lm[5]])
 
-            chArea, chPerimeter = self.getResidualStatistics(listOfLMResid)
+            chArea, chPerimeter = self.getConvexHullAreaAndPerimeter(listOfLMResidNorm)
 
-            maxDistance = self.getMaximumDistance(listOfLMResid)
+            maxDistance = self.getMaximumDistance(listOfLMResidNorm)
 
-            totalDistance = self.getTotalDistance(listOfLMResid)
+            totalDistance = self.getTotalDistance(listOfLMResidNorm)
 
-            pca = self.getPCA(listOfLMResid)
+            pcaComponents, pcaVariance = self.getPCA(listOfLMResidNorm)
 
-            residualStatistics.append([totalDistance, maxDistance, chArea, chPerimeter, pca[0], pca[1]])
+            residualStatistics.append([totalDistance, maxDistance, chArea, chPerimeter, pcaComponents, pcaVariance])
 
-        return residualStatistics
+        return np.array(residualStatistics)
 
-    def getResidualStatistics(self, listOfLMResid):
-        """ This method calculate the statistics from each chain of residual to filter the properly aligned set of
-        tilt series. """
+    def calculateImageResidualStatistics(self, lm, ts):
+        """ This method calculates the set of residual statistics sorting them in groups belonging to the same
+        tilt-image """
 
-        convexHullArea, convexHullPerimeter = self.getConvexHullAreaAndPerimeter(listOfLMResid)
+        firstItem = ts.getFirstItem()
 
-        return convexHullArea, convexHullPerimeter
+        xDim = firstItem.getXDim()
+        yDim = firstItem.getYDim()
 
+        imageResidualStatistics = []
+
+        for ti in ts:
+            tiIndex = ti.getIndex()
+
+            listOfLMInImage = lm.getLandmarksFromImage(tiIndex)
+
+            listOfLMInImageNorm = self.normalizeResiduals(listOfLMInImage, xDim, yDim)
+
+            listOfLMResidInImageNorm = []
+
+            for lmInImageNorm in listOfLMInImageNorm:
+                listOfLMResidInImageNorm.append([lmInImageNorm[4], lmInImageNorm[5]])
+
+            resultantVector = self.getResultantVector(listOfLMResidInImageNorm)
+
+            self.getCovarianceMatrix(listOfLMResidInImageNorm)
+
+            imageResidualStatistics.append([resultantVector[0], resultantVector[1]])
+
+        return np.array(imageResidualStatistics)
+
+    # --------------------------- CALCULUS functions -------------------------
     @staticmethod
-    def normalizeResiduals(listOfLMChainsMatrix, xDim, yDim):
-        """ This method multiplies the residual values by the sampling rate of the tilt-series to normalize its values
-        to a common scale.
-        :param listOfLMChainsMatrix: input set of landmark models separated by chainID.
+    def normalizeResiduals(listOfLMChains, xDim, yDim):
+        """ This method divides the residual values by the tilt-image dimensions to normalize its values to a common
+        scale.
+        :param listOfLMChains: input set of landmark models separated by chainID.
         :param xDim: X dimension of the input tilt-image used as a normalization factor.
         :param yDim: Y dimension of the input tilt-image used as a normalization factor.
         """
 
-        for listOfLMChains in listOfLMChainsMatrix:
-            for lm in listOfLMChains:
-                lm[4] = (float(lm[4]) / xDim) * 100
-                lm[5] = (float(lm[5]) / yDim) * 100
+        for lm in listOfLMChains:
+            lm[4] = (float(lm[4]) / xDim) * 100
+            lm[5] = (float(lm[5]) / yDim) * 100
 
-        return listOfLMChainsMatrix
+        return listOfLMChains
 
     def getConvexHullAreaAndPerimeter(self, listOfLMResid):
         """ Method to calculate the convex hull area and perimeter containing the residuals """
@@ -185,8 +231,36 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         pca = PCA(n_components=2)
         pca.fit(listOfLMResid)
 
-        # Return only the first component (remove redundant information)
-        return pca.components_[0]
+        # Return the feature space basis directions (.components_) and modulus (.explained_variance_)
+        return pca.components_, pca.explained_variance_
+
+    @staticmethod
+    def getResultantVector(listOfLMResid):
+        """ This method calculates the resultant vector from all the residual vectors belonging to the same image"""
+
+        resultantXVector = 0
+        resultantYVector = 0
+
+        for vector in listOfLMResid:
+            resultantXVector += vector[0]
+            resultantYVector += vector[1]
+
+        print([resultantXVector, resultantYVector])
+
+        return [resultantXVector, resultantYVector]
+
+    def getCovarianceMatrix(self, listOfLMResid):
+        """ This method calculates the resultant vector from all the residual vectors belonging to the same image"""
+
+        listOfLMResid = np.array(listOfLMResid)
+
+        print(len(listOfLMResid))
+
+        covMatrix = np.cov(listOfLMResid)
+
+        print(covMatrix.shape)
+
+        # print(covMatrix)
 
     @staticmethod
     def getDistance2D(coordinate2Da, coordinate2Db):
@@ -197,6 +271,12 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         distance = np.sqrt(sum(distanceVector))
 
         return distance
+
+    # --------------------------- FILTER functions ----------------------------
+    @staticmethod
+    def filterTotalDistance(totalDistanceVector):
+        totalDistanceCriterion = True
+        totalDistanceSDCriterion = True
 
     # @staticmethod
     # def getLandMarkModelFromTs(SoLM, tsId):
