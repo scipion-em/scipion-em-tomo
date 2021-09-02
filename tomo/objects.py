@@ -1233,6 +1233,8 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to an specific tilt-series."""
 
+    loadedInfoTable = {}
+
     def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
@@ -1296,19 +1298,23 @@ class LandmarkModel(data.EMObject):
 
         fileName = self.getFileName()
 
-        outputInfo = []
+        if not fileName in self.loadedInfoTable:
 
-        with open(fileName) as f:
-            reader = csv.reader(f)
+            outputInfo = []
 
-            # Ignore header
-            next(reader)
+            with open(fileName) as f:
+                reader = csv.reader(f)
 
-            for line in reader:
-                vector = line[0].split()
-                outputInfo.append(vector)
+                # Ignore header
+                next(reader)
 
-        return outputInfo
+                for line in reader:
+                    vector = line[0].split()
+                    outputInfo.append(vector)
+
+            self.loadedInfoTable[fileName] = outputInfo
+
+        return self.loadedInfoTable[fileName]
 
     def retrieveLandmarkModelChains(self):
         """ This method returns a list of list of landmarks containing all the information of the model split by
@@ -1345,6 +1351,21 @@ class LandmarkModel(data.EMObject):
             vector = reader[-1].split()
 
             return vector[3]
+
+    def getLandmarksFromImage(self, index):
+        """ This method return the list of landmark belonging ot the same tilt-image.
+        :param index: Tilt-image index from which to obtain the landmarks.
+        """
+
+        tiLmInfoTable = []
+
+        lmInfoTable = self.retrieveInfoTable()
+
+        for line in lmInfoTable:
+            if int(line[2]) == index:
+                tiLmInfoTable.append(line)
+
+        return tiLmInfoTable
 
 
 class SetOfLandmarkModels(data.EMSet):
