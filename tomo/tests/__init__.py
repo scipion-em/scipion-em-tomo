@@ -46,7 +46,8 @@ DataSet(name='tomo-em', folder='tomo-em',
                'noMaginficationMdoc': 'NoMagnification.mdoc',
                'noSamplingRateMdoc': 'NoPixelSpacing.mdoc',
                'noVoltagenoSRateMdoc': 'NoVoltage_NoPixelSpacing.mdoc',
-               'someMissingAnglesMdoc': 'SomeTiltAnglesMissing_1_7_48.mdoc'
+               'someMissingAnglesMdoc': 'SomeTiltAnglesMissing_1_7_48.mdoc',
+               'noDoseMdoc': 'noDose.mdoc'
         })
 
 DataSet(name='reliontomo', folder='reliontomo',
