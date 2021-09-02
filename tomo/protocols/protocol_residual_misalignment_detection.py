@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import os
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -82,6 +82,10 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         residualStatistics = self.calculateResidualStatistics(lm, ts)
 
+        outputTestPath = os.path.join(extraPrefix, "filterLandmarkModels_fedetest.csv")
+
+        np.savetxt(outputTestPath, residualStatistics, delimiter='\t', fmt='%.8e')
+
         # print(residualStatistics)
 
     def filterImageAlignmentByResidualStatistics(self, lmObjId):
@@ -93,6 +97,12 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
         ts = lm.getTiltSeries()
 
         imageResidualStatistics = self.calculateImageResidualStatistics(lm, ts)
+
+        tsId = lm.getTsId()
+        extraPrefix = self._getExtraPath(tsId)
+        outputTestPath = os.path.join(extraPrefix, "filterImage_fedetest.csv")
+
+        np.savetxt(outputTestPath, imageResidualStatistics, delimiter='\t', fmt='%.8e')
 
         # print(imageResidualStatistics)
 
@@ -130,7 +140,12 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
             pcaComponents, pcaVariance = self.getPCA(listOfLMResidNorm)
 
-            residualStatistics.append([totalDistance, maxDistance, chArea, chPerimeter, pcaComponents, pcaVariance])
+            print(pcaComponents)
+            print(pcaVariance)
+
+            residualStatistics.append([totalDistance, maxDistance, chArea, chPerimeter, pcaComponents[0][0],
+                                       pcaComponents[0][1], pcaComponents[1][0], pcaComponents[1][1], pcaVariance[0],
+                                       pcaVariance[1]])
 
         return np.array(residualStatistics)
 
@@ -245,8 +260,6 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
             resultantXVector += vector[0]
             resultantYVector += vector[1]
 
-        print([resultantXVector, resultantYVector])
-
         return [resultantXVector, resultantYVector]
 
     def getCovarianceMatrix(self, listOfLMResid):
@@ -254,13 +267,15 @@ class ProtResidualMisalignmentDetection(EMProtocol, ProtTomoBase):
 
         listOfLMResid = np.array(listOfLMResid)
 
-        print(len(listOfLMResid))
+        # print(len(listOfLMResid))
 
         covMatrix = np.cov(listOfLMResid)
 
-        print(covMatrix.shape)
+        # print(covMatrix.shape)
 
         # print(covMatrix)
+
+        return covMatrix
 
     @staticmethod
     def getDistance2D(coordinate2Da, coordinate2Db):
