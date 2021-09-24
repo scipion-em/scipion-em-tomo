@@ -969,7 +969,7 @@ class MDoc:
         if normTSID[0].isdigit():
             normTSID = "TS_" + normTSID
 
-        return normTSID
+        return normTSID.replace('-', '_').replace('.', '')
 
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
         validateTSFromMdocErrMsg = ''
