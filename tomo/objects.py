@@ -1186,9 +1186,15 @@ class SetOfSubTomograms(data.SetOfVolumes):
     REP_TYPE = SubTomogram
 
     def __init__(self, **kwargs):
-        data.SetOfVolumes.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self._acquisition = TomoAcquisition()
         self._coordsPointer = Pointer()
+
+    def copyInfo(self, other):
+        """ Copy basic information (sampling rate and ctf)
+        from other set of images to current one"""
+        super().copyInfo(other)
+        self.copyAttributes(other, '_coordsPointer')
 
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
