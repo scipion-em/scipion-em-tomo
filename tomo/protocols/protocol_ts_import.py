@@ -1044,7 +1044,7 @@ class MDoc:
                         # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
                         tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
                         # Check if it's a string which represents a float or not
-                        if tiltAxisAngle.replace('.', '', 1).isdigit():
+                        if tiltAxisAngle.lstrip('-+').replace('.', '', 1).isdigit():
                             self._tiltAxisAngle = float(tiltAxisAngle)
                 elif line.strip():
                     key, value = line.split('=')
