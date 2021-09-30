@@ -668,7 +668,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             let's add a prefix if it is not the case
             """
             tsId = match.group('TS')
-            return tsId
+            return normalizeTSId(tsId)
 
         def _addOne(fileList, file, match):
             """ Add one file matching to the list. """
@@ -939,6 +939,20 @@ class ProtImportTsMovies(ProtImportTsBase):
             return []
 
 
+def normalizeTSId(rawTSId):
+    """ Normalizes the name of a TS to prevent sqlite errors, it ends up as a table in a set"""
+    # remove paths and extension
+    normTSID = removeBaseExt(rawTSId)
+
+    # Avoid dots case: TS_234.mrc.mdoc
+    normTSID = normTSID.split(".")[0]
+
+    if normTSID[0].isdigit():
+        normTSID = "TS_" + normTSID
+
+    return normTSID.replace('-', '_').replace('.', '')
+
+
 class MDoc:
 
     def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None,
@@ -957,20 +971,6 @@ class MDoc:
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
-    @staticmethod
-    def normalizeTSId(rawTSId):
-        """ Normalizes the name of a TS to prevent sqlite errors, it ends up as a table in a set"""
-        # remove paths and extension
-        normTSID = removeBaseExt(rawTSId)
-
-        # Avoid dots case: TS_234.mrc.mdoc
-        normTSID = normTSID.split(".")[0]
-
-        if normTSID[0].isdigit():
-            normTSID = "TS_" + normTSID
-
-        return normTSID.replace('-', '_').replace('.', '')
-
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
         validateTSFromMdocErrMsg = ''
         tsFile = None
@@ -979,7 +979,7 @@ class MDoc:
 
         # Get acquisition general info
         self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
-        self._tsId = self.normalizeTSId(mdoc)
+        self._tsId = normalizeTSId(mdoc)
         parentFolder = getParentFolder(mdoc)
         if not isImportingTsMovies:
             # Some mdoc files point to an .st file stored in the ImageFile header line
