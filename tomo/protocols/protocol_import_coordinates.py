@@ -33,6 +33,7 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
+from pyworkflow.utils import copyFile
 
 from ..objects import SetOfCoordinates3D
 from .protocol_base import ProtTomoImportFiles
@@ -41,6 +42,12 @@ from ..utils import existsPlugin
 
 import tomo.constants as const
 
+IMPORT_FROM_AUTO = 'auto'
+IMPORT_FROM_TXT = 'txt'
+IMPORT_FROM_SQLITE = 'sqlite'
+IMPORT_FROM_EMAN = 'eman'
+IMPORT_FROM_DYNAMO = 'dynamo'
+
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
     """Protocol to import a set of tomograms to the project"""
@@ -48,21 +55,16 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     _label = 'import set of coordinates 3D'
     _devStatus = BETA
 
-    IMPORT_FROM_AUTO = 'auto'
-    IMPORT_FROM_TXT = 'txt'
-    IMPORT_FROM_EMAN = 'eman'
-    IMPORT_FROM_DYNAMO = 'dynamo'
-
     def _getImportChoices(self):
         """ Return a list of possible choices
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        importChoices = ['auto', 'txt']
+        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_SQLITE]
         if existsPlugin('emantomo'):
-            importChoices.append('eman')
+            importChoices.append(IMPORT_FROM_EMAN)
         if existsPlugin('dynamo'):
-            importChoices.append('dynamo')
+            importChoices.append(IMPORT_FROM_DYNAMO)
         return importChoices
 
     def _getDefaultChoice(self):
@@ -93,24 +95,29 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         importTomograms = self.importTomograms.get()
         suffix = self._getOutputSuffix(SetOfCoordinates3D)
         coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
-        coordsSet.setBoxSize(self.boxSize.get())
-        coordsSet.setSamplingRate(samplingRate)
-        coordsSet.setPrecedents(importTomograms)
-        ci = self.getImportClass()
-        for tomo in importTomograms.iterItems():
-            tomoName = basename(os.path.splitext(tomo.getFileName())[0])
-            for coordFile, fileId in self.iterFiles():
-                fileName = basename(os.path.splitext(coordFile)[0])
-                if tomo is not None and tomoName == fileName:
-                    # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() == self.IMPORT_FROM_EMAN or self.getImportFrom() == self.IMPORT_FROM_TXT:
-                        def addCoordinate(coord, x, y, z):
-                            coord.setVolume(tomo.clone())
-                            coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
-                            coordsSet.append(coord)
-                        ci.importCoordinates3D(coordFile, addCoordinate)
-                    elif self.getImportFrom() == self.IMPORT_FROM_DYNAMO:
-                        ci(coordFile, coordsSet, tomo.clone())
+        if self.getImportFrom() == IMPORT_FROM_SQLITE:
+            sqliteFile = self.getMatchFiles()[0]
+            copyFile(sqliteFile, self._getPath(basename(sqliteFile)))
+            coordsSet._mapperPath.set(sqliteFile)
+        else:
+            coordsSet.setBoxSize(self.boxSize.get())
+            coordsSet.setSamplingRate(samplingRate)
+            coordsSet.setPrecedents(importTomograms)
+            ci = self.getImportClass()
+            for tomo in importTomograms.iterItems():
+                tomoName = basename(os.path.splitext(tomo.getFileName())[0])
+                for coordFile, fileId in self.iterFiles():
+                    fileName = basename(os.path.splitext(coordFile)[0])
+                    if tomo is not None and tomoName == fileName:
+                        # Parse the coordinates in the given format for this micrograph
+                        if self.getImportFrom() == IMPORT_FROM_EMAN or self.getImportFrom() == IMPORT_FROM_TXT:
+                            def addCoordinate(coord, x, y, z):
+                                coord.setVolume(tomo.clone())
+                                coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
+                                coordsSet.append(coord)
+                            ci.importCoordinates3D(coordFile, addCoordinate)
+                        elif self.getImportFrom() == IMPORT_FROM_DYNAMO:
+                            ci(coordFile, coordsSet, tomo.clone())
 
         args = {}
         args[self.OUTPUT_PREFIX] = coordsSet
@@ -203,37 +210,38 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):
         importFrom = self._getImportChoices()[self.importFrom.get()]
-        if importFrom == self.IMPORT_FROM_AUTO:
+        if importFrom == IMPORT_FROM_AUTO:
             importFrom = self.getFormat()
         return importFrom
 
     def getFormat(self):
         for coordFile, _ in self.iterFiles():
             if coordFile.endswith('.txt'):
-                return self.IMPORT_FROM_TXT
+                return IMPORT_FROM_TXT
             if coordFile.endswith('.json') and existsPlugin('emantomo'):
-                return self.IMPORT_FROM_EMAN
+                return IMPORT_FROM_EMAN
             if coordFile.endswith('.tbl') and existsPlugin('dynamo'):
-                return self.IMPORT_FROM_DYNAMO
+                return IMPORT_FROM_DYNAMO
         return -1
 
     def getImportClass(self):
         """ Return the class in charge of importing the files. """
         importFrom = self.getImportFrom()
 
-        if importFrom == self.IMPORT_FROM_EMAN:
+        if importFrom == IMPORT_FROM_EMAN:
             EmanImport = Domain.importFromPlugin('emantomo.convert', 'EmanTomoImport',
                                                  errorMsg='Eman is needed to import .json or '
                                                           '.box files',
                                                  doRaise=True)
             return EmanImport(self, None)
 
-        elif importFrom == self.IMPORT_FROM_DYNAMO:
+        elif importFrom == IMPORT_FROM_DYNAMO:
             readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
             return readDynCoord
 
-        elif importFrom == self.IMPORT_FROM_TXT:
+        elif importFrom == IMPORT_FROM_TXT:
             return TomoImport(self)
+
         else:
             self.importFilePath = ''
             return None

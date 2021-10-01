@@ -33,6 +33,7 @@ from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
 from ..constants import BOTTOM_LEFT_CORNER
+from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO
 from ..utils import existsPlugin
 import tomo.protocols
 
@@ -158,7 +159,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
                                                    objLabel='Import from %s - %s' % (program, ext),
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
+                                                   auto=IMPORT_FROM_AUTO,
                                                    filesPath=self.dataset.getPath(),
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern=pattern, boxSize=32,
