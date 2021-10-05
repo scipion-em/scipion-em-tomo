@@ -60,7 +60,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_SQLITE]
+        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT]  #, IMPORT_FROM_SQLITE]
         if existsPlugin('emantomo'):
             importChoices.append(IMPORT_FROM_EMAN)
         if existsPlugin('dynamo'):
