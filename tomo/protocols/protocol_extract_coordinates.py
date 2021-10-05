@@ -24,6 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from os.path import basename
 
 import numpy as np
 
@@ -86,41 +87,24 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         inSubTomos = self.getInputSubTomos()
         scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
         print("Scaling coordinates by a factor *%0.2f*" % scale)
-        filesTomo = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomos.iterItems()]
 
+        # Ensure the order when indexing the set based on the file names
+        ind = np.argsort([basename(tomo.getFileName()) for tomo in inTomos])
+        tomoList = [tomo.clone() for tomo in inTomos]
+        inTomosSorted = []
+        for i in ind:
+            inTomosSorted.append(tomoList[i])
+        filesTomoSorted = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomosSorted]
         suffix = ''
+
         self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
         self.outputCoords.setSamplingRate(inTomos.getSamplingRate())
 
         def appendCoordFromSubTomo(subTomo, boxSize):
             coord = subTomo.getCoordinate3D()
-            tomoKey = coord.getVolId()
-            tomo = inTomos[tomoKey]
+            tomo = coord.getVolume()
 
-            if tomo is None:
-                print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
-                try:
-                    idx = filesTomo.index(pwutils.removeBaseExt(subTomo.getVolName()))
-                except:
-                    idx = None
-                if idx is not None:
-                    if len(filesTomo) == 1:
-                        newCoord.setVolume(inTomos.getFirstItem())
-                        coord.setVolume(inTomos.getFirstItem())
-                    else:
-                        newCoord.setVolume(inTomos[idx+1])
-                        coord.setVolume(inTomos[idx+1])
-                    x, y, z = coord.getPosition(const.SCIPION)
-                    newCoord.copyObjId(subTomo)
-
-                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
-                    newCoord.setBoxSize(boxSize)
-                    newCoord.setMatrix(checkMatrix(subTomo, coord))
-                    if coord.hasGroupId():
-                        newCoord.setGroupId(coord.getGroupId())
-                    self.outputCoords.append(newCoord)
-            else:
-                coord.setVolume(tomo)
+            if tomo:
                 newCoord.copyObjId(subTomo)
                 x, y, z = coord.getPosition(const.SCIPION)
                 newCoord.setVolume(tomo)
@@ -129,6 +113,31 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 newCoord.setBoxSize(boxSize)
                 newCoord.setMatrix(checkMatrix(subTomo, coord))
                 self.outputCoords.append(newCoord)
+            else:
+                tomoKey = coord.getVolId()
+                tomo = inTomos[tomoKey]
+                if tomo is None:
+                    print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
+                    try:
+                        idx = filesTomoSorted.index(pwutils.removeBaseExt(subTomo.getVolName()))
+                    except:
+                        idx = None
+                    if idx is not None:
+                        if len(filesTomoSorted) == 1:
+                            newCoord.setVolume(inTomos.getFirstItem())
+                            coord.setVolume(inTomos.getFirstItem())
+                        else:
+                            newCoord.setVolume(inTomosSorted[idx])
+                            coord.setVolume(inTomosSorted[idx])
+                        x, y, z = coord.getPosition(const.SCIPION)
+                        newCoord.copyObjId(subTomo)
+
+                        newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
+                        newCoord.setBoxSize(boxSize)
+                        newCoord.setMatrix(checkMatrix(subTomo, coord))
+                        if coord.hasGroupId():
+                            newCoord.setGroupId(coord.getGroupId())
+                        self.outputCoords.append(newCoord)
 
         def checkMatrix(subTomo, coord):
             transform_subTomo = subTomo.getTransform().getMatrix()
