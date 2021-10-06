@@ -128,8 +128,8 @@ class TiltSeriesTreeProvider(TreeProvider):
             key = '%s.%s' % (tsId, objId)
             text = objId
 
-            dose = obj.getAcquisition().getAccumDose()
-            adqOrder = obj.getAcquisitionOrder()
+            dose = obj.getAcquisition().getAccumDose() if hasattr(obj, '_accumDose') else None
+            adqOrder = obj.getAcquisitionOrder() if hasattr(obj, '_acqOrder') else None
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),

@@ -54,7 +54,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
     """ Wrapper to visualize tomo objects
     with default viewers such as xmipp/showj and chimera. """
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
-    _targets = [ProtImportTomograms, ProtImportSubTomograms, SetOfSubTomograms]
+    _targets = []
     _label = 'viewer input tomogram'
 
     def _defineParams(self, form):

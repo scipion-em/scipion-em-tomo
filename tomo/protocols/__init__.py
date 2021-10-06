@@ -38,3 +38,4 @@ from .protocol_assign_tomo2subtomo import ProtAssignTomo2Subtomo
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
 from .protocol_consensus_classes_subtomo import ProtConsensusClassesSubtomo
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
+from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
