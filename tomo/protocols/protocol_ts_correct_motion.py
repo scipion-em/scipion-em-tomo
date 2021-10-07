@@ -418,8 +418,8 @@ class ProtTsCorrectMotion(ProtTsProcess):
     def getGainAndDark(self):
         """ Return temporary paths of gain and dark if relevant. """
         inputTs = self.inputTiltSeriesM.get()
-        gain = self._getTmpPath('gain.mrc') if inputTs.getGain() else None
-        dark = self._getTmpPath('dark.mrc') if inputTs.getDark() else None
+        gain = os.path.abspath(self._getTmpPath('gain.mrc')) if inputTs.getGain() else None
+        dark = os.path.abspath(self._getTmpPath('dark.mrc')) if inputTs.getDark() else None
         return gain, dark
 
     def _getFrameRange(self, n, prefix):
