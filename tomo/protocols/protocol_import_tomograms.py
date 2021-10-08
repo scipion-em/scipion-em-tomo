@@ -156,10 +156,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                                  zDim / -2. * samplingRate)
 
             tomo.setOrigin(origin)  # read origin from form
-
-            newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
-
-            # newFileName = abspath(self._getVolumeFileName(newFileName))
+            newFileName = basename(fileName)
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
