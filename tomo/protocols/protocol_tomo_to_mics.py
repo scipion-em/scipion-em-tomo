@@ -31,9 +31,11 @@ from pwem.objects import SetOfMicrographs, Micrograph
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, IntParam
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import replaceExt
+from pyworkflow.utils import replaceExt, removeExt
 
-import tomo.objects as tomoObjs
+from tomo.constants import SCIPION, BOTTOM_LEFT_CORNER
+from tomo.objects import SetOfCoordinates3D, Coordinate3D
+
 
 class ProtTomoToMicsOutput(enum.Enum):
     outputMicrographs = SetOfMicrographs()
@@ -72,10 +74,6 @@ class ProtTomoToMics(EMProtocol):
         self._defineSourceRelation(self.input, output)
 
     # --------------------------- UTILS functions --------------------------------------------
-    @staticmethod
-    def tomoSliceToMicName(tomo, slice):
-        return "S%s_%s" % (slice, basename(tomo.getFileName()))
-
     def appendMicsFromTomogram(self, output, tomo):
 
         self.info("Creating micrographs for %s" % tomo.getFileName())
@@ -87,7 +85,7 @@ class ProtTomoToMics(EMProtocol):
         # For each slice
         for index in range(0, len(data),self.slicesGap.get()):
             self.debug("Creating micrograph for slice %s" % index)
-            micName = self.tomoSliceToMicName(tomo, index)
+            micName = tomoSliceToMicName(tomo, index)
             outputMicName = self._getExtraPath(micName)
             outputMicName = replaceExt(outputMicName, "mrc")
             slice = data[index]
@@ -116,3 +114,87 @@ class ProtTomoToMics(EMProtocol):
     def _validate(self):
         validateMsgs = []
         return validateMsgs
+
+
+class Prot2DcoordsTo3DCoordsOutput(enum.Enum):
+    outputCoordinates = SetOfCoordinates3D()
+
+class Prot2DcoordsTo3DCoords(EMProtocol):
+    """ Turns 2d coordinates into set of 3d coordinates. Works in coordination with 'tomograms to micrographs' protocol"""
+    _label = '2d coordinates to 3d coordinates'
+    _devStatus = BETA
+    _possibleOutputs = Prot2DcoordsTo3DCoordsOutput
+
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        form.addParam('tomograms', PointerParam, pointerClass='SetOfTomograms',
+                      label='Tomograms',
+                      help='Select the tomograms to be associated to the 3D coordinates')
+        form.addParam('coordinates', PointerParam, pointerClass='SetOfCoordinates', label="2D Coordinates",
+                      help='Set of 2d coordinates picked on tomogram slices.')
+
+    # --------------------------- INSERT steps functions --------------------------
+    def _insertAllSteps(self):
+        self._insertFunctionStep('createOutputStep')
+
+    # --------------------------- STEPS functions --------------------------------------------
+    def createOutputStep(self):
+        tomograms = self.tomograms.get()
+        coordinates = self.coordinates.get()
+
+        output = SetOfCoordinates3D.create(self._getPath())
+        # output.copyInfo(input)
+        output.setPrecedents(tomograms)
+        output.setBoxSize(coordinates.getBoxSize())
+
+        # Get a dictionary of tomograms by tsId
+        tomoDict = dict()
+        for tomogram in tomograms:
+            tomo = tomogram.clone()
+            tomoDict[removeExt(basename(tomo.getFileName()))] = tomo
+
+        # For each 2d coordinate
+        for cord2d in coordinates:
+
+            # Extract Z
+            micName = coordinates.getMicrographs()[cord2d.getMicId()].getFileName()
+            z , fileName = sliceAndNameFromMicName(micName)
+            newCoord = Coordinate3D()
+            newCoord.setVolume(tomoDict[fileName])
+            newCoord.setX(cord2d.getX(), BOTTOM_LEFT_CORNER)
+            newCoord.setY(cord2d.getY(), BOTTOM_LEFT_CORNER)
+            newCoord.setZ(z, BOTTOM_LEFT_CORNER)
+            newCoord.setBoxSize(coordinates.getBoxSize())
+            output.append(newCoord)
+
+        self._defineOutputs(**{Prot2DcoordsTo3DCoordsOutput.outputCoordinates.name: output})
+        self._defineSourceRelation(self.coordinates, output)
+
+    # --------------------------- UTILS functions --------------------------------------------
+
+
+    # --------------------------- INFO functions --------------------------------------------
+    def _summary(self):
+        summary = []
+        return summary
+
+    def _methods(self):
+        methods = []
+        return methods
+
+    def _validate(self):
+        validateMsgs = []
+        return validateMsgs
+
+
+def tomoSliceToMicName(tomo, slice):
+    return "S%s_%s" % (slice, basename(tomo.getFileName()))
+
+def sliceAndNameFromMicName(micname):
+    """ Extracts z and tomo name from a micname composed with tomoSliceToMicName"""
+
+    parts = removeExt(basename(micname)).split("_")
+    slice = parts[0]
+    slice = int(slice.replace("S", ""))
+    fileName = "_".join(parts[1:])
+    return slice, fileName
