@@ -72,6 +72,10 @@ class ProtTomoToMics(EMProtocol):
         self._defineSourceRelation(self.input, output)
 
     # --------------------------- UTILS functions --------------------------------------------
+    @staticmethod
+    def tomoSliceToMicName(tomo, slice):
+        return "S%s_%s" % (slice, basename(tomo.getFileName()))
+
     def appendMicsFromTomogram(self, output, tomo):
 
         self.info("Creating micrographs for %s" % tomo.getFileName())
@@ -83,7 +87,7 @@ class ProtTomoToMics(EMProtocol):
         # For each slice
         for index in range(0, len(data),self.slicesGap.get()):
             self.debug("Creating micrograph for slice %s" % index)
-            outputMicName = self._getExtraPath("S%s_%s" % (index, basename(tomo.getFileName())))
+            outputMicName = self._getExtraPath(self.tomoSliceToMicName(tomo, index))
             outputMicName = replaceExt(outputMicName, "mrc")
             slice = data[index]
             micImg = ImageHandler()
@@ -93,6 +97,7 @@ class ProtTomoToMics(EMProtocol):
             # Create the micrograph metadata object
             newMic = Micrograph()
             newMic.setFileName(outputMicName)
+            newMic.setMicName()
             newMic.setSamplingRate(tomo.getSamplingRate())
 
             # Append it
