@@ -87,7 +87,8 @@ class ProtTomoToMics(EMProtocol):
         # For each slice
         for index in range(0, len(data),self.slicesGap.get()):
             self.debug("Creating micrograph for slice %s" % index)
-            outputMicName = self._getExtraPath(self.tomoSliceToMicName(tomo, index))
+            micName = self.tomoSliceToMicName(tomo, index)
+            outputMicName = self._getExtraPath(micName)
             outputMicName = replaceExt(outputMicName, "mrc")
             slice = data[index]
             micImg = ImageHandler()
@@ -97,7 +98,7 @@ class ProtTomoToMics(EMProtocol):
             # Create the micrograph metadata object
             newMic = Micrograph()
             newMic.setFileName(outputMicName)
-            newMic.setMicName()
+            newMic.setMicName(micName)
             newMic.setSamplingRate(tomo.getSamplingRate())
 
             # Append it
