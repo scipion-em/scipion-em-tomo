@@ -28,6 +28,7 @@ from pwem.objects import SetOfClasses2D, SetOfParticles
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
+from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtTomoBase
 
 
@@ -36,6 +37,7 @@ class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
     """
     _label = '2D particles to subtomograms'
     _devStatus = BETA
+    _possibleOutputs = SetOfSubTomograms
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -52,12 +54,11 @@ class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
 
     # -------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.processStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # -------------------------- STEPS functions ------------------------------
 
-    def processStep(self):
+    def createOutputStep(self):
         subtomogramsSet = self.inputSubtomogramSet.get()
         inputParticles = self.inputSet.get()
         self.outputSubtomograms = 'outputSubtomograms'
@@ -71,7 +72,6 @@ class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
         elif isinstance(inputParticles, SetOfParticles):
             self._appendSubtomograms(inputParticles)
 
-    def createOutputStep(self):
         self._defineOutputs(**{self.outputSubtomograms: self.outputSetOfSubtomograms})
 
     def _appendSubtomograms(self, inputSet):
