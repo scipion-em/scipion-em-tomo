@@ -24,6 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import enum
+
 from pwem.objects import SetOfClasses2D, SetOfParticles
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
@@ -32,12 +34,16 @@ from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtTomoBase
 
 
+class importSubTomograms(enum.Enum):
+    outputSetOfSubtomograms = SetOfSubTomograms()
+
+
 class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
     """ Protocol to create a set of subtomograms from a selected 2D particles.
     """
     _label = '2D particles to subtomograms'
     _devStatus = BETA
-    _possibleOutputs = SetOfSubTomograms
+    _possibleOutputs = importSubTomograms
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
