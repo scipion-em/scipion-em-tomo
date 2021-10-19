@@ -40,3 +40,4 @@ from .protocol_consensus_classes_subtomo import ProtConsensusClassesSubtomo
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
+from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
