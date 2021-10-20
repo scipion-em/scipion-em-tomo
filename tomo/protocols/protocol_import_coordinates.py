@@ -229,10 +229,12 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         for coordFile, _ in self.iterFiles():
             if coordFile.endswith('.txt'):
                 return IMPORT_FROM_TXT
-            if coordFile.endswith('.json') and existsPlugin('emantomo'):
+            elif coordFile.endswith('.json') and existsPlugin('emantomo'):
                 return IMPORT_FROM_EMAN
-            if coordFile.endswith('.tbl') and existsPlugin('dynamo'):
+            elif coordFile.endswith('.tbl') and existsPlugin('dynamo'):
                 return IMPORT_FROM_DYNAMO
+            elif coordFile.endswith('.sqlite'):
+                return IMPORT_FROM_SQLITE
         return -1
 
     def getImportClass(self):

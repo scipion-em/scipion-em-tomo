@@ -169,11 +169,17 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         return protImportCoordinates3d
 
     def test_import_set_of_coordinates_3D(self):
-
+        # From txt
         protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertCoordinates(output, 5)
 
+        # From sqlite
+        protCoordinates = self._runTomoImportSetOfCoordinates('coordinates.sqlite', 'TOMO', 'SQLITE')
+        output = getattr(protCoordinates, 'outputCoordinates', None)
+        self.assertCoordinates(output, 5)
+
+        # From emantomo file
         if existsPlugin('emantomo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
             output = getattr(protCoordinates, 'outputCoordinates', None)
@@ -187,7 +193,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
             self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
 
-
+        # From dynamo file
         if existsPlugin('dynamo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
             output = getattr(protCoordinates, 'outputCoordinates', None)
