@@ -60,7 +60,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT]  #, IMPORT_FROM_SQLITE]
+        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_SQLITE]
         if existsPlugin('emantomo'):
             importChoices.append(IMPORT_FROM_EMAN)
         if existsPlugin('dynamo'):
@@ -95,14 +95,17 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         importTomograms = self.importTomograms.get()
         suffix = self._getOutputSuffix(SetOfCoordinates3D)
         coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
+        coordsSet.setSamplingRate(samplingRate)
+        coordsSet.setPrecedents(importTomograms)
+        coordsSet.setBoxSize(self.boxSize.get())
+
         if self.getImportFrom() == IMPORT_FROM_SQLITE:
             sqliteFile = self.getMatchFiles()[0]
-            copyFile(sqliteFile, self._getPath(basename(sqliteFile)))
-            coordsSet._mapperPath.set(sqliteFile)
+            newFileName = self._getPath(basename(sqliteFile))
+            copyFile(sqliteFile, newFileName)
+            coordsSet._mapperPath.set('%s, %s' % (newFileName, ''))
+            coordsSet.load()
         else:
-            coordsSet.setBoxSize(self.boxSize.get())
-            coordsSet.setSamplingRate(samplingRate)
-            coordsSet.setPrecedents(importTomograms)
             ci = self.getImportClass()
             for tomo in importTomograms.iterItems():
                 tomoName = basename(os.path.splitext(tomo.getFileName())[0])
@@ -163,48 +166,56 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         except StopIteration:
             errors.append('No files matching the pattern %s were found.' % self.getPattern())
         else:
-            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-            numberMatches = len(set(tomoFiles) & set(coordFiles))
-            if numberMatches == 0:
-                errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
-                              "relation, the filename of the corresponding tomogram and coordinate "
-                              "files must be equal.")
+            if self.getImportFrom() == IMPORT_FROM_SQLITE:
+                matches = self.getMatchFiles()
+                numberMatches = len(matches)
+                if numberMatches > 1:
+                    errors.append('Only one sqlite file can be introduced at once. Introduced path - pattern '
+                                  'combinations result in\n%s' % ' '.join(matches))
+            else:
+                tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+                coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+                numberMatches = len(set(tomoFiles) & set(coordFiles))
+                if numberMatches == 0:
+                    errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
+                                  "relation, the filename of the corresponding tomogram and coordinate "
+                                  "files must be equal.")
         return errors
 
     def _warnings(self):
         warnings = []
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
-        if not existsPlugin('emantomo'):
-            warnings.append('Plugin *scipion-em-emantomo* has not being installed. Please, install the Plugin to '
-                            'import Eman related formats (currently supported formats: ".json"). Otherwise, the protocol '
-                            'may have unexpected outputs if Eman files are attempted to be imported.\n')
-        if not existsPlugin('dynamo'):
-            warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
-                            'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
-                            'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
-        if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
-                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
-                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
-                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                            "- '.txt', '.tbl', '.json').\n")
-            mismatches_coords = set(coordFiles).difference(tomoFiles)
-            if mismatches_coords:
-                warnings.append("The following coordinate files will not be associated to any Tomogram "
-                                "(name without extension):")
-                for file in mismatches_coords:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
-            mismatches_tomos = set(tomoFiles).difference(coordFiles)
-            if mismatches_tomos:
-                warnings.append("The following Tomogram files will not be associated to any coordinates "
-                                "(name without extension):")
-                for file in mismatches_tomos:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
+        if self.getImportFrom() != IMPORT_FROM_SQLITE:
+            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
+            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+            numberMatches = len(set(tomoFiles) & set(coordFiles))
+            if not existsPlugin('emantomo'):
+                warnings.append('Plugin *scipion-em-emantomo* has not being installed. Please, install the Plugin to '
+                                'import Eman related formats (currently supported formats: ".json"). Otherwise, the protocol '
+                                'may have unexpected outputs if Eman files are attempted to be imported.\n')
+            if not existsPlugin('dynamo'):
+                warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
+                                'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
+                                'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
+            if numberMatches < max(len(tomoFiles), len(coordFiles)):
+                warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
+                                "Association is performed in terms of the file name of the Tomograms and the coordinates. "
+                                "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
+                                "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
+                                "- '.txt', '.tbl', '.json').\n")
+                mismatches_coords = set(coordFiles).difference(tomoFiles)
+                if mismatches_coords:
+                    warnings.append("The following coordinate files will not be associated to any Tomogram "
+                                    "(name without extension):")
+                    for file in mismatches_coords:
+                        warnings.append("\t%s" % file)
+                    warnings.append("\n")
+                mismatches_tomos = set(tomoFiles).difference(coordFiles)
+                if mismatches_tomos:
+                    warnings.append("The following Tomogram files will not be associated to any coordinates "
+                                    "(name without extension):")
+                    for file in mismatches_tomos:
+                        warnings.append("\t%s" % file)
+                    warnings.append("\n")
         return warnings
 
     # ------------------ UTILS functions --------------------------------------
