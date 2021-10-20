@@ -25,11 +25,11 @@
 # *
 # **************************************************************************
 import os
-import time
 
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
+from tomo.objects import SetOfCTFTomoSeries
 
 
 class ProtCTFTomoSeriesValidate(EMProtocol):
@@ -50,6 +50,9 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
         form.addParam('criteria',  params.EnumParam,
                       choices=["defocus tolerance"], label="Criteria",
                       default=0, help="Criteria to validate")
+        form.addParam('tolerance', params.FloatParam, label='Tolerance percent',
+                      condition='criteria==0', default=20,
+                      help="Percent Tolerance")
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self.ctfValidateStep)
@@ -61,46 +64,66 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
         following the selected criteria)
         """
         ctfSeries = self.inputCtfTomoSeries.get()
-        self.goodCTFName = 'goodSetOfCTFTomoSeries'
-        self.badCTFName = 'badSetOfCTFTomoSeries'
+        self.goodCtfName = 'goodSetOfCTFTomoSeries'
+        self.badCtfName = 'badSetOfCTFTomoSeries'
+        self.outputCtfName = 'outputSetOfCTFTomoSeries'
 
-        self.outputSetOfgoodCTFTomoSeries = ctfSeries.createCopy(self._getExtraPath(),
-                                                                 prefix=self.goodCTFName,
-                                                                 copyInfo=True)
-        self.outputSetOfbadCTFTomoSeries = ctfSeries.createCopy(self._getExtraPath(),
-                                                                prefix=self.badCTFName,
-                                                                copyInfo=True)
+        self.outputSetOfCtfTomoSeries = SetOfCTFTomoSeries.create(self._getPath(),
+                                                                  template='CTFmodels%s.sqlite')
+        self.outputSetOfCtfTomoSeries.setSetOfTiltSeries(ctfSeries.getSetOfTiltSeries(pointer=True).get())
+
         if self.criteria.get() == 0:  # Defocus angles case
-            self._validateCtfDefocusDeviation(ctfSeries)
+            self._validateCtfDefocusDeviation(ctfSeries, self.tolerance.get())
 
-    def _validateCtfDefocusDeviation(self, ctfSeries):
+    def _validateCtfDefocusDeviation(self, ctfSeries, tolerance):
         """
         Validate the set of ctf tomo series taking into account de defocus angle
         deviation
         """
-
+        # Creating a new copy of ctf tomo series and recalculate the defocus
+        # deviation
         for ctfSerie in ctfSeries:
+            newCTFTomoSeries = ctfSerie.clone()
+            newCTFTomoSeries._isDefocusUDeviationInRange.set(True)
+            newCTFTomoSeries._isDefocusVDeviationInRange.set(True)
+            self.outputSetOfCtfTomoSeries.append(newCTFTomoSeries)
+            for item in ctfSerie.iterItems():
+                ctfEstItem = item.clone()
+                newCTFTomoSeries.append(ctfEstItem)
+            newCTFTomoSeries.calculateDefocusUDeviation(defocusUTolerance=tolerance)
+            newCTFTomoSeries.calculateDefocusVDeviation(defocusVTolerance=tolerance)
+            newCTFTomoSeries.write()
+            self.outputSetOfCtfTomoSeries.update(newCTFTomoSeries)
+
+        self.outputSetOfgoodCtfTomoSeries = self.outputSetOfCtfTomoSeries.createCopy(self._getExtraPath(),
+                                                                                     prefix=self.goodCtfName,
+                                                                                     copyInfo=True)
+        self.outputSetOfbadCtfTomoSeries = self.outputSetOfCtfTomoSeries.createCopy(self._getExtraPath(),
+                                                                                    prefix=self.badCtfName,
+                                                                                    copyInfo=True)
+
+        for ctfSerie in self.outputSetOfCtfTomoSeries:
             ctfSerieClon = ctfSerie.clone()
             # Store good and bad ctf series
-            if (ctfSerie.getIsDefocusVDeviationInRange() and
-                    ctfSerie.getIsDefocusUDeviationInRange()):
-                self.outputSetOfgoodCTFTomoSeries.append(ctfSerieClon)
+            if ctfSerie.getIsDefocusUDeviationInRange():
+                self.outputSetOfgoodCtfTomoSeries.append(ctfSerieClon)
             else:
-                self.outputSetOfbadCTFTomoSeries.append(ctfSerieClon)
+                self.outputSetOfbadCtfTomoSeries.append(ctfSerieClon)
             for item in ctfSerie.iterItems():
                 ctfEstItem = item.clone()
                 ctfSerieClon.append(ctfEstItem)
 
     def createOutputStep(self):
-        if len(self.outputSetOfgoodCTFTomoSeries) > 0:
-            self._defineOutputs(**{self.goodCTFName: self.outputSetOfgoodCTFTomoSeries})
+        self._defineOutputs(**{self.outputCtfName: self.outputSetOfCtfTomoSeries})
+        if len(self.outputSetOfgoodCtfTomoSeries) > 0:
+            self._defineOutputs(**{self.goodCtfName: self.outputSetOfgoodCtfTomoSeries})
         else:
-            os.remove(self._getExtraPath(self.goodCTFName+'..sqlite'))
+            os.remove(self._getExtraPath(self.goodCtfName+'..sqlite'))
 
-        if len(self.outputSetOfbadCTFTomoSeries) > 0:
-            self._defineOutputs(**{self.badCTFName: self.outputSetOfbadCTFTomoSeries})
+        if len(self.outputSetOfbadCtfTomoSeries) > 0:
+            self._defineOutputs(**{self.badCtfName: self.outputSetOfbadCtfTomoSeries})
         else:
-            os.remove(self._getExtraPath(self.badCTFName + '..sqlite'))
+            os.remove(self._getExtraPath(self.badCtfName + '..sqlite'))
 
     def allowsDelete(self, obj):
         return True
