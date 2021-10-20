@@ -908,7 +908,9 @@ class Coordinate3D(data.EMObject):
         """ Set the micrograph to which this coordinate belongs. """
         self._volumePointer.set(volume)
         self._volId.set(volume.getObjId())
-        self.setTomoId(volume.getTsId())
+        if volume.getTsId():  # See getCoordinate3D() --> as a tomo is necessary to be created, the tomoId (tsId),
+            # which may have been previously stored is deleted when calling setVolume
+            self.setTomoId(volume.getTsId())
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
