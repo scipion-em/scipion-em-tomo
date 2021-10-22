@@ -27,6 +27,7 @@
 import glob
 import threading
 from tkinter import *
+import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -204,7 +205,7 @@ class TomogramsTreeProvider(TreeProvider):
         self._mode = mode
 
     def getColumns(self):
-        return [('Tomogram', 300), ('status', 150)]
+        return [('Tomogram', 300), ("# coords", 100), ('status', 150)]
 
     def getObjectInfo(self, tomo):
         if self._mode == 'txt':
@@ -225,11 +226,11 @@ class TomogramsTreeProvider(TreeProvider):
 
         if not os.path.isfile(filePath):
             return {'key': tomogramName, 'parent': None,
-                    'text': tomogramName, 'values': ("TODO"),
+                    'text': tomogramName, 'values': (tomo.count, "TODO"),
                     'tags': ("pending")}
         else:
             return {'key': tomogramName, 'parent': None,
-                    'text': tomogramName, 'values': ("DONE"),
+                    'text': tomogramName, 'values': (tomo.count, "DONE"),
                     'tags': ("done")}
 
     def getObjectPreview(self, obj):
@@ -329,27 +330,34 @@ class TomogramsDialog(ToolbarListDialog):
                                        "Tomogram List",
                                        allowsEmptySelection=False,
                                        itemDoubleClick=self.doubleClickViewer,
+                                       allowSelect=False,
                                        **kwargs)
         else:
             ToolbarListDialog.__init__(self, parent,
                                        "Tomogram List",
                                        allowsEmptySelection=False,
                                        itemDoubleClick=self.doubleClickOnTomogram,
+                                       allowSelect=False,
                                        **kwargs)
 
     def refresh_gui_viewer(self):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui_viewer)
         else:
-            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
+            meshFile = os.path.join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
+            self.tomo.count = np.loadtxt(meshFile, delimiter=',').shape[0]
             pwutils.cleanPath(self.macroPath)
+            self.tree.update()
 
     def refresh_gui(self):
         self.tree.update()
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
+            meshFile = os.path.join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
+            self.tomo.count = np.loadtxt(meshFile, delimiter=',').shape[0]
             pwutils.cleanPath(self.macroPath)
+            self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
@@ -364,7 +372,7 @@ class TomogramsDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui_viewer)
 
     def lanchIJForTomogram(self, path, tomogram):
-        self.macroPath = os.path.join(conf.Config.SCIPION_TMP, "AutoSave_ROI.ijm")
+        self.macroPath = os.path.join(self.path, "AutoSave_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
@@ -528,7 +536,7 @@ class TomogramsDialog(ToolbarListDialog):
         runJavaIJapp(4, app, args).wait()
 
     def lanchIJForViewing(self, path, tomogram):
-        self.macroPath = os.path.join(conf.Config.SCIPION_TMP, "View_ROI.ijm")
+        self.macroPath = os.path.join(self.path, "View_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
