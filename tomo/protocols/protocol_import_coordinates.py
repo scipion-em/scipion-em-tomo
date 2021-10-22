@@ -47,6 +47,8 @@ IMPORT_FROM_TXT = 'txt'
 IMPORT_FROM_SQLITE = 'sqlite'
 IMPORT_FROM_EMAN = 'eman'
 IMPORT_FROM_DYNAMO = 'dynamo'
+IMPORT_FROM_CHOICES = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_SQLITE,
+                       IMPORT_FROM_EMAN, IMPORT_FROM_DYNAMO]
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
