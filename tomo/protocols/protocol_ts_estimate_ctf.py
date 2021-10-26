@@ -87,9 +87,13 @@ class ProtTsEstimateCTF(ProtTsProcess):
             raise Exception("Missing input file: %s" % ti)
 
         if downFactor != 1:
-            # Replace extension by 'mrc' because there are some formats
-            # that cannot be written (such as dm3)
-            ih.scaleFourier(ti.getFileName(), tiFn, downFactor)
+            tiFName = ti.getFileName()
+            # Make xmipp considers the input object as TS to work as expected
+            if tiFName.endswith(':mrc'):
+                tiFName.replace(':mrc', ':mrcs')
+            elif not tiFName.endswith(':mrcs'):
+                tiFName += ':mrcs'
+            ih.scaleFourier(tiFName, tiFn, downFactor)
         else:
             ih.convert(ti, tiFn, emlib.DT_FLOAT)
 

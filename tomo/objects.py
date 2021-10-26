@@ -740,6 +740,8 @@ class Coordinate3D(data.EMObject):
         self._volId = Integer()
         self._eulerMatrix = data.Transform()
         self._groupId = Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
+        self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
+        # coord (it's the tsId)
 
     def getX(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
@@ -906,6 +908,9 @@ class Coordinate3D(data.EMObject):
         """ Set the micrograph to which this coordinate belongs. """
         self._volumePointer.set(volume)
         self._volId.set(volume.getObjId())
+        if volume.getTsId():  # See getCoordinate3D() --> as a tomo is necessary to be created, the tomoId (tsId),
+            # which may have been previously stored is deleted when calling setVolume
+            self.setTomoId(volume.getTsId())
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
@@ -958,6 +963,12 @@ class Coordinate3D(data.EMObject):
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
             return origin[0] / sr, origin[1] / sr, origin[2] / sr
+
+    def getTomoId(self):
+        return self._tomoId.get()
+
+    def setTomoId(self, tomoId):
+        self._tomoId.set(tomoId)
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -1194,7 +1205,8 @@ class SetOfSubTomograms(data.SetOfVolumes):
         """ Copy basic information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_coordsPointer')
+        if hasattr(other, '_coordsPointer'):  # Like the vesicles in pyseg
+            self.copyAttributes(other, '_coordsPointer')
 
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
