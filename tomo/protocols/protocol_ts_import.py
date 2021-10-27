@@ -239,7 +239,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep('importStep')
+        self._insertFunctionStep(self.importStep)
 
     # -------------------------- STEPS functions -------------------------------
     def importStep(self):
@@ -375,6 +375,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 else:
                     tsObj.getAcquisition().setDosePerFrame(self.dosePerFrame.get())
                     tsObj.getAcquisition().setAccumDose(self.dosePerFrame.get() * len(tiltSeriesList))
+                    tsObj.getAcquisition().setTiltAxisAngle(self.tiltAxisAngle.get())
 
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
@@ -1036,16 +1037,19 @@ class MDoc:
                         raise Exception("Unexpected ZValue = %d" % zvalue)
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
-                elif line.startswith('[T') and not self.getTiltAxisAngle():
-                    strLine = line.strip().replace(' ', '').lower()
-                    pattern = 'tiltaxisangle='
-                    if pattern in strLine:
-                        # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
-                        # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
-                        tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
-                        # Check if it's a string which represents a float or not
-                        if tiltAxisAngle.lstrip('-+').replace('.', '', 1).isdigit():
-                            self._tiltAxisAngle = float(tiltAxisAngle)
+                elif line.startswith('[T'):
+                    if self.getTiltAxisAngle():
+                        continue  # It's in the mdoc, but the user has specified it manually
+                    else:
+                        strLine = line.strip().replace(' ', '').lower()
+                        pattern = 'tiltaxisangle='
+                        if pattern in strLine:
+                            # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
+                            # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
+                            tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
+                            # Check if it's a string which represents a float or not
+                            if tiltAxisAngle.lstrip('-+').replace('.', '', 1).isdigit():
+                                self._tiltAxisAngle = float(tiltAxisAngle)
                 elif line.strip():
                     key, value = line.split('=')
                     if not headerParsed:
