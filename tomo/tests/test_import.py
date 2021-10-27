@@ -324,6 +324,7 @@ class TestTomoImportTsFromPattern(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.getFile = cls.dataset.getFile('etomo')
         cls.getFileM = cls.dataset.getFile('empiar')
+        cls.tiltAxisAngle = 84.1
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
@@ -337,7 +338,7 @@ class TestTomoImportTsFromPattern(BaseTest):
             samplingRate=0.675,
             doseInitial=0,
             dosePerFrame=0.375,
-            tiltAxisAngle=84.1
+            tiltAxisAngle=self.tiltAxisAngle
         )
         self.launchProtocol(protImport)
         return protImport
@@ -357,7 +358,7 @@ class TestTomoImportTsFromPattern(BaseTest):
             samplingRate=1.35,
             doseInitial=0,
             dosePerFrame=0.3,
-            tiltAxisAngle=84.1)
+            tiltAxisAngle=self.tiltAxisAngle)
         self.launchProtocol(protImport)
         return protImport
 
@@ -385,6 +386,7 @@ class TestTomoImportTsFromPattern(BaseTest):
         self.assertSetSize(set, size)
         for ts in set:
             self.assertEquals(ts.getSize(), anglesCount, "Size of tilt images is wrong.")
+            self.assertEqual(ts.getAcquisition().getTiltAxisAngle(), self.tiltAxisAngle)
             for i, ti in enumerate(ts):
                 self.assertFalse(os.path.isabs(ti.getFileName()),
                                  "Tilt image file %s is not absolute!. Should be relative.")
