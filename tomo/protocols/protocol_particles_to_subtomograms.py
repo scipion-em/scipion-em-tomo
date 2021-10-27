@@ -81,18 +81,13 @@ class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
         self._defineOutputs(**{self.outputSubtomograms: self.outputSetOfSubtomograms})
 
     def _appendSubtomograms(self, inputSet):
-        subtomogramsDict = {}
-        for item in inputSet.iterItems():
-            subtomogramId = str(item._subtomogramID)
-            if subtomogramId not in list(subtomogramsDict.keys()):
-                subtomogramsDict[subtomogramId] = True
-                subtomogram = self.getSubtomogramById(subtomogramId).clone()
-                self.outputSetOfSubtomograms.append(subtomogram)
+        subTomogramsIds = inputSet.aggregate(["COUNT"], "_subtomogramID", ["_subtomogramID"])
+        subTomogramsIds = [(d['_subtomogramID'], d["COUNT"]) for d in subTomogramsIds]
 
-    def getSubtomogramById(self, subtomogramId):
-        for subtomogram in self.inputSubtomogramSet.get():
-            if str(subtomogram.getObjId()) == subtomogramId:
-                return subtomogram
+        for item in subTomogramsIds:
+            subtomogramId = int(item[0])
+            subtomogram = self.inputSubtomogramSet.get()[subtomogramId].clone()
+            self.outputSetOfSubtomograms.append(subtomogram)
 
     def _summary(self):
         summary = []
