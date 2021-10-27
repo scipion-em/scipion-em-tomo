@@ -31,7 +31,7 @@ from os.path import abspath, basename
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.utils.path import createAbsLink
+from pyworkflow.utils.path import createAbsLink, removeExt
 import pyworkflow.protocol.params as params
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
@@ -114,11 +114,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importTomogramsStep(
-            self,
-            pattern,
-            samplingRate
-    ):
+    def importTomogramsStep(self, pattern, samplingRate):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
@@ -158,22 +154,22 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             tomo.setOrigin(origin)  # read origin from form
 
             newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
-
-            # newFileName = abspath(self._getVolumeFileName(newFileName))
+            tsId = removeExt(newFileName)
+            tomo.setTsId(tsId)
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
             createAbsLink(fileName, abspath(self._getExtraPath(newFileName)))
-            if n == 1:
+            tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+
+            if n == 1:  # One volume per file
                 tomo.cleanObjId()
                 tomo.setFileName(self._getExtraPath(newFileName))
-                tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 tomoSet.append(tomo)
-            else:
+            else:  # A stack of volumes per file (not common)
                 for index in range(1, n+1):
                     tomo.cleanObjId()
                     tomo.setLocation(index, self._getExtraPath(newFileName))
-                    tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
         self._defineOutputs(outputTomograms=tomoSet)

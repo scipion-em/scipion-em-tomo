@@ -146,6 +146,7 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
         # output.copyInfo(input)
         output.setPrecedents(tomograms)
         output.setBoxSize(coordinates.getBoxSize())
+        output.setSamplingRate(coordinates.getMicrographs().getSamplingRate())
 
         # Get a dictionary of tomograms by tsId
         tomoDict = dict()
@@ -165,6 +166,7 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
             newCoord.setY(cord2d.getY(), BOTTOM_LEFT_CORNER)
             newCoord.setZ(z, BOTTOM_LEFT_CORNER)
             newCoord.setBoxSize(coordinates.getBoxSize())
+            newCoord.setGroupId(1)
             output.append(newCoord)
 
         self._defineOutputs(**{Prot2DcoordsTo3DCoordsOutput.outputCoordinates.name: output})
