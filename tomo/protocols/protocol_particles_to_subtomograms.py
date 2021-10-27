@@ -82,10 +82,10 @@ class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
 
     def _appendSubtomograms(self, inputSet):
         subTomogramsIds = inputSet.aggregate(["COUNT"], "_subtomogramID", ["_subtomogramID"])
-        subTomogramsIds = [(d['_subtomogramID'], d["COUNT"]) for d in subTomogramsIds]
+        subTomogramsIds = [d['_subtomogramID'] for d in subTomogramsIds]
 
         for item in subTomogramsIds:
-            subtomogramId = int(item[0])
+            subtomogramId = int(item)
             subtomogram = self.inputSubtomogramSet.get()[subtomogramId].clone()
             self.outputSetOfSubtomograms.append(subtomogram)
 
