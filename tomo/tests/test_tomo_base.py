@@ -755,6 +755,8 @@ class TestParticlesToSubtomograms(BaseTest):
         protSubtraction = self.newProtocol(XmippProtSubtomoProject,
                                            input=subtomograms.outputSubTomograms)
         self.launchProtocol(protSubtraction)
+        self.assertSetSize(protSubtraction.outputParticles, 4,
+                           "The number of projections generated must be 4")
 
         splitSet = self._splitSet(protSubtraction.outputParticles, 2)
         protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
@@ -762,12 +764,16 @@ class TestParticlesToSubtomograms(BaseTest):
                                       inputSet=splitSet.outputParticles01)
         self.launchProtocol(protParticlesToSubtomograms)
         self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
+        self.assertSetSize(protParticlesToSubtomograms.outputSubtomograms, 2,
+                           "The number of subtomograms must be 2")
 
         protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
                                                        inputSubtomogramSet=subtomograms.outputSubTomograms,
                                                        inputSet=splitSet.outputParticles02)
         self.launchProtocol(protParticlesToSubtomograms)
         self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
+        self.assertSetSize(protParticlesToSubtomograms.outputSubtomograms, 2,
+                           "The number of subtomograms must be 2")
 
         protClassification2D = self.newProtocol(XmippProtCL2D,
                                                 inputParticles=protSubtraction.outputParticles,
@@ -785,11 +791,15 @@ class TestParticlesToSubtomograms(BaseTest):
         self.launchProtocol(protParticlesToSubtomograms)
         self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
 
-        protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
+        protParticlesToSubtomograms1 = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
                                                        inputSubtomogramSet=subtomograms.outputSubTomograms,
                                                        inputSet=splitSet.outputClasses2D02)
-        self.launchProtocol(protParticlesToSubtomograms)
-        self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
+        self.launchProtocol(protParticlesToSubtomograms1)
+        self.assertIsNotNone(protParticlesToSubtomograms1.outputSubtomograms)
+
+        self.assertEqual((protParticlesToSubtomograms.outputSubtomograms.getSize() +
+                         protParticlesToSubtomograms1.outputSubtomograms.getSize()), 4,
+                         "The total number of subtomograms must be 4")
 
 
 class TestTomoSplitEvenOdd(BaseTest):
