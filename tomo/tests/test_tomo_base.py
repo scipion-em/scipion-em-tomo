@@ -36,7 +36,6 @@ from pwem.objects import CTFModel, Transform
 
 from . import DataSet
 from ..objects import SetOfTiltSeriesM, SetOfTiltSeries, Coordinate3D, Tomogram
-from ..utils import existsPlugin
 import tomo.protocols
 import tomo.constants as const
 
@@ -713,6 +712,94 @@ class TestTomoAssignTomo2Subtomo(BaseTest):
         self.assertTrue(getattr(tomo2subtomo, 'outputSubtomograms'))
         # It can not be checked properly with current test data
         return tomo2subtomo
+
+class TestParticlesToSubtomograms(BaseTest):
+    """
+    This class create a set of subtomograms from a set of particles
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+
+    def _importSubtomoSet(self):
+        protImportSubtomo = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+                                             filesPath=self.setOfSubtomograms,
+                                             samplingRate=5)
+        self.launchProtocol(protImportSubtomo)
+        self.assertIsNotNone(protImportSubtomo.outputSubTomograms)
+        self.assertSetSize(protImportSubtomo.outputSubTomograms, 4,
+                           "The output size must be 4")
+        return protImportSubtomo
+
+    def _splitSet(self, inputSet, numberOfSets):
+        protSplitSet = self.newProtocol(emprot.ProtSplitSet,
+                                        inputSet=inputSet,
+                                        numberOfSets=numberOfSets,
+                                        randomize=True)
+        self.launchProtocol(protSplitSet)
+        return protSplitSet
+
+    def test_particlesToSubTomograms(self):
+        try:
+            from xmipptomo.protocols.protocol_project_top import XmippProtSubtomoProject
+            from xmipp3.protocols.protocol_cl2d import XmippProtCL2D
+        except ImportError:
+            print('To run this test, scipion-em-xmipptomo and scipion-em-xmipp2'
+                  ' are required. This test will not be executed unless these '
+                  'plugins are installed')
+            return
+        subtomograms = self._importSubtomoSet()
+        protSubtraction = self.newProtocol(XmippProtSubtomoProject,
+                                           input=subtomograms.outputSubTomograms)
+        self.launchProtocol(protSubtraction)
+        self.assertSetSize(protSubtraction.outputParticles, 4,
+                           "The number of projections generated must be 4")
+
+        splitSet = self._splitSet(protSubtraction.outputParticles, 2)
+        protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
+                                      inputSubtomogramSet=subtomograms.outputSubTomograms,
+                                      inputSet=splitSet.outputParticles01)
+        self.launchProtocol(protParticlesToSubtomograms)
+        self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
+        self.assertSetSize(protParticlesToSubtomograms.outputSubtomograms, 2,
+                           "The number of subtomograms must be 2")
+
+        protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
+                                                       inputSubtomogramSet=subtomograms.outputSubTomograms,
+                                                       inputSet=splitSet.outputParticles02)
+        self.launchProtocol(protParticlesToSubtomograms)
+        self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
+        self.assertSetSize(protParticlesToSubtomograms.outputSubtomograms, 2,
+                           "The number of subtomograms must be 2")
+
+        protClassification2D = self.newProtocol(XmippProtCL2D,
+                                                inputParticles=protSubtraction.outputParticles,
+                                                numberOfClasses=2,
+                                                numberOfInitialClasses=2)
+        self.launchProtocol(protClassification2D)
+        self.assertSetSize(protClassification2D.outputClasses, 2,
+                           "The number of classes must be 2")
+
+        splitSet = self._splitSet(protClassification2D.outputClasses, 2)
+        protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
+                                                       inputSubtomogramSet=subtomograms.outputSubTomograms,
+                                                       inputSet=splitSet.outputClasses2D01)
+
+        self.launchProtocol(protParticlesToSubtomograms)
+        self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
+
+        protParticlesToSubtomograms1 = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
+                                                       inputSubtomogramSet=subtomograms.outputSubTomograms,
+                                                       inputSet=splitSet.outputClasses2D02)
+        self.launchProtocol(protParticlesToSubtomograms1)
+        self.assertIsNotNone(protParticlesToSubtomograms1.outputSubtomograms)
+
+        self.assertEqual((protParticlesToSubtomograms.outputSubtomograms.getSize() +
+                         protParticlesToSubtomograms1.outputSubtomograms.getSize()), 4,
+                         "The total number of subtomograms must be 4")
 
 
 class TestTomoSplitEvenOdd(BaseTest):
