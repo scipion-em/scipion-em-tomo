@@ -466,7 +466,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 errMsg.append('Sampling rate should be a float')
             if not self.dosePerFrame.get():
                 errMsg.append('Dose per frame should be a float')
-            if not self.tiltAxisAngle.get():
+            if self.tiltAxisAngle.get() is None:
                 errMsg.append('Tilt axis angle should be a float')
 
         return errMsg
@@ -486,7 +486,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     #     return ['files']
 
     # -------------------------- UTILS functions -------------------------------
-    def _initialize(self):
+    def  _initialize(self):
         """ Initialize some internal variables such as:
         - patterns: Expand the pattern using environ vars or username
             and also replacing special character # by digit matching.
