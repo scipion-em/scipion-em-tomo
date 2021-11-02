@@ -106,14 +106,19 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 if idx is not None:
                     if len(filesTomo) == 1:
                         newCoord.setVolume(inTomos.getFirstItem())
-                        coord.setVolume(inTomos.getFirstItem())
                     else:
                         newCoord.setVolume(inTomos[idx+1])
-                        coord.setVolume(inTomos[idx+1])
                     x, y, z = coord.getPosition(const.SCIPION)
                     newCoord.copyObjId(subTomo)
 
-                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
+                    # Consider padding when extracting the coordinates in a new tomogram
+                    new_tomo_dim = np.asarray(newCoord.getVolume().getDimensions()) / scale
+                    prev_tomo_dim = np.asarray(coord.getVolume().getDimensions())
+                    dim_diff = 0.5 * (new_tomo_dim - prev_tomo_dim)
+
+                    newCoord.setPosition(scale * (x + dim_diff[0]),
+                                         scale * (y + dim_diff[1]),
+                                         scale * (z + dim_diff[0]), const.SCIPION)
                     newCoord.setBoxSize(boxSize)
                     newCoord.setMatrix(checkMatrix(subTomo, coord))
                     if coord.hasGroupId():
