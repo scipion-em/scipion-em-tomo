@@ -56,7 +56,7 @@ class ProtSplitEvenOddTomoSet(EMProtocol, ProtTomoBase):
     # -------------------------- STEPS functions ------------------------------
     def createOutputStep(self):
         inputSet = self.inputSet.get()
-        if isinstance(inputSet.getFirstItem(), SetOfTomograms):
+        if isinstance(inputSet, SetOfTomograms):
             evenSet = self._createSetOfTomograms(suffix='_even')
             oddSet = self._createSetOfTomograms(suffix='_odd')
         else:
