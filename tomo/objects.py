@@ -681,6 +681,11 @@ class Tomogram(data.Volume):
             return self._dim
         return None
 
+    def copyInfo(self, other):
+        """ Copy basic information """
+        super().copyInfo(other)
+        self.copyAttributes(other, '_acquisition', '_tsId', '_origin')
+
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
