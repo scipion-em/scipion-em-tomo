@@ -28,6 +28,7 @@ import os
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
+from pwem.convert.headers import getFileFormat, MRC
 from pyworkflow.object import Set, Integer
 from pyworkflow.protocol import STATUS_NEW
 from pyworkflow.utils.properties import Message
@@ -86,16 +87,16 @@ class ProtTsEstimateCTF(ProtTsProcess):
         if not ih.existsLocation(ti):
             raise Exception("Missing input file: %s" % ti)
 
+        tiFName = ti.getFileName()
+        # Make xmipp considers the input object as TS to work as expected
+        if getFileFormat(tiFName) == MRC:
+            tiFName = tiFName.split(':')[0] + ':mrcs'
+        tiFName = str(ti.getIndex()) + '@' + tiFName
+
         if downFactor != 1:
-            tiFName = ti.getFileName()
-            # Make xmipp considers the input object as TS to work as expected
-            if tiFName.endswith(':mrc'):
-                tiFName.replace(':mrc', ':mrcs')
-            elif not tiFName.endswith(':mrcs'):
-                tiFName += ':mrcs'
             ih.scaleFourier(tiFName, tiFn, downFactor)
         else:
-            ih.convert(ti, tiFn, emlib.DT_FLOAT)
+            ih.convert(tiFName, tiFn, emlib.DT_FLOAT)
 
     def _estimateCtf(self, workingDir, tiFn, tiltImage, *args):
         raise Exception("_estimateCTF function should be implemented!")
