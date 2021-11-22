@@ -73,10 +73,12 @@ class TiltImageBase:
     def setAcquisitionOrder(self, value):
         self._acqOrder.set(value)
 
-    def copyInfo(self, other, copyId=False):
+    def copyInfo(self, other, copyId=False, copyTM=True):
         self.copyAttributes(other, '_tiltAngle', '_tsId', '_acqOrder')
         if copyId:
             self.copyObjId(other)
+        if copyTM and other.hasTransform():
+            self.copyAttributes(other, '_transform')
 
 
 class TiltImage(data.Image, TiltImageBase):
@@ -86,9 +88,9 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other, copyId=False):
+    def copyInfo(self, other, copyId=False, copyTM=True):
         data.Image.copyInfo(self, other)
-        TiltImageBase.copyInfo(self, other, copyId=copyId)
+        TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
 
     def parseFileName(self, suffix="", extension=None):
         """
@@ -395,9 +397,9 @@ class TiltImageM(data.Movie, TiltImageBase):
         data.Movie.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other, copyId=False):
+    def copyInfo(self, other, copyId=False, copyTM=True):
         data.Movie.copyInfo(self, other)
-        TiltImageBase.copyInfo(self, other, copyId=copyId)
+        TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
 
 
 class TiltSeriesM(TiltSeriesBase):
