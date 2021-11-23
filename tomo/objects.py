@@ -684,9 +684,7 @@ class Tomogram(data.Volume):
     def copyInfo(self, other):
         """ Copy basic information """
         super().copyInfo(other)
-        attribs2Copy = ['_acquisition', '_tsId', '_origin']
-        finalAttribs = [attrib for attrib in attribs2Copy if hasattr(other, attrib)]
-        self.copyAttributes(other, *finalAttribs)
+        self.copyAttributes(other, '_acquisition', '_tsId', '_origin')
 
 
 class SetOfTomograms(data.SetOfVolumes):
@@ -727,6 +725,10 @@ class TomoMask(Tomogram):
         tomo.setSamplingRate(self.getSamplingRate())
         tomo.setAcquisition(self.getAcquisition())
         return tomo
+
+    def copyInfo(self, other):
+        """ Copy basic information """
+        self.copyAttributes(other, '_samplingRate', '_tsId')
 
 
 class SetOfTomoMasks(SetOfTomograms):
