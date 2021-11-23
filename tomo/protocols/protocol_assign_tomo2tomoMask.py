@@ -108,9 +108,12 @@ class ProtAssignTomo2TomoMask(EMProtocol):
 
     def _isMatchingByTsId(self):
         tsId = '_tsId'
-        if getattr(self.inTomoMasks.get().getFirstItem(), tsId, None) and \
-                getattr(self.inputTomos.get().getFirstItem(), tsId, None):
-            return True
+        if hasattr(self.inTomoMasks.get().getFirstItem(), tsId) and \
+                hasattr(self.inputTomos.get().getFirstItem(), tsId):
+            if self.inTomoMasks.get().getFirstItem().getTsId() and self.inputTomos.get().getFirstItem().getTsId():
+                return True
+            else:
+                return False
         else:
             return False
 
