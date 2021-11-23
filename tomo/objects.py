@@ -684,7 +684,7 @@ class Tomogram(data.Volume):
     def copyInfo(self, other):
         """ Copy basic information """
         super().copyInfo(other)
-        self.copyAttributes(other, '_acquisition', '_tsId', '_origin')
+        # self.copyAttributes(other, '_acquisition', '_tsId', '_origin')
 
 
 class SetOfTomograms(data.SetOfVolumes):
