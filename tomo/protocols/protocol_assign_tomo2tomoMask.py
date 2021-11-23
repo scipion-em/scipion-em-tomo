@@ -96,7 +96,8 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         if isMatchingByTsId:
             outTomoMask.setVolName(inTomos[idList.index(inTomoMask.getTsId()) + 1].getFileName())
         else:
-            outTomoMask.setVolName(inTomos[idList.index(basename(inTomoMask.getFileName())) + 1].getFileName())
+            outTomoMask.setVolName(inTomos[idList.index(basename(inTomoMask.getFileName().replace(
+                MATERIALS_SUFFIX, ''))) + 1].getFileName())
         return outTomoMask
 
     def _updateItem(self, item, row):
