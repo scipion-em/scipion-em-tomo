@@ -76,7 +76,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
                 outputSetOfTomoMasks.append(outTomoMask)
         else:
             # Membrane Annotator tool adds suffix _materials to the generated tomomasks
-            tomoBaseNames = [tomo.getFileName().replace(MATERIALS_SUFFIX, '') for tomo in inTomos]
+            tomoBaseNames = [basename(tomo.getFileName().replace(MATERIALS_SUFFIX, '')) for tomo in inTomos]
             for inTomoMask in inTomoMasks:
                 outTomoMask = self.setMatchingTomogram(tomoBaseNames, inTomoMask, inTomos, isMatchingByTsId=False)
                 outputSetOfTomoMasks.append(outTomoMask)
