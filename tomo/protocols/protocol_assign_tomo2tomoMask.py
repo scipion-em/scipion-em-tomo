@@ -162,7 +162,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
             tomoBaseNames = [tomo.getFileName().replace(MATERIALS_SUFFIX, '') for tomo in inTomos]
             for tomoMask in inTomoMasks:
                 tomoMaskName = tomoMask.getFileName()
-                tomoMaskBaseName = basename(tomoMaskBaseName.replace(MATERIALS_SUFFIX, ''))
+                tomoMaskBaseName = basename(tomoMaskName.replace(MATERIALS_SUFFIX, ''))
                 if tomoMaskBaseName not in tomoBaseNames:
                     notMatchingMsg += '\n\t-%s' % tomoMaskName
             if notMatchingMsg:
