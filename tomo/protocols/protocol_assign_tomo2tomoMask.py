@@ -87,6 +87,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         outFileName = self._getExtraPath(basename(inFileName))
         symlink(abspath(inFileName), abspath(outFileName))
         outTomoMask = TomoMask()
+        outTomoMask.setLocation(inFileName)
         outTomoMask.copyInfo(inTomoMask)
         outTomoMask.setFileName = outFileName
         if isMatchingByTsId:
