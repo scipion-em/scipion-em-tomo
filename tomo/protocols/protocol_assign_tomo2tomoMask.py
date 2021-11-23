@@ -161,8 +161,9 @@ class ProtAssignTomo2TomoMask(EMProtocol):
             # Check match by basename
             tomoBaseNames = [tomo.getFileName().replace(MATERIALS_SUFFIX, '') for tomo in inTomos]
             for tomoMask in inTomoMasks:
-                tomoMaskName = tomoMask.getFileName().replace(MATERIALS_SUFFIX, '')
-                if tomoMaskName not in tomoBaseNames:
+                tomoMaskName = tomoMask.getFileName()
+                tomoMaskBaseName = basename(tomoMaskBaseName.replace(MATERIALS_SUFFIX, ''))
+                if tomoMaskBaseName not in tomoBaseNames:
                     notMatchingMsg += '\n\t-%s' % tomoMaskName
             if notMatchingMsg:
                 warnings.append('Not able to find a basename-based match for the following tomomasks in '
