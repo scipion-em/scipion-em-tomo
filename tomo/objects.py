@@ -685,7 +685,7 @@ class Tomogram(data.Volume):
         """ Copy basic information """
         super().copyInfo(other)
         attribs2Copy = ['_acquisition', '_tsId', '_origin']
-        finalAttribs = [attrib for attrib in attribs2Copy if hasattr(attrib, other)]
+        finalAttribs = [attrib for attrib in attribs2Copy if hasattr(other, attrib)]
         self.copyAttributes(other, *finalAttribs)
 
 
