@@ -32,6 +32,8 @@ from pyworkflow.utils import removeExt
 from pwem.protocols import EMProtocol
 from tomo.objects import TomoMask
 
+MATERIALS_SUFFIX = '_materials'
+
 
 class ProtAssignTomo2TomoMask(EMProtocol):
     """ This protocol assign tomograms to tomo masks (segmentations)."""
@@ -74,7 +76,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
                 outputSetOfTomoMasks.append(outTomoMask)
         else:
             # Membrane Annotator tool adds suffix _materials to the generated tomomasks
-            tomoBaseNames = [tomo.getFileName().replace('_materials', '') for tomo in inTomos]
+            tomoBaseNames = [tomo.getFileName().replace(MATERIALS_SUFFIX, '') for tomo in inTomos]
             for inTomoMask in inTomoMasks:
                 outTomoMask = self.setMatchingTomogram(tomoBaseNames, inTomoMask, inTomos, isMatchingByTsId=False)
                 outputSetOfTomoMasks.append(outTomoMask)
@@ -128,7 +130,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
             numberMatchesByTsId = len(set(tomoTsIds) & set(tomoMaskTsIds))  # Length of the intersection of both lists
 
             # Check match by basename
-            tomoMaskBaseNames = [tomoMask.getFileName() for tomoMask in inTomoMasks]
+            tomoMaskBaseNames = [tomoMask.getFileName().replace(MATERIALS_SUFFIX, '') for tomoMask in inTomoMasks]
             tomoBaseNames = [tomo.getFileName() for tomo in inTomos]
             numberMatchesByBaseName = len(set(tomoMaskBaseNames) & set(tomoBaseNames))  # Length of the intersection of both lists
 
@@ -154,7 +156,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         else:
             notMatchingMsg = ''
             # Check match by basename
-            tomoBaseNames = [tomo.getFileName() for tomo in inTomos]
+            tomoBaseNames = [tomo.getFileName().replace(MATERIALS_SUFFIX, '') for tomo in inTomos]
             for tomoMask in inTomoMasks:
                 tomoMaskName = tomoMask.getFileName()
                 if tomoMaskName not in tomoBaseNames:
