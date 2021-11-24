@@ -728,10 +728,6 @@ class TomoMask(Tomogram):
         tomo.setAcquisition(self.getAcquisition())
         return tomo
 
-    def copyInfo(self, other):
-        """ Copy basic information """
-        self.copyAttributes(other, '_samplingRate', '_tsId')
-
 
 class SetOfTomoMasks(SetOfTomograms):
     ITEM_TYPE = TomoMask
