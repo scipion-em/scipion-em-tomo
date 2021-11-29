@@ -1021,6 +1021,7 @@ class CtfEstimationListDialog(ListDialog):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         angList = []
         defocusUList = []
+        defocusVList = []
         phShList = []
         resList = []
 
@@ -1031,6 +1032,7 @@ class CtfEstimationListDialog(ListDialog):
                     index = int(item.getIndex())
                     angList.append(int(ts[index].getTiltAngle()))
                     defocusUList.append(item.getDefocusU())
+                    defocusVList.append(item.getDefocusV())
                     phShList.append(
                         item.getPhaseShift() if item.hasPhaseShift() else 0)
                     resList.append(item.getResolution())
@@ -1043,6 +1045,9 @@ class CtfEstimationListDialog(ListDialog):
                 defocusPlot.set_ylabel('DefocusU', color='tab:red')
                 defocusPlot.plot(angList, defocusUList, marker='.',
                                  color='tab:red', label='DefocusU (A)')
+                defocusPlot.set_ylabel('DefocusV', color='tab:blue')
+                defocusPlot.plot(angList, defocusVList, marker='.',
+                                 color='tab:blue', label='DefocusV (A)')
 
                 if item.hasPhaseShift():
                     phShPlot = defocusPlot.twinx()
