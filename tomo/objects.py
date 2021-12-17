@@ -73,10 +73,12 @@ class TiltImageBase:
     def setAcquisitionOrder(self, value):
         self._acqOrder.set(value)
 
-    def copyInfo(self, other, copyId=False):
+    def copyInfo(self, other, copyId=False, copyTM=True):
         self.copyAttributes(other, '_tiltAngle', '_tsId', '_acqOrder')
         if copyId:
             self.copyObjId(other)
+        if copyTM and other.hasTransform():
+            self.copyAttributes(other, '_transform')
 
 
 class TiltImage(data.Image, TiltImageBase):
@@ -86,9 +88,9 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other, copyId=False):
+    def copyInfo(self, other, copyId=False, copyTM=True):
         data.Image.copyInfo(self, other)
-        TiltImageBase.copyInfo(self, other, copyId=copyId)
+        TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
 
     def parseFileName(self, suffix="", extension=None):
         """
@@ -395,9 +397,9 @@ class TiltImageM(data.Movie, TiltImageBase):
         data.Movie.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other, copyId=False):
+    def copyInfo(self, other, copyId=False, copyTM=True):
         data.Movie.copyInfo(self, other)
-        TiltImageBase.copyInfo(self, other, copyId=copyId)
+        TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
 
 
 class TiltSeriesM(TiltSeriesBase):
@@ -681,6 +683,11 @@ class Tomogram(data.Volume):
             return self._dim
         return None
 
+    def copyInfo(self, other):
+        """ Copy basic information """
+        super().copyInfo(other)
+        self.copyAttributes(other, '_acquisition', '_tsId', '_origin')
+
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
@@ -740,6 +747,8 @@ class Coordinate3D(data.EMObject):
         self._volId = Integer()
         self._eulerMatrix = data.Transform()
         self._groupId = Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
+        self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
+        # coord (it's the tsId)
 
     def getX(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
@@ -906,6 +915,9 @@ class Coordinate3D(data.EMObject):
         """ Set the micrograph to which this coordinate belongs. """
         self._volumePointer.set(volume)
         self._volId.set(volume.getObjId())
+        if volume.getTsId():  # See getCoordinate3D() --> as a tomo is necessary to be created, the tomoId (tsId),
+            # which may have been previously stored is deleted when calling setVolume
+            self.setTomoId(volume.getTsId())
 
     def copyInfo(self, coord):
         """ Copy information from other coordinate. """
@@ -958,6 +970,12 @@ class Coordinate3D(data.EMObject):
             sr = vol.getSamplingRate()
             origin = vol.getShiftsFromOrigin()
             return origin[0] / sr, origin[1] / sr, origin[2] / sr
+
+    def getTomoId(self):
+        return self._tomoId.get()
+
+    def setTomoId(self, tomoId):
+        self._tomoId.set(tomoId)
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -1186,9 +1204,16 @@ class SetOfSubTomograms(data.SetOfVolumes):
     REP_TYPE = SubTomogram
 
     def __init__(self, **kwargs):
-        data.SetOfVolumes.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self._acquisition = TomoAcquisition()
         self._coordsPointer = Pointer()
+
+    def copyInfo(self, other):
+        """ Copy basic information (sampling rate and ctf)
+        from other set of images to current one"""
+        super().copyInfo(other)
+        if hasattr(other, '_coordsPointer'):  # Like the vesicles in pyseg
+            self.copyAttributes(other, '_coordsPointer')
 
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()

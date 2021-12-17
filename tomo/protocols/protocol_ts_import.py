@@ -239,7 +239,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     # -------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep('importStep')
+        self._insertFunctionStep(self.importStep)
 
     # -------------------------- STEPS functions -------------------------------
     def importStep(self):
@@ -375,6 +375,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 else:
                     tsObj.getAcquisition().setDosePerFrame(self.dosePerFrame.get())
                     tsObj.getAcquisition().setAccumDose(self.dosePerFrame.get() * len(tiltSeriesList))
+                    tsObj.getAcquisition().setTiltAxisAngle(self.tiltAxisAngle.get())
 
                 outputSet.update(tsObj)  # update items and size info
                 self._existingTs.add(ts)
@@ -465,7 +466,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 errMsg.append('Sampling rate should be a float')
             if not self.dosePerFrame.get():
                 errMsg.append('Dose per frame should be a float')
-            if not self.tiltAxisAngle.get():
+            if self.tiltAxisAngle.get() is None:
                 errMsg.append('Tilt axis angle should be a float')
 
         return errMsg
@@ -485,7 +486,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     #     return ['files']
 
     # -------------------------- UTILS functions -------------------------------
-    def _initialize(self):
+    def  _initialize(self):
         """ Initialize some internal variables such as:
         - patterns: Expand the pattern using environ vars or username
             and also replacing special character # by digit matching.
@@ -668,7 +669,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             let's add a prefix if it is not the case
             """
             tsId = match.group('TS')
-            return tsId
+            return normalizeTSId(tsId)
 
         def _addOne(fileList, file, match):
             """ Add one file matching to the list. """
@@ -939,6 +940,20 @@ class ProtImportTsMovies(ProtImportTsBase):
             return []
 
 
+def normalizeTSId(rawTSId):
+    """ Normalizes the name of a TS to prevent sqlite errors, it ends up as a table in a set"""
+    # remove paths and extension
+    normTSID = removeBaseExt(rawTSId)
+
+    # Avoid dots case: TS_234.mrc.mdoc
+    normTSID = normTSID.split(".")[0]
+
+    if normTSID[0].isdigit():
+        normTSID = "TS_" + normTSID
+
+    return normTSID.replace('-', '_').replace('.', '')
+
+
 class MDoc:
 
     def __init__(self, fileName, voltage=None, magnification=None, samplingRate=None,
@@ -957,20 +972,6 @@ class MDoc:
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
-    @staticmethod
-    def normalizeTSId(rawTSId):
-        """ Normalizes the name of a TS to prevent sqlite errors, it ends up as a table in a set"""
-        # remove paths and extension
-        normTSID = removeBaseExt(rawTSId)
-
-        # Avoid dots case: TS_234.mrc.mdoc
-        normTSID = normTSID.split(".")[0]
-
-        if normTSID[0].isdigit():
-            normTSID = "TS_" + normTSID
-
-        return normTSID
-
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
         validateTSFromMdocErrMsg = ''
         tsFile = None
@@ -979,7 +980,7 @@ class MDoc:
 
         # Get acquisition general info
         self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
-        self._tsId = self.normalizeTSId(mdoc)
+        self._tsId = normalizeTSId(mdoc)
         parentFolder = getParentFolder(mdoc)
         if not isImportingTsMovies:
             # Some mdoc files point to an .st file stored in the ImageFile header line
@@ -1036,16 +1037,19 @@ class MDoc:
                         raise Exception("Unexpected ZValue = %d" % zvalue)
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
-                elif line.startswith('[T') and not self.getTiltAxisAngle():
-                    strLine = line.strip().replace(' ', '').lower()
-                    pattern = 'tiltaxisangle='
-                    if pattern in strLine:
-                        # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
-                        # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
-                        tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
-                        # Check if it's a string which represents a float or not
-                        if tiltAxisAngle.replace('.', '', 1).isdigit():
-                            self._tiltAxisAngle = float(tiltAxisAngle)
+                elif line.startswith('[T'):
+                    if self.getTiltAxisAngle():
+                        continue  # It's in the mdoc, but the user has specified it manually
+                    else:
+                        strLine = line.strip().replace(' ', '').lower()
+                        pattern = 'tiltaxisangle='
+                        if pattern in strLine:
+                            # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
+                            # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
+                            tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
+                            # Check if it's a string which represents a float or not
+                            if tiltAxisAngle.lstrip('-+').replace('.', '', 1).isdigit():
+                                self._tiltAxisAngle = float(tiltAxisAngle)
                 elif line.strip():
                     key, value = line.split('=')
                     if not headerParsed:

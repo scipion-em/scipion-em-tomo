@@ -33,6 +33,7 @@ from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
 from ..constants import BOTTOM_LEFT_CORNER
+from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO
 from ..utils import existsPlugin
 import tomo.protocols
 
@@ -158,7 +159,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
                                                    objLabel='Import from %s - %s' % (program, ext),
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
+                                                   auto=IMPORT_FROM_AUTO,
                                                    filesPath=self.dataset.getPath(),
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern=pattern, boxSize=32,
@@ -168,11 +169,17 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         return protImportCoordinates3d
 
     def test_import_set_of_coordinates_3D(self):
-
+        # From txt
         protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertCoordinates(output, 5)
 
+        # From sqlite
+        protCoordinates = self._runTomoImportSetOfCoordinates('coordinates.sqlite', 'TOMO', 'SQLITE')
+        output = getattr(protCoordinates, 'outputCoordinates', None)
+        self.assertCoordinates(output, 5)
+
+        # From emantomo file
         if existsPlugin('emantomo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
             output = getattr(protCoordinates, 'outputCoordinates', None)
@@ -186,7 +193,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
             self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
 
-
+        # From dynamo file
         if existsPlugin('dynamo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
             output = getattr(protCoordinates, 'outputCoordinates', None)
@@ -317,6 +324,7 @@ class TestTomoImportTsFromPattern(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.getFile = cls.dataset.getFile('etomo')
         cls.getFileM = cls.dataset.getFile('empiar')
+        cls.tiltAxisAngle = 84.1
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
@@ -330,7 +338,7 @@ class TestTomoImportTsFromPattern(BaseTest):
             samplingRate=0.675,
             doseInitial=0,
             dosePerFrame=0.375,
-            tiltAxisAngle=84.1
+            tiltAxisAngle=self.tiltAxisAngle
         )
         self.launchProtocol(protImport)
         return protImport
@@ -350,7 +358,7 @@ class TestTomoImportTsFromPattern(BaseTest):
             samplingRate=1.35,
             doseInitial=0,
             dosePerFrame=0.3,
-            tiltAxisAngle=84.1)
+            tiltAxisAngle=self.tiltAxisAngle)
         self.launchProtocol(protImport)
         return protImport
 
@@ -378,6 +386,7 @@ class TestTomoImportTsFromPattern(BaseTest):
         self.assertSetSize(set, size)
         for ts in set:
             self.assertEquals(ts.getSize(), anglesCount, "Size of tilt images is wrong.")
+            self.assertEqual(ts.getAcquisition().getTiltAxisAngle(), self.tiltAxisAngle)
             for i, ti in enumerate(ts):
                 self.assertFalse(os.path.isabs(ti.getFileName()),
                                  "Tilt image file %s is not absolute!. Should be relative.")

@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+from .protocol_assign_tomo2tomoMask import ProtAssignTomo2TomoMask
 from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
@@ -38,3 +38,6 @@ from .protocol_assign_tomo2subtomo import ProtAssignTomo2Subtomo
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
 from .protocol_consensus_classes_subtomo import ProtConsensusClassesSubtomo
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
+from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
+from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
+from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
