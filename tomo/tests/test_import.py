@@ -33,7 +33,8 @@ from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
 from ..constants import BOTTOM_LEFT_CORNER
-from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO
+from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
+from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from ..utils import existsPlugin
 import tomo.protocols
 
@@ -145,28 +146,38 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('tomo1')
 
-    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
+    def _importTomograms(self):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=self.tomogram,
                                               samplingRate=5)
 
         self.launchProtocol(protImportTomogram)
+        outputTomos = getattr(protImportTomogram, 'outputTomograms', None)
+        self.assertIsNotNone(outputTomos, "There was a problem with tomogram output")
 
-        output = getattr(protImportTomogram, 'outputTomograms', None)
+        return outputTomos
 
-        self.assertIsNotNone(output,
-                             "There was a problem with tomogram output")
-
-        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
+    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
+        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
                                                    objLabel='Import from %s - %s' % (program, ext),
                                                    auto=IMPORT_FROM_AUTO,
                                                    filesPath=self.dataset.getPath(),
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern=pattern, boxSize=32,
+                                                   importTomograms=self._importTomograms(),
+                                                   filesPattern=pattern,
+                                                   boxSize=32,
                                                    samplingRate=5.5)
         self.launchProtocol(protImportCoordinates3d)
-
         return protImportCoordinates3d
+
+    def testImport3dCoordsFromSqlite(self):
+        ds = DataSet.getDataSet('emd_10439')
+        protImportCoordsFromSqlite = self.newProtocol(ProtImportCoordinates3DFromScipion,
+                                                      objLabel='Import from Scipion sqlite',
+                                                      sqliteFile=ds.getFile('scipionSqlite3dCoords'),
+                                                      inTomos=self._importTomograms())
+
+        self.launchProtocol(protImportCoordsFromSqlite)
+        a = 1
 
     def test_import_set_of_coordinates_3D(self):
         # From txt
