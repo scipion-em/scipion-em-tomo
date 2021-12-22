@@ -26,11 +26,12 @@
 from os.path import basename, exists
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
+from pyworkflow.object import String
 from pyworkflow.protocol import FileParam, IntParam, PointerParam
 from pyworkflow.utils import copyFile, Message, removeBaseExt
-from ..constants import SCIPION
+from ..constants import SCIPION, ERR_COORDS_FROM_SQLITE_NO_MATCH
 from .protocol_base import ProtTomoBase
-from ..objects import SetOfTomograms
+from ..objects import SetOfTomograms, SetOfCoordinates3D
 
 
 class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
@@ -39,11 +40,15 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
     _label = 'import set of coordinates 3D from scipion sqlite file'
     _devStatus = BETA
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.notFoundCoordsMsg = None
+
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('sqliteFile', FileParam,
                       label='Scipion sqlite file')
-        form.addParam('inTomos', PointerParam,
+        form.addParam('importTomograms', PointerParam,
                       pointerClass='SetOfTomograms',
                       label='Input tomograms',
                       help='Select the tomograms to which the coordinates should be referred to. '
@@ -56,31 +61,20 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
                       default=20)
 
     def _insertAllSteps(self):
-        # JORGE
-        import os
-        fname = "/home/jjimenez/Desktop/test_JJ.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        import time
-        time.sleep(10)
-        # JORGE_END
         self._insertFunctionStep(self.importCoordinatesStep)
 
     # --------------------------- STEPS functions -----------------------------
 
     def importCoordinatesStep(self):
+        inTomoSet = self.importTomograms.get()
+        coordsSet = SetOfCoordinates3D()
+
         # Make a copy of the introduced file in the current protocol's results folder
         sqliteFile = self.sqliteFile.get()
         newFileName = self._getPath(basename(sqliteFile))
         copyFile(sqliteFile, newFileName)
 
         # Generate a set of 3d coordinates and assign the mapper of the introduced sqlite file
-        inTomoSet = self.importTomograms.get()
-        coordsSet = self._createSetOfCoordinates3D(inTomoSet)
         coordsSet.setSamplingRate(inTomoSet.getSamplingRate())
         coordsSet.setBoxSize(self.boxSize.get())
         coordsSet._mapperPath.set('%s, %s' % (newFileName, ''))
@@ -89,13 +83,16 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
         # Check if the coordinates and the tomograms can be related via the tomoId or the filename
         outTomoSet = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
         outTomoSet.copyInfo(inTomoSet)
-        self._getMatchingTomos(inTomoSet, outTomoSet, coordsSet)
+        self._checkCoordinatesMatching(inTomoSet, outTomoSet, coordsSet)
+        if self.notFoundCoordsMsg:
+            self._store()
 
         # Define the outputs
         self._defineOutputs(outputSetOfCoordinates=coordsSet)
         self._defineSourceRelation(inTomoSet, coordsSet)
 
     # --------------------------- INFO functions ------------------------------
+
     def _validate(self):
         errorList = []
         if not exists(self.sqliteFile.get()):
@@ -104,15 +101,22 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
         return errorList
 
     def _summary(self):
-        pass
+        summaryMsg = []
+        if self.isFinished():
+            statusMsg = getattr(self, 'notFoundCoordsMsg', None)
+            if statusMsg:
+                summaryMsg.append(statusMsg.get())
+
+        return summaryMsg
 
     # --------------------------- UTILS functions ----------------------------
 
-    @staticmethod
-    def _getMatchingTomos(inTomoSet, outTomoSet, coordsSet):
+    def _checkCoordinatesMatching(self, inTomoSet, outTomoSet, coordsSet):
         notFoundCoords = []
+        notFoundCoordsMsg = ''
+        notFoundTomosMsg = ''
         inTomoSetMatchingIndices = []
-        pattern = 'Row %i - (x, y, x) = (%.2f, %.2f, %.2f)'
+        pattern = 'Row %i  -  tomoId = %s  -  (x, y, x) = (%.2f, %.2f, %.2f)'
         tomoTsIdList, tomoBaseNameList = zip(*[(tomo.getTsId(), removeBaseExt(tomo.getFileName()))
                                                for tomo in inTomoSet])
         for coord in coordsSet:
@@ -122,23 +126,45 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
                 coord.setVolume(inTomoSet[indByTomoId])
                 inTomoSetMatchingIndices.append(indByTomoId)
             else:
-                indexByName = ProtImportCoordinates3DFromScipion._getMatchingIndexByFileName(coordTomoId,
-                                                                                             tomoBaseNameList)
+                indexByName = self._getMatchingIndexByFileName(coordTomoId, tomoBaseNameList)
                 if indexByName:
                     coord.setVolume(inTomoSet[indexByName])
                     inTomoSetMatchingIndices.append(indexByName)
                 else:
-                    notFoundCoords.append(pattern % (coord.getObjId(), *coord.getPosition(SCIPION)))
+                    coord.setVolume(inTomoSet[1])  # 3D coordinate must be referred to a volume to get its origin
+                    notFoundCoords.append(pattern % (coord.getObjId(), coordTomoId, *coord.getPosition(SCIPION)))
 
         # Build a precedents set with only the matching tomograms, in case there are not all the ones present in the
         # input set
+        pattern = '\t-{}\n'
         if inTomoSetMatchingIndices:
-            for ind in set(inTomoSetMatchingIndices):
-                outTomoSet.append(inTomoSet[ind])
+            inTomoSetMatchingIndices = set(inTomoSetMatchingIndices)
+            if len(inTomoSetMatchingIndices) < inTomoSet.getSize():
+                for ind in set(inTomoSetMatchingIndices):
+                    outTomoSet.append(inTomoSet[ind])
+                coordsSet.setPrecedents(outTomoSet)
+                # Format the non-matching coordinates message and add the header
+                notFoundCoordsMsg += 'The following coordinates have a tomoId which was not found in the tsId ' \
+                                     'attribute of none of the tomograms introduced nor contained in their basename:' \
+                                     '\n\n%s' % (pattern * len(notFoundCoords))
+                notFoundCoordsMsg.format(*notFoundCoords)
 
-        # TODO: register thisoutput if necessary
+                # Generate a message to report about the non-matching tomograms found
+                notMatchingTomoFiles = self._getNotMatchingTomoFiles(inTomoSet, inTomoSetMatchingIndices)
+                notFoundTomosMsg += 'The following tomograms were excluded from the set because no coordinates are ' \
+                                    'referred to them:\n\n%s' % (pattern * len(notMatchingTomoFiles))
+                notFoundTomosMsg.format(*notMatchingTomoFiles)
+        else:
+            raise Exception(ERR_COORDS_FROM_SQLITE_NO_MATCH)
 
-        return notFoundCoords
+        if notFoundCoords:
+            # Format the non-matching coordinates message and add the header
+            notFoundCoordsMsg += ('The following coordinates have a tomoId which was not found in the tsId '
+                                  'attribute of none of the tomograms introduced nor contained in their basename:'
+                                  '\n%s' % (pattern * len(notFoundCoords))).format(*notFoundCoords)
+
+        self.notFoundCoordsMsg = String(notFoundTomosMsg + '\n\n' + notFoundCoordsMsg if
+                                        notFoundTomosMsg else notFoundCoordsMsg)
 
     @staticmethod
     def _getMatchingIndexByFileName(coordTomoId, tomoBaseNameList):
@@ -148,3 +174,10 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
             matchingIndex = matches.index(True) + 1
 
         return matchingIndex
+
+    @staticmethod
+    def _getNotMatchingTomoFiles(inTomoSet, inTomoSetMatchingIndices):
+        return [inTomoSet[ind + 1].getFileName() for ind in range(inTomoSetMatchingIndices)
+                if ind not in inTomoSetMatchingIndices]
+
+

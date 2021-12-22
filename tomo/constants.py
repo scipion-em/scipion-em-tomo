@@ -42,3 +42,7 @@ CENTER_GRAVITY = lambda dim: (0.5 * dim[0], 0.5 * dim[1], 0.5 * dim[2])
 SCIPION = lambda dim: None
 
 # ----------------------------------------------------------------------------
+# Error message when non-matching tomograms are found in protocol import 3d coordinates from Scipion sqlite
+ERR_COORDS_FROM_SQLITE_NO_MATCH = 'No matching tomograms were found to the introduced coordinates. Coordinates ' \
+                                  'attribute tomoId should be the same as the corresponding tomogram attribute tsId ' \
+                                  'or be contained in its name.'
