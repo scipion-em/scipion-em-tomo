@@ -178,7 +178,7 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
             print(yellowStr(('EXCLUDED COORDINATES [%i]:\n%s' %
                             (nOfNonMatchingCoords, pattern * nOfNonMatchingCoords)).format(*notFoundCoords)))
 
-        self.notMatchingsMsg = String(notFoundTomosMsg + '\n\n' + notFoundCoordsMsg if
+        self.notMatchingMsg = String(notFoundTomosMsg + '\n\n' + notFoundCoordsMsg if
                                         notFoundTomosMsg else notFoundCoordsMsg)
 
     @staticmethod
