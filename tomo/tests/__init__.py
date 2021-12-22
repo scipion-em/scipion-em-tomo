@@ -58,6 +58,8 @@ DataSet(name='reliontomo', folder='reliontomo',
 
 DataSet(name='emd_10439', folder='emd_10439',
         files={
+               'tomogramsDir': 'tomograms',
                'tomoEmd10439': 'tomograms/emd_10439.mrc',
-               'scipionSqlite3dCoords': 'importFromScipionSqlite/coordinates.sqlite'
+               'scipionSqlite3dCoords': 'importFromScipionSqlite/coordinates.sqlite',
+               'scipionSqlite3dCoordsSomeBad': 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
         })
