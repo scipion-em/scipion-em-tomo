@@ -25,15 +25,16 @@
 # **************************************************************************
 import glob
 import os
-from os.path import join
+from os.path import join, basename, exists, abspath
 
 import numpy
 from pyworkflow.tests import BaseTest, setupTestProject
 from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
-from ..constants import BOTTOM_LEFT_CORNER
-from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO
+from ..constants import BOTTOM_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH
+from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
+from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from ..utils import existsPlugin
 import tomo.protocols
 
@@ -142,48 +143,110 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
-        cls.tomogram = cls.dataset.getFile('tomo1')
+        cls.tomoDs = DataSet.getDataSet('tomo-em')
+        cls.emdDs = DataSet.getDataSet('emd_10439')
+        cls.sqBoxSize = 20
+        cls.sqSamplingRate = 13.68
 
-    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
+    def _importTomograms(self, filesPath, samplingRate, pattern=None):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
-                                              filesPath=self.tomogram,
-                                              samplingRate=5)
+                                              filesPath=filesPath,
+                                              filesPattern=pattern,
+                                              samplingRate=samplingRate)
 
         self.launchProtocol(protImportTomogram)
+        outputTomos = getattr(protImportTomogram, 'outputTomograms', None)
+        self.assertIsNotNone(outputTomos, 'No tomograms were genetated.')
 
-        output = getattr(protImportTomogram, 'outputTomograms', None)
+        return outputTomos
 
-        self.assertIsNotNone(output,
-                             "There was a problem with tomogram output")
-
-        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
+    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
+        sRate = 5.5
+        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
                                                    objLabel='Import from %s - %s' % (program, ext),
                                                    auto=IMPORT_FROM_AUTO,
-                                                   filesPath=self.dataset.getPath(),
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern=pattern, boxSize=32,
-                                                   samplingRate=5.5)
+                                                   filesPath=self.tomoDs.getPath(),
+                                                   importTomograms=self._importTomograms(self.tomoDs.getFile('tomo1'),
+                                                                                         sRate),
+                                                   filesPattern=pattern,
+                                                   boxSize=32,
+                                                   samplingRate=sRate)
         self.launchProtocol(protImportCoordinates3d)
-
         return protImportCoordinates3d
 
+    def _runImportSetoOfCoordsFromScipionSqlite(self, sqliteFile, inTomos, boxSize, objLabel):
+        protImportCoordsFromSqlite = self.newProtocol(ProtImportCoordinates3DFromScipion,
+                                                      objLabel=objLabel,
+                                                      sqliteFile=sqliteFile,
+                                                      importTomograms=inTomos,
+                                                      boxSize=boxSize)
+
+        self.launchProtocol(protImportCoordsFromSqlite)
+        return getattr(protImportCoordsFromSqlite, 'outputCoordinates', None), \
+            getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
+
+    def testImport3dCoordsFromSqlite_FullMatch(self):
+        setSize = 2339
+        inTomos = self._importTomograms(self.emdDs.getFile('tomoEmd10439'), self.sqSamplingRate)
+        outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
+            self.emdDs.getFile('scipionSqlite3dCoords'), inTomos, self.sqBoxSize, 'Scipion - Full match')
+        self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
+        self.assertFalse(outputTomoSet)
+
+    def testImport3dCoordsFromSqlite_SomeCoordsExcluded(self):
+        setSize = 2335
+        inTomos = self._importTomograms(self.emdDs.getFile('tomoEmd10439'), self.sqSamplingRate)
+        outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
+            self.emdDs.getFile('scipionSqlite3dCoordsSomeBad'), inTomos, self.sqBoxSize,
+            'Scipion - Some coords excluded')
+        self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
+        self.assertFalse(outputTomoSet)
+
+    def testImport3dCoordsFromSqlite_SomeTomosAndCoordsExcluded(self):
+        # Generate a symbolic link to another tomogram to have a set of two, and the coordinates referred only to one
+        # of them
+        setSize = 2335
+        tomosPath = self.emdDs.getFile('tomograms')
+        additionalTomo = self.tomoDs.getFile('tomo1')
+        linkedTomoBaseName = basename(additionalTomo)
+        linkedTomo = join(tomosPath, linkedTomoBaseName)
+        if not exists(linkedTomo.replace('.em', '.mrc')):
+            os.symlink(abspath(additionalTomo), abspath(linkedTomo))
+
+        inTomos = self._importTomograms(tomosPath, self.sqSamplingRate, pattern='*.mrc')
+        outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
+            self.emdDs.getFile('scipionSqlite3dCoordsSomeBad'), inTomos, self.sqBoxSize,
+            'Scipion - Some tomos and coords excluded')
+        self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
+
+        # A set of tomograms with the original tomograms should have also been generated, because it's the only one
+        # from the introduced set which has coordinates referred to it
+        self.assertSetSize(outputTomoSet, 1)
+        self.assertEqual(outputTomoSet[1].getTsId(), 'emd_10439')
+        self.assertEqual(basename(outputTomoSet[1].getFileName()), 'emd_10439.mrc')
+        self.assertEqual(outputTomoSet[1].getSamplingRate(), self.sqSamplingRate)
+
+    def testImport3dCoordsFromSqlite_NoneMatch(self):
+        inTomos = self._importTomograms(self.tomoDs.getFile('tomo1'), self.sqSamplingRate)
+        with self.assertRaises(Exception) as eType:
+            self._runImportSetoOfCoordsFromScipionSqlite(
+                self.emdDs.getFile('scipionSqlite3dCoords'), inTomos, self.sqBoxSize, 'Scipion - No match')
+            self.assertEqual(str(eType.exception), ERR_COORDS_FROM_SQLITE_NO_MATCH)
+
     def test_import_set_of_coordinates_3D(self):
+        boxSize = 32
+        samplingRate = 5.5
+
         # From txt
         protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 5)
-
-        # From sqlite
-        protCoordinates = self._runTomoImportSetOfCoordinates('coordinates.sqlite', 'TOMO', 'SQLITE')
-        output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 5)
+        self.assertCoordinates(output, 5, boxSize, samplingRate)
 
         # From emantomo file
         if existsPlugin('emantomo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
             output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 19)
+            self.assertCoordinates(output, 19, boxSize, samplingRate)
 
             # Check se are not loosing precision
             firstCoord = output.getFirstItem()
@@ -197,14 +260,13 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         if existsPlugin('dynamo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
             output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 5)
+            self.assertCoordinates(output, 5, boxSize, samplingRate)
 
-    def assertCoordinates(self, coordSet, size):
-        self.assertTrue(coordSet,
-                        "There was a problem with coordinates 3d output")
+    def assertCoordinates(self, coordSet, size, boxSize, samplingRate):
+        self.assertTrue(coordSet, 'No 3d coordinates were generated.')
         self.assertSetSize(coordSet, size=size)
-        self.assertTrue(coordSet.getBoxSize() == 32)
-        self.assertTrue(coordSet.getSamplingRate() == 5.5)
+        self.assertTrue(coordSet.getBoxSize() == boxSize)
+        self.assertTrue(coordSet.getSamplingRate() == samplingRate)
 
 
 class TestTomoImportTomograms(BaseTest):
@@ -272,6 +334,7 @@ class TestTomoImportTomograms(BaseTest):
                             "There was a problem with the acquisition angle min")
 
             break
+
 
 class TestTomoBaseProtocols(BaseTest):
     @classmethod
@@ -570,7 +633,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertEqual(tiM.getAcquisitionOrder(), acqOrderList[i])
 
                 if not isTsMovie:
-                    self.assertEqual(i+1, tiM.getIndex())
+                    self.assertEqual(i + 1, tiM.getIndex())
                     if previousAngle is not None:
                         self.assertTrue(previousAngle < tiM.getTiltAngle(), "Tilt images are not sorted by angle.")
                     previousAngle = tiM.getTiltAngle()
