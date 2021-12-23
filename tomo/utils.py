@@ -34,6 +34,7 @@ import numpy as np
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms
 
 
 def existsPlugin(plugin):
@@ -323,3 +324,15 @@ def generatePointCloud(v, tomoDim):
                 pointCloud.append([0, 0, int(z * tomoDim[2])])
 
     return pointCloud
+
+
+def isMatchingByTsId(set1, set2):
+    return True if getattr(set1.getFirstItem(), _getTsIdLabel(set1), None) and \
+                   getattr(set2.getFirstItem(), _getTsIdLabel(set2), None) else False
+
+
+def _getTsIdLabel(setObject):
+    """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
+    corresponding coordinate)"""
+    return '_tomoId' if type(setObject) in [SetOfCoordinates3D, SetOfSubTomograms] else '_tsId'
+
