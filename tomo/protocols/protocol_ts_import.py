@@ -1045,7 +1045,7 @@ class MDoc:
                         if pattern in strLine:
                             # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
                             # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
-                            # [T =     Tilt axis angle = -91.81  Binning = 1  SpotSize = 7]
+                            # [T =     TiltAxisAngle = -91.81  Binning = 1  SpotSize = 7]
                             tiltAxisAngle = strLine.split('=')[2].split('binning')[0]
                             # Check if it's a string which represents a float or not
                             if tiltAxisAngle.lstrip('-+').replace('.', '', 1).isdigit():
