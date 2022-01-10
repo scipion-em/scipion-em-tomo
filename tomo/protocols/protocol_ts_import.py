@@ -545,7 +545,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         skippedMdocs = 0
 
         for mdoc in mdocList:
-            print("processing mdoc file", mdoc)
             # Note: voltage, magnification and sampling rate values are the ones introduced by the user in the
             # protocol's form. Otherwise, the corresponding values considered will be the ones read from the mdoc.
             # This is because because you can't trust mdoc (often dose is not calibrated in serialem, so you get 0;
