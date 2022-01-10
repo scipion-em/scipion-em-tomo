@@ -545,6 +545,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         skippedMdocs = 0
 
         for mdoc in mdocList:
+            print("processing mdoc file", mdoc)
             # Note: voltage, magnification and sampling rate values are the ones introduced by the user in the
             # protocol's form. Otherwise, the corresponding values considered will be the ones read from the mdoc.
             # This is because because you can't trust mdoc (often dose is not calibrated in serialem, so you get 0;
@@ -1026,7 +1027,6 @@ class MDoc:
         headerDict = {}
         headerParsed = False
         zvalueList = []
-
         with open(self._mdocFileName) as f:
             for line in f:
                 if line.startswith('[ZValue'):
@@ -1046,7 +1046,8 @@ class MDoc:
                         if pattern in strLine:
                             # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
                             # [T =     Tilt axis angle = 90.1, binning = 1  spot = 9  camera = 0]
-                            tiltAxisAngle = strLine.split('tiltaxisangle=')[1].split(',')[0]
+                            # [T =     Tilt axis angle = -91.81  Binning = 1  SpotSize = 7]
+                            tiltAxisAngle = strLine.split('=')[2].split('binning')[0]
                             # Check if it's a string which represents a float or not
                             if tiltAxisAngle.lstrip('-+').replace('.', '', 1).isdigit():
                                 self._tiltAxisAngle = float(tiltAxisAngle)
