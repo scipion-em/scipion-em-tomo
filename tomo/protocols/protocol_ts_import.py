@@ -1040,7 +1040,7 @@ class MDoc:
                     if self.getTiltAxisAngle():
                         continue  # It's in the mdoc, but the user has specified it manually
                     else:
-                        strLine = line.strip().replace(' ', '').lower()
+                        strLine = line.strip().replace(' ', '').replace(',','').lower()
                         pattern = 'tiltaxisangle='
                         if pattern in strLine:
                             # Example of the most common syntax (after having checked multiple mdocs from EMPIAR)
