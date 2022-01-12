@@ -439,7 +439,7 @@ class TestTomoSubSetsSubTomograms(BaseTest):
 
         protImportCoordinates3d = self.newProtocol(
             tomo.protocols.ProtImportCoordinates3D,
-            auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+            auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_FILES,
             filesPath=self.coords3D,
             importTomograms=protImportSubTomogram.outputTomograms,
             filesPattern='', boxSize=32,
@@ -581,6 +581,7 @@ class TestTomoPreprocessing(BaseTest):
             sphericalAberration=2.7,
             amplitudeContrast=0.1,
             samplingRate=0.675,
+            tiltAxisAngle=90,
             doseInitial=0,
             dosePerFrame=0.375)
         self.launchProtocol(protImport)
