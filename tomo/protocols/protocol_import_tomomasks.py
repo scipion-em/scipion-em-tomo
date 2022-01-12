@@ -22,8 +22,10 @@
 # *  e-mail address 'scipion-users@lists.sourceforge.net'
 # *
 # **************************************************************************
+from pwem.emlib.image import ImageHandler
 from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam
+from pyworkflow.utils import yellowStr
 from pyworkflow.utils.path import removeBaseExt
 from .protocol_base import ProtTomoImportFiles
 from ..objects import TomoMask, SetOfTomoMasks
@@ -55,8 +57,12 @@ class ProtImportTomomasks(ProtTomoImportFiles):
     def importStep(self):
         self._checkMatchingFiles()
         tomoMaskSet = self._genOutputSetOfTomoMasks()
+        if self.warnMsg:
+            print(yellowStr(self.warnMsg))
+        if not tomoMaskSet:
+            raise Exception('No tomomasks were generated. Check the output log for more details.')
+
         self._defineOutputs(outputTomoMasks=tomoMaskSet)
-        self._store()
 
     # --------------------------- INFO functions ------------------------------
     def _getTomMessage(self):
@@ -67,22 +73,14 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             summary = []
             if self.isFinished():
                 summary.append("%s imported from:\n%s" % (self._getTomMessage(), self.getPattern()))
-                summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
 
                 if self.warnMsg:
-                    summary.append(self.warnMsg)
+                    summary.append('Some tomograms or tomomasks were excluded. Check the log for more details.')
 
             return summary
 
         except Exception as e:
             print(e)
-
-    def _methods(self):
-        methods = []
-        if self.isFinished():
-            methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getTomMessage(), self.samplingRate.get()), )
-        return methods
 
     def _validate(self):
         errors = []
@@ -115,7 +113,7 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             list2check = tomoBaseNames
 
         for file, _ in self.iterFiles():
-            tomoMaskName = removeBaseExt(file).replace('_materials', '')
+            tomoMaskName = self.getTomoMaskName(file)
             matches = list(map(isMember, list2check, [tomoMaskName]))
             if any(matches):
                 matchingTomoMaskDict[file] = inTomoSet[matches.index(True) + 1]
@@ -123,15 +121,17 @@ class ProtImportTomomasks(ProtTomoImportFiles):
                 nonMatchingTomoMaskNames.append(tomoMaskName)
 
         # Check if there are non-matching tomograms
-        setMatchingIds = set(matchingTomoMaskDict.keys())
+        matchingIds = matchingTomoMaskDict.keys()
         pattern = '\t- {}\n'
-        if setMatchingIds:
+        if matchingIds:
+            uniqueMatchingIds = set([self.getTomoMaskName(matchingId) for matchingId in matchingIds])
             set2check = set(list2check)
-            nonMatchingTomogramIds = set2check ^ setMatchingIds  # ^ is (a | b) - (a & b) inverse intersection
+            nonMatchingTomogramIds = set2check ^ uniqueMatchingIds  # ^ is (a | b) - (a & b) inverse intersection
             if nonMatchingTomogramIds:
                 nOfNonMatchingTomos = len(nonMatchingTomogramIds)
-                msgNonMatchingTomos = ('*[%i]* tomograms did not match to any of the tomomasks introduced:%s' %
-                                       (nOfNonMatchingTomos, pattern * nOfNonMatchingTomos)).format(*nonMatchingTomogramIds)
+                msgNonMatchingTomos = ('[%i] tomograms did not match to any of the tomomasks introduced:\n%s' %
+                                       (nOfNonMatchingTomos, pattern * nOfNonMatchingTomos)
+                                       ).format(*nonMatchingTomogramIds)
         else:
             raise Exception('No matching tomograms were found with the input tomomasks. The match is carried out by '
                             'checking if the tsId of each tomogram is contained in the basename of the tomomaks. If '
@@ -140,8 +140,9 @@ class ProtImportTomomasks(ProtTomoImportFiles):
         # The same for the non-matching tomomasks
         if nonMatchingTomoMaskNames:
             nOfNonMatchingTomomasks = len(nonMatchingTomoMaskNames)
-            msgNonMatchingTomoMasks = ('*[%i]* tomomask did not match to any of the tomograms introduced:%s' %
-                                   (nOfNonMatchingTomomasks, pattern * nOfNonMatchingTomomasks)).format(*nonMatchingTomoMaskNames)
+            msgNonMatchingTomoMasks = ('[%i] tomomasks did not match to any of the tomograms introduced:\n%s' %
+                                       (nOfNonMatchingTomomasks, pattern * nOfNonMatchingTomomasks)
+                                       ).format(*nonMatchingTomoMaskNames)
 
         self.warnMsg = msgNonMatchingTomos + '\n\n' + msgNonMatchingTomoMasks
         self.matchingTomoMaskDict = matchingTomoMaskDict
@@ -151,19 +152,46 @@ class ProtImportTomomasks(ProtTomoImportFiles):
         return True if getattr(tomo, '_tsId', None) else False
 
     def _genOutputSetOfTomoMasks(self):
+        ih = ImageHandler()
+        tomoMasksNonMatchingDims = []
+        nonMatchingDimsList = []
         tomoMaskSet = SetOfTomoMasks.create(self._getPath(), template='tomomasks%s.sqlite', suffix='annotated')
         inTomoSet = self.inputTomos.get()
+        xt, yt, zt = inTomoSet.getDimensions()
         sRate = inTomoSet.getSamplingRate()
         tomoMaskSet.setSamplingRate(sRate)
         counter = 1
         for tomomaskFile, tomoObj in self.matchingTomoMaskDict.items():
-            tomoMask = TomoMask()
-            tomoMask.setSamplingRate(sRate)
-            tomoMask.setLocation(counter, tomomaskFile)
-            tomoMask.setVolName(tomoObj.getFileName())
-            if self._tomoHasValidTsId(tomoObj):
-                tomoMask.setTsId(tomoObj.getTsId())
-            tomoMaskSet.append(tomoMask)
-            counter += 1
+            x, y, z, _ = ih.getDimensions(tomomaskFile)
+            if (xt, yt, zt) == (x, y, z):
+                tomoMask = TomoMask()
+                tomoMask.setSamplingRate(sRate)
+                tomoMask.setLocation(counter, tomomaskFile)
+                tomoMask.setVolName(tomoObj.getFileName())
+                if self._tomoHasValidTsId(tomoObj):
+                    tomoMask.setTsId(tomoObj.getTsId())
+                tomoMaskSet.append(tomoMask)
+                counter += 1
+            else:
+                tomoMasksNonMatchingDims.append(self.getTomoMaskName(tomomaskFile))
+                nonMatchingDimsList.append((z, y, z))
+
+        if tomoMasksNonMatchingDims:
+            nNonMatchingDimsMasks = len(tomoMasksNonMatchingDims)
+            msgNonMatchingDimsMasks = ('[%i] tomomasks have different dimensions than the ones from the introduced '
+                                       'set of tomograms (x, y, z) = (%i, %i, %i):\n' %
+                                       (nNonMatchingDimsMasks, xt, yt, zt))
+            for nonMatchingDimsMask, nonMatchingDims in zip(tomoMasksNonMatchingDims, nonMatchingDimsList):
+                msgNonMatchingDimsMasks += '\t- %s (x, y, z) = (%i, %i, %i)\n' % \
+                                           (nonMatchingDimsMask,
+                                            nonMatchingDims[0],
+                                            nonMatchingDims[1],
+                                            nonMatchingDims[2])
+
+            self.warnMsg += '\n\n' + msgNonMatchingDimsMasks
 
         return tomoMaskSet
+
+    @staticmethod
+    def getTomoMaskName(maskFileName):
+        return removeBaseExt(maskFileName).replace('_materials', '')  # This suffix is added by the memb. annotator
