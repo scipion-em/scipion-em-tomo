@@ -31,11 +31,12 @@ import numpy
 
 from imod.protocols import ProtImodTomoNormalization
 from pyworkflow.tests import BaseTest, setupTestProject
-from pyworkflow.utils import magentaStr
+from pyworkflow.utils import magentaStr, createLink
 from tomo.protocols.protocol_ts_import import MDoc
 
 from . import DataSet
-from ..constants import BOTTOM_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH
+from ..constants import BOTTOM_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
+    ERR_NON_MATCHING_TOMOS
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
@@ -736,20 +737,26 @@ class TestImportTomoMasks(BaseTest):
     samplingRate = 13.68
     inTomoSet = None
     inTomoSetBinned = None
+    inNotMatchingTomoSet = None
 
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
         ds = DataSet.getDataSet('emd_10439')
         cls.ds = ds
-        cls.inTomoSet = cls._importTomograms()
+        cls.inTomoSet = cls._importTomograms(ds.getFile('tomoEmd10439'))
         cls.inTomoSetBinned = cls._normalizeTomo()
+        # Create a link pointing to the tomogram but renaming it in a way that it won't be possible to match it with
+        # the tomomask
+        nonMatchingTomoName = join(ds.getPath(), 'nonMatchingTomo.mrc')
+        createLink(ds.getFile('tomoEmd10439'), nonMatchingTomoName)
+        cls.inNotMatchingTomoSet = cls._importTomograms(nonMatchingTomoName)
 
     @classmethod
-    def _importTomograms(cls):
+    def _importTomograms(cls, filesPath):
         print(magentaStr("\n==> Importing data - tomograms:"))
         protImportTomogram = cls.newProtocol(ProtImportTomograms,
-                                             filesPath=cls.ds.getFile('tomoEmd10439'),
+                                             filesPath=filesPath,
                                              samplingRate=cls.samplingRate)
 
         cls.launchProtocol(protImportTomogram)
@@ -772,8 +779,7 @@ class TestImportTomoMasks(BaseTest):
         return outputTomos
 
     def testImportTomoMasksAllGood(self):
-        print(magentaStr("\n==> Importing data - tomoMasks"
-                         ":"))
+        print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
                                                filesPath=self.ds.getFile('tomomaskAnnotated'),
                                                inputTomos=self.inTomoSetBinned)
@@ -787,4 +793,25 @@ class TestImportTomoMasks(BaseTest):
         self.assertEqual(tomoMaskSet.getSamplingRate(), 2 * self.samplingRate)
         self.assertFalse(protImportTomomasks.warnMsg)
 
-    #TODO: Add more tests with non matching files and non matching dimensions
+    # The tomogram and the tomomask have different sizes
+    def testImportTomoMasksDiffSize(self):
+        print(magentaStr("\n==> Importing data - tomoMasks:"))
+        protImportTomomasks = self.newProtocol(ProtImportTomomasks,
+                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               inputTomos=self.inTomoSet)
+
+        with self.assertRaises(Exception) as eType:
+            self.launchProtocol(protImportTomomasks)
+            self.assertEqual(str(eType.exception), ERR_NO_TOMOMASKS_GEN)
+
+    # Tomomask and tomogram doesn't correspond
+    def testImportTomoMasksNoneMatch(self):
+        print(magentaStr("\n==> Importing data - tomoMasks:"))
+        protImportTomomasks = self.newProtocol(ProtImportTomomasks,
+                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               inputTomos=self.inNotMatchingTomoSet)
+
+        with self.assertRaises(Exception) as eType:
+            self.launchProtocol(protImportTomomasks)
+            self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)
+

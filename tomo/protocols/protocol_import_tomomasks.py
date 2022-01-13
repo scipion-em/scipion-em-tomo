@@ -28,6 +28,7 @@ from pyworkflow.protocol import PointerParam
 from pyworkflow.utils import yellowStr
 from pyworkflow.utils.path import removeBaseExt
 from .protocol_base import ProtTomoImportFiles
+from ..constants import ERR_NO_TOMOMASKS_GEN, ERR_NON_MATCHING_TOMOS
 from ..objects import TomoMask, SetOfTomoMasks
 
 
@@ -40,7 +41,7 @@ class ProtImportTomomasks(ProtTomoImportFiles):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.warnMsg = None
+        self.warnMsg = ''
         self.matchingTomoMaskDict = None  # keys = filenames of matching tomomasks, values = matching Tomogram
 
     def _defineParams(self, form):
@@ -58,9 +59,9 @@ class ProtImportTomomasks(ProtTomoImportFiles):
         self._checkMatchingFiles()
         tomoMaskSet = self._genOutputSetOfTomoMasks()
         if self.warnMsg:
-            print(yellowStr(self.warnMsg))
+            print(yellowStr('WARNING!') + '\n' + self.warnMsg)
         if not tomoMaskSet:
-            raise Exception('No tomomasks were generated. Check the output log for more details.')
+            raise Exception(ERR_NO_TOMOMASKS_GEN)
 
         self._defineOutputs(outputTomoMasks=tomoMaskSet)
 
@@ -129,22 +130,19 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             nonMatchingTomogramIds = set2check ^ uniqueMatchingIds  # ^ is (a | b) - (a & b) inverse intersection
             if nonMatchingTomogramIds:
                 nOfNonMatchingTomos = len(nonMatchingTomogramIds)
-                msgNonMatchingTomos = ('[%i] tomograms did not match to any of the tomomasks introduced:\n%s' %
-                                       (nOfNonMatchingTomos, pattern * nOfNonMatchingTomos)
-                                       ).format(*nonMatchingTomogramIds)
+                headMsg = yellowStr('[%i] tomograms did not match to any of the tomomasks introduced:' % nOfNonMatchingTomos)
+                msgNonMatchingTomos = ('%s\n%s' % (headMsg, pattern * nOfNonMatchingTomos)).format(*nonMatchingTomogramIds)
+                self.warnMsg += msgNonMatchingTomos + '\n\n'
         else:
-            raise Exception('No matching tomograms were found with the input tomomasks. The match is carried out by '
-                            'checking if the tsId of each tomogram is contained in the basename of the tomomaks. If '
-                            'the tomograms do not have that attribute, then the base name is considered.')
+            raise Exception(ERR_NON_MATCHING_TOMOS)
 
         # The same for the non-matching tomomasks
         if nonMatchingTomoMaskNames:
             nOfNonMatchingTomomasks = len(nonMatchingTomoMaskNames)
-            msgNonMatchingTomoMasks = ('[%i] tomomasks did not match to any of the tomograms introduced:\n%s' %
-                                       (nOfNonMatchingTomomasks, pattern * nOfNonMatchingTomomasks)
-                                       ).format(*nonMatchingTomoMaskNames)
+            headMsg = yellowStr('[%i] tomomasks did not match to any of the tomograms introduced:' % nOfNonMatchingTomomasks)
+            msgNonMatchingTomoMasks = ('%s\n%s' % (headMsg, pattern * nOfNonMatchingTomomasks)).format(*nonMatchingTomoMaskNames)
+            self.warnMsg += msgNonMatchingTomoMasks + '\n\n'
 
-        self.warnMsg = msgNonMatchingTomos + '\n\n' + msgNonMatchingTomoMasks
         self.matchingTomoMaskDict = matchingTomoMaskDict
 
     @staticmethod
@@ -174,21 +172,22 @@ class ProtImportTomomasks(ProtTomoImportFiles):
                 counter += 1
             else:
                 tomoMasksNonMatchingDims.append(self.getTomoMaskName(tomomaskFile))
-                nonMatchingDimsList.append((z, y, z))
+                nonMatchingDimsList.append((x, y, z))
 
         if tomoMasksNonMatchingDims:
             nNonMatchingDimsMasks = len(tomoMasksNonMatchingDims)
-            msgNonMatchingDimsMasks = ('[%i] tomomasks have different dimensions than the ones from the introduced '
-                                       'set of tomograms (x, y, z) = (%i, %i, %i):\n' %
-                                       (nNonMatchingDimsMasks, xt, yt, zt))
+            msgNonMatchingDimsMasks = yellowStr('[%i] tomomasks have different dimensions than the ones from the '
+                                                'introduced set of tomograms (x, y, z) = (%i, %i, %i):' %
+                                                (nNonMatchingDimsMasks, xt, yt, zt))
+
             for nonMatchingDimsMask, nonMatchingDims in zip(tomoMasksNonMatchingDims, nonMatchingDimsList):
-                msgNonMatchingDimsMasks += '\t- %s (x, y, z) = (%i, %i, %i)\n' % \
+                msgNonMatchingDimsMasks += '\n\t- %s (x, y, z) = (%i, %i, %i)\n' % \
                                            (nonMatchingDimsMask,
                                             nonMatchingDims[0],
                                             nonMatchingDims[1],
                                             nonMatchingDims[2])
 
-            self.warnMsg += '\n\n' + msgNonMatchingDimsMasks
+            self.warnMsg += msgNonMatchingDimsMasks + '\n\n'
 
         return tomoMaskSet
 
