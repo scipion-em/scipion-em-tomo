@@ -46,3 +46,9 @@ SCIPION = lambda dim: None
 ERR_COORDS_FROM_SQLITE_NO_MATCH = 'No matching tomograms were found to the introduced coordinates. Coordinates ' \
                                   'attribute tomoId should be the same as the corresponding tomogram attribute tsId ' \
                                   'or be contained in its name.'
+
+# Import tomomasks error messages
+ERR_NO_TOMOMASKS_GEN = 'No tomomasks were generated. Check the output log for more details.'
+ERR_NON_MATCHING_TOMOS = 'No matching tomograms were found with the input tomomasks. The match is carried out by ' \
+                         'checking if the tsId of each tomogram is contained in the basename of the tomomaks. If ' \
+                         'the tomograms do not have that attribute, then the base name is considered.'
