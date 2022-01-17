@@ -138,7 +138,6 @@ class MDoc:
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
                 elif line.startswith('[T'):  # auxiliary global information
-                    print("starting with T", file=sys.stderr)
                     if self.getTiltAxisAngle():
                         # It's in the mdoc, but the user has specified
                         # it manually
@@ -146,7 +145,6 @@ class MDoc:
                     else:
                         strLine = line.strip().replace(' ', '').\
                                                replace(',', '').lower()
-                        print("strLine", strLine, file=sys.stderr)
                         pattern = 'tiltaxisangle='
                         if pattern in strLine:
                             # Example of the most common syntax
