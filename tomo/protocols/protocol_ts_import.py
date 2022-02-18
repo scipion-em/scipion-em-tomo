@@ -956,6 +956,16 @@ class ProtImportTs(ProtImportTsBase):
 
     def _validateAngles(self):
         if not self.MDOC_DATA_SOURCE:
+            # If importing from pattern and getting the tilt data from header,
+            # it has to check if IMOD's extract tilts is installed
+            if self.getEnumText('anglesFrom') == self.ANGLES_FROM_HEADER:
+                from pwem import Domain
+                imod = Domain.importFromPlugin('imod')
+
+                if imod is None:
+                    return ['Imod plugin is needed to import angles from header.'
+                            'Please install it']
+
             ts, tiltSeriesList = self._firstMatch
             i, fileName = tiltSeriesList[0][0]
             x, y, z, n = ImageHandler().getDimensions(fileName)
