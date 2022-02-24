@@ -129,7 +129,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             key = '%s.%s' % (tsId, objId)
             text = objId
 
-            dose = obj.getAcquisition().getAccumDose() if hasattr(obj, '_accumDose') else None
+            dose = obj.getAcquisition().getAccumDose() if hasattr(obj.getAcquisition(), '_accumDose') else None
             adqOrder = obj.getAcquisitionOrder() if hasattr(obj, '_acqOrder') else None
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
@@ -1011,6 +1011,8 @@ class CtfEstimationListDialog(ListDialog):
                     ctfId = int(itemSelected.split('.')[-1])
                     # TODO: sort ctfSerie by id
                     fig = self._show2DPLot(ctfSerie, ctfId)
+                    if fig is None:
+                        return
                     canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
                     canvas.draw()
                     canvas.get_tk_widget().pack(fill=BOTH, expand=0)
