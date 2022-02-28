@@ -234,7 +234,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         if self._doSplitEvenOdd():
             template = 'tiltseries%s.sqlite'
             acq = ts.getAcquisition()
-            sRate = ts.getSamplingRate()
+            sRate = self._getOutputSampling()
             # Even
             if self.outputSetEven:
                 self.outputSetEven.enableAppend()
@@ -251,8 +251,8 @@ class ProtTsCorrectMotion(ProtTsProcess):
             tsClass = self.outputSetEven.ITEM_TYPE
             tsObjEven = tsClass(tsId=tsId)
             tsObjOdd = tsClass(tsId=tsId)
-            tsObjEven.setAcquisition(ts.getAcquisition())
-            tsObjOdd.setAcquisition(ts.getAcquisition())
+            tsObjEven.setAcquisition(acq)
+            tsObjOdd.setAcquisition(acq)
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
