@@ -522,7 +522,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         """ Function to be implemented in subclass to validate
         the angles range.
         """
-        return []
+        return None
 
     # -------------------------- BASE methods to be overridden ----------------
     # def _getImportChoices(self):
@@ -962,11 +962,11 @@ class ProtImportTs(ProtImportTsBase):
             nImages = max(z, n)  # Just handle ambiguity with mrc format
             nAngles = len(self._tiltAngleList)
             if nAngles != nImages:
-                return ['Tilt-series %s stack has different number of images '
-                        '(%d) than the expected number of tilt angles (%d). '
-                        % (fileName, nImages, nAngles)]
+                return 'Tilt-series %s stack has different number of images '\
+                        '(%d) than the expected number of tilt angles (%d). '\
+                        % (fileName, nImages, nAngles)
         else:
-            return []
+            return None
 
 
 class ProtImportTsMovies(ProtImportTsBase):
@@ -1024,7 +1024,7 @@ class ProtImportTsMovies(ProtImportTsBase):
         if not self.MDOC_DATA_SOURCE and \
            self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
             if not self._anglesInPattern():
-                return ['When importing movies, {TA} and {TO} '
-                        'should be in the files pattern.']
+                return 'When importing movies, {TA} and {TO} ' \
+                        'should be in the files pattern.'
         else:
-            return []
+            return None
