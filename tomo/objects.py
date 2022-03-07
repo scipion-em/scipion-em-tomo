@@ -750,21 +750,26 @@ class Coordinate3D(data.EMObject):
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
         # coord (it's the tsId)
 
+    def _getOffset(self, dim, originFunction):
+        """ Returns the offset to apply to a one of the coordinates
+        :param dim integer to get the dimension from (X=0, Y=1, Z=2)
+        :param originFunction function to call to do the conversion
+        """
+
+        origin_Scipion = self.getVolumeOrigin()[dim]
+        aux = originFunction(self.getVolume().getDim())
+        origin = aux[dim] if aux is not None else -origin_Scipion
+        return origin + origin_Scipion
+
     def getX(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
         works"""
-        origin_Scipion = self.getVolumeOrigin()[0]
-        aux = originFunction(self.getVolume().getDim())
-        origin = aux[0] if aux is not None else -origin_Scipion
-        return self._x.get() - origin - origin_Scipion
+        return self._x.get() - self._getOffset(0, originFunction)
 
     def setX(self, x, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        origin_Scipion = self.getVolumeOrigin()[0]
-        aux = originFunction(self.getVolume().getDim())
-        origin = aux[0] if aux is not None else -origin_Scipion
-        self._x.set(x + origin + origin_Scipion)
+        self._x.set(x + self._getOffset(0,originFunction))
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
@@ -772,18 +777,14 @@ class Coordinate3D(data.EMObject):
     def getY(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
         works"""
-        origin_Scipion = self.getVolumeOrigin()[1]
-        aux = originFunction(self.getVolume().getDim())
-        origin = aux[1] if aux is not None else -origin_Scipion
-        return self._y.get() - origin - origin_Scipion
+
+        return self._y.get() - self._getOffset(1,originFunction)
 
     def setY(self, y, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        origin_Scipion = self.getVolumeOrigin()[1]
-        aux = originFunction(self.getVolume().getDim())
-        origin = aux[1] if aux is not None else -origin_Scipion
-        self._y.set(y + origin + origin_Scipion)
+
+        self._y.set(y + self._getOffset(1,originFunction))
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
@@ -791,18 +792,12 @@ class Coordinate3D(data.EMObject):
     def getZ(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
         works"""
-        origin_Scipion = self.getVolumeOrigin()[2]
-        aux = originFunction(self.getVolume().getDim())
-        origin = aux[2] if aux is not None else -origin_Scipion
-        return self._z.get() - origin - origin_Scipion
+        return self._z.get() - self._getOffset(2,originFunction)
 
     def setZ(self, z, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        origin_Scipion = self.getVolumeOrigin()[2]
-        aux = originFunction(self.getVolume().getDim())
-        origin = aux[2] if aux is not None else -origin_Scipion
-        self._z.set(z + origin + origin_Scipion)
+        self._z.set(z + self._getOffset(2,originFunction))
 
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
