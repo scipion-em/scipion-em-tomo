@@ -30,7 +30,7 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.viewer as pwviewer
 from pwem.protocols import EMProtocol
-from pwem.viewers import ObjectView
+from pwem.viewers import ObjectView, DataViewer, MODE, MODE_MD
 from pyworkflow.protocol import LabelParam
 
 from .views import ClassesSubTomogramsView
@@ -210,3 +210,21 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
                                       CtfEstimationTomoViewer.plot2D):
             return self.plot2D
         return None
+
+
+class XmippDataViewer(DataViewer):
+    """ Wrapper to visualize SetOfCoordinates3D
+        with the Xmipp program xmipp_showj
+        """
+    _environments = [pwviewer.DESKTOP_TKINTER, pwviewer.WEB_DJANGO]
+    _targets = [tomo.objects.SetOfCoordinates3D]
+    _label = 'XmippDataViewer'
+
+    def __init__(self, **kwargs):
+        DataViewer.__init__(self, **kwargs)
+        self._views = []
+
+    def _visualize(self, obj, **kwargs):
+        fn = obj.getFileName()
+        self._addObjView(obj, fn, {MODE: MODE_MD})
+        return self._views
