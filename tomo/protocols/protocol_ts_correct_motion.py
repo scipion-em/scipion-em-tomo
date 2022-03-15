@@ -234,7 +234,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
         # Even and odd stuff
         if self._doSplitEvenOdd():
             template = 'tiltseries%s.sqlite'
-            acq = ts.getAcquisition()
             sRate = self._getOutputSampling()
             # Even
             if self.outputSetEven:
@@ -249,11 +248,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 self.outputSetOdd = SetOfTiltSeries.create(self._getPath(), template=template, suffix=ODD)
                 self.outputSetOdd.setSamplingRate(sRate)
 
-            tsClass = self.outputSetEven.ITEM_TYPE
-            tsObjEven = tsClass(tsId=tsId)
-            tsObjOdd = tsClass(tsId=tsId)
-            tsObjEven.setAcquisition(acq)
-            tsObjOdd.setAcquisition(acq)
+            tsObjEven = TiltSeries()
+            tsObjOdd = TiltSeries()
+            tsObjEven.copyInfo(ts, copyId=True)
+            tsObjOdd.copyInfo(ts, copyId=True)
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
