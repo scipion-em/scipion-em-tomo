@@ -40,6 +40,7 @@ from tomo.protocols import ProtTsCorrectMotion
 
 SERIES_EVEN = "outputTiltSeriesEven"
 SERIES_ODD = "outputTiltSeriesOdd"
+SERIES_DW = "outputTiltSeriesDW"
 
 
 class TomoDataViewer(pwviewer.Viewer):
@@ -110,6 +111,10 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
         form.addParam('displayFullTiltSeries', LabelParam,
                       label='Display full frame aligned tilt series',
                       help='Shows full frames aligned set of tilt series')
+        if self.hasDWSet():
+            form.addParam('displayFullTiltSeriesDW', LabelParam,
+                          label='Display full frame aligned tilt series (dose-weighted)',
+                          help='Shows full frames aligned set of tilt series')
         if self.hasEvenSet():
             form.addParam('displayEvenTiltSeries', LabelParam,
                           label='Display even frames aligned tilt series',
@@ -119,6 +124,9 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
                 form.addParam('displayOddTiltSeries', LabelParam,
                               label='Display odd frames aligned tilt series',
                               help='Shows even frames aligned set of tilt series')
+
+    def hasDWSet(self):
+        return hasattr(self.protocol, SERIES_DW)
 
     def hasEvenSet(self):
         return hasattr(self.protocol, SERIES_EVEN)
@@ -141,9 +149,13 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
     def _displayFullTiltSeries(self, param=None):
         return self._visualize(self.protocol.outputTiltSeries)
 
+    def _displayFullTiltSeriesDW(self, param=None):
+        return self._visualize(self.protocol.outputTiltSeriesDW)
+
     def _getVisualizeDict(self):
         return {
             'displayFullTiltSeries': self._displayFullTiltSeries,
+            'displayFullTiltSeriesDW': self._displayFullTiltSeriesDW,
             'displayEvenTiltSeries': self._displayEvenTiltSeries,
             'displayOddTiltSeries': self._displayOddTiltSeries,
         }
