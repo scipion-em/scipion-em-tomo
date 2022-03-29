@@ -944,6 +944,21 @@ class TestTomoCoordinatesOrigin(BaseTest):
         self.assertEqual(-0.5 * z, trPosition[2],
                          'SCIPION: Conversion did not return the expected value for Z axis')
 
+    def test_Scipion_Origin_noTomo(self):
+        """Test coordinate position where there is no tomogram associated.
+        """
+        self._createCoordinate3D()
+        self.coord._volumePointer.set(None)
+        x, y, z = self.Tomo.getDim()
+        trPosition = self.coord.getPosition(const.SCIPION)
+        self.assertEqual(-0.5 * x, trPosition[0],
+                         'SCIPION: Conversion did not return the expected value for X axis without a tomo')
+        self.assertEqual(-0.5 * y, trPosition[1],
+                         'SCIPION: Conversion did not return the expected value for Y axis without a tomo')
+        self.assertEqual(-0.5 * z, trPosition[2],
+                         'SCIPION: Conversion did not return the expected value for Z axis without a tomo')
+
+
 
 if __name__ == 'main':
     pass

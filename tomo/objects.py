@@ -750,11 +750,13 @@ class Coordinate3D(data.EMObject):
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
         # coord (it's the tsId)
 
-    def _getOffset(self, dim, originFunction):
+    def _getOffset(self, dim, originFunction=const.SCIPION):
         """ Returns the offset to apply to a one of the coordinates
         :param dim integer to get the dimension from (X=0, Y=1, Z=2)
         :param originFunction function to call to do the conversion
         """
+        if originFunction == const.SCIPION:
+            return 0
 
         origin_Scipion = self.getVolumeOrigin()[dim]
         aux = originFunction(self.getVolume().getDim())
