@@ -170,7 +170,8 @@ class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
                                self.samplingRate.get())
 
-            ProtTomoImportAcquisition._summary(self, summary, getattr(self, 'outputSubTomograms'))
+            # This is too much info to display
+            # ProtTomoImportAcquisition._summary(self, summary, getattr(self, 'outputSubTomograms'))
 
         return summary
 
