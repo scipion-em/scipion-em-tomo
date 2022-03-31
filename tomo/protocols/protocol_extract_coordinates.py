@@ -115,7 +115,11 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
                     newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
                     newCoord.setBoxSize(boxSize)
-                    newCoord.setMatrix(checkMatrix(subTomo, coord))
+                    transformation = checkMatrix(subTomo)
+                    transformation[0, 3] *= scale
+                    transformation[1, 3] *= scale
+                    transformation[2, 3] *= scale
+                    newCoord.setMatrix(transformation)
                     if coord.hasGroupId():
                         newCoord.setGroupId(coord.getGroupId())
                     self.outputCoords.append(newCoord)
@@ -127,15 +131,18 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                 newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
 
                 newCoord.setBoxSize(boxSize)
-                newCoord.setMatrix(checkMatrix(subTomo, coord))
+                transformation = checkMatrix(subTomo)
+                transformation[0, 3] *= scale
+                transformation[1, 3] *= scale
+                transformation[2, 3] *= scale
+                newCoord.setMatrix(transformation)
+                if coord.hasGroupId():
+                    newCoord.setGroupId(coord.getGroupId())
                 self.outputCoords.append(newCoord)
 
-        def checkMatrix(subTomo, coord):
+        def checkMatrix(subTomo):
             transform_subTomo = subTomo.getTransform().getMatrix()
-            transform_coordinate = coord.getMatrix()
-            if not np.allclose(transform_coordinate, np.eye(transform_coordinate.shape[0])):
-                return transform_coordinate
-            elif not np.allclose(transform_subTomo, np.eye(transform_subTomo.shape[0])):
+            if transform_subTomo is not None:
                 return transform_subTomo
             else:
                 return np.eye(transform_subTomo.shape[0])
