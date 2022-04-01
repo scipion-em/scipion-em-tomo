@@ -1135,15 +1135,17 @@ class SubTomogram(data.Volume):
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
-        tomo = Tomogram()
-        subtomoOrigin = self.getOrigin()
-        if subtomoOrigin:
-            tomo.setOrigin(subtomoOrigin)
-        tomo.setLocation(self.getVolName())
-        tomo.setSamplingRate(self.getSamplingRate())
-        coord = self._coordinate
-        coord.setVolume(tomo)
-        return coord
+        # We do not do this here but in the set iterator tha will "plug" the volume (tomogram) is exists
+        # tomo = Tomogram()
+        # subtomoOrigin = self.getOrigin()
+        # if subtomoOrigin:
+        #     tomo.setOrigin(subtomoOrigin)
+        # tomo.setLocation(self.getVolName())
+        # tomo.setSamplingRate(self.getSamplingRate())
+        # coord = self._coordinate
+        # coord.setVolume(tomo)
+        # return coord
+        return self._coordinate
 
     def getAcquisition(self):
         return self._acquisition
@@ -1176,9 +1178,11 @@ class SubTomogram(data.Volume):
         """
         if self._volName.hasValue():
             return self._volName.get()
-        if self.getVolume():
-            return self.getVolume().getFileName()
-        return None
+        # getVolume does not exists!
+        # if self.getVolume():
+        #     return self.getVolume().getFileName()
+
+        return "Missing"
 
     def setVolName(self, volName):
         self._volName.set(volName)

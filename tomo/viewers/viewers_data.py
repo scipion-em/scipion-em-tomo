@@ -224,7 +224,7 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         return None
 
 
-class XmippDataViewer(DataViewer):
+class Coordinates3DDataViewer(DataViewer):
     """ Wrapper to visualize SetOfCoordinates3D
         with the Xmipp program xmipp_showj
         """
