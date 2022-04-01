@@ -273,6 +273,128 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
+    def writeNewstcomFile(self, ts_folder, **kwargs):
+        '''Writes an artifitial newst.com file'''
+        newstcomPath = ts_folder + '/newst.com'
+        pathi = self.getTsId()
+        taperAtFill = kwargs.get('taperAtFill', (1, 0))
+        offsetsInXandY = kwargs.get('offsetsInXandY', (0.0, 0.0))
+        imagesAreBinned = kwargs.get('imagesAreBinned', 1.0)
+        binByFactor = kwargs.get('binByFactor', 1)
+
+        with open(newstcomPath, 'w') as f:
+            f.write('$newstack -StandardInput\n\
+InputFile {}.st\n\
+OutputFile {}.ali\n\
+TransformFile {}.xf\n\
+TaperAtFill	{},{}\n\
+AdjustOrigin\n\
+OffsetsInXandY {},{}\n\
+#DistortionField	.idf\n\
+ImagesAreBinned	{}\n\
+BinByFactor	{}\n\
+#GradientFile {}.maggrad\n\
+$if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
+                                       taperAtFill[0],
+                                       taperAtFill[1], offsetsInXandY[0],
+                                       offsetsInXandY[1], imagesAreBinned,
+                                       binByFactor, pathi))
+
+        return newstcomPath
+
+    def writeTiltcomFile(self, ts_folder, **kwargs):
+        '''Writes an artifitial tilt.com file'''
+        tiltcomPath = ts_folder + '/tilt.com'
+        pathi = self.getTsId()
+        thickness = kwargs.get('thickness', 500)
+        binned = kwargs.get('binned', 1)
+        offset = kwargs.get('offset', 0.0)
+        shift = kwargs.get('shift', (0.0, 0.0))
+        radial = kwargs.get('radial', (0.35, 0.035))
+        xAxisTill = kwargs.get('xAxisTill', 0.0)
+        log = kwargs.get('log', 0.0)
+        scale = kwargs.get('scale', (0.0, 1000.0))
+        mode = kwargs.get('mode', 2)
+        subsetStart = kwargs.get('subsetStart', (0, 0))
+        actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+
+        with open(tiltcomPath, 'w') as f:
+            f.write('$tilt -StandardInput\n\
+InputProjections {}.ali\n\
+OutputFile {}.rec\n\
+IMAGEBINNED {} \n\
+TILTFILE {}.tlt\n\
+THICKNESS {}\n\
+RADIAL {} {}\n\
+FalloffIsTrueSigma 1\n\
+XAXISTILT {}\n\
+LOG	{}\n\
+SCALE {} {}\n\
+PERPENDICULAR\n\
+MODE {}\n\
+FULLIMAGE {} {}\n\
+SUBSETSTART 0 0\n\
+AdjustOrigin\n\
+ActionIfGPUFails {},{}\n\
+XTILTFILE {}.xtilt\n\
+OFFSET {}\n\
+SHIFT {} {}\n\
+$if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
+                                       radial[0], radial[1], xAxisTill, log,
+                                       scale[0], scale[1], mode,
+                                       self.getDim()[0], self.getDim()[1],
+                                       subsetStart[0], subsetStart[1],
+                                       actionIfGPUFails[0], actionIfGPUFails[1],
+                                       pathi, offset, shift[0], shift[1]))
+
+        return tiltcomPath
+
+    def writeTltFile(self, ts_folder):
+        xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
+        with open(xtiltPath, 'w') as f:
+            for ti in self:
+                f.write(str(ti.getTiltAngle()) + '\n')
+
+    def writeXtiltFile(self, ts_folder):
+        xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
+        with open(xtiltPath, 'w') as f:
+            for ti in self:
+                f.write('0.00\n')
+
+    def writeXfFile(self, transformFilePath):
+        """ This method takes a tilt series and the output transformation file
+        path and creates an IMOD-based transform
+        file in the location indicated. """
+
+        tsMatrixTransformList = []
+
+        for ti in self:
+            transform = ti.getTransform().getMatrix().flatten()
+            transformIMOD = ['%.7f' % transform[0],
+                             '%.7f' % transform[1],
+                             '%.7f' % transform[3],
+                             '%.7f' % transform[4],
+                             '%.3f' % transform[2],
+                             '%.3f' % transform[5]]
+            tsMatrixTransformList.append(transformIMOD)
+
+        with open(transformFilePath, 'w') as f:
+            csvW = csv.writer(f, delimiter='\t')
+            csvW.writerows(tsMatrixTransformList)
+
+    def writeImodFiles(self, folderName, **kwargs):
+        # Create a newst.com file
+        self.writeNewstcomFile(folderName, **kwargs)
+        # Create a tilt.com file
+        self.writeTiltcomFile(folderName, **kwargs)
+        # Create a .tlt file
+        self.writeTltFile(folderName)
+        # Create a .xtilt file
+        self.writeXtiltFile(folderName)
+        # Create a .xf file
+        transformFilePath = folderName + '/%s.xf' % self.getTsId()
+        self.writeXfFile(transformFilePath)
+
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
