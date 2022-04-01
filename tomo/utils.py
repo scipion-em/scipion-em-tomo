@@ -34,7 +34,8 @@ import numpy as np
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms
+from pyworkflow.object import Pointer, RELATION_SOURCE, OBJECT_PARENT_ID
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries
 
 
 def existsPlugin(plugin):
@@ -335,4 +336,23 @@ def _getTsIdLabel(setObject):
     """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
     corresponding coordinate)"""
     return '_tomoId' if type(setObject) in [SetOfCoordinates3D, SetOfSubTomograms] else '_tsId'
+
+def recoverTSFromObj(child_obj, protocol):
+    p = protocol.getProject()
+    graph = p.getSourceGraph(False)
+    relations = p.mapper.getRelationsByName(RELATION_SOURCE)
+    n = graph.getNode(child_obj.strId())
+    connection = []
+    while n is not None and not n.getParent().isRoot():
+        n = n.getParent()
+        connection.append(n.pointer.getUniqueId())
+        connection.append(n.pointer.get().strId())
+    for rel in relations:
+        pObj = p.getObject(rel[OBJECT_PARENT_ID])
+        pExt = rel['object_parent_extended']
+        pp = Pointer(pObj, extended=pExt)
+        if pp.getUniqueId() in connection:
+            if isinstance(pObj, SetOfTiltSeries) and pObj.getFirstItem().getFirstItem().hasTransform():
+                return pObj
+    return None
 
