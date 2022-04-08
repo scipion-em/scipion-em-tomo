@@ -44,6 +44,106 @@ from pwem.emlib.image import ImageHandler
 import tomo.constants as const
 
 
+def convertMatrix(M, convention=None, direction=None):
+    """
+            Parameters:
+                - M --> Transformation matrix
+                - convention --> One of the valid conventions to convert M. It can be:
+                    * None         : Return the matrix stored in the metadata (Scipion convention).
+                    * relion (str) : Relion matrix convention
+                - direction --> Determine how to perform the conversion (not considered if convention is None):
+                    * 'to' (str)   : Convert the matrix stored in metadata (Scipion definition) to the given 'convention'
+                    * 'from' (str) : Convert the matrix from the given 'convention' to Scipion definition
+
+            Scipion transformation matrix definition is described in detailed below:
+
+               Notation:
+                    - r      --> A 3D position vector
+                    - f'(r)  --> Moved map
+                    - f(r)   --> Reference
+                    - M      --> Matrix to be stored by Scipion
+                    - @      --> Matrix product
+
+               Definition:
+
+                   f'(r) = f(M@r)
+
+               Example:
+
+                   If r = (0,0,0,1) = o (origin vector) and M is a translation only transformation matrix
+                   of the form:
+
+                        M = [[1,0,0,0],[0,1,0,0],[0,0,0,1],[-dx,-dy,-dz,1]]
+
+                   Being dx, dy, and dz a infinitesimally small displacement, then our transformation
+                   verifies that:
+
+                        f'(o) = f(M@o) = [-dx,-dy,-dz,1]
+
+            We include conversions to the following matrix conventions:
+
+                - Eman:
+                    Notation:
+                        - X'  -->  inverse of a matrix
+                        - T   -->  translation matrix
+                        - R   ---> rotation matrix
+                        - M   -->  Scipion transformation matrix
+                        - N   -->  Eman transformation matrix
+                        - @   -->  Matrix multiplication
+
+                    Conversion Scipion --> Eman
+                        M = R@T' => T' = R'@M
+                        *** N = T'@R = R'@M@R ***
+
+                    Conversion Eman --> Scipion
+                        N = R'@M@R => *** M = R@N@R' ***
+
+                - Relion:
+                    Notation:
+                        - X'  -->  inverse of a matrix
+                        - T   -->  translation matrix
+                        - R   ---> rotation matrix
+                        - M   -->  Scipion transformation matrix
+                        - N   -->  Relion transformation matrix
+                        - @   -->  Matrix multiplication
+
+                    Conversion Scipion --> Relion
+                        M = R@T' => T = M'@R
+                        *** N = T@R = M'@R@R ***
+
+                    Conversion Relion --> Scipion
+                        N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
+            """
+
+    if convention is None:
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Ri = np.linalg.inv(R)
+        return R @ M @ Ri
+    elif direction == 'get' and convention == 'eman':
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Ri = np.linalg.inv(R)
+        return Ri @ M @ R
+    elif direction == 'set' and convention == 'eman':
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Ri = np.linalg.inv(R)
+        return R @ M @ Ri
+    elif direction == 'get' and convention == 'relion':
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Mi = np.linalg.inv(M)
+        return Mi @ R @ R
+    elif direction == 'set' and convention == 'relion':
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        Mi = np.linalg.inv(M)
+        return R @ R @ Mi
+
+
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
 
@@ -926,16 +1026,17 @@ class Coordinate3D(data.EMObject):
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
 
-    def setMatrix(self, matrix):
-        self._eulerMatrix.setMatrix(matrix)
+    def setMatrix(self, matrix, convention=None):
+        self._eulerMatrix.setMatrix(convertMatrix(matrix, direction='set', convention=convention))
 
-    def getMatrix(self):
-        return self._eulerMatrix.getMatrix()
+    def getMatrix(self, convention=None):
+        return convertMatrix(self._eulerMatrix.getMatrix(), direction='get', convention=convention)
 
     def hasTransform(self):
         return self._eulerMatrix is not None
 
     def euler2Matrix(self, r, p, y):
+        # FIXME: Queremos mantener esta conversion? Puede ser muy lioso
         self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
     def eulerAngles(self):
@@ -1320,6 +1421,19 @@ class SubTomogram(data.Volume):
             sr = self.getSamplingRate()
             origin = self.getShiftsFromOrigin()
             return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
+
+    def setTransform(self, newTransform, convention=None):
+        if newTransform is None:
+            newTransform = Transform()
+            matrix = np.eye(4)
+        else:
+            matrix = newTransform.getMatrix()
+        newTransform.setMatrix(convertMatrix(matrix, direction='set', convention=convention))
+        self._transform = newTransform
+
+    def getTransform(self, convention=None):
+        matrix = self._transform.getMatrix()
+        return Transform(convertMatrix(matrix, direction='get', convention=convention))
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
