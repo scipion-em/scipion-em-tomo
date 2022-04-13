@@ -51,9 +51,10 @@ def convertMatrix(M, convention=None, direction=None):
                 - convention --> One of the valid conventions to convert M. It can be:
                     * None         : Return the matrix stored in the metadata (Scipion convention).
                     * relion (str) : Relion matrix convention
+                    * eman (str)   : Eman matrix convention
                 - direction --> Determine how to perform the conversion (not considered if convention is None):
-                    * 'to' (str)   : Convert the matrix stored in metadata (Scipion definition) to the given 'convention'
-                    * 'from' (str) : Convert the matrix from the given 'convention' to Scipion definition
+                    * 'get' (str)   : Convert the matrix stored in metadata (Scipion definition) to the given 'convention'
+                    * 'set' (str)   : Convert the matrix from the given 'convention' to Scipion definition
 
             Scipion transformation matrix definition is described in detailed below:
 
@@ -140,6 +141,7 @@ def convertMatrix(M, convention=None, direction=None):
     elif direction == 'set' and convention == 'relion':
         # Rotation matrix. Remove translation from the Scipion matrix
         R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
         Mi = np.linalg.inv(M)
         return R @ R @ Mi
 
@@ -1027,10 +1029,10 @@ class Coordinate3D(data.EMObject):
         self._z.sum(shiftZ)
 
     def setMatrix(self, matrix, convention=None):
-        self._eulerMatrix.setMatrix(convertMatrix(matrix, direction='set', convention=convention))
+        self._eulerMatrix.setMatrix(convertMatrix(matrix, direction=const.SET, convention=convention))
 
     def getMatrix(self, convention=None):
-        return convertMatrix(self._eulerMatrix.getMatrix(), direction='get', convention=convention)
+        return convertMatrix(self._eulerMatrix.getMatrix(), direction=const.GET, convention=convention)
 
     def hasTransform(self):
         return self._eulerMatrix is not None
@@ -1428,12 +1430,12 @@ class SubTomogram(data.Volume):
             matrix = np.eye(4)
         else:
             matrix = newTransform.getMatrix()
-        newTransform.setMatrix(convertMatrix(matrix, direction='set', convention=convention))
+        newTransform.setMatrix(convertMatrix(matrix, direction=const.SET, convention=convention))
         self._transform = newTransform
 
     def getTransform(self, convention=None):
         matrix = self._transform.getMatrix()
-        return Transform(convertMatrix(matrix, direction='get', convention=convention))
+        return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
 
 
 class SetOfSubTomograms(data.SetOfVolumes):
