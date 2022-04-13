@@ -142,29 +142,7 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
         # Build a precedents set with only the matching tomograms, in case there are not all the ones present in the
         # input set
         pattern = '\t-{}\n'
-        if inTomoSetMatchingIndices:
-            inTomoSetMatchingIndices = set(inTomoSetMatchingIndices)
-            nMatchingTomos = len(inTomoSetMatchingIndices)
-            inputTomoSetSize = inTomoSet.getSize()
-            if nMatchingTomos < inputTomoSetSize:
-                # Create the output set of tomograms
-                outTomoSet = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
-                outTomoSet.copyInfo(inTomoSet)
-                for ind in inTomoSetMatchingIndices:
-                    outTomoSet.append(inTomoSet[ind])
-
-                # Update the precedents to the output set of 3d coordinates and register them
-                outCoordsSet.setPrecedents(outTomoSet)
-                self._defineOutputs(outputTomograms=outTomoSet)
-
-                # Generate a message to report about the non-matching tomograms found
-                notMatchingTomoFiles = self._getNotMatchingTomoFiles(inTomoSet, inTomoSetMatchingIndices)
-                nOfNonMatchingTomos = len(notMatchingTomoFiles)
-                notFoundTomosMsg += ('*[%i] tomograms were excluded:*\n'
-                                     'The following tomograms were excluded from the set because no coordinates are '
-                                     'referred to them:\n%s' %
-                                     (nOfNonMatchingTomos, pattern * nOfNonMatchingTomos)).format(*notMatchingTomoFiles)
-        else:
+        if not inTomoSetMatchingIndices:
             raise Exception(ERR_COORDS_FROM_SQLITE_NO_MATCH)
 
         if notFoundCoords:
@@ -189,11 +167,6 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
             matchingIndex = matches.index(True) + 1
 
         return matchingIndex
-
-    @staticmethod
-    def _getNotMatchingTomoFiles(inTomoSet, inTomoSetMatchingIndices):
-        return [basename(inTomoSet[ind + 1].getFileName()) for ind in range(inTomoSet.getSize())
-                if (ind + 1) not in inTomoSetMatchingIndices]
 
     @staticmethod
     def _appendBaddCoordMsgToList(coord, notFoundCoordsList, inTomoSet, coordTomoId, pattern):

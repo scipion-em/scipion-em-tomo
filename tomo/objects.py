@@ -1257,15 +1257,17 @@ class SubTomogram(data.Volume):
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
-        tomo = Tomogram()
-        subtomoOrigin = self.getOrigin()
-        if subtomoOrigin:
-            tomo.setOrigin(subtomoOrigin)
-        tomo.setLocation(self.getVolName())
-        tomo.setSamplingRate(self.getSamplingRate())
-        coord = self._coordinate
-        coord.setVolume(tomo)
-        return coord
+        # We do not do this here but in the set iterator tha will "plug" the volume (tomogram) is exists
+        # tomo = Tomogram()
+        # subtomoOrigin = self.getOrigin()
+        # if subtomoOrigin:
+        #     tomo.setOrigin(subtomoOrigin)
+        # tomo.setLocation(self.getVolName())
+        # tomo.setSamplingRate(self.getSamplingRate())
+        # coord = self._coordinate
+        # coord.setVolume(tomo)
+        # return coord
+        return self._coordinate
 
     def getAcquisition(self):
         return self._acquisition
@@ -1298,9 +1300,11 @@ class SubTomogram(data.Volume):
         """
         if self._volName.hasValue():
             return self._volName.get()
-        if self.getVolume():
-            return self.getVolume().getFileName()
-        return None
+        # getVolume does not exists!
+        # if self.getVolume():
+        #     return self.getVolume().getFileName()
+
+        return "Missing"
 
     def setVolName(self, volName):
         self._volName.set(volName)
@@ -1326,6 +1330,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         super().__init__(**kwargs)
         self._acquisition = TomoAcquisition()
         self._coordsPointer = Pointer()
+        self._tomos = dict()
 
     def copyInfo(self, other):
         """ Copy basic information (sampling rate and ctf)
@@ -1339,7 +1344,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
     def getCoordinates3D(self):
         """ Returns the SetOfCoordinates associated with
-        this SetOfParticles"""
+        this SetOfSubTomograms"""
         return self._coordsPointer.get()
 
     def setCoordinates3D(self, coordinates):
@@ -1348,6 +1353,67 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
+    def iterSubtomos(self, volume=None, orderBy='id'):
+        """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
+        If volume=None, the iteration is performed over the whole
+        set of subtomograms.
+
+        IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
+        pointer to the associated Tomogram. This method overcomes this problem by retrieving and
+        relinking the Tomogram as if nothing would ever happened.
+
+        It is recommended to use this method when working with subtomograms, anytime you want to properly use
+        its coordinate3D attached object.
+
+        Example:
+
+            >>> for subtomo in subtomos.iterItems()
+            >>>     print(subtomo.getCoordinate3D().getX(SCIPION))
+            >>>     Error: Tomogram associated to Coordinate3D is NoneType (pointer lost)
+            >>> for subtomo in subtomos.iterSubtomos()
+            >>>     print(subtomo.getCoordinate3D().getX(SCIPION))
+            >>>     330 retrieved correctly
+
+        """
+        if volume is None:
+            volId = None
+        elif isinstance(volume, int):
+            volId = volume
+        elif isinstance(volume, data.Volume):
+            volId = volume.getObjId()
+        else:
+            raise Exception('Invalid input tomogram of type %s'
+                            % type(volume))
+
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
+        subtomoWhere = '1' if volId is None else '_volId=%d' % int(volId)
+
+        for subtomo in self.iterItems(where=subtomoWhere, orderBy=orderBy):
+            if subtomo.hasCoordinate3D():
+                subtomo.getCoordinate3D().setVolume(self.getTomogram(subtomo))
+            yield subtomo
+
+    def getTomogram(self, subtomo):
+        """ returns and caches the tomogram related with a subtomogram.
+        If the subtomograms were imported and not associated to any tomogram returns None."""
+
+        # Tomogram is stored with the coordinate data
+        coord = subtomo.getCoordinate3D()
+
+        # If there is no coordinate associated
+        if coord is None:
+            return None
+
+        # Else, there are coordinates
+        tomoId = coord.getVolId()
+
+        # If not cached
+        if tomoId not in self._tomos:
+            tomo = self.getCoordinates3D().get().getPrecedents()[subtomo.getVolId()]
+            self._tomos[tomoId] = tomo
+
+        return self._tomos[tomoId]
 
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
