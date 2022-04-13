@@ -29,19 +29,22 @@ from os.path import join, basename, exists, abspath
 
 import numpy
 
-from imod.protocols import ProtImodTomoNormalization
-from pyworkflow.tests import BaseTest, setupTestProject
+from pyworkflow.tests import BaseTest, setupTestProject, setupTestOutput
 from pyworkflow.utils import magentaStr, createLink
-from tomo.protocols.protocol_ts_import import MDoc
+from pyworkflow.object import Pointer
+from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 
+from tomo.protocols.protocol_ts_import import MDoc
 from . import DataSet
-from ..constants import BOTTOM_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
+from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS
+import tomo.protocols
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from ..utils import existsPlugin
-import tomo.protocols
+
+from imod.protocols import ProtImodTomoNormalization
 
 
 class TestTomoImportSubTomograms(BaseTest):
@@ -198,6 +201,31 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
         self.assertFalse(outputTomoSet)
 
+        # Subset of coordinates 3d
+        splitSet = self.newProtocol(ProtSplitSet,
+                         inputSet=outputCoordsSet)
+
+        # Launch the split set protocol
+        self.launchProtocol(splitSet)
+        # test we have teh tomograms associatted
+        self.assertCoordinates(splitSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
+
+        # Launch the filter set
+        filterSet = self.newProtocol(ProtSetFilter, formula="True" )
+        filterSet.inputSet = Pointer(splitSet, extended="outputCoordinates3D01")
+
+        self.launchProtocol(filterSet)
+        # test the set is correct
+        self.assertCoordinates(filterSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
+
+        # Launch the edit set
+        editSet = self.newProtocol(ProtSetEditor, formula="True")
+        editSet.inputSet = Pointer(filterSet, extended="outputCoordinates3D01")
+
+        self.launchProtocol(editSet)
+        # test the set is correct
+        self.assertCoordinates(editSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
+
     def testImport3dCoordsFromSqlite_SomeCoordsExcluded(self):
         setSize = 2335
         inTomos = self._importTomograms(self.emdDs.getFile('tomoEmd10439'), self.sqSamplingRate)
@@ -211,25 +239,22 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         # Generate a symbolic link to another tomogram to have a set of two, and the coordinates referred only to one
         # of them
         setSize = 2335
-        tomosPath = self.emdDs.getFile('tomograms')
-        additionalTomo = self.tomoDs.getFile('tomo1')
-        linkedTomoBaseName = basename(additionalTomo)
-        linkedTomo = join(tomosPath, linkedTomoBaseName)
-        if not exists(linkedTomo.replace('.em', '.mrc')):
-            os.symlink(abspath(additionalTomo), abspath(linkedTomo))
+        workingPath = self.getOutputPath()
+        emTomogram = self.tomoDs.getFile('tomo1')
+        mrcTomogram = self.emdDs.getFile('tomoEmd10439')
 
-        inTomos = self._importTomograms(tomosPath, self.sqSamplingRate, pattern='*.mrc')
+        for tomgramPath in [emTomogram, mrcTomogram]:
+
+            fileName = os.path.basename(tomgramPath).replace(".ed", ".mrc")
+            linkedTomo = join(workingPath, fileName)
+            if not exists(linkedTomo):
+                os.symlink(abspath(tomgramPath), abspath(linkedTomo))
+
+        inTomos = self._importTomograms(workingPath, self.sqSamplingRate, pattern='*.mrc')
         outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
             self.emdDs.getFile('scipionSqlite3dCoordsSomeBad'), inTomos, self.sqBoxSize,
             'Scipion - Some tomos and coords excluded')
         self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
-
-        # A set of tomograms with the original tomograms should have also been generated, because it's the only one
-        # from the introduced set which has coordinates referred to it
-        self.assertSetSize(outputTomoSet, 1)
-        self.assertEqual(outputTomoSet[1].getTsId(), 'emd_10439')
-        self.assertEqual(basename(outputTomoSet[1].getFileName()), 'emd_10439.mrc')
-        self.assertEqual(outputTomoSet[1].getSamplingRate(), self.sqSamplingRate)
 
     def testImport3dCoordsFromSqlite_NoneMatch(self):
         inTomos = self._importTomograms(self.tomoDs.getFile('tomo1'), self.sqSamplingRate)
@@ -272,6 +297,15 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertSetSize(coordSet, size=size)
         self.assertTrue(coordSet.getBoxSize() == boxSize)
         self.assertTrue(coordSet.getSamplingRate() == samplingRate)
+
+        self.assertIsNotNone(coordSet.getPrecedents(), "Tomograms not associated in the output set")
+
+        for coord in coordSet.iterCoordinates():
+            # Access the coordinate, this should work if tomograms are assocciated
+            Y = coord.getY(BOTTOM_LEFT_CORNER)
+            Y = coord.getY(TOP_LEFT_CORNER)
+
+            break
 
 
 class TestTomoImportTomograms(BaseTest):
