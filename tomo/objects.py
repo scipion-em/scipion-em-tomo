@@ -117,11 +117,7 @@ def convertMatrix(M, convention=None, direction=None):
             """
 
     if convention is None:
-        # Rotation matrix. Remove translation from the Scipion matrix
-        R = np.eye(4)
-        R[:3, :3] = M[:3, :3]
-        Ri = np.linalg.inv(R)
-        return R @ M @ Ri
+        return M
     elif direction == 'get' and convention == 'eman':
         R = np.eye(4)
         R[:3, :3] = M[:3, :3]
