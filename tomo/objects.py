@@ -83,21 +83,7 @@ def convertMatrix(M, convention=None, direction=None):
 
             We include conversions to the following matrix conventions:
 
-                - Eman:
-                    Notation:
-                        - X'  -->  inverse of a matrix
-                        - T   -->  translation matrix
-                        - R   ---> rotation matrix
-                        - M   -->  Scipion transformation matrix
-                        - N   -->  Eman transformation matrix
-                        - @   -->  Matrix multiplication
-
-                    Conversion Scipion --> Eman
-                        M = R@T' => T' = R'@M
-                        *** N = T'@R = R'@M@R ***
-
-                    Conversion Eman --> Scipion
-                        N = R'@M@R => *** M = R@N@R' ***
+                - Eman: Same as Scipion convention
 
                 - Relion:
                     Notation:
@@ -116,18 +102,8 @@ def convertMatrix(M, convention=None, direction=None):
                         N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
             """
 
-    if convention is None:
+    if convention is None or convention == "eman":
         return M
-    elif direction == 'get' and convention == 'eman':
-        R = np.eye(4)
-        R[:3, :3] = M[:3, :3]
-        Ri = np.linalg.inv(R)
-        return Ri @ M @ R
-    elif direction == 'set' and convention == 'eman':
-        R = np.eye(4)
-        R[:3, :3] = M[:3, :3]
-        Ri = np.linalg.inv(R)
-        return R @ M @ Ri
     elif direction == 'get' and convention == 'relion':
         # Rotation matrix. Remove translation from the Scipion matrix
         R = np.eye(4)
