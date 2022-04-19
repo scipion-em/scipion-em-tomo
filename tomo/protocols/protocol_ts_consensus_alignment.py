@@ -33,7 +33,7 @@ from tomo.protocols import ProtTomoBase
 from tomo import utils
 
 
-class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
+class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     """
     Perform a consensus of two alignments for the same tilt series.
     """
@@ -70,21 +70,15 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions ----------------------------
     def generateTsIdList(self):
         for ts in self.setOfTiltSeries1.get():
-            self._tsIdList.append(ts.getTsid())
-
-        print(self._tsIdList)
+            self._tsIdList.append(ts.getTsId())
 
         tmpTsIdList = []
         for ts in self.setOfTiltSeries2.get():
-            tmpTsIdList.append(ts.getTsid())
-
-        print(tmpTsIdList)
+            tmpTsIdList.append(ts.getTsId())
 
         for tsId in self._tsIdList:
             if tsId not in tmpTsIdList:
                 self._tsIdList.remove(tsId)
-
-        print(self._tsIdList)
 
         if len(self._tsIdList) == 0:
             raise Exception("None matching tilt-series between two sets.")
