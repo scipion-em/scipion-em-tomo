@@ -24,5 +24,36 @@
 # *
 # **************************************************************************
 
+from pyworkflow import BETA
+import pyworkflow.protocol.params as params
+from pwem.protocols import EMProtocol
+import tomo.objects as tomoObj
+from tomo.protocols import ProtTomoBase
+
+
+class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
+    """
+    Perform a consensus of two alignments for the same tilt series.
+    """
+
+    _label = 'Tilt-series consensus alignment'
+    _devStatus = BETA
+
+    # -------------------------- DEFINE param functions -----------------------
+    def _defineParams(self, form):
+        form.addSection('Input')
+        form.addParam('setOfTiltSeries1',
+                      params.PointerParam,
+                      pointerClass='SetOfTiltSeries',
+                      important=True,
+                      help='First set of tilt-series to be analyzed in the consensus alignment.',
+                      label='First set of tilt-series')
+
+        form.addParam('setOfTiltSeries2',
+                      params.PointerParam,
+                      pointerClass='SetOfTiltSeries',
+                      important=True,
+                      help='Second set of tilt-series to be analyzed in the consensus alignment.',
+                      label='Second set of tilt-series')
 
 
