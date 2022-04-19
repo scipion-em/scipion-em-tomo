@@ -39,6 +39,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     _label = 'Tilt-series consensus alignment'
     _devStatus = BETA
 
+    _tsIdList = []
+
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection('Input')
@@ -56,4 +58,28 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       help='Second set of tilt-series to be analyzed in the consensus alignment.',
                       label='Second set of tilt-series')
 
+    # -------------------------- INSERT steps functions ---------------------
+    def _insertAllSteps(self):
+        self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
 
+        # for ts in self.getTMSetOfTiltSeries.get():
+        #     self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
+
+    # --------------------------- STEPS functions ----------------------------
+    def generateTsIdList(self):
+        for ts in self.setOfTiltSeries1.get():
+            self._tsIdList.append(ts.getTsid())
+
+        print(self._tsIdList)
+
+        tmpTsIdList = []
+        for ts in self.setOfTiltSeries2.get():
+            tmpTsIdList.append(ts.getTsid())
+
+        print(tmpTsIdList)
+
+        for tsId in self._tsIdList:
+            if tsId not in tmpTsIdList:
+                self._tsIdList.remove(tsId)
+
+        print(self._tsIdList)
