@@ -30,6 +30,7 @@ import os
 import re
 import importlib
 import numpy as np
+import math
 
 import pyworkflow.utils as pwutils
 
@@ -337,6 +338,7 @@ def _getTsIdLabel(setObject):
     corresponding coordinate)"""
     return '_tomoId' if type(setObject) in [SetOfCoordinates3D, SetOfSubTomograms] else '_tsId'
 
+
 def recoverTSFromObj(child_obj, protocol):
     p = protocol.getProject()
     graph = p.getSourceGraph(False)
@@ -355,4 +357,18 @@ def recoverTSFromObj(child_obj, protocol):
             if isinstance(pObj, SetOfTiltSeries) and pObj.getFirstItem().getFirstItem().hasTransform():
                 return pObj
     return None
+
+
+def getRotationAngleAndShiftFromTM(ti):
+    """ This method calculates que tilt image in-plane rotation angle and shifts from its associated transformation
+    matrix."""
+
+    tm = ti.getTransform().getMatrix()
+    cosRotationAngle = tm[0][0]
+    sinRotationAngle = tm[1][0]
+    rotationAngle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+    shifts = [tm[0][2], tm[0][2]]
+
+    return rotationAngle, shifts
 
