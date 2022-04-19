@@ -27,8 +27,10 @@
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
+
 import tomo.objects as tomoObj
 from tomo.protocols import ProtTomoBase
+from tomo import utils
 
 
 class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
@@ -60,10 +62,10 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
+        self._insertFunctionStep(self.generateTsIdList)
 
-        # for ts in self.getTMSetOfTiltSeries.get():
-        #     self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
+        for tsId in self._tsIdList:
+            self._insertFunctionStep(self.consensusAlignment, tsId)
 
     # --------------------------- STEPS functions ----------------------------
     def generateTsIdList(self):
@@ -83,3 +85,18 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                 self._tsIdList.remove(tsId)
 
         print(self._tsIdList)
+
+        if len(self._tsIdList) == 0:
+            raise Exception("None matching tilt-series between two sets.")
+
+    def consensusAlignment(self, tsId):
+        ts1 = self.setOfTiltSeries1.get().getTiltSeriesFromTsId(tsId)
+        ts2 = self.setOfTiltSeries2.get().getTiltSeriesFromTsId(tsId)
+
+        for ti1, ti2 in zip(ts1, ts2):
+            ra1, sh1 = utils.getRotationAngleAndShiftFromTM(ti1)
+            ra2, sh2 = utils.getRotationAngleAndShiftFromTM(ti2)
+
+    # --------------------------- UTILS functions ----------------------------
+
+
