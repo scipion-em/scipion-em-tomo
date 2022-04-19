@@ -501,6 +501,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
+    def getTiltSeriesFromTsId(self, tsId):
+        for ts in self:
+            if ts.getTsId() == tsId:
+                return ts
+
+        return None
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
