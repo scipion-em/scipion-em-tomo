@@ -26,9 +26,12 @@
 
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
-from pwem.protocols import EMProtocol
+from pyworkflow.object import Set
 
-import tomo.objects as tomoObj
+from pwem.protocols import EMProtocol
+from pwem.objects import Float
+
+from tomo.objects import TiltSeries, TiltImage
 from tomo.protocols import ProtTomoBase
 from tomo import utils
 
@@ -50,7 +53,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
-                      help='First set of tilt-series to be analyzed in the consensus alignment.',
+                      help='First set of tilt-series to be analyzed in the consensus alignment. The unrelated '
+                           'alignment information will be taken form this set.',
                       label='First set of tilt-series')
 
         form.addParam('setOfTiltSeries2',
@@ -62,35 +66,81 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.generateTsIdList)
+        self._insertFunctionStep(self.consensusAlignment)
 
-        for tsId in self._tsIdList:
-            self._insertFunctionStep(self.consensusAlignment, tsId)
+        self._insertFunctionStep(self.closeOutputSetsStep)
 
     # --------------------------- STEPS functions ----------------------------
-    def generateTsIdList(self):
-        for ts in self.setOfTiltSeries1.get():
-            self._tsIdList.append(ts.getTsId())
+    def consensusAlignment(self):
+        tsIdList = self.generateTsIdList()
 
+        self.getOutputAlignmentConsensusSetOfTiltSeries()
+
+        for tsId in tsIdList:
+            ts1 = self.setOfTiltSeries1.get().getTiltSeriesFromTsId(tsId)
+            ts2 = self.setOfTiltSeries2.get().getTiltSeriesFromTsId(tsId)
+
+            newTs = TiltSeries(tsId=tsId)
+            newTs.copyInfo(ts1)
+            self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
+
+            for ti1, ti2 in zip(ts1, ts2):
+                newTi = TiltImage()
+                newTi.copyInfo(ti1, copyId=True)
+                newTi.setLocation(ti1.getLocation())
+                newTi.setTransform(ti1.getTransform())
+
+                ra1, sh1 = utils.getRotationAngleAndShiftFromTM(ti1)
+                ra2, sh2 = utils.getRotationAngleAndShiftFromTM(ti2)
+
+                newTi._angleDiff = Float(abs(ra1-ra2))
+                newTi._shiftDiff = Float((abs(sh1[0]-sh2[0]) + abs(sh1[1]-sh2[1]))/2)  # Shift average in both directions
+
+                newTs.append(newTi)
+
+            newTs.setDim(ts1.getDim())
+            newTs.write()
+
+            self.outputAlignmentConsensusSetOfTiltSeries.update(newTs)
+            self.outputAlignmentConsensusSetOfTiltSeries.updateDim()
+            self.outputAlignmentConsensusSetOfTiltSeries.write()
+
+        self._store()
+
+    def closeOutputSetsStep(self):
+        self.outputAlignmentConsensusSetOfTiltSeries.setStreamState(Set.STREAM_CLOSED)
+        self.outputAlignmentConsensusSetOfTiltSeries.write()
+
+        self._store()
+
+    # --------------------------- UTILS functions ----------------------------
+    def generateTsIdList(self):
+        tsIdList = []
         tmpTsIdList = []
+
+        for ts in self.setOfTiltSeries1.get():
+            tsIdList.append(ts.getTsId())
+
         for ts in self.setOfTiltSeries2.get():
             tmpTsIdList.append(ts.getTsId())
 
-        for tsId in self._tsIdList:
+        for tsId in tsIdList:
             if tsId not in tmpTsIdList:
-                self._tsIdList.remove(tsId)
+                tsIdList.remove(tsId)
 
-        if len(self._tsIdList) == 0:
+        if len(tsIdList) == 0:
             raise Exception("None matching tilt-series between two sets.")
 
-    def consensusAlignment(self, tsId):
-        ts1 = self.setOfTiltSeries1.get().getTiltSeriesFromTsId(tsId)
-        ts2 = self.setOfTiltSeries2.get().getTiltSeriesFromTsId(tsId)
+        print(tsIdList)
+        return tsIdList
 
-        for ti1, ti2 in zip(ts1, ts2):
-            ra1, sh1 = utils.getRotationAngleAndShiftFromTM(ti1)
-            ra2, sh2 = utils.getRotationAngleAndShiftFromTM(ti2)
+    def getOutputAlignmentConsensusSetOfTiltSeries(self):
+        if not hasattr(self, "outputSetOfTiltSeries"):
+            outputAlignmentConsensusSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AliConsensus')
+            outputAlignmentConsensusSetOfTiltSeries.copyInfo(self.setOfTiltSeries1.get())
+            outputAlignmentConsensusSetOfTiltSeries.setDim(self.setOfTiltSeries1.get().getDim())
 
-    # --------------------------- UTILS functions ----------------------------
-
+            self._defineOutputs(outputAlignmentConsensusSetOfTiltSeries=outputAlignmentConsensusSetOfTiltSeries)
+            self._defineSourceRelation(self.setOfTiltSeries1, outputAlignmentConsensusSetOfTiltSeries)
+        return self.outputAlignmentConsensusSetOfTiltSeries
 
