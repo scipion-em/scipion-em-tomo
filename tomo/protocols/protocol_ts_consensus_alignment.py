@@ -135,7 +135,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         return tsIdList
 
     def getOutputAlignmentConsensusSetOfTiltSeries(self):
-        if not hasattr(self, "outputSetOfTiltSeries"):
+        if not hasattr(self, "outputAlignmentConsensusSetOfTiltSeries"):
             outputAlignmentConsensusSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AliConsensus')
             outputAlignmentConsensusSetOfTiltSeries.copyInfo(self.setOfTiltSeries1.get())
             outputAlignmentConsensusSetOfTiltSeries.setDim(self.setOfTiltSeries1.get().getDim())
@@ -164,4 +164,23 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         return validateMsgs
 
+    def _summary(self):
+        summary = []
+        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
+            summary.append("Input Tilt-Series: %d.\nOutput tilt series with consensus applied : %d.\n"
+                           % (self.setOfTiltSeries1.get().getSize(),
+                              self.setOfTiltSeries2.get().getSize()))
+        else:
+            summary.append("Output classes not ready yet.")
+        return summary
+
+    def _methods(self):
+        methods = []
+        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
+            methods.append("Consensus have been performed over %d transformation matrices from the input sets of "
+                           "tilt-series.\n"
+                           % (self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
+        else:
+            methods.append("Output classes not ready yet.")
+        return methods
 
