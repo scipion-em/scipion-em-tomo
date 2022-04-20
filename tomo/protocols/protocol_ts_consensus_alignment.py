@@ -144,3 +144,24 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             self._defineSourceRelation(self.setOfTiltSeries1, outputAlignmentConsensusSetOfTiltSeries)
         return self.outputAlignmentConsensusSetOfTiltSeries
 
+    # --------------------------- INFO functions ----------------------------
+    def _validate(self):
+        validateMsgs = []
+
+        for ts1, ts2 in zip(self.setOfTiltSeries1.get(), self.setOfTiltSeries2.get()):
+            if not ts1.getFirstItem().hasTransform():
+                validateMsgs.append("Some tilt-series from the input set of tilt-series 1 does not have a "
+                                    "transformation matrix assigned.")
+
+            if not ts2.getFirstItem().hasTransform():
+                validateMsgs.append("Some tilt-series from the input set of tilt-series 2 does not have a "
+                                    "transformation matrix assigned.")
+
+            if ts1.getSize() != ts2.getSize():
+                validateMsgs.append("Some tilt-series from the input set of tilt-series 1 and its target in the "
+                                    "set of tilt-series 2 sizes' do not match. Every input tilt-series "
+                                    "and its target must have the same number of tilt-images")
+
+        return validateMsgs
+
+
