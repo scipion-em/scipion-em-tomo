@@ -44,6 +44,80 @@ from pwem.emlib.image import ImageHandler
 import tomo.constants as const
 
 
+def convertMatrix(M, convention=None, direction=None):
+    """
+            Parameters:
+                - M --> Transformation matrix
+                - convention --> One of the valid conventions to convert M. It can be:
+                    * None         : Return the matrix stored in the metadata (Scipion convention).
+                    * relion (str) : Relion matrix convention
+                    * eman (str)   : Eman matrix convention
+                - direction --> Determine how to perform the conversion (not considered if convention is None):
+                    * 'get' (str)   : Convert the matrix stored in metadata (Scipion definition) to the given 'convention'
+                    * 'set' (str)   : Convert the matrix from the given 'convention' to Scipion definition
+
+            Scipion transformation matrix definition is described in detailed below:
+
+               Notation:
+                    - r      --> A 3D position vector
+                    - f'(r)  --> Moved map
+                    - f(r)   --> Reference
+                    - M      --> Matrix to be stored by Scipion
+                    - @      --> Matrix product
+
+               Definition:
+
+                   f'(r) = f(M@r)
+
+               Example:
+
+                   If r = (0,0,0,1) = o (origin vector) and M is a translation only transformation matrix
+                   of the form:
+
+                        M = [[1,0,0,0],[0,1,0,0],[0,0,0,1],[-dx,-dy,-dz,1]]
+
+                   Being dx, dy, and dz a infinitesimally small displacement, then our transformation
+                   verifies that:
+
+                        f'(o) = f(M@o) = [-dx,-dy,-dz,1]
+
+            We include conversions to the following matrix conventions:
+
+                - Eman: Same as Scipion convention
+
+                - Relion:
+                    Notation:
+                        - X'  -->  inverse of a matrix
+                        - T   -->  translation matrix
+                        - R   ---> rotation matrix
+                        - M   -->  Scipion transformation matrix
+                        - N   -->  Relion transformation matrix
+                        - @   -->  Matrix multiplication
+
+                    Conversion Scipion --> Relion
+                        M = R@T' => T = M'@R
+                        *** N = T@R = M'@R@R ***
+
+                    Conversion Relion --> Scipion
+                        N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
+            """
+
+    if convention is None or convention == "eman":
+        return M
+    elif direction == 'get' and convention == 'relion':
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Mi = np.linalg.inv(M)
+        return Mi @ R @ R
+    elif direction == 'set' and convention == 'relion':
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Mi = np.linalg.inv(M)
+        return R @ R @ Mi
+
+
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
 
@@ -272,6 +346,128 @@ class TiltSeries(TiltSeriesBase):
 
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
+
+    def writeNewstcomFile(self, ts_folder, **kwargs):
+        '''Writes an artifitial newst.com file'''
+        newstcomPath = ts_folder + '/newst.com'
+        pathi = self.getTsId()
+        taperAtFill = kwargs.get('taperAtFill', (1, 0))
+        offsetsInXandY = kwargs.get('offsetsInXandY', (0.0, 0.0))
+        imagesAreBinned = kwargs.get('imagesAreBinned', 1.0)
+        binByFactor = kwargs.get('binByFactor', 1)
+
+        with open(newstcomPath, 'w') as f:
+            f.write('$newstack -StandardInput\n\
+InputFile {}.st\n\
+OutputFile {}.ali\n\
+TransformFile {}.xf\n\
+TaperAtFill	{},{}\n\
+AdjustOrigin\n\
+OffsetsInXandY {},{}\n\
+#DistortionField	.idf\n\
+ImagesAreBinned	{}\n\
+BinByFactor	{}\n\
+#GradientFile {}.maggrad\n\
+$if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
+                                       taperAtFill[0],
+                                       taperAtFill[1], offsetsInXandY[0],
+                                       offsetsInXandY[1], imagesAreBinned,
+                                       binByFactor, pathi))
+
+        return newstcomPath
+
+    def writeTiltcomFile(self, ts_folder, **kwargs):
+        '''Writes an artifitial tilt.com file'''
+        tiltcomPath = ts_folder + '/tilt.com'
+        pathi = self.getTsId()
+        thickness = kwargs.get('thickness', 500)
+        binned = kwargs.get('binned', 1)
+        offset = kwargs.get('offset', 0.0)
+        shift = kwargs.get('shift', (0.0, 0.0))
+        radial = kwargs.get('radial', (0.35, 0.035))
+        xAxisTill = kwargs.get('xAxisTill', 0.0)
+        log = kwargs.get('log', 0.0)
+        scale = kwargs.get('scale', (0.0, 1000.0))
+        mode = kwargs.get('mode', 2)
+        subsetStart = kwargs.get('subsetStart', (0, 0))
+        actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+
+        with open(tiltcomPath, 'w') as f:
+            f.write('$tilt -StandardInput\n\
+InputProjections {}.ali\n\
+OutputFile {}.rec\n\
+IMAGEBINNED {} \n\
+TILTFILE {}.tlt\n\
+THICKNESS {}\n\
+RADIAL {} {}\n\
+FalloffIsTrueSigma 1\n\
+XAXISTILT {}\n\
+LOG	{}\n\
+SCALE {} {}\n\
+PERPENDICULAR\n\
+MODE {}\n\
+FULLIMAGE {} {}\n\
+SUBSETSTART 0 0\n\
+AdjustOrigin\n\
+ActionIfGPUFails {},{}\n\
+XTILTFILE {}.xtilt\n\
+OFFSET {}\n\
+SHIFT {} {}\n\
+$if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
+                                       radial[0], radial[1], xAxisTill, log,
+                                       scale[0], scale[1], mode,
+                                       self.getDim()[0], self.getDim()[1],
+                                       subsetStart[0], subsetStart[1],
+                                       actionIfGPUFails[0], actionIfGPUFails[1],
+                                       pathi, offset, shift[0], shift[1]))
+
+        return tiltcomPath
+
+    def writeTltFile(self, ts_folder):
+        xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
+        with open(xtiltPath, 'w') as f:
+            for ti in self:
+                f.write(str(ti.getTiltAngle()) + '\n')
+
+    def writeXtiltFile(self, ts_folder):
+        xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
+        with open(xtiltPath, 'w') as f:
+            for ti in self:
+                f.write('0.00\n')
+
+    def writeXfFile(self, transformFilePath):
+        """ This method takes a tilt series and the output transformation file
+        path and creates an IMOD-based transform
+        file in the location indicated. """
+
+        tsMatrixTransformList = []
+
+        for ti in self:
+            transform = ti.getTransform().getMatrix().flatten()
+            transformIMOD = ['%.7f' % transform[0],
+                             '%.7f' % transform[1],
+                             '%.7f' % transform[3],
+                             '%.7f' % transform[4],
+                             '%.3f' % transform[2],
+                             '%.3f' % transform[5]]
+            tsMatrixTransformList.append(transformIMOD)
+
+        with open(transformFilePath, 'w') as f:
+            csvW = csv.writer(f, delimiter='\t')
+            csvW.writerows(tsMatrixTransformList)
+
+    def writeImodFiles(self, folderName, **kwargs):
+        # Create a newst.com file
+        self.writeNewstcomFile(folderName, **kwargs)
+        # Create a tilt.com file
+        self.writeTiltcomFile(folderName, **kwargs)
+        # Create a .tlt file
+        self.writeTltFile(folderName)
+        # Create a .xtilt file
+        self.writeXtiltFile(folderName)
+        # Create a .xf file
+        transformFilePath = folderName + '/%s.xf' % self.getTsId()
+        self.writeXfFile(transformFilePath)
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -804,16 +1000,17 @@ class Coordinate3D(data.EMObject):
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
 
-    def setMatrix(self, matrix):
-        self._eulerMatrix.setMatrix(matrix)
+    def setMatrix(self, matrix, convention=None):
+        self._eulerMatrix.setMatrix(convertMatrix(matrix, direction=const.SET, convention=convention))
 
-    def getMatrix(self):
-        return self._eulerMatrix.getMatrix()
+    def getMatrix(self, convention=None):
+        return convertMatrix(self._eulerMatrix.getMatrix(), direction=const.GET, convention=convention)
 
     def hasTransform(self):
         return self._eulerMatrix is not None
 
     def euler2Matrix(self, r, p, y):
+        # FIXME: Queremos mantener esta conversion? Puede ser muy lioso
         self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
     def eulerAngles(self):
@@ -1135,15 +1332,17 @@ class SubTomogram(data.Volume):
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
-        tomo = Tomogram()
-        subtomoOrigin = self.getOrigin()
-        if subtomoOrigin:
-            tomo.setOrigin(subtomoOrigin)
-        tomo.setLocation(self.getVolName())
-        tomo.setSamplingRate(self.getSamplingRate())
-        coord = self._coordinate
-        coord.setVolume(tomo)
-        return coord
+        # We do not do this here but in the set iterator tha will "plug" the volume (tomogram) is exists
+        # tomo = Tomogram()
+        # subtomoOrigin = self.getOrigin()
+        # if subtomoOrigin:
+        #     tomo.setOrigin(subtomoOrigin)
+        # tomo.setLocation(self.getVolName())
+        # tomo.setSamplingRate(self.getSamplingRate())
+        # coord = self._coordinate
+        # coord.setVolume(tomo)
+        # return coord
+        return self._coordinate
 
     def getAcquisition(self):
         return self._acquisition
@@ -1176,9 +1375,11 @@ class SubTomogram(data.Volume):
         """
         if self._volName.hasValue():
             return self._volName.get()
-        if self.getVolume():
-            return self.getVolume().getFileName()
-        return None
+        # getVolume does not exists!
+        # if self.getVolume():
+        #     return self.getVolume().getFileName()
+
+        return "Missing"
 
     def setVolName(self, volName):
         self._volName.set(volName)
@@ -1195,6 +1396,19 @@ class SubTomogram(data.Volume):
             origin = self.getShiftsFromOrigin()
             return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
 
+    def setTransform(self, newTransform, convention=None):
+        if newTransform is None:
+            newTransform = Transform()
+            matrix = np.eye(4)
+        else:
+            matrix = newTransform.getMatrix()
+        newTransform.setMatrix(convertMatrix(matrix, direction=const.SET, convention=convention))
+        self._transform = newTransform
+
+    def getTransform(self, convention=None):
+        matrix = self._transform.getMatrix()
+        return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
+
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
@@ -1204,6 +1418,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         super().__init__(**kwargs)
         self._acquisition = TomoAcquisition()
         self._coordsPointer = Pointer()
+        self._tomos = dict()
 
     def copyInfo(self, other):
         """ Copy basic information (sampling rate and ctf)
@@ -1217,7 +1432,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
     def getCoordinates3D(self):
         """ Returns the SetOfCoordinates associated with
-        this SetOfParticles"""
+        this SetOfSubTomograms"""
         return self._coordsPointer.get()
 
     def setCoordinates3D(self, coordinates):
@@ -1226,6 +1441,67 @@ class SetOfSubTomograms(data.SetOfVolumes):
          """
         self._coordsPointer.set(coordinates)
 
+    def iterSubtomos(self, volume=None, orderBy='id'):
+        """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
+        If volume=None, the iteration is performed over the whole
+        set of subtomograms.
+
+        IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
+        pointer to the associated Tomogram. This method overcomes this problem by retrieving and
+        relinking the Tomogram as if nothing would ever happened.
+
+        It is recommended to use this method when working with subtomograms, anytime you want to properly use
+        its coordinate3D attached object.
+
+        Example:
+
+            >>> for subtomo in subtomos.iterItems()
+            >>>     print(subtomo.getCoordinate3D().getX(SCIPION))
+            >>>     Error: Tomogram associated to Coordinate3D is NoneType (pointer lost)
+            >>> for subtomo in subtomos.iterSubtomos()
+            >>>     print(subtomo.getCoordinate3D().getX(SCIPION))
+            >>>     330 retrieved correctly
+
+        """
+        if volume is None:
+            volId = None
+        elif isinstance(volume, int):
+            volId = volume
+        elif isinstance(volume, data.Volume):
+            volId = volume.getObjId()
+        else:
+            raise Exception('Invalid input tomogram of type %s'
+                            % type(volume))
+
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
+        subtomoWhere = '1' if volId is None else '_volId=%d' % int(volId)
+
+        for subtomo in self.iterItems(where=subtomoWhere, orderBy=orderBy):
+            if subtomo.hasCoordinate3D():
+                subtomo.getCoordinate3D().setVolume(self.getTomogram(subtomo))
+            yield subtomo
+
+    def getTomogram(self, subtomo):
+        """ returns and caches the tomogram related with a subtomogram.
+        If the subtomograms were imported and not associated to any tomogram returns None."""
+
+        # Tomogram is stored with the coordinate data
+        coord = subtomo.getCoordinate3D()
+
+        # If there is no coordinate associated
+        if coord is None:
+            return None
+
+        # Else, there are coordinates
+        tomoId = coord.getVolId()
+
+        # If not cached
+        if tomoId not in self._tomos:
+            tomo = self.getCoordinates3D().get().getPrecedents()[subtomo.getVolId()]
+            self._tomos[tomoId] = tomo
+
+        return self._tomos[tomoId]
 
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
