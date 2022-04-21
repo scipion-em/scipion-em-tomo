@@ -24,6 +24,9 @@
 # *
 # **************************************************************************
 
+
+import numpy as np
+
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
@@ -84,6 +87,9 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             newTs.copyInfo(ts1)
             self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
 
+            M1set = []
+            M2set = []
+
             for ti1, ti2 in zip(ts1, ts2):
                 newTi = TiltImage()
                 newTi.copyInfo(ti1, copyId=True)
@@ -93,10 +99,16 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 ra1, sh1 = utils.getRotationAngleAndShiftFromTM(ti1)
                 ra2, sh2 = utils.getRotationAngleAndShiftFromTM(ti2)
 
-                newTi._angleDiff = Float(abs(ra1-ra2))
-                newTi._shiftDiff = Float((abs(sh1[0]-sh2[0]) + abs(sh1[1]-sh2[1]))/2)  # Shift average in both directions
+                newTi._angleDiff = Float(abs(ra1 - ra2))
+                newTi._shiftDiff = Float(
+                    (abs(sh1[0] - sh2[0]) + abs(sh1[1] - sh2[1])) / 2)  # Shift average in both directions
 
                 newTs.append(newTi)
+
+                M1set.append(ti1.getTransform().getMatrix())
+                M2set.append(ti2.getTransform().getMatrix())
+
+            self.transformationMatrix(M1set, M2set)
 
             newTs.setDim(ts1.getDim())
             newTs.write()
@@ -114,6 +126,29 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         self._store()
 
     # --------------------------- UTILS functions ----------------------------
+    @staticmethod
+    def transformationMatrix(M1set, M2set):
+        m = np.zeros((3, 3))
+
+        for m1, m2 in zip(M1set, M2set):
+            m1 = np.matrix(m1)
+            m2 = np.matrix(m2)
+
+            m += np.matmul(m1, np.linalg.inv(m2))
+
+        m /= len(M1set)
+        print("m")
+        print(m)
+
+        mError = np.zeros((3, 3))
+        for m1, m2 in zip(M1set, M2set):
+            mError += np.absolute(m - np.matmul(m1, np.linalg.inv(m2)))
+
+        print("mError")
+        print(mError)
+
+        print("----------------")
+
     def generateTsIdList(self):
         tsIdList = []
         tmpTsIdList = []
@@ -131,7 +166,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         if len(tsIdList) == 0:
             raise Exception("None matching tilt-series between two sets.")
 
-        print(tsIdList)
         return tsIdList
 
     def getOutputAlignmentConsensusSetOfTiltSeries(self):
@@ -183,4 +217,3 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         else:
             methods.append("Output classes not ready yet.")
         return methods
-
