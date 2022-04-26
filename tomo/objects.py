@@ -348,7 +348,7 @@ class TiltSeries(TiltSeriesBase):
                             self._firstDim[1])
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
-        '''Writes an artifitial newst.com file'''
+        """Writes an artificial newst.com file"""
         newstcomPath = ts_folder + '/newst.com'
         pathi = self.getTsId()
         taperAtFill = kwargs.get('taperAtFill', (1, 0))
@@ -377,7 +377,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         return newstcomPath
 
     def writeTiltcomFile(self, ts_folder, **kwargs):
-        '''Writes an artifitial tilt.com file'''
+        """Writes an artificial tilt.com file"""
         tiltcomPath = ts_folder + '/tilt.com'
         pathi = self.getTsId()
         thickness = kwargs.get('thickness', 500)
@@ -391,6 +391,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+
+        dims = (self.getDim()[0], self.getDim()[1])
+        if kwargs.get('swapDims', False):
+            dims = (dims[1], dims[0])
 
         with open(tiltcomPath, 'w') as f:
             f.write('$tilt -StandardInput\n\
@@ -407,7 +411,7 @@ SCALE {} {}\n\
 PERPENDICULAR\n\
 MODE {}\n\
 FULLIMAGE {} {}\n\
-SUBSETSTART 0 0\n\
+SUBSETSTART {} {}\n\
 AdjustOrigin\n\
 ActionIfGPUFails {},{}\n\
 XTILTFILE {}.xtilt\n\
@@ -416,7 +420,7 @@ SHIFT {} {}\n\
 $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        radial[0], radial[1], xAxisTill, log,
                                        scale[0], scale[1], mode,
-                                       self.getDim()[0], self.getDim()[1],
+                                       dims[0], dims[1],
                                        subsetStart[0], subsetStart[1],
                                        actionIfGPUFails[0], actionIfGPUFails[1],
                                        pathi, offset, shift[0], shift[1]))

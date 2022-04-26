@@ -49,32 +49,6 @@ with weakImport("xmipptomo"):
 
             self._runPhantomSubtomo()
 
-        def _addAveragers(self, inputProt:XmippProtPhantomSubtomo):
-            """ Add all the averagers available to be run with the subtomo set"""
-
-            # Add reliontomo average method
-            with weakImport("reliontomo"):
-                from reliontomo.protocols import ProtRelionSubTomoReconstructAvg
-                relionAve = self.newProtocol(ProtRelionSubTomoReconstructAvg)
-                relionAve.inputSubtomos.set(inputProt)
-                relionAve.inputSubtomos.setExtended(inputProt._possibleOutputs.outputSubtomograms.name)
-                self.launchProtocol(relionAve)
-
-            # Add eman average method
-            with weakImport("emantomo"):
-                from emantomo.protocols import EmanProtSubTomoAverage
-                emanAve = self.newProtocol(EmanProtSubTomoAverage)
-                emanAve.inputSetOfSubTomogram.set(inputProt)
-                emanAve.inputSetOfSubTomogram.setExtended(inputProt._possibleOutputs.outputSubtomograms.name)
-                self.launchProtocol(emanAve)
-
-            # Add xmipp tomo averager. In this case we do not need the weak import since this test will only run if xmipptomo is available
-            from xmipptomo.protocols import XmippProtApplyTransformSubtomo
-            xmippAve = self.newProtocol(XmippProtApplyTransformSubtomo)
-            xmippAve.inputSubtomograms.set(inputProt)
-            xmippAve.inputSubtomograms.setExtended(inputProt._possibleOutputs.outputSubtomograms.name)
-            self.launchProtocol(xmippAve)
-
         def _runPhantomSubtomo(self, shifts=5, angles=90):
             """ Creates a a phantom subtomo protocol with shift and rotation by default
 
@@ -116,7 +90,7 @@ with weakImport("xmipptomo"):
             self.launchProtocol(protPhantom)
 
             # Add the averagers
-            self._addAveragers(protPhantom)
+            addAveragers(self, protPhantom , XmippProtPhantomSubtomo._possibleOutputs.outputSubtomograms.name)
 
 
     # Testing phantoms in tomograms, going through coordinates, extraction and average
@@ -133,61 +107,81 @@ with weakImport("xmipptomo"):
 
         def testNoAngles(self):
             # angles =1 cancels the rotation
-            self._runPhantomSubtomo(angles=1)
+            self._runPhantomSubtomo("NO ANGLES", rot=1, tilt=1, psi=1)
 
         def testAngles(self):
 
-            self._runPhantomSubtomo()
+            self._runPhantomSubtomo("ALL ANGLES")
 
-        def _addAveragers(self, inputProt:XmippProtPhantomSubtomo):
-            """ Add all the averagers available to be run with the subtomo set"""
+        def testOnlyRot(self):
 
-            # Add reliontomo average method
-            with weakImport("reliontomo"):
-                from reliontomo.protocols import ProtRelionSubTomoReconstructAvg
-                relionAve = self.newProtocol(ProtRelionSubTomoReconstructAvg)
-                relionAve.inputSubtomos.set(inputProt)
-                relionAve.inputSubtomos.setExtended(inputProt._possibleOutputs.outputSubtomograms.name)
-                self.launchProtocol(relionAve)
+            self._runPhantomSubtomo("ONLY ROT", tilt=1, psi=1)
 
-            # Add eman average method
-            with weakImport("emantomo"):
-                from emantomo.protocols import EmanProtSubTomoAverage
-                emanAve = self.newProtocol(EmanProtSubTomoAverage)
-                emanAve.inputSetOfSubTomogram.set(inputProt)
-                emanAve.inputSetOfSubTomogram.setExtended(inputProt._possibleOutputs.outputSubtomograms.name)
-                self.launchProtocol(emanAve)
+        def testOnlyTilt(self):
 
-            # Add xmipp tomo averager. In this case we do not need the weak import since this test will only run if xmipptomo is available
-            from xmipptomo.protocols import XmippProtApplyTransformSubtomo
-            xmippAve = self.newProtocol(XmippProtApplyTransformSubtomo)
-            xmippAve.inputSubtomograms.set(inputProt)
-            xmippAve.inputSubtomograms.setExtended(inputProt._possibleOutputs.outputSubtomograms.name)
-            self.launchProtocol(xmippAve)
+            self._runPhantomSubtomo("ONLY TILT", rot=1, psi=1)
 
-        def _runPhantomSubtomo(self, angles=90):
+        def testOnlyPsi(self):
+
+            self._runPhantomSubtomo("ONLY PSI", rot=1, tilt=1)
+
+        def _runPhantomSubtomo(self, label, rot=90, tilt=90, psi=90):
             """ Creates a a phantom subtomo protocol with rotation by default
 
             :param angles: value for the 3 angles, to cancel rotation use 1
             """
 
-            anglesStr = "NO" if angles==1 else "0-%s" % angles
-            label = "TOMO phantoms ROT %s" % anglesStr
-
             protPhantom = self.newProtocol(XmippProtPhantomTomo,
                                            objLabel=label,
-                                           dimensions="100 100 50",
+                                           dimensions="200 200 100",
                                            sampling=4,
                                            nparticles=10,
                                            ntomos=3,
                                            rotmin=0,
-                                           rotmax=angles,
+                                           rotmax=rot,
                                            tiltmin=0,
-                                           tiltmax=angles,
+                                           tiltmax=tilt,
                                            psimin=0,
-                                           psimax=angles)
+                                           psimax=psi)
 
             self.launchProtocol(protPhantom)
 
-            # Add the averagers
-            #self._addAveragers(protPhantom)
+            with weakImport("emantomo"):
+                # Add eman extraction
+                from emantomo.protocols.protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
+                stExtraction = self.newProtocol(EmanProtTomoExtraction,
+                                                inputCoordinates = protPhantom.coordinates3D,
+                                                boxSize = protPhantom.coordinates3D.getBoxSize(),
+                                                doInvert = True
+                                                )
+
+                self.launchProtocol(stExtraction)
+
+                # Add the averagers
+                addAveragers(self, stExtraction, EmanProtTomoExtraction._possibleOutputs.subtomograms.name)
+
+def addAveragers(test, inputProt, outputName):
+    """ Add all the averagers available to be run with the subtomo set"""
+
+    # Add reliontomo average method
+    with weakImport("reliontomo"):
+        from reliontomo.protocols import ProtRelionSubTomoReconstructAvg
+        relionAve = test.newProtocol(ProtRelionSubTomoReconstructAvg)
+        relionAve.inputSubtomos.set(inputProt)
+        relionAve.inputSubtomos.setExtended(outputName)
+        test.launchProtocol(relionAve)
+
+    # Add eman average method
+    with weakImport("emantomo"):
+        from emantomo.protocols import EmanProtSubTomoAverage
+        emanAve = test.newProtocol(EmanProtSubTomoAverage)
+        emanAve.inputSetOfSubTomogram.set(inputProt)
+        emanAve.inputSetOfSubTomogram.setExtended(outputName)
+        test.launchProtocol(emanAve)
+
+    # Add xmipp tomo averager. In this case we do not need the weak import since this test will only run if xmipptomo is available
+    from xmipptomo.protocols import XmippProtApplyTransformSubtomo
+    xmippAve = test.newProtocol(XmippProtApplyTransformSubtomo)
+    xmippAve.inputSubtomograms.set(inputProt)
+    xmippAve.inputSubtomograms.setExtended(outputName)
+    test.launchProtocol(xmippAve)
