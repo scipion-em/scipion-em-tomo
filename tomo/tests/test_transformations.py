@@ -174,7 +174,8 @@ def addAveragers(test, inputProt, outputName):
     # Add eman average method
     with weakImport("emantomo"):
         from emantomo.protocols import EmanProtSubTomoAverage
-        emanAve = test.newProtocol(EmanProtSubTomoAverage)
+        emanAve = test.newProtocol(EmanProtSubTomoAverage,
+                                   msWedge=0)
         emanAve.inputSetOfSubTomogram.set(inputProt)
         emanAve.inputSetOfSubTomogram.setExtended(outputName)
         test.launchProtocol(emanAve)
