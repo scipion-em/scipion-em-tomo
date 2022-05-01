@@ -339,7 +339,7 @@ class TiltSeries(TiltSeriesBase):
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
-            path.createLink(inputFilePath, outputFilePath)
+            path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
