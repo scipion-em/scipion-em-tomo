@@ -87,8 +87,12 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             newTs.copyInfo(ts1)
             self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
 
+            # First method
             M1set = []
             M2set = []
+
+            # Second method
+            Mset = []
 
             for ti1, ti2 in zip(ts1, ts2):
                 newTi = TiltImage()
@@ -105,10 +109,19 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 newTs.append(newTi)
 
+                # First method
                 M1set.append(ti1.getTransform().getMatrix())
                 M2set.append(ti2.getTransform().getMatrix())
 
+            # Second method
+            Mset.append(M1set)
+            Mset.append(M2set)
+
+            # First method
             self.transformationMatrix(M1set, M2set)
+
+            # Second method
+            self.transformationMatrixBis(Mset)
 
             newTs.setDim(ts1.getDim())
             newTs.write()
@@ -128,26 +141,56 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
     def transformationMatrix(M1set, M2set):
-        m = np.zeros((3, 3))
+        p = np.zeros((3, 3))
 
         for m1, m2 in zip(M1set, M2set):
             m1 = np.matrix(m1)
             m2 = np.matrix(m2)
 
-            m += np.matmul(m1, np.linalg.inv(m2))
+            p += np.matmul(m1, np.linalg.inv(m2))
 
-        m /= len(M1set)
-        print("m")
-        print(m)
+        p /= len(M1set)
+        print("p")
+        print(np.matrix.round(p, 2))
 
         mError = np.zeros((3, 3))
         for m1, m2 in zip(M1set, M2set):
-            mError += np.absolute(m - np.matmul(m1, np.linalg.inv(m2)))
+            mError += np.absolute(p - np.matmul(m1, np.linalg.inv(m2)))
 
         print("mError")
-        print(mError)
+        print(np.matrix.round(mError, 2))
 
         print("----------------")
+
+    @staticmethod
+    def transformationMatrixBis(Mset):
+        Nts = len(Mset)
+        Nti = len(Mset[0])
+
+        p = np.zeros((3, 3))
+
+        divider = 0
+
+        for i in range(Nti):  # Iterate each tilt-image
+            for j in range(Nts):  # Iterate each tilt-series
+                for k in range(j+1, Nts):  # Compare each matrix with the following
+                    p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
+
+        p /= (Nts * Nti) / 2  # Number of comparisons performed
+        print("p")
+        print(np.matrix.round(p, 2))
+
+        mError = np.zeros((3, 3))
+
+        for i in range(Nti):  # Iterate each tilt-image
+            for j in range(Nts):  # Iterate each tilt-series
+                for k in range(j + 1, Nts):  # Compare each matrix with the following
+                    mError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
+
+        print("mError")
+        print(np.matrix.round(mError, 2))
+
+        print("+++++++++++++++++++++++++++++++++++")
 
     def generateTsIdList(self):
         tsIdList = []
