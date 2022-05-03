@@ -90,8 +90,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         for tsId in tsIdList:
             Mset = []
 
-            for sots in self.inputMultiSoTS.get():
-                ts = sots.getTiltSeriesFromTsId(tsId)
+            for sots in self.inputMultiSoTS:
+                ts = sots.get().getTiltSeriesFromTsId(tsId)
 
                 M = []
 
@@ -243,7 +243,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             sum2ShiftY = 0
 
             for j in range(Nts):  # Iterate each tilt-series
-                angle, shifts = utils.getRotationAngleAndShiftFromTM(Mset[j][i])
+                # Angle from TM
+                cosRotationAngle = Mset[j][i][0][0]
+                sinRotationAngle = Mset[j][i][1][0]
+                angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+                # Shifts from TM
+                shifts = [Mset[j][i][0][2], Mset[j][i][0][2]]
 
                 sumAngle += angle
                 sum2Angle += angle*angle
@@ -322,7 +328,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         for tsId in tsIdList:
             for i in range(1, len(self.inputMultiSoTS)):
-                for ts in self.inputMultiSoTS[i]:
+                for ts in self.inputMultiSoTS[i].get():
                     tmpTsIdList.append(ts.getTsId)
                 if tsId not in tmpTsIdList:
                     tsIdList.remove(tsId)
@@ -336,49 +342,54 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     def getOutputAlignmentConsensusSetOfTiltSeries(self):
         if not hasattr(self, "outputAlignmentConsensusSetOfTiltSeries"):
             outputAlignmentConsensusSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AliConsensus')
-            outputAlignmentConsensusSetOfTiltSeries.copyInfo(self.setOfTiltSeries1.get())
-            outputAlignmentConsensusSetOfTiltSeries.setDim(self.setOfTiltSeries1.get().getDim())
+            outputAlignmentConsensusSetOfTiltSeries.copyInfo(self.inputMultiSoTS[0].get())
+            outputAlignmentConsensusSetOfTiltSeries.setDim(self.inputMultiSoTS[0].get().getDim())
 
             self._defineOutputs(outputAlignmentConsensusSetOfTiltSeries=outputAlignmentConsensusSetOfTiltSeries)
-            self._defineSourceRelation(self.setOfTiltSeries1, outputAlignmentConsensusSetOfTiltSeries)
+            self._defineSourceRelation(self.inputMultiSoTS, outputAlignmentConsensusSetOfTiltSeries)
         return self.outputAlignmentConsensusSetOfTiltSeries
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
-        validateMsgs = []
+        errors = [] if len(self.inputMultiSoTS) > 1 else \
+            ["More than one input set of tilt-series is needed to compute the consensus."]
+        return errors
 
-        for ts1, ts2 in zip(self.setOfTiltSeries1.get(), self.setOfTiltSeries2.get()):
-            if not ts1.getFirstItem().hasTransform():
-                validateMsgs.append("Some tilt-series from the input set of tilt-series 1 does not have a "
-                                    "transformation matrix assigned.")
+    # def _validate(self):
+    #     validateMsgs = []
+    #
+    #     for ts1, ts2 in zip(self.setOfTiltSeries1.get(), self.setOfTiltSeries2.get()):
+    #         if not ts1.getFirstItem().hasTransform():
+    #             validateMsgs.append("Some tilt-series from the input set of tilt-series 1 does not have a "
+    #                                 "transformation matrix assigned.")
+    #
+    #         if not ts2.getFirstItem().hasTransform():
+    #             validateMsgs.append("Some tilt-series from the input set of tilt-series 2 does not have a "
+    #                                 "transformation matrix assigned.")
+    #
+    #         if ts1.getSize() != ts2.getSize():
+    #             validateMsgs.append("Some tilt-series from the input set of tilt-series 1 and its target in the "
+    #                                 "set of tilt-series 2 sizes' do not match. Every input tilt-series "
+    #                                 "and its target must have the same number of tilt-images")
+    #
+    #     return validateMsgs
 
-            if not ts2.getFirstItem().hasTransform():
-                validateMsgs.append("Some tilt-series from the input set of tilt-series 2 does not have a "
-                                    "transformation matrix assigned.")
-
-            if ts1.getSize() != ts2.getSize():
-                validateMsgs.append("Some tilt-series from the input set of tilt-series 1 and its target in the "
-                                    "set of tilt-series 2 sizes' do not match. Every input tilt-series "
-                                    "and its target must have the same number of tilt-images")
-
-        return validateMsgs
-
-    def _summary(self):
-        summary = []
-        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
-            summary.append("Input Tilt-Series: %d.\nOutput tilt series with consensus applied : %d.\n"
-                           % (self.setOfTiltSeries1.get().getSize(),
-                              self.setOfTiltSeries2.get().getSize()))
-        else:
-            summary.append("Output classes not ready yet.")
-        return summary
-
-    def _methods(self):
-        methods = []
-        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
-            methods.append("Consensus have been performed over %d transformation matrices from the input sets of "
-                           "tilt-series.\n"
-                           % (self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
-        else:
-            methods.append("Output classes not ready yet.")
-        return methods
+    # def _summary(self):
+    #     summary = []
+    #     if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
+    #         summary.append("Input Tilt-Series: %d.\nOutput tilt series with consensus applied : %d.\n"
+    #                        % (self.setOfTiltSeries1.get().getSize(),
+    #                           self.setOfTiltSeries2.get().getSize()))
+    #     else:
+    #         summary.append("Output classes not ready yet.")
+    #     return summary
+    #
+    # def _methods(self):
+    #     methods = []
+    #     if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
+    #         methods.append("Consensus have been performed over %d transformation matrices from the input sets of "
+    #                        "tilt-series.\n"
+    #                        % (self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
+    #     else:
+    #         methods.append("Output classes not ready yet.")
+    #     return methods
