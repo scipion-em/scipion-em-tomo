@@ -23,12 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import math
 
 import numpy as np
 
 from pyworkflow import BETA
-import pyworkflow.protocol.params as params
+from pyworkflow.protocol.params import MultiPointerParam, PointerParam
 from pyworkflow.object import Set
 
 from pwem.protocols import EMProtocol
@@ -52,20 +52,28 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection('Input')
-        form.addParam('setOfTiltSeries1',
-                      params.PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      help='First set of tilt-series to be analyzed in the consensus alignment. The unrelated '
-                           'alignment information will be taken form this set.',
-                      label='First set of tilt-series')
+        # form.addParam('setOfTiltSeries1',
+        #               PointerParam,
+        #               pointerClass='SetOfTiltSeries',
+        #               important=True,
+        #               help='First set of tilt-series to be analyzed in the consensus alignment. The unrelated '
+        #                    'alignment information will be taken form this set.',
+        #               label='First set of tilt-series')
+        #
+        # form.addParam('setOfTiltSeries2',
+        #               PointerParam,
+        #               pointerClass='SetOfTiltSeries',
+        #               important=True,
+        #               help='Second set of tilt-series to be analyzed in the consensus alignment.',
+        #               label='Second set of tilt-series')
 
-        form.addParam('setOfTiltSeries2',
-                      params.PointerParam,
-                      pointerClass='SetOfTiltSeries',
+        form.addParam('inputMultiSoTS',
+                      MultiPointerParam,
                       important=True,
-                      help='Second set of tilt-series to be analyzed in the consensus alignment.',
-                      label='Second set of tilt-series')
+                      label="Input tilt series",
+                      pointerClass='SetOfTiltSeries',
+                      help='Select several sets of tilt-series where to evaluate the consensus in their alignment. '
+                           'Output set will bring the information from the first selected set.')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
@@ -80,50 +88,42 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         self.getOutputAlignmentConsensusSetOfTiltSeries()
 
         for tsId in tsIdList:
-            ts1 = self.setOfTiltSeries1.get().getTiltSeriesFromTsId(tsId)
-            ts2 = self.setOfTiltSeries2.get().getTiltSeriesFromTsId(tsId)
-
-            newTs = TiltSeries(tsId=tsId)
-            newTs.copyInfo(ts1)
-            self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
-
-            # First method
-            M1set = []
-            M2set = []
-
-            # Second method
             Mset = []
 
-            for ti1, ti2 in zip(ts1, ts2):
+            for sots in self.inputMultiSoTS.get():
+                ts = sots.getTiltSeriesFromTsId(tsId)
+
+                M = []
+
+                for ti in ts:
+                    M.append(ti.getTransform().getMatrix())
+
+                Mset.append(M)
+
+            enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.compareTransformationMatrices(Mset)
+
+            ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
+            newTs = TiltSeries(tsId=tsId)
+            newTs.copyInfo(ts)
+            newTs._enable = enable
+            self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
+
+            for i, ti in enumerate(ts):
                 newTi = TiltImage()
-                newTi.copyInfo(ti1, copyId=True)
-                newTi.setLocation(ti1.getLocation())
-                newTi.setTransform(ti1.getTransform())
+                newTi.copyInfo(ti, copyId=True)
+                newTi.setLocation(ti.getLocation())
+                newTi.setTransform(ti.getTransform())
 
-                ra1, sh1 = utils.getRotationAngleAndShiftFromTM(ti1)
-                ra2, sh2 = utils.getRotationAngleAndShiftFromTM(ti2)
-
-                newTi._angleDiff = Float(abs(ra1 - ra2))
-                newTi._shiftDiff = Float(
-                    (abs(sh1[0] - sh2[0]) + abs(sh1[1] - sh2[1])) / 2)  # Shift average in both directions
+                newTi._angleAvg = Float(anglesAvgV[i])
+                newTi._angleStd = Float(anglesStdV[i])
+                newTi._shiftXAvg = Float(shiftXAvgV[i])
+                newTi._shiftXStd = Float(shiftXStdV[i])
+                newTi._shiftYAvg = Float(shiftYAvgV[i])
+                newTi._shiftYStd = Float(shiftYStdV[i])
 
                 newTs.append(newTi)
 
-                # First method
-                M1set.append(ti1.getTransform().getMatrix())
-                M2set.append(ti2.getTransform().getMatrix())
-
-            # Second method
-            Mset.append(M1set)
-            Mset.append(M2set)
-
-            # First method
-            self.transformationMatrix(M1set, M2set)
-
-            # Second method
-            self.transformationMatrixBis(Mset)
-
-            newTs.setDim(ts1.getDim())
+            newTs.setDim(ts.getDim())
             newTs.write()
 
             self.outputAlignmentConsensusSetOfTiltSeries.update(newTs)
@@ -132,6 +132,64 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         self._store()
 
+    # def consensusAlignment(self):
+    #     tsIdList = self.generateTsIdList()
+    #
+    #     self.getOutputAlignmentConsensusSetOfTiltSeries()
+    #
+    #     for tsId in tsIdList:
+    #         ts1 = self.setOfTiltSeries1.get().getTiltSeriesFromTsId(tsId)
+    #         ts2 = self.setOfTiltSeries2.get().getTiltSeriesFromTsId(tsId)
+    #
+    #         newTs = TiltSeries(tsId=tsId)
+    #         newTs.copyInfo(ts1)
+    #         self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
+    #
+    #         # First method
+    #         M1set = []
+    #         M2set = []
+    #
+    #         # Second method
+    #         Mset = []
+    #
+    #         for ti1, ti2 in zip(ts1, ts2):
+    #             newTi = TiltImage()
+    #             newTi.copyInfo(ti1, copyId=True)
+    #             newTi.setLocation(ti1.getLocation())
+    #             newTi.setTransform(ti1.getTransform())
+    #
+    #             ra1, sh1 = utils.getRotationAngleAndShiftFromTM(ti1)
+    #             ra2, sh2 = utils.getRotationAngleAndShiftFromTM(ti2)
+    #
+    #             newTi._angleDiff = Float(abs(ra1 - ra2))
+    #             newTi._shiftDiff = Float(
+    #                 (abs(sh1[0] - sh2[0]) + abs(sh1[1] - sh2[1])) / 2)  # Shift average in both directions
+    #
+    #             newTs.append(newTi)
+    #
+    #             # First method
+    #             M1set.append(ti1.getTransform().getMatrix())
+    #             M2set.append(ti2.getTransform().getMatrix())
+    #
+    #         # Second method
+    #         Mset.append(M1set)
+    #         Mset.append(M2set)
+    #
+    #         # First method
+    #         self.transformationMatrix(M1set, M2set)
+    #
+    #         # Second method
+    #         self.compareTransformationMatrices(Mset)
+    #
+    #         newTs.setDim(ts1.getDim())
+    #         newTs.write()
+    #
+    #         self.outputAlignmentConsensusSetOfTiltSeries.update(newTs)
+    #         self.outputAlignmentConsensusSetOfTiltSeries.updateDim()
+    #         self.outputAlignmentConsensusSetOfTiltSeries.write()
+    #
+    #     self._store()
+
     def closeOutputSetsStep(self):
         self.outputAlignmentConsensusSetOfTiltSeries.setStreamState(Set.STREAM_CLOSED)
         self.outputAlignmentConsensusSetOfTiltSeries.write()
@@ -139,72 +197,136 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         self._store()
 
     # --------------------------- UTILS functions ----------------------------
+    # @staticmethod
+    # def transformationMatrix(M1set, M2set):
+    #     p = np.zeros((3, 3))
+    #
+    #     for m1, m2 in zip(M1set, M2set):
+    #         m1 = np.matrix(m1)
+    #         m2 = np.matrix(m2)
+    #
+    #         p += np.matmul(m1, np.linalg.inv(m2))
+    #
+    #     p /= len(M1set)
+    #     print("p")
+    #     print(np.matrix.round(p, 2))
+    #
+    #     mError = np.zeros((3, 3))
+    #     for m1, m2 in zip(M1set, M2set):
+    #         mError += np.absolute(p - np.matmul(m1, np.linalg.inv(m2)))
+    #
+    #     print("mError")
+    #     print(np.matrix.round(mError, 2))
+    #
+    #     print("----------------")
+
     @staticmethod
-    def transformationMatrix(M1set, M2set):
-        p = np.zeros((3, 3))
-
-        for m1, m2 in zip(M1set, M2set):
-            m1 = np.matrix(m1)
-            m2 = np.matrix(m2)
-
-            p += np.matmul(m1, np.linalg.inv(m2))
-
-        p /= len(M1set)
-        print("p")
-        print(np.matrix.round(p, 2))
-
-        mError = np.zeros((3, 3))
-        for m1, m2 in zip(M1set, M2set):
-            mError += np.absolute(p - np.matmul(m1, np.linalg.inv(m2)))
-
-        print("mError")
-        print(np.matrix.round(mError, 2))
-
-        print("----------------")
-
-    @staticmethod
-    def transformationMatrixBis(Mset):
+    def compareTransformationMatrices(Mset):
         Nts = len(Mset)
         Nti = len(Mset[0])
 
         p = np.zeros((3, 3))
 
-        divider = 0
+        anglesAvgV = []
+        anglesStdV = []
+        shiftXAvgV = []
+        shiftXStdV = []
+        shiftYAvgV = []
+        shiftYStdV = []
 
         for i in range(Nti):  # Iterate each tilt-image
+            sumAngle = 0
+            sum2Angle = 0
+            sumShiftX = 0
+            sum2ShiftX = 0
+            sumShiftY = 0
+            sum2ShiftY = 0
+
             for j in range(Nts):  # Iterate each tilt-series
+                angle, shifts = utils.getRotationAngleAndShiftFromTM(Mset[j][i])
+
+                sumAngle += angle
+                sum2Angle += angle*angle
+                sumShiftX += shifts[0]
+                sum2ShiftX += shifts[0] * shifts[0]
+                sumShiftY += shifts[1]
+                sum2ShiftY += shifts[1] * shifts[1]
+
                 for k in range(j+1, Nts):  # Compare each matrix with the following
                     p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
+
+            # Append angle information
+            anglesAvg = sumAngle / Nti
+            anglesStd = math.sqrt(sum2Angle/Nti - anglesAvg*anglesAvg)
+            anglesAvgV.append(anglesAvg)
+            anglesStdV.append(anglesStd)
+
+            # Append shift X information
+            shiftXAvg = sumShiftX / Nti
+            shiftXStd = math.sqrt(sum2ShiftX/Nti - shiftXAvg*shiftXAvg)
+            shiftXAvgV.append(shiftXAvg)
+            shiftXStdV.append(shiftXStd)
+
+            # Append shift Y information
+            shiftYAvg = sumShiftY / Nti
+            shiftYStd = math.sqrt(sum2ShiftY/Nti - shiftYAvg*shiftYAvg)
+            shiftYAvgV.append(shiftYAvg)
+            shiftYStdV.append(shiftYStd)
 
         p /= (Nts * Nti) / 2  # Number of comparisons performed
         print("p")
         print(np.matrix.round(p, 2))
 
-        mError = np.zeros((3, 3))
+        pError = np.zeros((3, 3))
 
         for i in range(Nti):  # Iterate each tilt-image
             for j in range(Nts):  # Iterate each tilt-series
                 for k in range(j + 1, Nts):  # Compare each matrix with the following
-                    mError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
+                    pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
 
-        print("mError")
-        print(np.matrix.round(mError, 2))
+        print("pError")
+        print(np.matrix.round(pError, 2))
 
         print("+++++++++++++++++++++++++++++++++++")
+
+        # *** add condition based on pError
+        enable = True
+
+        return enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
+
+    # def generateTsIdList(self):
+    #     tsIdList = []
+    #     tmpTsIdList = []
+    #
+    #     for ts in self.setOfTiltSeries1.get():
+    #         tsIdList.append(ts.getTsId())
+    #
+    #     for ts in self.setOfTiltSeries2.get():
+    #         tmpTsIdList.append(ts.getTsId())
+    #
+    #     for tsId in tsIdList:
+    #         if tsId not in tmpTsIdList:
+    #             tsIdList.remove(tsId)
+    #
+    #     if len(tsIdList) == 0:
+    #         raise Exception("None matching tilt-series between two sets.")
+    #
+    #     return tsIdList
 
     def generateTsIdList(self):
         tsIdList = []
         tmpTsIdList = []
 
-        for ts in self.setOfTiltSeries1.get():
+        for ts in self.inputMultiSoTS[0].get():
             tsIdList.append(ts.getTsId())
 
-        for ts in self.setOfTiltSeries2.get():
-            tmpTsIdList.append(ts.getTsId())
-
         for tsId in tsIdList:
-            if tsId not in tmpTsIdList:
-                tsIdList.remove(tsId)
+            for i in range(1, len(self.inputMultiSoTS)):
+                for ts in self.inputMultiSoTS[i]:
+                    tmpTsIdList.append(ts.getTsId)
+                if tsId not in tmpTsIdList:
+                    tsIdList.remove(tsId)
+                    break
 
         if len(tsIdList) == 0:
             raise Exception("None matching tilt-series between two sets.")
