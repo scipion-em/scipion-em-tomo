@@ -1502,10 +1502,11 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         # If not cached
         if tomoId not in self._tomos:
-            tomo = self.getCoordinates3D().get().getPrecedents()[subtomo.getVolId()]
+            tomo = self.getCoordinates3D().getPrecedents()[subtomo.getVolId()]
             self._tomos[tomoId] = tomo
 
         return self._tomos[tomoId]
+
 
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
