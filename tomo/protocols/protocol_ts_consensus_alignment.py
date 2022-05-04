@@ -411,6 +411,17 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #         summary.append("Output classes not ready yet.")
     #     return summary
 
+    def _methods(self):
+        methods = []
+        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
+            methods.append("Consensus have been performed over %d transformation matrices from the input sets of "
+                           "tilt-series. New consensus set of tilt-series generated with %d elements.\n"
+                           % (len(self.inputMultiSoTS),
+                              self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
+        else:
+            methods.append("Output classes not ready yet.")
+        return methods
+
     # def _methods(self):
     #     methods = []
     #     if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
