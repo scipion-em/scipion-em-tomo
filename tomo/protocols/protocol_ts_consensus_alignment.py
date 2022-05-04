@@ -100,7 +100,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 Mset.append(M)
 
-            enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.compareTransformationMatrices(Mset)
+            # enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.compareTransformationMatrices(Mset)
+            enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
 
             ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
             newTs = TiltSeries(tsId=tsId)
@@ -114,11 +115,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 newTi.setLocation(ti.getLocation())
                 newTi.setTransform(ti.getTransform())
 
-                newTi._angleAvg = Float(anglesAvgV[i])
+                # newTi._angleAvg = Float(anglesAvgV[i])
                 newTi._angleStd = Float(anglesStdV[i])
-                newTi._shiftXAvg = Float(shiftXAvgV[i])
+                # newTi._shiftXAvg = Float(shiftXAvgV[i])
                 newTi._shiftXStd = Float(shiftXStdV[i])
-                newTi._shiftYAvg = Float(shiftYAvgV[i])
+                # newTi._shiftYAvg = Float(shiftYAvgV[i])
                 newTi._shiftYStd = Float(shiftYStdV[i])
 
                 newTs.append(newTi)
@@ -225,6 +226,12 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         Nts = len(Mset)
         Nti = len(Mset[0])
 
+        # Number od possible combinations picking 2 tilt-series out of the set
+        numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
+
+        print("Number of tilt-series analyzed: " + str(Nts))
+        print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+
         p = np.zeros((3, 3))
 
         anglesAvgV = []
@@ -262,24 +269,24 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
 
             # Append angle information
-            anglesAvg = sumAngle / Nti
-            anglesStd = math.sqrt(sum2Angle/Nti - anglesAvg*anglesAvg)
+            anglesAvg = sumAngle / Nts
+            anglesStd = math.sqrt(sum2Angle/Nts - anglesAvg*anglesAvg)
             anglesAvgV.append(anglesAvg)
             anglesStdV.append(anglesStd)
 
             # Append shift X information
-            shiftXAvg = sumShiftX / Nti
-            shiftXStd = math.sqrt(sum2ShiftX/Nti - shiftXAvg*shiftXAvg)
+            shiftXAvg = sumShiftX / Nts
+            shiftXStd = math.sqrt(sum2ShiftX/Nts - shiftXAvg*shiftXAvg)
             shiftXAvgV.append(shiftXAvg)
             shiftXStdV.append(shiftXStd)
 
             # Append shift Y information
-            shiftYAvg = sumShiftY / Nti
-            shiftYStd = math.sqrt(sum2ShiftY/Nti - shiftYAvg*shiftYAvg)
+            shiftYAvg = sumShiftY / Nts
+            shiftYStd = math.sqrt(sum2ShiftY/Nts - shiftYAvg*shiftYAvg)
             shiftYAvgV.append(shiftYAvg)
             shiftYStdV.append(shiftYStd)
 
-        p /= (Nts * Nti) / 2  # Number of comparisons performed
+        p /= Nti * numberOfCombinations  # Normalized by the number of comparisons performed
         print("p")
         print(np.matrix.round(p, 2))
 
@@ -290,6 +297,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 for k in range(j + 1, Nts):  # Compare each matrix with the following
                     pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
 
+        pError /= numberOfCombinations  # Normalized by the number of tilt-series analyzed
+
         print("pError")
         print(np.matrix.round(pError, 2))
 
@@ -298,7 +307,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         # *** add condition based on pError
         enable = True
 
-        return enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
+        # return enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
+        return enable, anglesStdV, shiftXStdV, shiftYStdV
 
     # def generateTsIdList(self):
     #     tsIdList = []
@@ -351,9 +361,16 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
-        errors = [] if len(self.inputMultiSoTS) > 1 else \
+        validateMsgs = [] if len(self.inputMultiSoTS) > 1 else \
             ["More than one input set of tilt-series is needed to compute the consensus."]
-        return errors
+
+        for i, sots in enumerate(self.inputMultiSoTS):
+            ts = sots.get().getFirstItem()
+            if not ts.getFirstItem().hasTransform():
+                validateMsgs.append("Some tilt-series from the input set of tilt-series %d does not have a "
+                                    "transformation matrix assigned." % (i+1))
+
+        return validateMsgs
 
     # def _validate(self):
     #     validateMsgs = []
