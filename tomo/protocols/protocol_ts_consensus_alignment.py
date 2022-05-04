@@ -270,19 +270,19 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             # Append angle information
             anglesAvg = sumAngle / Nts
-            anglesStd = math.sqrt(sum2Angle/Nts - anglesAvg*anglesAvg)
+            anglesStd = math.sqrt(abs(sum2Angle/Nts - anglesAvg*anglesAvg))  # Abs avoid 0 as small negative number
             anglesAvgV.append(anglesAvg)
             anglesStdV.append(anglesStd)
 
             # Append shift X information
             shiftXAvg = sumShiftX / Nts
-            shiftXStd = math.sqrt(sum2ShiftX/Nts - shiftXAvg*shiftXAvg)
+            shiftXStd = math.sqrt(abs(sum2ShiftX/Nts - shiftXAvg*shiftXAvg))  # Abs avoid 0 as small negative number
             shiftXAvgV.append(shiftXAvg)
             shiftXStdV.append(shiftXStd)
 
             # Append shift Y information
             shiftYAvg = sumShiftY / Nts
-            shiftYStd = math.sqrt(sum2ShiftY/Nts - shiftYAvg*shiftYAvg)
+            shiftYStd = math.sqrt(abs(sum2ShiftY/Nts - shiftYAvg*shiftYAvg))  # Abs avoid 0 as small negative number
             shiftYAvgV.append(shiftYAvg)
             shiftYStdV.append(shiftYStd)
 
@@ -339,10 +339,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         for tsId in tsIdList:
             for i in range(1, len(self.inputMultiSoTS)):
                 for ts in self.inputMultiSoTS[i].get():
-                    tmpTsIdList.append(ts.getTsId)
+                    tmpTsIdList.append(ts.getTsId())
                 if tsId not in tmpTsIdList:
                     tsIdList.remove(tsId)
                     break
+                tmpTsIdList = []
 
         if len(tsIdList) == 0:
             raise Exception("None matching tilt-series between two sets.")
