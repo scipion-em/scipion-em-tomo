@@ -1443,7 +1443,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
         """ Set the SetOfCoordinates associates with
         this set of particles.
          """
-        self._coordsPointer.set(coordinates)
+        if isinstance(coordinates, Pointer):
+            self._coordsPointer = coordinates
+        else:
+            self._coordsPointer.set(coordinates)
 
     def iterSubtomos(self, volume=None, orderBy='id'):
         """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
