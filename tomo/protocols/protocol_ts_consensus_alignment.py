@@ -391,6 +391,16 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #
     #     return validateMsgs
 
+    def _summary(self):
+        summary = []
+        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
+            summary.append("Input Tilt-Series: %d.\nOutput tilt series with consensus applied : %d.\n"
+                           % (len(self.inputMultiSoTS),
+                              self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
+        else:
+            summary.append("Output classes not ready yet.")
+        return summary
+
     # def _summary(self):
     #     summary = []
     #     if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
@@ -400,7 +410,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #     else:
     #         summary.append("Output classes not ready yet.")
     #     return summary
-    #
+
     # def _methods(self):
     #     methods = []
     #     if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
