@@ -100,8 +100,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 Mset.append(M)
 
-            # enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.compareTransformationMatrices(Mset)
-            enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
+            # anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
+            anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
 
             ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
             newTs = TiltSeries(tsId=tsId)
@@ -222,17 +222,9 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #     print("----------------")
 
     @staticmethod
-    def compareTransformationMatrices(Mset):
+    def calculateAngleAndShiftDistribution(Mset):
         Nts = len(Mset)
         Nti = len(Mset[0])
-
-        # Number od possible combinations picking 2 tilt-series out of the set
-        numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
-
-        print("Number of tilt-series analyzed: " + str(Nts))
-        print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
-
-        p = np.zeros((3, 3))
 
         anglesAvgV = []
         anglesStdV = []
@@ -265,9 +257,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 sumShiftY += shifts[1]
                 sum2ShiftY += shifts[1] * shifts[1]
 
-                for k in range(j+1, Nts):  # Compare each matrix with the following
-                    p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
-
             # Append angle information
             anglesAvg = sumAngle / Nts
             anglesStd = math.sqrt(abs(sum2Angle/Nts - anglesAvg*anglesAvg))  # Abs avoid 0 as small negative number
@@ -286,29 +275,57 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             shiftYAvgV.append(shiftYAvg)
             shiftYStdV.append(shiftYStd)
 
-        p /= Nti * numberOfCombinations  # Normalized by the number of comparisons performed
-        print("p")
-        print(np.matrix.round(p, 2))
+        # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
+        return anglesStdV, shiftXStdV, shiftYStdV
 
-        pError = np.zeros((3, 3))
+    @staticmethod
+    def compareTransformationMatrices(Mset):
+        Nts = len(Mset)
+        Nti = len(Mset[0])
+
+        # Number od possible combinations picking 2 tilt-series out of the set
+        numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
+
+        print("Number of tilt-series analyzed: " + str(Nts))
+        print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+
+        p = np.zeros((3, 3))
+        pTotalError = np.zeros((3, 3))
 
         for i in range(Nti):  # Iterate each tilt-image
+
+            for j in range(Nts):  # Iterate each tilt-series
+
+                # Calculate p matrix
+                for k in range(j+1, Nts):  # Compare each matrix with the following
+                    p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
+
+            # Calculate error matrix given a calculated p matrix (for a pair of matrices)
+            p /= Nti  # Normalized by the number of comparisons performed
+            print("p")
+            print(np.matrix.round(p, 2))
+
+            pError = np.zeros((3, 3))
+
             for j in range(Nts):  # Iterate each tilt-series
                 for k in range(j + 1, Nts):  # Compare each matrix with the following
                     pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
 
-        pError /= numberOfCombinations  # Normalized by the number of tilt-series analyzed
+            pError /= Nti  # Normalized by the number of tilt-series analyzed
+            print("pError")
+            print(np.matrix.round(pError, 2))
 
-        print("pError")
-        print(np.matrix.round(pError, 2))
+            # Add the matrix error for a given pair of matrices to the total error matrix
+            pTotalError += pError
 
         print("+++++++++++++++++++++++++++++++++++")
+        print("pTotalError")
+        print(np.matrix.round(pTotalError, 2))
 
         # *** add condition based on pError
         enable = True
 
-        # return enable, anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
-        return enable, anglesStdV, shiftXStdV, shiftYStdV
+        return enable
 
     # def generateTsIdList(self):
     #     tsIdList = []
