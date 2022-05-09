@@ -292,31 +292,32 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         p = np.zeros((3, 3))
         pTotalError = np.zeros((3, 3))
 
-        for i in range(Nti):  # Iterate each tilt-image
+        for j in range(Nts):  # Iterate each tilt-series
 
-            for j in range(Nts):  # Iterate each tilt-series
+            # Calculate p matrix
+            for k in range(j+1, Nts):  # Compare each matrix with the following
 
-                # Calculate p matrix
-                for k in range(j+1, Nts):  # Compare each matrix with the following
+                # Calculate p matrix for the pair of tilt-series
+                for i in range(Nti):  # Iterate each tilt-image
                     p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
 
-            # Calculate error matrix given a calculated p matrix (for a pair of matrices)
-            p /= Nti  # Normalized by the number of comparisons performed
-            print("p")
-            print(np.matrix.round(p, 2))
+                # Calculate error matrix given a calculated p matrix (for a pair of matrices)
+                p /= Nti  # Normalized by the number of comparisons performed
+                print("p")
+                print(np.matrix.round(p, 2))
 
-            pError = np.zeros((3, 3))
+                pError = np.zeros((3, 3))
 
-            for j in range(Nts):  # Iterate each tilt-series
-                for k in range(j + 1, Nts):  # Compare each matrix with the following
+                # Calculate error matrix for the pair of tilt-series
+                for i in range(Nti):  # Iterate each tilt-image
                     pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
 
-            pError /= Nti  # Normalized by the number of tilt-series analyzed
-            print("pError")
-            print(np.matrix.round(pError, 2))
+                pError /= Nti  # Normalized by the number of tilt-series analyzed
+                print("pError")
+                print(np.matrix.round(pError, 2))
 
-            # Add the matrix error for a given pair of matrices to the total error matrix
-            pTotalError += pError
+                # Add the matrix error for a given pair of matrices to the total error matrix
+                pTotalError += pError
 
         print("+++++++++++++++++++++++++++++++++++")
         print("pTotalError")
