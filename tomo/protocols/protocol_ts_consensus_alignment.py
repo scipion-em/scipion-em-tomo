@@ -103,6 +103,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             # anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
             anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
 
+            enable = self.compareTransformationMatrices(Mset)
+
             ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
             newTs = TiltSeries(tsId=tsId)
             newTs.copyInfo(ts)
@@ -289,7 +291,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         print("Number of tilt-series analyzed: " + str(Nts))
         print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
 
-        p = np.zeros((3, 3))
         pTotalError = np.zeros((3, 3))
 
         for j in range(Nts):  # Iterate each tilt-series
@@ -297,9 +298,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             # Calculate p matrix
             for k in range(j+1, Nts):  # Compare each matrix with the following
 
+                p = np.zeros((3, 3))
+
                 # Calculate p matrix for the pair of tilt-series
                 for i in range(Nti):  # Iterate each tilt-image
                     p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
+
+                print("\nComparing matrices " + str(j) + " and " + str(k))
 
                 # Calculate error matrix given a calculated p matrix (for a pair of matrices)
                 p /= Nti  # Normalized by the number of comparisons performed
@@ -319,9 +324,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 # Add the matrix error for a given pair of matrices to the total error matrix
                 pTotalError += pError
 
-        print("+++++++++++++++++++++++++++++++++++")
-        print("pTotalError")
+        pTotalError /= numberOfCombinations
+
+        print("\n\npTotalError")
         print(np.matrix.round(pTotalError, 2))
+        print("+++++++++++++++++++++++++++++++++++")
 
         # *** add condition based on pError
         enable = True
