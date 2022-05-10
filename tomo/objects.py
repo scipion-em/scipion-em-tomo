@@ -2275,6 +2275,7 @@ class SetOfCTFTomoSeries(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._idDict = {}
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
@@ -2341,19 +2342,22 @@ class SetOfCTFTomoSeries(data.EMSet):
         return classItem
 
     def iterItems(self, orderBy='id', direction='ASC'):
-        for item in data.EMSet.iterItems(self,
-                                         orderBy=orderBy,
-                                         direction=direction):
+        for item in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction):
 
-            objId = None
-            for tiltSeries in self.getSetOfTiltSeries():
-                if tiltSeries.getTsId() == item.getTsId():
-                    objId = tiltSeries.getObjId()
-
-            if objId is None:
+            ts = self._getTiltSeriesFromTsId(item.getTsId())
+            if ts is None:
                 raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
 
-            item.setTiltSeries(self.getSetOfTiltSeries()[objId])
+            item.setTiltSeries(ts)
             self._setItemMapperPath(item)
 
             yield item
+
+    def _getTiltSeriesFromTsId(self, tsId):
+        if self._idDict:
+            return self._idDict.get(tsId, None)
+        else:
+            self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
+            return self._idDict.get(tsId, None)
+
+
