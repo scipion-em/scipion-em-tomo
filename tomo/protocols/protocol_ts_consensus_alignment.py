@@ -322,7 +322,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         # Matrix for saving the final accumalated error in the whole set
         pTotalError = np.zeros((3, 3))
 
-        for j in range(Nts):  # Iterate each tilt-series
+        for j in range(1):  # Iterate each tilt-series
 
             # Calculate p matrix
             for k in range(j+1, Nts):  # Compare each matrix with the following
