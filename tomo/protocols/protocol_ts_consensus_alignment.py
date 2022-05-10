@@ -101,9 +101,9 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 Mset.append(M)
 
             # anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
-            anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
+            # anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
 
-            enable = self.compareTransformationMatrices(Mset)
+            enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
 
             ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
             newTs = TiltSeries(tsId=tsId)
@@ -223,74 +223,103 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #
     #     print("----------------")
 
-    @staticmethod
-    def calculateAngleAndShiftDistribution(Mset):
-        Nts = len(Mset)
-        Nti = len(Mset[0])
-
-        anglesAvgV = []
-        anglesStdV = []
-        shiftXAvgV = []
-        shiftXStdV = []
-        shiftYAvgV = []
-        shiftYStdV = []
-
-        for i in range(Nti):  # Iterate each tilt-image
-            sumAngle = 0
-            sum2Angle = 0
-            sumShiftX = 0
-            sum2ShiftX = 0
-            sumShiftY = 0
-            sum2ShiftY = 0
-
-            for j in range(Nts):  # Iterate each tilt-series
-                # Angle from TM
-                cosRotationAngle = Mset[j][i][0][0]
-                sinRotationAngle = Mset[j][i][1][0]
-                angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
-
-                # Shifts from TM
-                shifts = [Mset[j][i][0][2], Mset[j][i][0][2]]
-
-                sumAngle += angle
-                sum2Angle += angle*angle
-                sumShiftX += shifts[0]
-                sum2ShiftX += shifts[0] * shifts[0]
-                sumShiftY += shifts[1]
-                sum2ShiftY += shifts[1] * shifts[1]
-
-            # Append angle information
-            anglesAvg = sumAngle / Nts
-            anglesStd = math.sqrt(abs(sum2Angle/Nts - anglesAvg*anglesAvg))  # Abs avoid 0 as small negative number
-            anglesAvgV.append(anglesAvg)
-            anglesStdV.append(anglesStd)
-
-            # Append shift X information
-            shiftXAvg = sumShiftX / Nts
-            shiftXStd = math.sqrt(abs(sum2ShiftX/Nts - shiftXAvg*shiftXAvg))  # Abs avoid 0 as small negative number
-            shiftXAvgV.append(shiftXAvg)
-            shiftXStdV.append(shiftXStd)
-
-            # Append shift Y information
-            shiftYAvg = sumShiftY / Nts
-            shiftYStd = math.sqrt(abs(sum2ShiftY/Nts - shiftYAvg*shiftYAvg))  # Abs avoid 0 as small negative number
-            shiftYAvgV.append(shiftYAvg)
-            shiftYStdV.append(shiftYStd)
-
-        # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
-        return anglesStdV, shiftXStdV, shiftYStdV
+    # @staticmethod
+    # def calculateAngleAndShiftDistribution(Mset):
+    #     Nts = len(Mset)
+    #     Nti = len(Mset[0])
+    #
+    #     anglesAvgV = []
+    #     anglesStdV = []
+    #     shiftXAvgV = []
+    #     shiftXStdV = []
+    #     shiftYAvgV = []
+    #     shiftYStdV = []
+    #
+    #     for i in range(Nti):  # Iterate each tilt-image
+    #         sumAngle = 0
+    #         sum2Angle = 0
+    #         sumShiftX = 0
+    #         sum2ShiftX = 0
+    #         sumShiftY = 0
+    #         sum2ShiftY = 0
+    #
+    #         for j in range(Nts):  # Iterate each tilt-series
+    #             # Angle from TM
+    #             cosRotationAngle = Mset[j][i][0][0]
+    #             sinRotationAngle = Mset[j][i][1][0]
+    #             angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+    #
+    #             # Shifts from TM
+    #             shifts = [Mset[j][i][0][2], Mset[j][i][0][2]]
+    #
+    #             sumAngle += angle
+    #             sum2Angle += angle*angle
+    #             sumShiftX += shifts[0]
+    #             sum2ShiftX += shifts[0] * shifts[0]
+    #             sumShiftY += shifts[1]
+    #             sum2ShiftY += shifts[1] * shifts[1]
+    #
+    #         # Append angle information
+    #         anglesAvg = sumAngle / Nts
+    #         anglesStd = math.sqrt(abs(sum2Angle/Nts - anglesAvg*anglesAvg))  # Abs avoid 0 as small negative number
+    #         anglesAvgV.append(anglesAvg)
+    #         anglesStdV.append(anglesStd)
+    #
+    #         # Append shift X information
+    #         shiftXAvg = sumShiftX / Nts
+    #         shiftXStd = math.sqrt(abs(sum2ShiftX/Nts - shiftXAvg*shiftXAvg))  # Abs avoid 0 as small negative number
+    #         shiftXAvgV.append(shiftXAvg)
+    #         shiftXStdV.append(shiftXStd)
+    #
+    #         # Append shift Y information
+    #         shiftYAvg = sumShiftY / Nts
+    #         shiftYStd = math.sqrt(abs(sum2ShiftY/Nts - shiftYAvg*shiftYAvg))  # Abs avoid 0 as small negative number
+    #         shiftYAvgV.append(shiftYAvg)
+    #         shiftYStdV.append(shiftYStd)
+    #
+    #     # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
+    #     return anglesStdV, shiftXStdV, shiftYStdV
 
     @staticmethod
     def compareTransformationMatrices(Mset):
         Nts = len(Mset)
         Nti = len(Mset[0])
 
-        # Number od possible combinations picking 2 tilt-series out of the set
+        # Number of possible combinations picking 2 tilt-series out of the set
         numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
 
         print("Number of tilt-series analyzed: " + str(Nts))
         print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
 
+        # Vector for posterior calculation of std and avg of both shifts and angles.
+        sumAnglesV = np.zeros(Nti)
+        sum2AnglesV = np.zeros(Nti)
+        sumShiftXV = np.zeros(Nti)
+        sum2ShiftXV = np.zeros(Nti)
+        sumShiftYV = np.zeros(Nti)
+        sum2ShiftYV = np.zeros(Nti)
+
+        # Calculate shifts and vectors values of the first matrix (since it is the only one not compared in the
+        # posterior loop). Also, it is the only one whose shiftY does not have to be corrected by the matrix p (all the
+        # matrices in set are compared to the first one).
+        for i in range(Nti):
+            # Angle from TM
+            cosRotationAngle = Mset[0][i][0][0]
+            sinRotationAngle = Mset[0][i][1][0]
+            angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+            # Shifts from TM
+            shiftX = Mset[0][i][0][2]
+            shiftY = Mset[0][i][1][2]
+
+            sumAnglesV[i] += angle
+            sum2AnglesV[i] += angle * angle
+            sumShiftXV[i] += shiftX
+            sum2ShiftXV[i] += shiftX * shiftX
+            sumShiftYV[i] += shiftY
+            sum2ShiftYV[i] += shiftY * shiftY
+
+        # Matrix for saving the final accumalated error in the whole set
         pTotalError = np.zeros((3, 3))
 
         for j in range(Nts):  # Iterate each tilt-series
@@ -304,14 +333,32 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 for i in range(Nti):  # Iterate each tilt-image
                     p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
 
-                print("\nComparing matrices " + str(j) + " and " + str(k))
-
                 # Calculate error matrix given a calculated p matrix (for a pair of matrices)
                 p /= Nti  # Normalized by the number of comparisons performed
                 print("p")
                 print(np.matrix.round(p, 2))
 
                 pError = np.zeros((3, 3))
+
+                # Calculate shifts and vectors values
+                for i in range(Nti):  # Iterate each tilt-image
+                    # Angle from TM
+                    cosRotationAngle = Mset[k][i][0][0]
+                    sinRotationAngle = Mset[k][i][1][0]
+                    angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+                    # Shifts from TM
+                    shiftX = Mset[k][i][0][2]
+                    shiftY = Mset[k][i][1][2] + p[1][2]  # Correct the shiftY from calculated p matrix
+
+                    sumAnglesV[i] += angle
+                    sum2AnglesV[i] += angle * angle
+                    sumShiftXV[i] += shiftX
+                    sum2ShiftXV[i] += shiftX * shiftX
+                    sumShiftYV[i] += shiftY
+                    sum2ShiftYV[i] += shiftY * shiftY
+
+                print("\nComparing matrices " + str(j) + " and " + str(k))
 
                 # Calculate error matrix for the pair of tilt-series
                 for i in range(Nti):  # Iterate each tilt-image
@@ -324,16 +371,60 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 # Add the matrix error for a given pair of matrices to the total error matrix
                 pTotalError += pError
 
+        # Calculate the final avg and stf for each tilt-image
+        anglesAvgV = np.zeros(Nti)
+        anglesStdV = np.zeros(Nti)
+        shiftXAvgV = np.zeros(Nti)
+        shiftXStdV = np.zeros(Nti)
+        shiftYAvgV = np.zeros(Nti)
+        shiftYStdV = np.zeros(Nti)
+
+        for i in range(Nti):
+            anglesAvgV[i] = sumAnglesV[i] / (numberOfCombinations+1)  # Plus one because we added the first tilt-series
+            shiftXAvgV[i] = sumShiftXV[i] / (numberOfCombinations+1)
+            shiftYAvgV[i] = sumShiftYV[i] / (numberOfCombinations+1)
+
+            # Abs to avoid 0 as small negative number
+            anglesStdV[i] = math.sqrt(abs(sum2AnglesV[i]/(numberOfCombinations+1) - anglesAvgV[i]*anglesAvgV[i]))
+            shiftXStdV[i] = math.sqrt(abs(sum2ShiftXV[i]/(numberOfCombinations+1) - shiftXAvgV[i]*shiftXAvgV[i]))
+            shiftYStdV[i] = math.sqrt(abs(sum2ShiftYV[i]/(numberOfCombinations+1) - shiftYAvgV[i]*shiftYAvgV[i]))
+
+        print("anglesAvgV")
+        print(anglesAvgV)
+        print("anglesStdV")
+        print(anglesStdV)
+        print("shiftXAvgV")
+        print(shiftXAvgV)
+        print("shiftXStdV")
+        print(shiftXStdV)
+        print("shiftYAvgV")
+        print(shiftYAvgV)
+        print("shiftYStdV")
+        print(shiftYStdV)
+
+
+        # Normalize the total error matrix
         pTotalError /= numberOfCombinations
 
         print("\n\npTotalError")
         print(np.matrix.round(pTotalError, 2))
+
+        # Calculate the determinant of the adjugate matrix (transpose of the cofactor matrix)
+        m = np.linalg.det(pTotalError)
+        c = [[i for i in range(3)] for j in range(3)]
+
+        for i in range(3):
+            for j in range(3):
+                c[i][j] = (-1) * (i + j) * m
+
+        print("Determinant of the adjugate matrix")
+        print(np.linalg.det(c))
         print("+++++++++++++++++++++++++++++++++++")
 
         # *** add condition based on pError
         enable = True
 
-        return enable
+        return enable, anglesStdV, shiftXStdV, shiftYStdV
 
     # def generateTsIdList(self):
     #     tsIdList = []
