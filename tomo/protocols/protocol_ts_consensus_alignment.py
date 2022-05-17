@@ -333,6 +333,10 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 for i in range(Nti):  # Iterate each tilt-image
                     p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
 
+                    print(Mset[j][i])
+                    print(Mset[k][i])
+                    print("-----------------------------------")
+
                 # Calculate error matrix given a calculated p matrix (for a pair of matrices)
                 p /= Nti  # Normalized by the number of comparisons performed
                 print("p")
