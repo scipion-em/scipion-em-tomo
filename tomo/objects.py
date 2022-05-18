@@ -298,7 +298,7 @@ class TiltSeriesBase(data.SetOfImages):
         return x, y, z
         # x, y, z are floats in Angstroms
 
-    def updateOriginWithResize(self,  resizeFactor):
+    def updateOriginWithResize(self, resizeFactor):
         """ Method to update the origin after resizing the TiltSeries. """
 
         origin = self.getOrigin()
@@ -316,7 +316,7 @@ class TiltSeriesBase(data.SetOfImages):
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
-    def applyTransform(self, outputFilePath, swapXY = False):
+    def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
         newStack = True
@@ -918,6 +918,7 @@ class SetOfTomograms(data.SetOfVolumes):
 class TomoMask(Tomogram):
     """ Object used to represent segmented tomograms
     """
+
     def __init__(self, **kwargs):
         Tomogram.__init__(self, **kwargs)
         self._volName = String()
@@ -984,7 +985,7 @@ class Coordinate3D(data.EMObject):
     def setX(self, x, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        self._x.set(x + self._getOffset(0,originFunction))
+        self._x.set(x + self._getOffset(0, originFunction))
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
@@ -993,13 +994,13 @@ class Coordinate3D(data.EMObject):
         """ See getPosition method for a full description of how "originFunction"
         works"""
 
-        return self._y.get() - self._getOffset(1,originFunction)
+        return self._y.get() - self._getOffset(1, originFunction)
 
     def setY(self, y, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
 
-        self._y.set(y + self._getOffset(1,originFunction))
+        self._y.set(y + self._getOffset(1, originFunction))
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
@@ -1007,12 +1008,12 @@ class Coordinate3D(data.EMObject):
     def getZ(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
         works"""
-        return self._z.get() - self._getOffset(2,originFunction)
+        return self._z.get() - self._getOffset(2, originFunction)
 
     def setZ(self, z, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        self._z.set(z + self._getOffset(2,originFunction))
+        self._z.set(z + self._getOffset(2, originFunction))
 
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
@@ -1580,7 +1581,6 @@ class LandmarkModel(data.EMObject):
         self._modelName = String(modelName)
         self._tiltSeries = Pointer(objDoStore=False)
 
-
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
 
@@ -1690,7 +1690,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer = False):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:
@@ -1837,7 +1837,7 @@ class CTFTomo(data.CTFModel):
         newCTFTomo = CTFTomo()
         newCTFTomo.copyAttributes(ctfModel, '_defocusU', '_defocusV',
                                   '_defocusAngle', '_defocusRatio', '_psdFile',
-                                  '_resolution',  '_fitQuality')
+                                  '_resolution', '_fitQuality')
         return newCTFTomo
 
     def getIndex(self):
@@ -2108,14 +2108,14 @@ class CTFTomo(data.CTFModel):
 
     def isDefocusUDeviationInRange(self, mean, percentage=20):
         defocusUDeviation = self.getDefocusUDeviation(mean)
-        return True if defocusUDeviation < (percentage * mean/100) else False
+        return True if defocusUDeviation < (percentage * mean / 100) else False
 
     def getDefocusVDeviation(self, mean):
         return abs(self.getDefocusV() - mean)
 
     def isDefocusVDeviationInRange(self, mean, percentage=20):
         defocusVDeviation = self.getDefocusVDeviation(mean)
-        return True if defocusVDeviation < (percentage * mean/100) else False
+        return True if defocusVDeviation < (percentage * mean / 100) else False
 
 
 class CTFTomoSeries(data.EMSet):
@@ -2372,5 +2372,3 @@ class SetOfCTFTomoSeries(data.EMSet):
         else:
             self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
             return self._idDict.get(tsId, None)
-
-
