@@ -52,3 +52,16 @@ ERR_NO_TOMOMASKS_GEN = 'No tomomasks were generated. Check the output log for mo
 ERR_NON_MATCHING_TOMOS = 'No matching tomograms were found with the input tomomasks. The match is carried out by ' \
                          'checking if the tsId of each tomogram is contained in the basename of the tomomaks. If ' \
                          'the tomograms do not have that attribute, then the base name is considered.'
+
+
+# ---------------------------- TRANSFORMATION MATRIX Conventions ----------------------------
+
+# A detailed description of the transformation convention adopted by Scipion and its conversion to other packages is
+# available in the help of the function "convertMatrix" defined in the "objects.py" file
+TR_SCIPION = None
+TR_RELION = "relion"
+TR_EMAN = "eman"
+
+# Conversion direction constants
+SET = "set"
+GET = "get"

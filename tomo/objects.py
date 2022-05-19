@@ -44,6 +44,80 @@ from pwem.emlib.image import ImageHandler
 import tomo.constants as const
 
 
+def convertMatrix(M, convention=None, direction=None):
+    """
+            Parameters:
+                - M --> Transformation matrix
+                - convention --> One of the valid conventions to convert M. It can be:
+                    * None         : Return the matrix stored in the metadata (Scipion convention).
+                    * relion (str) : Relion matrix convention
+                    * eman (str)   : Eman matrix convention
+                - direction --> Determine how to perform the conversion (not considered if convention is None):
+                    * 'get' (str)   : Convert the matrix stored in metadata (Scipion definition) to the given 'convention'
+                    * 'set' (str)   : Convert the matrix from the given 'convention' to Scipion definition
+
+            Scipion transformation matrix definition is described in detailed below:
+
+               Notation:
+                    - r      --> A 3D position vector
+                    - f'(r)  --> Moved map
+                    - f(r)   --> Reference
+                    - M      --> Matrix to be stored by Scipion
+                    - @      --> Matrix product
+
+               Definition:
+
+                   f'(r) = f(M@r)
+
+               Example:
+
+                   If r = (0,0,0,1) = o (origin vector) and M is a translation only transformation matrix
+                   of the form:
+
+                        M = [[1,0,0,0],[0,1,0,0],[0,0,0,1],[-dx,-dy,-dz,1]]
+
+                   Being dx, dy, and dz a infinitesimally small displacement, then our transformation
+                   verifies that:
+
+                        f'(o) = f(M@o) = [-dx,-dy,-dz,1]
+
+            We include conversions to the following matrix conventions:
+
+                - Eman: Same as Scipion convention
+
+                - Relion:
+                    Notation:
+                        - X'  -->  inverse of a matrix
+                        - T   -->  translation matrix
+                        - R   ---> rotation matrix
+                        - M   -->  Scipion transformation matrix
+                        - N   -->  Relion transformation matrix
+                        - @   -->  Matrix multiplication
+
+                    Conversion Scipion --> Relion
+                        M = R@T' => T = M'@R
+                        *** N = T@R = M'@R@R ***
+
+                    Conversion Relion --> Scipion
+                        N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
+            """
+
+    if convention is None or convention == "eman":
+        return M
+    elif direction == 'get' and convention == 'relion':
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Mi = np.linalg.inv(M)
+        return Mi @ R @ R
+    elif direction == 'set' and convention == 'relion':
+        # Rotation matrix. Remove translation from the Scipion matrix
+        R = np.eye(4)
+        R[:3, :3] = M[:3, :3]
+        Mi = np.linalg.inv(M)
+        return R @ R @ Mi
+
+
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
 
@@ -224,7 +298,7 @@ class TiltSeriesBase(data.SetOfImages):
         return x, y, z
         # x, y, z are floats in Angstroms
 
-    def updateOriginWithResize(self,  resizeFactor):
+    def updateOriginWithResize(self, resizeFactor):
         """ Method to update the origin after resizing the TiltSeries. """
 
         origin = self.getOrigin()
@@ -242,7 +316,7 @@ class TiltSeriesBase(data.SetOfImages):
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
-    def applyTransform(self, outputFilePath):
+    def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
         newStack = True
@@ -251,21 +325,34 @@ class TiltSeries(TiltSeriesBase):
             for index, ti in enumerate(self):
                 if ti.hasTransform():
                     if newStack:
-                        ih.createEmptyImage(fnOut=outputFilePath,
-                                            xDim=ti.getXDim(),
-                                            yDim=ti.getYDim(),
-                                            nDim=self.getSize())
-                        newStack = False
+                        if swapXY:
+                            ih.createEmptyImage(fnOut=outputFilePath,
+                                                xDim=ti.getYDim(),
+                                                yDim=ti.getXDim(),
+                                                nDim=self.getSize())
+                            newStack = False
+                        else:
+                            ih.createEmptyImage(fnOut=outputFilePath,
+                                                xDim=ti.getXDim(),
+                                                yDim=ti.getYDim(),
+                                                nDim=self.getSize())
+                            newStack = False
                     transform = ti.getTransform().getMatrix()
                     transformArray = np.array(transform)
-                    ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                      outputFile=str(index + 1) + '@' + outputFilePath,
-                                      transformMatrix=transformArray,
-                                      shape=(ti.getYDim(), ti.getXDim()))
+                    if swapXY:
+                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                          outputFile=str(index + 1) + '@' + outputFilePath,
+                                          transformMatrix=transformArray,
+                                          shape=(ti.getXDim(), ti.getYDim()))
+                    else:
+                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                          outputFile=str(index + 1) + '@' + outputFilePath,
+                                          transformMatrix=transformArray,
+                                          shape=(ti.getYDim(), ti.getXDim()))
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
-            path.createLink(inputFilePath, outputFilePath)
+            path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -274,7 +361,7 @@ class TiltSeries(TiltSeriesBase):
                             self._firstDim[1])
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
-        '''Writes an artifitial newst.com file'''
+        """Writes an artificial newst.com file"""
         newstcomPath = ts_folder + '/newst.com'
         pathi = self.getTsId()
         taperAtFill = kwargs.get('taperAtFill', (1, 0))
@@ -303,7 +390,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         return newstcomPath
 
     def writeTiltcomFile(self, ts_folder, **kwargs):
-        '''Writes an artifitial tilt.com file'''
+        """Writes an artificial tilt.com file"""
         tiltcomPath = ts_folder + '/tilt.com'
         pathi = self.getTsId()
         thickness = kwargs.get('thickness', 500)
@@ -317,6 +404,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+
+        dims = (self.getDim()[0], self.getDim()[1])
+        if kwargs.get('swapDims', False):
+            dims = (dims[1], dims[0])
 
         with open(tiltcomPath, 'w') as f:
             f.write('$tilt -StandardInput\n\
@@ -333,7 +424,7 @@ SCALE {} {}\n\
 PERPENDICULAR\n\
 MODE {}\n\
 FULLIMAGE {} {}\n\
-SUBSETSTART 0 0\n\
+SUBSETSTART {} {}\n\
 AdjustOrigin\n\
 ActionIfGPUFails {},{}\n\
 XTILTFILE {}.xtilt\n\
@@ -342,7 +433,7 @@ SHIFT {} {}\n\
 $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        radial[0], radial[1], xAxisTill, log,
                                        scale[0], scale[1], mode,
-                                       self.getDim()[0], self.getDim()[1],
+                                       dims[0], dims[1],
                                        subsetStart[0], subsetStart[1],
                                        actionIfGPUFails[0], actionIfGPUFails[1],
                                        pathi, offset, shift[0], shift[1]))
@@ -833,6 +924,7 @@ class SetOfTomograms(data.SetOfVolumes):
 class TomoMask(Tomogram):
     """ Object used to represent segmented tomograms
     """
+
     def __init__(self, **kwargs):
         Tomogram.__init__(self, **kwargs)
         self._volName = String()
@@ -899,7 +991,7 @@ class Coordinate3D(data.EMObject):
     def setX(self, x, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        self._x.set(x + self._getOffset(0,originFunction))
+        self._x.set(x + self._getOffset(0, originFunction))
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
@@ -908,13 +1000,13 @@ class Coordinate3D(data.EMObject):
         """ See getPosition method for a full description of how "originFunction"
         works"""
 
-        return self._y.get() - self._getOffset(1,originFunction)
+        return self._y.get() - self._getOffset(1, originFunction)
 
     def setY(self, y, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
 
-        self._y.set(y + self._getOffset(1,originFunction))
+        self._y.set(y + self._getOffset(1, originFunction))
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
@@ -922,26 +1014,27 @@ class Coordinate3D(data.EMObject):
     def getZ(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
         works"""
-        return self._z.get() - self._getOffset(2,originFunction)
+        return self._z.get() - self._getOffset(2, originFunction)
 
     def setZ(self, z, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        self._z.set(z + self._getOffset(2,originFunction))
+        self._z.set(z + self._getOffset(2, originFunction))
 
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
 
-    def setMatrix(self, matrix):
-        self._eulerMatrix.setMatrix(matrix)
+    def setMatrix(self, matrix, convention=None):
+        self._eulerMatrix.setMatrix(convertMatrix(matrix, direction=const.SET, convention=convention))
 
-    def getMatrix(self):
-        return self._eulerMatrix.getMatrix()
+    def getMatrix(self, convention=None):
+        return convertMatrix(self._eulerMatrix.getMatrix(), direction=const.GET, convention=convention)
 
     def hasTransform(self):
         return self._eulerMatrix is not None
 
     def euler2Matrix(self, r, p, y):
+        # FIXME: Queremos mantener esta conversion? Puede ser muy lioso
         self._eulerMatrix.setMatrix(euler_matrix(r, p, y))
 
     def eulerAngles(self):
@@ -1327,6 +1420,19 @@ class SubTomogram(data.Volume):
             origin = self.getShiftsFromOrigin()
             return int(origin[0] / sr), int(origin[1] / sr), int(origin[2] / sr)
 
+    def setTransform(self, newTransform, convention=None):
+        if newTransform is None:
+            newTransform = Transform()
+            matrix = np.eye(4)
+        else:
+            matrix = newTransform.getMatrix()
+        newTransform.setMatrix(convertMatrix(matrix, direction=const.SET, convention=convention))
+        self._transform = newTransform
+
+    def getTransform(self, convention=None):
+        matrix = self._transform.getMatrix()
+        return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
+
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
@@ -1357,7 +1463,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
         """ Set the SetOfCoordinates associates with
         this set of particles.
          """
-        self._coordsPointer.set(coordinates)
+        if isinstance(coordinates, Pointer):
+            self._coordsPointer = coordinates
+        else:
+            self._coordsPointer.set(coordinates)
 
     def iterSubtomos(self, volume=None, orderBy='id'):
         """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
@@ -1416,10 +1525,11 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         # If not cached
         if tomoId not in self._tomos:
-            tomo = self.getCoordinates3D().get().getPrecedents()[subtomo.getVolId()]
+            tomo = self.getCoordinates3D().getPrecedents()[subtomo.getVolId()]
             self._tomos[tomoId] = tomo
 
         return self._tomos[tomoId]
+
 
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
@@ -1476,7 +1586,6 @@ class LandmarkModel(data.EMObject):
         self._fileName = String(fileName)
         self._modelName = String(modelName)
         self._tiltSeries = Pointer(objDoStore=False)
-
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1587,7 +1696,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer = False):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:
@@ -1734,7 +1843,7 @@ class CTFTomo(data.CTFModel):
         newCTFTomo = CTFTomo()
         newCTFTomo.copyAttributes(ctfModel, '_defocusU', '_defocusV',
                                   '_defocusAngle', '_defocusRatio', '_psdFile',
-                                  '_resolution',  '_fitQuality')
+                                  '_resolution', '_fitQuality')
         return newCTFTomo
 
     def getIndex(self):
@@ -2005,14 +2114,14 @@ class CTFTomo(data.CTFModel):
 
     def isDefocusUDeviationInRange(self, mean, percentage=20):
         defocusUDeviation = self.getDefocusUDeviation(mean)
-        return True if defocusUDeviation < (percentage * mean/100) else False
+        return True if defocusUDeviation < (percentage * mean / 100) else False
 
     def getDefocusVDeviation(self, mean):
         return abs(self.getDefocusV() - mean)
 
     def isDefocusVDeviationInRange(self, mean, percentage=20):
         defocusVDeviation = self.getDefocusVDeviation(mean)
-        return True if defocusVDeviation < (percentage * mean/100) else False
+        return True if defocusVDeviation < (percentage * mean / 100) else False
 
 
 class CTFTomoSeries(data.EMSet):
@@ -2185,6 +2294,7 @@ class SetOfCTFTomoSeries(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._idDict = {}
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
@@ -2251,19 +2361,20 @@ class SetOfCTFTomoSeries(data.EMSet):
         return classItem
 
     def iterItems(self, orderBy='id', direction='ASC'):
-        for item in data.EMSet.iterItems(self,
-                                         orderBy=orderBy,
-                                         direction=direction):
+        for item in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction):
 
-            objId = None
-            for tiltSeries in self.getSetOfTiltSeries():
-                if tiltSeries.getTsId() == item.getTsId():
-                    objId = tiltSeries.getObjId()
-
-            if objId is None:
+            ts = self._getTiltSeriesFromTsId(item.getTsId())
+            if ts is None:
                 raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
 
-            item.setTiltSeries(self.getSetOfTiltSeries()[objId])
+            item.setTiltSeries(ts)
             self._setItemMapperPath(item)
 
             yield item
+
+    def _getTiltSeriesFromTsId(self, tsId):
+        if self._idDict:
+            return self._idDict.get(tsId, None)
+        else:
+            self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
+            return self._idDict.get(tsId, None)

@@ -339,24 +339,29 @@ def _getTsIdLabel(setObject):
     return '_tomoId' if type(setObject) in [SetOfCoordinates3D, SetOfSubTomograms] else '_tsId'
 
 
-def recoverTSFromObj(child_obj, protocol):
+def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
     p = protocol.getProject()
-    graph = p.getSourceGraph(False)
-    relations = p.mapper.getRelationsByName(RELATION_SOURCE)
-    n = graph.getNode(child_obj.strId())
-    connection = []
-    while n is not None and not n.getParent().isRoot():
-        n = n.getParent()
-        connection.append(n.pointer.getUniqueId())
-        connection.append(n.pointer.get().strId())
-    for rel in relations:
-        pObj = p.getObject(rel[OBJECT_PARENT_ID])
-        pExt = rel['object_parent_extended']
-        pp = Pointer(pObj, extended=pExt)
-        if pp.getUniqueId() in connection:
-            if isinstance(pObj, SetOfTiltSeries) and pObj.getFirstItem().getFirstItem().hasTransform():
-                return pObj
+    graph = p.getSourceGraph(False)  # Graph with all the relations
+    sourceNode = graph.getNode(sourceObj.strId())  # Node corresponding to the source object
+    # Climb up in the relations graph until the target condition provided in the callback input is fulfilled
+    while not sourceNode.isRoot():
+        relatedOutput = sourceNode.getParent().pointer.get()
+        if stopSearchCallback(relatedOutput):
+            return relatedOutput
+        else:
+            sourceNode = sourceNode.getParent()
     return None
+
+def getNonInterpolatedTsFromRelations(sourceObj, prot):
+    def stopSearchCallback(pObj):
+        return type(pObj) == SetOfTiltSeries and pObj.getFirstItem().getFirstItem().hasTransform()
+    return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
+
+
+def getObjFromRelation(sourceObj, prot, targetObj):
+    def stopSearchCallback(pObj):
+        return type(pObj) == targetObj
+    return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
 def getRotationAngleAndShiftFromTM(ti):
@@ -371,4 +376,3 @@ def getRotationAngleAndShiftFromTM(ti):
     shifts = [tm[0][2], tm[0][2]]
 
     return rotationAngle, shifts
-
