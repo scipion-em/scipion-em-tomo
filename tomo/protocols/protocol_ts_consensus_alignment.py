@@ -280,8 +280,82 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #     # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
     #     return anglesStdV, shiftXStdV, shiftYStdV
 
+
     @staticmethod
     def compareTransformationMatrices(Mset):
+        Nts = len(Mset)
+        Nti = len(Mset[0])
+
+        # Number of possible combinations picking 2 tilt-series out of the set
+        numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
+
+        print("Number of tilt-series analyzed: " + str(Nts))
+        print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+
+        # Matrix for saving the final accumalated error in the whole set
+        pTotalError = np.zeros((3, 3))
+
+        for j in range(1):  # Iterate each tilt-series
+
+            # Calculate p matrix
+            for k in range(j+1, Nts):  # Compare each matrix with the following
+
+                print("\nComparing matrices " + str(j) + " and " + str(k))
+
+                p = np.zeros((3, 3))
+
+                # Calculate p matrix for the pair of tilt-series
+                for i in range(Nti):  # Iterate each tilt-image
+                    p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
+
+                # Calculate error matrix given a calculated p matrix (for a pair of matrices)
+                p /= Nti  # Normalized by the number of comparisons performed
+                print("p")
+                print(np.matrix.round(p, 2))
+
+                pError = np.zeros((3, 3))
+
+                for i in range(Nti):  # Iterate each tilt-image
+                    pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
+
+                pError /= Nti  # Normalized by the number of tilt-images analyzed
+                print("pError")
+                print(np.matrix.round(pError, 2))
+
+                # Add the matrix error for a given pair of matrices to the total error matrix
+                pTotalError += pError
+
+        # Normalize the total error matrix
+        pTotalError /= numberOfCombinations
+
+        print("\n\npTotalError")
+        print(np.matrix.round(pTotalError, 2))
+
+        # Calculate the determinant of the adjugate matrix (transpose of the cofactor matrix)
+        m = np.linalg.det(pTotalError)
+        c = [[i for i in range(3)] for j in range(3)]
+
+        for i in range(3):
+            for j in range(3):
+                c[i][j] = (-1) * (i + j) * m
+
+        print("Determinant of the adjugate matrix")
+        print(np.linalg.det(c))
+        print("+++++++++++++++++++++++++++++++++++")
+
+        # *** add condition based on pError
+        enable = True
+
+        return enable, anglesStdV, shiftXStdV, shiftYStdV
+
+
+
+
+
+
+
+    @staticmethod
+    def compareTransformationMatricesBis(Mset):
         Nts = len(Mset)
         Nti = len(Mset[0])
 
