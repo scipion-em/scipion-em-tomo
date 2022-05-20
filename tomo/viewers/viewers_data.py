@@ -224,12 +224,15 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         return None
 
 
-class Coordinates3DDataViewer(DataViewer):
-    """ Wrapper to visualize SetOfCoordinates3D
+class TomoMetadataDataViewer(DataViewer):
+    """ Wrapper to visualize any Set of something different than a set of images, useful to make subsets
         with the Xmipp program xmipp_showj
         """
-    _environments = [pwviewer.DESKTOP_TKINTER, pwviewer.WEB_DJANGO]
-    _targets = [tomo.objects.SetOfCoordinates3D]
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [tomo.objects.SetOfCoordinates3D,
+                tomo.objects.SetOfTiltSeriesCoordinates,
+                tomo.objects.SetOfMeshes,
+                tomo.objects.SetOfLandmarkModels]
     _label = 'XmippDataViewer'
 
     def __init__(self, **kwargs):
