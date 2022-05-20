@@ -2357,3 +2357,115 @@ class SetOfCTFTomoSeries(data.EMSet):
             self._setItemMapperPath(item)
 
             yield item
+
+
+class TiltSeriesCoordinate(data.EMObject):
+    """This class holds the (x,y,z) positions, in angstroms, and other information
+    associated with a coordinate related to a tilt series"""
+
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._x = Float()
+        self._y = Float()
+        self._z = Float()
+        # Used to access to the corresponding tilt series from each coord (it's the tsId)
+        self._tsId = String(kwargs.get('tsId', None))
+
+    def copyInfo(self, coord):
+        """ Copy information from other coordinate. """
+        self.setPosition(*coord.getPosition())
+        self.setTsId(coord.getTsId())
+        self.setObjId(coord.getObjId())
+
+    def getX(self):
+        """ Returns the X dimension (Å) of the coordinate"""
+        return self._x.get()
+
+    def setX(self, x):
+        """ Sets the x dimension (Å) of the coordinate """
+        self._x.set(x)
+
+    def getY(self):
+        """ Returns the Y dimension (Å) of the coordinate"""
+        return self._y.get()
+
+    def setY(self, y):
+        """ Sets the Y dimension of (Å) the coordinate"""
+        self._y.set(y)
+
+    def getZ(self):
+        """ Returns the Z dimension (Å) of the coordinate"""
+        return self._z.get()
+
+    def setZ(self, z):
+        """ Sets the Z dimension (Å) of the coordinate"""
+        self._z.set(z)
+
+    def getPosition(self, sampling_rate=1):
+        """Returns the position a TiltSeriesCoordinate in a tuple at a specific sampling rate (optional)"""
+        return self.getX()/sampling_rate, self.getY()/sampling_rate, self.getZ()/sampling_rate
+
+    def setPosition(self, x, y, z, sampling_rate):
+        """Set the position of the coordinate
+            :param int x: Position of the coordinate in the X axis
+            :param int y: Position of the coordinate in the Y axis
+            :param int z: Position of the coordinate in the Z axis
+            :param flat sampling_rate: sampling rate in which x,y,z are measured. Default 1 = Å
+        """
+        self.setX(x*sampling_rate)
+        self.setY(y*sampling_rate)
+        self.setZ(z*sampling_rate)
+
+    def getTsId(self):
+        return self._tsId.get()
+
+    def setTsId(self, tsId):
+        self._tsId.set(tsId)
+
+
+class SetOfTiltSeriesCoordinates(data.EMSet):
+    """ Encapsulate the logic of a set of tilt series coordinates.
+    Each coordinate has a (x,y,z) position in scipion's convention.
+    Scipion's convention is the center of a theoretical volume when applying
+    the tilt series transformation matrix:
+    X0 --> half x dimension
+    Y0 --> half y dimension
+    Z0 --> half z of a theoretical volume?
+    """
+    ITEM_TYPE = TiltSeriesCoordinate
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._tiltSeriesPointer = Pointer()
+
+    def getTiltSeries(self):
+        """ Returns the Tilt Series associated with
+                this SetOfTiltSeriesCoordinates"""
+        return self._tiltSeriesPointer.get()
+
+    def setTiltSeries(self, tiltseries):
+        """ Set the Tilt Series associated with this set of coordinates.
+
+            Params:
+
+            tiltseries: Tilt Series object or a pointer to it.
+                """
+        if tiltseries.isPointer():
+            self._tiltSeriesPointer.copy(tiltseries)
+        else:
+            self._tiltSeriesPointer.set(tiltseries)
+
+    def getSummary(self):
+        summary = []
+        summary.append("Number of tilt series coordinates: %s" % self.getSize())
+        return "\n".join(summary)
+
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but not _mapperPath or _size
+        from other set of objects to current one.
+        """
+        self.setTiltSeries(other.getTiltSeries())
+
+
+
+
