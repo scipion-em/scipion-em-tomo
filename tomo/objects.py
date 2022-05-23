@@ -316,7 +316,7 @@ class TiltSeriesBase(data.SetOfImages):
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
-    def applyTransform(self, outputFilePath):
+    def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
         newStack = True
@@ -325,21 +325,34 @@ class TiltSeries(TiltSeriesBase):
             for index, ti in enumerate(self):
                 if ti.hasTransform():
                     if newStack:
-                        ih.createEmptyImage(fnOut=outputFilePath,
-                                            xDim=ti.getXDim(),
-                                            yDim=ti.getYDim(),
-                                            nDim=self.getSize())
-                        newStack = False
+                        if swapXY:
+                            ih.createEmptyImage(fnOut=outputFilePath,
+                                                xDim=ti.getYDim(),
+                                                yDim=ti.getXDim(),
+                                                nDim=self.getSize())
+                            newStack = False
+                        else:
+                            ih.createEmptyImage(fnOut=outputFilePath,
+                                                xDim=ti.getXDim(),
+                                                yDim=ti.getYDim(),
+                                                nDim=self.getSize())
+                            newStack = False
                     transform = ti.getTransform().getMatrix()
                     transformArray = np.array(transform)
-                    ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                      outputFile=str(index + 1) + '@' + outputFilePath,
-                                      transformMatrix=transformArray,
-                                      shape=(ti.getYDim(), ti.getXDim()))
+                    if swapXY:
+                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                          outputFile=str(index + 1) + '@' + outputFilePath,
+                                          transformMatrix=transformArray,
+                                          shape=(ti.getXDim(), ti.getYDim()))
+                    else:
+                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                          outputFile=str(index + 1) + '@' + outputFilePath,
+                                          transformMatrix=transformArray,
+                                          shape=(ti.getYDim(), ti.getXDim()))
                 else:
                     raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
         else:
-            path.createLink(inputFilePath, outputFilePath)
+            path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -348,7 +361,7 @@ class TiltSeries(TiltSeriesBase):
                             self._firstDim[1])
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
-        '''Writes an artifitial newst.com file'''
+        """Writes an artificial newst.com file"""
         newstcomPath = ts_folder + '/newst.com'
         pathi = self.getTsId()
         taperAtFill = kwargs.get('taperAtFill', (1, 0))
@@ -377,7 +390,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         return newstcomPath
 
     def writeTiltcomFile(self, ts_folder, **kwargs):
-        '''Writes an artifitial tilt.com file'''
+        """Writes an artificial tilt.com file"""
         tiltcomPath = ts_folder + '/tilt.com'
         pathi = self.getTsId()
         thickness = kwargs.get('thickness', 500)
@@ -391,6 +404,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+
+        dims = (self.getDim()[0], self.getDim()[1])
+        if kwargs.get('swapDims', False):
+            dims = (dims[1], dims[0])
 
         with open(tiltcomPath, 'w') as f:
             f.write('$tilt -StandardInput\n\
@@ -407,7 +424,7 @@ SCALE {} {}\n\
 PERPENDICULAR\n\
 MODE {}\n\
 FULLIMAGE {} {}\n\
-SUBSETSTART 0 0\n\
+SUBSETSTART {} {}\n\
 AdjustOrigin\n\
 ActionIfGPUFails {},{}\n\
 XTILTFILE {}.xtilt\n\
@@ -416,7 +433,7 @@ SHIFT {} {}\n\
 $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        radial[0], radial[1], xAxisTill, log,
                                        scale[0], scale[1], mode,
-                                       self.getDim()[0], self.getDim()[1],
+                                       dims[0], dims[1],
                                        subsetStart[0], subsetStart[1],
                                        actionIfGPUFails[0], actionIfGPUFails[1],
                                        pathi, offset, shift[0], shift[1]))
@@ -901,6 +918,7 @@ class SetOfTomograms(data.SetOfVolumes):
 class TomoMask(Tomogram):
     """ Object used to represent segmented tomograms
     """
+
     def __init__(self, **kwargs):
         Tomogram.__init__(self, **kwargs)
         self._volName = String()
@@ -967,7 +985,7 @@ class Coordinate3D(data.EMObject):
     def setX(self, x, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        self._x.set(x + self._getOffset(0,originFunction))
+        self._x.set(x + self._getOffset(0, originFunction))
 
     def shiftX(self, shiftX):
         self._x.sum(shiftX)
@@ -976,13 +994,13 @@ class Coordinate3D(data.EMObject):
         """ See getPosition method for a full description of how "originFunction"
         works"""
 
-        return self._y.get() - self._getOffset(1,originFunction)
+        return self._y.get() - self._getOffset(1, originFunction)
 
     def setY(self, y, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
 
-        self._y.set(y + self._getOffset(1,originFunction))
+        self._y.set(y + self._getOffset(1, originFunction))
 
     def shiftY(self, shiftY):
         self._y.sum(shiftY)
@@ -990,12 +1008,12 @@ class Coordinate3D(data.EMObject):
     def getZ(self, originFunction):
         """ See getPosition method for a full description of how "originFunction"
         works"""
-        return self._z.get() - self._getOffset(2,originFunction)
+        return self._z.get() - self._getOffset(2, originFunction)
 
     def setZ(self, z, originFunction):
         """ See setPosition method for a full description of how "originFunction"
         works"""
-        self._z.set(z + self._getOffset(2,originFunction))
+        self._z.set(z + self._getOffset(2, originFunction))
 
     def shiftZ(self, shiftZ):
         self._z.sum(shiftZ)
@@ -1439,7 +1457,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
         """ Set the SetOfCoordinates associates with
         this set of particles.
          """
-        self._coordsPointer.set(coordinates)
+        if isinstance(coordinates, Pointer):
+            self._coordsPointer = coordinates
+        else:
+            self._coordsPointer.set(coordinates)
 
     def iterSubtomos(self, volume=None, orderBy='id'):
         """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
@@ -1498,10 +1519,11 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         # If not cached
         if tomoId not in self._tomos:
-            tomo = self.getCoordinates3D().get().getPrecedents()[subtomo.getVolId()]
+            tomo = self.getCoordinates3D().getPrecedents()[subtomo.getVolId()]
             self._tomos[tomoId] = tomo
 
         return self._tomos[tomoId]
+
 
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
@@ -1558,7 +1580,6 @@ class LandmarkModel(data.EMObject):
         self._fileName = String(fileName)
         self._modelName = String(modelName)
         self._tiltSeries = Pointer(objDoStore=False)
-
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1669,7 +1690,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer = False):
+    def getSetOfTiltSeries(self, pointer=False):
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:
@@ -1816,7 +1837,7 @@ class CTFTomo(data.CTFModel):
         newCTFTomo = CTFTomo()
         newCTFTomo.copyAttributes(ctfModel, '_defocusU', '_defocusV',
                                   '_defocusAngle', '_defocusRatio', '_psdFile',
-                                  '_resolution',  '_fitQuality')
+                                  '_resolution', '_fitQuality')
         return newCTFTomo
 
     def getIndex(self):
@@ -2087,14 +2108,14 @@ class CTFTomo(data.CTFModel):
 
     def isDefocusUDeviationInRange(self, mean, percentage=20):
         defocusUDeviation = self.getDefocusUDeviation(mean)
-        return True if defocusUDeviation < (percentage * mean/100) else False
+        return True if defocusUDeviation < (percentage * mean / 100) else False
 
     def getDefocusVDeviation(self, mean):
         return abs(self.getDefocusV() - mean)
 
     def isDefocusVDeviationInRange(self, mean, percentage=20):
         defocusVDeviation = self.getDefocusVDeviation(mean)
-        return True if defocusVDeviation < (percentage * mean/100) else False
+        return True if defocusVDeviation < (percentage * mean / 100) else False
 
 
 class CTFTomoSeries(data.EMSet):
@@ -2267,6 +2288,7 @@ class SetOfCTFTomoSeries(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
+        self._idDict = {}
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
@@ -2333,19 +2355,132 @@ class SetOfCTFTomoSeries(data.EMSet):
         return classItem
 
     def iterItems(self, orderBy='id', direction='ASC'):
-        for item in data.EMSet.iterItems(self,
-                                         orderBy=orderBy,
-                                         direction=direction):
+        for item in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction):
 
-            objId = None
-            for tiltSeries in self.getSetOfTiltSeries():
-                if tiltSeries.getTsId() == item.getTsId():
-                    objId = tiltSeries.getObjId()
-
-            if objId is None:
+            ts = self._getTiltSeriesFromTsId(item.getTsId())
+            if ts is None:
                 raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
 
-            item.setTiltSeries(self.getSetOfTiltSeries()[objId])
+            item.setTiltSeries(ts)
             self._setItemMapperPath(item)
 
             yield item
+
+    def _getTiltSeriesFromTsId(self, tsId):
+        if self._idDict:
+            return self._idDict.get(tsId, None)
+        else:
+            self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
+            return self._idDict.get(tsId, None)
+
+
+class TiltSeriesCoordinate(data.EMObject):
+    """This class holds the (x,y,z) positions, in angstroms, and other information
+    associated with a coordinate related to a tilt series"""
+
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self._x = Float()
+        self._y = Float()
+        self._z = Float()
+        # Used to access to the corresponding tilt series from each coord (it's the tsId)
+        self._tsId = String(kwargs.get('tsId', None))
+
+    def copyInfo(self, coord):
+        """ Copy information from other coordinate. """
+        self.setPosition(*coord.getPosition())
+        self.setTsId(coord.getTsId())
+        self.setObjId(coord.getObjId())
+
+    def getX(self):
+        """ Returns the X dimension (Å) of the coordinate"""
+        return self._x.get()
+
+    def setX(self, x):
+        """ Sets the x dimension (Å) of the coordinate """
+        self._x.set(x)
+
+    def getY(self):
+        """ Returns the Y dimension (Å) of the coordinate"""
+        return self._y.get()
+
+    def setY(self, y):
+        """ Sets the Y dimension of (Å) the coordinate"""
+        self._y.set(y)
+
+    def getZ(self):
+        """ Returns the Z dimension (Å) of the coordinate"""
+        return self._z.get()
+
+    def setZ(self, z):
+        """ Sets the Z dimension (Å) of the coordinate"""
+        self._z.set(z)
+
+    def getPosition(self, sampling_rate=1):
+        """Returns the position a TiltSeriesCoordinate in a tuple at a specific sampling rate (optional)"""
+        return self.getX()/sampling_rate, self.getY()/sampling_rate, self.getZ()/sampling_rate
+
+    def setPosition(self, x, y, z, sampling_rate):
+        """Set the position of the coordinate
+            :param int x: Position of the coordinate in the X axis
+            :param int y: Position of the coordinate in the Y axis
+            :param int z: Position of the coordinate in the Z axis
+            :param flat sampling_rate: sampling rate in which x,y,z are measured. Default 1 = Å
+        """
+        self.setX(x*sampling_rate)
+        self.setY(y*sampling_rate)
+        self.setZ(z*sampling_rate)
+
+    def getTsId(self):
+        return self._tsId.get()
+
+    def setTsId(self, tsId):
+        self._tsId.set(tsId)
+
+
+class SetOfTiltSeriesCoordinates(data.EMSet):
+    """ Encapsulate the logic of a set of tilt series coordinates.
+    Each coordinate has a (x,y,z) position in scipion's convention.
+    Scipion's convention is the center of a theoretical volume when applying
+    the tilt series transformation matrix:
+    X0 --> half x dimension
+    Y0 --> half y dimension
+    Z0 --> half z of a theoretical volume?
+    """
+    ITEM_TYPE = TiltSeriesCoordinate
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._tiltSeriesPointer = Pointer()
+
+    def getTiltSeries(self):
+        """ Returns the Tilt Series associated with
+                this SetOfTiltSeriesCoordinates"""
+        return self._tiltSeriesPointer.get()
+
+    def setTiltSeries(self, tiltseries):
+        """ Set the Tilt Series associated with this set of coordinates.
+
+            Params:
+
+            tiltseries: Tilt Series object or a pointer to it.
+                """
+        if tiltseries.isPointer():
+            self._tiltSeriesPointer.copy(tiltseries)
+        else:
+            self._tiltSeriesPointer.set(tiltseries)
+
+    def getSummary(self):
+        summary = []
+        summary.append("Number of tilt series coordinates: %s" % self.getSize())
+        return "\n".join(summary)
+
+    def copyInfo(self, other):
+        """ Copy basic information (id and other properties) but not _mapperPath or _size
+        from other set of objects to current one.
+        """
+        self.setTiltSeries(other.getTiltSeries())
+
+
+
+

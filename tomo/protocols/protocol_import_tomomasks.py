@@ -64,6 +64,7 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             raise Exception(ERR_NO_TOMOMASKS_GEN)
 
         self._defineOutputs(outputTomoMasks=tomoMaskSet)
+        self._defineSourceRelation(self.inputTomos.get(), tomoMaskSet)
 
     # --------------------------- INFO functions ------------------------------
     def _getTomMessage(self):
