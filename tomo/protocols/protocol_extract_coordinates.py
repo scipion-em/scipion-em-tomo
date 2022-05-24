@@ -116,9 +116,15 @@ class ProtTomoExtractCoords(ProtTomoPicking):
                     newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
                     newCoord.setBoxSize(boxSize)
                     transformation = checkMatrix(subTomo)
-                    transformation[0, 3] *= scale
-                    transformation[1, 3] *= scale
-                    transformation[2, 3] *= scale
+
+                    A = transformation[:3,:3]
+                    T = np.linalg.inv(A) @ transformation
+                    T[:3, 3] *= scale
+                    transformation = A @ T
+
+                    # transformation[0, 3] *= scale
+                    # transformation[1, 3] *= scale
+                    # transformation[2, 3] *= scale
                     newCoord.setMatrix(transformation)
                     if coord.hasGroupId():
                         newCoord.setGroupId(coord.getGroupId())
