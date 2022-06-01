@@ -469,8 +469,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.3f' % transform[2],
                                  '%.3f' % transform[5]]
             else:
-                print(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices).
-                                 'The identity transformation will be written in the .xf file')
+                print(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). The identity transformation will be written in the .xf file')
                 #This is the identity matrix
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
