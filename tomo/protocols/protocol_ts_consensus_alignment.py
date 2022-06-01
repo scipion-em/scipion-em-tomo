@@ -103,7 +103,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             # anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
             # anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
 
-            enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
+            # enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
+            enable = self.compareTransformationMatrices(Mset)
 
             ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
             newTs = TiltSeries(tsId=tsId)
@@ -117,12 +118,12 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 newTi.setLocation(ti.getLocation())
                 newTi.setTransform(ti.getTransform())
 
-                # newTi._angleAvg = Float(anglesAvgV[i])
-                newTi._angleStd = Float(anglesStdV[i])
-                # newTi._shiftXAvg = Float(shiftXAvgV[i])
-                newTi._shiftXStd = Float(shiftXStdV[i])
-                # newTi._shiftYAvg = Float(shiftYAvgV[i])
-                newTi._shiftYStd = Float(shiftYStdV[i])
+                # # newTi._angleAvg = Float(anglesAvgV[i])
+                # newTi._angleStd = Float(anglesStdV[i])
+                # # newTi._shiftXAvg = Float(shiftXAvgV[i])
+                # newTi._shiftXStd = Float(shiftXStdV[i])
+                # # newTi._shiftYAvg = Float(shiftYAvgV[i])
+                # newTi._shiftYStd = Float(shiftYStdV[i])
 
                 newTs.append(newTi)
 
@@ -280,7 +281,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #     # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
     #     return anglesStdV, shiftXStdV, shiftYStdV
 
-
     @staticmethod
     def compareTransformationMatrices(Mset):
         Nts = len(Mset)
@@ -292,67 +292,114 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         print("Number of tilt-series analyzed: " + str(Nts))
         print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
 
-        # Matrix for saving the final accumalated error in the whole set
+        # Matrix for saving the final accumulated error in the whole set
         pTotalError = np.zeros((3, 3))
 
-        for j in range(1):  # Iterate each tilt-series
+        # Matrix saving the module error from comparing matrices
+        # moduleErrorMatrix = np.zeros((Nts, Nts))
 
-            # Calculate p matrix
-            for k in range(j+1, Nts):  # Compare each matrix with the following
+        # Vectors for angle and shift average errors between tilt-series
+        avgAngleErrorsV = np.zeros(Nts)
+        avgShiftErrorsV = np.zeros(Nts)
 
-                print("\nComparing matrices " + str(j) + " and " + str(k))
+        # Calculate p matrix
+        for k in range(1, Nts):  # Compare each matrix with the following
 
-                p = np.zeros((3, 3))
+            print("\nComparing matrices " + str(0) + " and " + str(k))
 
-                # Calculate p matrix for the pair of tilt-series
-                for i in range(Nti):  # Iterate each tilt-image
-                    p += np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i]))
+            p = np.zeros((3, 3))
 
-                # Calculate error matrix given a calculated p matrix (for a pair of matrices)
-                p /= Nti  # Normalized by the number of comparisons performed
-                print("p")
-                print(np.matrix.round(p, 2))
+            # Calculate p matrix for the pair of tilt-series
+            for i in range(Nti):  # Iterate each tilt-image
+                p += np.matmul(Mset[0][i], np.linalg.inv(Mset[k][i]))
 
-                pError = np.zeros((3, 3))
+            # Calculate error matrix given a calculated p matrix (for a pair of matrices)
+            p /= Nti  # Normalized by the number of comparisons performed
+            print("p")
+            print(np.matrix.round(p, 2))
 
-                for i in range(Nti):  # Iterate each tilt-image
-                    pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
+            pError = np.zeros((3, 3))
 
-                pError /= Nti  # Normalized by the number of tilt-images analyzed
-                print("pError")
-                print(np.matrix.round(pError, 2))
+            # Calculate error matrix for the pair of tilt-series.
+            for i in range(Nti):  # Iterate each tilt-image
+                # pError += np.absolute(p - np.matmul(Mset[0][i], np.linalg.inv(Mset[k][i])))
 
-                # Add the matrix error for a given pair of matrices to the total error matrix
-                pTotalError += pError
+                # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
+                matrixShiftYCorrected = Mset[k][i]
+                matrixShiftYCorrected[0][1] -= p[0][1]
+                pError += np.absolute(Mset[0][i]-matrixShiftYCorrected)
+
+            pError /= Nti  # Normalized by the number of tilt-images analyzed
+            print("pError")
+            print(np.matrix.round(pError, 2))
+
+            # Angle from pError matrix
+            cosRotationAngle = pError[0][0]
+            sinRotationAngle = pError[1][0]
+            avgAngleErrorsV[k] = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+            # Shifts from pError matrix
+            shiftX = pError[0][2]
+            shiftY = pError[1][2]
+            print(shiftY)
+            print(shiftX)
+            avgShiftErrorsV[k] = (shiftX + shiftY) / 2
+
+            # Add the matrix error for a given pair of matrices to the total error matrix
+            pTotalError += pError
 
         # Normalize the total error matrix
-        pTotalError /= numberOfCombinations
+        pTotalError /= (Nts-1)
 
         print("\n\npTotalError")
         print(np.matrix.round(pTotalError, 2))
 
-        # Calculate the determinant of the adjugate matrix (transpose of the cofactor matrix)
-        m = np.linalg.det(pTotalError)
-        c = [[i for i in range(3)] for j in range(3)]
+        # Angle from pTotalError matrix
+        cosRotationAngle = pTotalError[0][0]
+        sinRotationAngle = pTotalError[1][0]
+        avgAngleError = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
 
-        for i in range(3):
-            for j in range(3):
-                c[i][j] = (-1) * (i + j) * m
+        # Shifts from pTotalError matrix
+        shiftX = pTotalError[0][2]
+        shiftY = pTotalError[1][2]
+        avgShiftError = (shiftX+shiftY) / 2
 
-        print("Determinant of the adjugate matrix")
-        print(np.linalg.det(c))
-        print("+++++++++++++++++++++++++++++++++++")
+        print("Mean shift error vector: " )
+        print(avgShiftErrorsV)
+        print("Mean angle error vector: ")
+        print(avgAngleErrorsV)
 
-        # *** add condition based on pError
-        enable = True
+        print("Mean angle error: " + str(avgAngleError))
+        print("Mean shift error: " + str(avgShiftError))
 
-        return enable, anglesStdV, shiftXStdV, shiftYStdV
+        # Discard series by MAD
+        shiftMedian = np.median(avgShiftErrorsV)
+        angleMedian = np.median(avgAngleErrorsV)
 
+        shiftMAD = 0
+        angleMAD = 0
 
+        for i in range(Nts):
+            shiftMAD += abs(avgShiftErrorsV[i] - shiftMedian)
+            angleMAD += abs(avgAngleErrorsV[i] - angleMedian)
 
+        shiftMAD /= Nts
+        angleMAD /= Nts
 
+        discardedIndexes = []
 
+        for i in range(Nts):
+            if(abs(avgShiftErrorsV[i]-shiftMedian) > 3 * shiftMAD or
+               abs(avgAngleErrorsV[i]-angleMedian) > 3 * angleMAD):
+                discardedIndexes.append([i])
 
+        if len(discardedIndexes != 0):
+            del Mset[discardedIndexes]
+            ProtConsensusAlignmentTS.compareTransformationMatrices(Mset)
+        else:
+            return True
+
+        return True  # enable
 
     @staticmethod
     def compareTransformationMatricesBis(Mset):
@@ -393,7 +440,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             sumShiftYV[i] += shiftY
             sum2ShiftYV[i] += shiftY * shiftY
 
-        # Matrix for saving the final accumalated error in the whole set
+        # Matrix for saving the final accumulated error in the whole set
         pTotalError = np.zeros((3, 3))
 
         for j in range(1):  # Iterate each tilt-series
@@ -438,9 +485,14 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 print("\nComparing matrices " + str(j) + " and " + str(k))
 
-                # Calculate error matrix for the pair of tilt-series
+                # Calculate error matrix for the pair of tilt-series.
                 for i in range(Nti):  # Iterate each tilt-image
-                    pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
+                    # pError += np.absolute(p - np.matmul(Mset[j][i], np.linalg.inv(Mset[k][i])))
+
+                    # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
+                    matrixShiftYCorrected = Mset[k][i]
+                    matrixShiftYCorrected = matrixShiftYCorrected[0][1] - p[0][1]
+                    pError += np.absolute(Mset-matrixShiftYCorrected)
 
                 pError /= Nti  # Normalized by the number of tilt-series analyzed
                 print("pError")
@@ -501,6 +553,30 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         # *** add condition based on pError
         enable = True
+
+
+        #     # Calculate the module of the pError
+        #     pError[2][2] = 1
+        #
+        #     m = np.linalg.det(p)
+        #     c = [[i for i in range(3)] for j in range(3)]
+        #
+        #     print("m")
+        #     print(m)
+        #
+        #     for ii in range(3):
+        #         for jj in range(3):
+        #             c[ii][jj] = (-1) * (ii + jj) * m
+        #
+        #     print("c")
+        #     print(np.matrix(c))
+        #
+        #     modError = np.linalg.det(np.matrix(c))
+        #     print("modError")
+        #     print(modError)
+        #     moduleErrorMatrix[1][k] = modError
+        #
+        # print(moduleErrorMatrix)
 
         return enable, anglesStdV, shiftXStdV, shiftYStdV
 
