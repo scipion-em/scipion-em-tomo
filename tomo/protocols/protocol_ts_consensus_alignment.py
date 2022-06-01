@@ -201,86 +201,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         self._store()
 
     # --------------------------- UTILS functions ----------------------------
-    # @staticmethod
-    # def transformationMatrix(M1set, M2set):
-    #     p = np.zeros((3, 3))
-    #
-    #     for m1, m2 in zip(M1set, M2set):
-    #         m1 = np.matrix(m1)
-    #         m2 = np.matrix(m2)
-    #
-    #         p += np.matmul(m1, np.linalg.inv(m2))
-    #
-    #     p /= len(M1set)
-    #     print("p")
-    #     print(np.matrix.round(p, 2))
-    #
-    #     mError = np.zeros((3, 3))
-    #     for m1, m2 in zip(M1set, M2set):
-    #         mError += np.absolute(p - np.matmul(m1, np.linalg.inv(m2)))
-    #
-    #     print("mError")
-    #     print(np.matrix.round(mError, 2))
-    #
-    #     print("----------------")
-
-    # @staticmethod
-    # def calculateAngleAndShiftDistribution(Mset):
-    #     Nts = len(Mset)
-    #     Nti = len(Mset[0])
-    #
-    #     anglesAvgV = []
-    #     anglesStdV = []
-    #     shiftXAvgV = []
-    #     shiftXStdV = []
-    #     shiftYAvgV = []
-    #     shiftYStdV = []
-    #
-    #     for i in range(Nti):  # Iterate each tilt-image
-    #         sumAngle = 0
-    #         sum2Angle = 0
-    #         sumShiftX = 0
-    #         sum2ShiftX = 0
-    #         sumShiftY = 0
-    #         sum2ShiftY = 0
-    #
-    #         for j in range(Nts):  # Iterate each tilt-series
-    #             # Angle from TM
-    #             cosRotationAngle = Mset[j][i][0][0]
-    #             sinRotationAngle = Mset[j][i][1][0]
-    #             angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
-    #
-    #             # Shifts from TM
-    #             shifts = [Mset[j][i][0][2], Mset[j][i][0][2]]
-    #
-    #             sumAngle += angle
-    #             sum2Angle += angle*angle
-    #             sumShiftX += shifts[0]
-    #             sum2ShiftX += shifts[0] * shifts[0]
-    #             sumShiftY += shifts[1]
-    #             sum2ShiftY += shifts[1] * shifts[1]
-    #
-    #         # Append angle information
-    #         anglesAvg = sumAngle / Nts
-    #         anglesStd = math.sqrt(abs(sum2Angle/Nts - anglesAvg*anglesAvg))  # Abs avoid 0 as small negative number
-    #         anglesAvgV.append(anglesAvg)
-    #         anglesStdV.append(anglesStd)
-    #
-    #         # Append shift X information
-    #         shiftXAvg = sumShiftX / Nts
-    #         shiftXStd = math.sqrt(abs(sum2ShiftX/Nts - shiftXAvg*shiftXAvg))  # Abs avoid 0 as small negative number
-    #         shiftXAvgV.append(shiftXAvg)
-    #         shiftXStdV.append(shiftXStd)
-    #
-    #         # Append shift Y information
-    #         shiftYAvg = sumShiftY / Nts
-    #         shiftYStd = math.sqrt(abs(sum2ShiftY/Nts - shiftYAvg*shiftYAvg))  # Abs avoid 0 as small negative number
-    #         shiftYAvgV.append(shiftYAvg)
-    #         shiftYStdV.append(shiftYStd)
-    #
-    #     # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
-    #     return anglesStdV, shiftXStdV, shiftYStdV
-
     @staticmethod
     def compareTransformationMatrices(Mset):
         Nts = len(Mset)
@@ -702,3 +622,83 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #     else:
     #         methods.append("Output classes not ready yet.")
     #     return methods
+
+    # @staticmethod
+    # def transformationMatrix(M1set, M2set):
+    #     p = np.zeros((3, 3))
+    #
+    #     for m1, m2 in zip(M1set, M2set):
+    #         m1 = np.matrix(m1)
+    #         m2 = np.matrix(m2)
+    #
+    #         p += np.matmul(m1, np.linalg.inv(m2))
+    #
+    #     p /= len(M1set)
+    #     print("p")
+    #     print(np.matrix.round(p, 2))
+    #
+    #     mError = np.zeros((3, 3))
+    #     for m1, m2 in zip(M1set, M2set):
+    #         mError += np.absolute(p - np.matmul(m1, np.linalg.inv(m2)))
+    #
+    #     print("mError")
+    #     print(np.matrix.round(mError, 2))
+    #
+    #     print("----------------")
+
+    # @staticmethod
+    # def calculateAngleAndShiftDistribution(Mset):
+    #     Nts = len(Mset)
+    #     Nti = len(Mset[0])
+    #
+    #     anglesAvgV = []
+    #     anglesStdV = []
+    #     shiftXAvgV = []
+    #     shiftXStdV = []
+    #     shiftYAvgV = []
+    #     shiftYStdV = []
+    #
+    #     for i in range(Nti):  # Iterate each tilt-image
+    #         sumAngle = 0
+    #         sum2Angle = 0
+    #         sumShiftX = 0
+    #         sum2ShiftX = 0
+    #         sumShiftY = 0
+    #         sum2ShiftY = 0
+    #
+    #         for j in range(Nts):  # Iterate each tilt-series
+    #             # Angle from TM
+    #             cosRotationAngle = Mset[j][i][0][0]
+    #             sinRotationAngle = Mset[j][i][1][0]
+    #             angle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+    #
+    #             # Shifts from TM
+    #             shifts = [Mset[j][i][0][2], Mset[j][i][0][2]]
+    #
+    #             sumAngle += angle
+    #             sum2Angle += angle*angle
+    #             sumShiftX += shifts[0]
+    #             sum2ShiftX += shifts[0] * shifts[0]
+    #             sumShiftY += shifts[1]
+    #             sum2ShiftY += shifts[1] * shifts[1]
+    #
+    #         # Append angle information
+    #         anglesAvg = sumAngle / Nts
+    #         anglesStd = math.sqrt(abs(sum2Angle/Nts - anglesAvg*anglesAvg))  # Abs avoid 0 as small negative number
+    #         anglesAvgV.append(anglesAvg)
+    #         anglesStdV.append(anglesStd)
+    #
+    #         # Append shift X information
+    #         shiftXAvg = sumShiftX / Nts
+    #         shiftXStd = math.sqrt(abs(sum2ShiftX/Nts - shiftXAvg*shiftXAvg))  # Abs avoid 0 as small negative number
+    #         shiftXAvgV.append(shiftXAvg)
+    #         shiftXStdV.append(shiftXStd)
+    #
+    #         # Append shift Y information
+    #         shiftYAvg = sumShiftY / Nts
+    #         shiftYStd = math.sqrt(abs(sum2ShiftY/Nts - shiftYAvg*shiftYAvg))  # Abs avoid 0 as small negative number
+    #         shiftYAvgV.append(shiftYAvg)
+    #         shiftYStdV.append(shiftYStd)
+    #
+    #     # return anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV
+    #     return anglesStdV, shiftXStdV, shiftYStdV
