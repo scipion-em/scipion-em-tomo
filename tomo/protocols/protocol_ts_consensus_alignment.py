@@ -73,6 +73,20 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                       help='Select several sets of tilt-series where to evaluate the consensus in their alignment. '
                            'Output set will bring the information from the first selected set.')
 
+        form.addParam('shiftTolerance',
+                      FloatParam,
+                      label="Shift tolerance (px)",
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Maximum shift difference between alignments to consider them as equal. it is measured in '
+                           'pixels.')
+
+        form.addParam('angleTolerance',
+                      FloatParam,
+                      label="Angle tolerance (degrees)",
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Maximum angle difference between alignments to consider them as equal. It is measured in '
+                           'degrees')
+
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.consensusAlignment)
