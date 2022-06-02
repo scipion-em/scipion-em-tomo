@@ -28,15 +28,13 @@ import math
 import numpy as np
 
 from pyworkflow import BETA
-from pyworkflow.protocol.params import MultiPointerParam, PointerParam
+from pyworkflow.protocol.params import MultiPointerParam, FloatParam, LEVEL_ADVANCED
 from pyworkflow.object import Set
 
 from pwem.protocols import EMProtocol
-from pwem.objects import Float
 
 from tomo.objects import TiltSeries, TiltImage
 from tomo.protocols import ProtTomoBase
-from tomo import utils
 
 
 class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
@@ -206,8 +204,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         Nts = len(Mset)
         Nti = len(Mset[0])
 
+        # If there is only one matrix in Mset then there has been no consensus in the recursion.
+        if Nts < 2:
+            print("No consensus achieved for this set of tilt-series.")
+            return False
+
         # Number of possible combinations picking 2 tilt-series out of the set
-        numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
+        numberOfCombinations = math.factorial(Nts) / (math.factorial(2) * math.factorial(Nts - 2))
 
         print("Number of tilt-series analyzed: " + str(Nts))
         print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
@@ -235,7 +238,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             # Calculate error matrix given a calculated p matrix (for a pair of matrices)
             p /= Nti  # Normalized by the number of comparisons performed
-            print("p")
+            print("p"+str(k))
             print(np.matrix.round(p, 2))
 
             pError = np.zeros((3, 3))
@@ -246,45 +249,51 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
                 matrixShiftYCorrected = Mset[k][i]
-                matrixShiftYCorrected[0][1] -= p[0][1]
-                pError += np.absolute(Mset[0][i]-matrixShiftYCorrected)
+                matrixShiftYCorrected[1, 2] = matrixShiftYCorrected[1][2] + p[1][2]
+                pError += np.absolute(Mset[0][i] - matrixShiftYCorrected)
 
             pError /= Nti  # Normalized by the number of tilt-images analyzed
-            print("pError")
+            print("pError"+str(k))
             print(np.matrix.round(pError, 2))
 
             # Angle from pError matrix
             cosRotationAngle = pError[0][0]
             sinRotationAngle = pError[1][0]
-            avgAngleErrorsV[k] = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+            if math.isnan(sinRotationAngle / cosRotationAngle):
+                avgAngleErrorsV[k] = 0
+            else:
+                avgAngleErrorsV[k] = math.degrees(math.asin(sinRotationAngle))
 
             # Shifts from pError matrix
             shiftX = pError[0][2]
             shiftY = pError[1][2]
-            print(shiftY)
-            print(shiftX)
             avgShiftErrorsV[k] = (shiftX + shiftY) / 2
 
             # Add the matrix error for a given pair of matrices to the total error matrix
             pTotalError += pError
 
         # Normalize the total error matrix
-        pTotalError /= (Nts-1)
+        pTotalError /= (Nts - 1)
 
-        print("\n\npTotalError")
+        print("pTotalError")
         print(np.matrix.round(pTotalError, 2))
 
         # Angle from pTotalError matrix
         cosRotationAngle = pTotalError[0][0]
         sinRotationAngle = pTotalError[1][0]
-        avgAngleError = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+        if math.isnan(sinRotationAngle / cosRotationAngle):
+            avgAngleError = 0
+        else:
+            avgAngleError = math.degrees(math.asin(sinRotationAngle))
 
         # Shifts from pTotalError matrix
         shiftX = pTotalError[0][2]
         shiftY = pTotalError[1][2]
-        avgShiftError = (shiftX+shiftY) / 2
+        avgShiftError = (shiftX + shiftY) / 2
 
-        print("Mean shift error vector: " )
+        print("\nMean shift error vector: ")
         print(avgShiftErrorsV)
         print("Mean angle error vector: ")
         print(avgAngleErrorsV)
@@ -306,15 +315,22 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         shiftMAD /= Nts
         angleMAD /= Nts
 
+        print("Angle MAD: " + str(angleMAD))
+        print("Shift MAD: " + str(shiftMAD))
+
         discardedIndexes = []
 
         for i in range(Nts):
-            if(abs(avgShiftErrorsV[i]-shiftMedian) > 3 * shiftMAD or
-               abs(avgAngleErrorsV[i]-angleMedian) > 3 * angleMAD):
-                discardedIndexes.append([i])
+            if (abs(avgShiftErrorsV[i] - shiftMedian) > 1 * shiftMAD or
+                    abs(avgAngleErrorsV[i] - angleMedian) > 1 * angleMAD):
+                discardedIndexes.append(i)
 
-        if len(discardedIndexes != 0):
-            del Mset[discardedIndexes]
+        print("Discarded indexes")
+        print(discardedIndexes)
+
+        if len(discardedIndexes) != 0:
+            for n in discardedIndexes:
+                del Mset[n]
             ProtConsensusAlignmentTS.compareTransformationMatrices(Mset)
         else:
             return True
@@ -327,7 +343,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         Nti = len(Mset[0])
 
         # Number of possible combinations picking 2 tilt-series out of the set
-        numberOfCombinations = math.factorial(Nts)/(math.factorial(2)*math.factorial(Nts-2))
+        numberOfCombinations = math.factorial(Nts) / (math.factorial(2) * math.factorial(Nts - 2))
 
         print("Number of tilt-series analyzed: " + str(Nts))
         print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
@@ -366,7 +382,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         for j in range(1):  # Iterate each tilt-series
 
             # Calculate p matrix
-            for k in range(j+1, Nts):  # Compare each matrix with the following
+            for k in range(j + 1, Nts):  # Compare each matrix with the following
 
                 p = np.zeros((3, 3))
 
@@ -412,7 +428,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
                     matrixShiftYCorrected = Mset[k][i]
                     matrixShiftYCorrected = matrixShiftYCorrected[0][1] - p[0][1]
-                    pError += np.absolute(Mset-matrixShiftYCorrected)
+                    pError += np.absolute(Mset - matrixShiftYCorrected)
 
                 pError /= Nti  # Normalized by the number of tilt-series analyzed
                 print("pError")
@@ -430,14 +446,15 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         shiftYStdV = np.zeros(Nti)
 
         for i in range(Nti):
-            anglesAvgV[i] = sumAnglesV[i] / (numberOfCombinations+1)  # Plus one because we added the first tilt-series
-            shiftXAvgV[i] = sumShiftXV[i] / (numberOfCombinations+1)
-            shiftYAvgV[i] = sumShiftYV[i] / (numberOfCombinations+1)
+            anglesAvgV[i] = sumAnglesV[i] / (
+                    numberOfCombinations + 1)  # Plus one because we added the first tilt-series
+            shiftXAvgV[i] = sumShiftXV[i] / (numberOfCombinations + 1)
+            shiftYAvgV[i] = sumShiftYV[i] / (numberOfCombinations + 1)
 
             # Abs to avoid 0 as small negative number
-            anglesStdV[i] = math.sqrt(abs(sum2AnglesV[i]/(numberOfCombinations+1) - anglesAvgV[i]*anglesAvgV[i]))
-            shiftXStdV[i] = math.sqrt(abs(sum2ShiftXV[i]/(numberOfCombinations+1) - shiftXAvgV[i]*shiftXAvgV[i]))
-            shiftYStdV[i] = math.sqrt(abs(sum2ShiftYV[i]/(numberOfCombinations+1) - shiftYAvgV[i]*shiftYAvgV[i]))
+            anglesStdV[i] = math.sqrt(abs(sum2AnglesV[i] / (numberOfCombinations + 1) - anglesAvgV[i] * anglesAvgV[i]))
+            shiftXStdV[i] = math.sqrt(abs(sum2ShiftXV[i] / (numberOfCombinations + 1) - shiftXAvgV[i] * shiftXAvgV[i]))
+            shiftYStdV[i] = math.sqrt(abs(sum2ShiftYV[i] / (numberOfCombinations + 1) - shiftYAvgV[i] * shiftYAvgV[i]))
 
         print("anglesAvgV")
         print(anglesAvgV)
@@ -451,7 +468,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         print(shiftYAvgV)
         print("shiftYStdV")
         print(shiftYStdV)
-
 
         # Normalize the total error matrix
         pTotalError /= numberOfCombinations
@@ -473,7 +489,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         # *** add condition based on pError
         enable = True
-
 
         #     # Calculate the module of the pError
         #     pError[2][2] = 1
@@ -559,7 +574,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             ts = sots.get().getFirstItem()
             if not ts.getFirstItem().hasTransform():
                 validateMsgs.append("Some tilt-series from the input set of tilt-series %d does not have a "
-                                    "transformation matrix assigned." % (i+1))
+                                    "transformation matrix assigned." % (i + 1))
 
         return validateMsgs
 
