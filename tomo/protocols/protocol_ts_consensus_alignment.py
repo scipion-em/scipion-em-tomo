@@ -77,6 +77,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                       FloatParam,
                       label="Shift tolerance (px)",
                       expertLevel=LEVEL_ADVANCED,
+                      default=5,
                       help='Maximum shift difference between alignments to consider them as equal. it is measured in '
                            'pixels.')
 
@@ -84,6 +85,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                       FloatParam,
                       label="Angle tolerance (degrees)",
                       expertLevel=LEVEL_ADVANCED,
+                      default=3,
                       help='Maximum angle difference between alignments to consider them as equal. It is measured in '
                            'degrees')
 
@@ -116,7 +118,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             # anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
 
             # enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
-            enable = self.compareTransformationMatrices(Mset)
+            enable = self.compareTransformationMatrices(Mset, self.shiftTolerance.get(), self.angleTolerance.get())
 
             ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
             newTs = TiltSeries(tsId=tsId)
@@ -214,7 +216,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
-    def compareTransformationMatrices(Mset):
+    def compareTransformationMatrices(Mset, shiftTol, angleTol):
         Nts = len(Mset)
         Nti = len(Mset[0])
 
@@ -252,7 +254,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             # Calculate error matrix given a calculated p matrix (for a pair of matrices)
             p /= Nti  # Normalized by the number of comparisons performed
-            print("p"+str(k))
+            print("p" + str(k))
             print(np.matrix.round(p, 2))
 
             pError = np.zeros((3, 3))
@@ -264,10 +266,25 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
                 matrixShiftYCorrected = Mset[k][i]
                 matrixShiftYCorrected[1, 2] = matrixShiftYCorrected[1][2] + p[1][2]
-                pError += np.absolute(Mset[0][i] - matrixShiftYCorrected)
+                # pError += np.absolute(Mset[0][i] - matrixShiftYCorrected)
+                pError = Mset[0][i] - matrixShiftYCorrected
 
-            pError /= Nti  # Normalized by the number of tilt-images analyzed
-            print("pError"+str(k))
+                # Angle from pTotalError matrix
+                cosRotationAngle = pTotalError[0][0]
+                sinRotationAngle = pTotalError[1][0]
+
+                if math.isnan(sinRotationAngle / cosRotationAngle):
+                    angleError = 0
+                else:
+                    angleError = math.degrees(math.asin(sinRotationAngle))
+
+                # Shifts from pTotalError matrix
+                shiftX = pTotalError[0][2]
+                shiftY = pTotalError[1][2]
+                shiftError = (shiftX + shiftY) / 2
+
+            # pError /= Nti  # Normalized by the number of tilt-images analyzed
+            print("pError" + str(k))
             print(np.matrix.round(pError, 2))
 
             # Angle from pError matrix
@@ -315,41 +332,60 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         print("Mean angle error: " + str(avgAngleError))
         print("Mean shift error: " + str(avgShiftError))
 
+        # # Discard series by tolerance
+        # shiftMean = np.mean(avgShiftErrorsV)
+        # angleMean = np.mean(avgAngleErrorsV)
+        #
+        # discardedIndexes = []
+        #
+        # for i in range(Nts):
+        #     if (abs(avgShiftErrorsV[i] - shiftMean) > shiftTol or
+        #             abs(avgAngleErrorsV[i] - angleMean) > angleTol):
+        #         discardedIndexes.append(i)
+        #
+        # print("Discarded indexes")
+        # print(discardedIndexes)
+        #
+        # if len(discardedIndexes) != 0:
+        #     for n in discardedIndexes:
+        #         del Mset[n]
+        #     ProtConsensusAlignmentTS.compareTransformationMatrices(Mset, shiftTol, angleTol)
+        # else:
+        #     return True
+
         # Discard series by MAD
-        shiftMedian = np.median(avgShiftErrorsV)
-        angleMedian = np.median(avgAngleErrorsV)
-
-        shiftMAD = 0
-        angleMAD = 0
-
-        for i in range(Nts):
-            shiftMAD += abs(avgShiftErrorsV[i] - shiftMedian)
-            angleMAD += abs(avgAngleErrorsV[i] - angleMedian)
-
-        shiftMAD /= Nts
-        angleMAD /= Nts
-
-        print("Angle MAD: " + str(angleMAD))
-        print("Shift MAD: " + str(shiftMAD))
-
-        discardedIndexes = []
-
-        for i in range(Nts):
-            if (abs(avgShiftErrorsV[i] - shiftMedian) > 1 * shiftMAD or
-                    abs(avgAngleErrorsV[i] - angleMedian) > 1 * angleMAD):
-                discardedIndexes.append(i)
-
-        print("Discarded indexes")
-        print(discardedIndexes)
-
-        if len(discardedIndexes) != 0:
-            for n in discardedIndexes:
-                del Mset[n]
-            ProtConsensusAlignmentTS.compareTransformationMatrices(Mset)
-        else:
-            return True
-
-        return True  # enable
+        # shiftMedian = np.median(avgShiftErrorsV)
+        # angleMedian = np.median(avgAngleErrorsV)
+        #
+        # shiftMAD = 0
+        # angleMAD = 0
+        #
+        # for i in range(Nts):
+        #     shiftMAD += abs(avgShiftErrorsV[i] - shiftMedian)
+        #     angleMAD += abs(avgAngleErrorsV[i] - angleMedian)
+        #
+        # shiftMAD /= Nts
+        # angleMAD /= Nts
+        #
+        # print("Angle MAD: " + str(angleMAD))
+        # print("Shift MAD: " + str(shiftMAD))
+        #
+        # discardedIndexes = []
+        #
+        # for i in range(Nts):
+        #     if (abs(avgShiftErrorsV[i] - shiftMedian) > 1 * shiftMAD or
+        #             abs(avgAngleErrorsV[i] - angleMedian) > 1 * angleMAD):
+        #         discardedIndexes.append(i)
+        #
+        # print("Discarded indexes")
+        # print(discardedIndexes)
+        #
+        # if len(discardedIndexes) != 0:
+        #     for n in discardedIndexes:
+        #         del Mset[n]
+        #     ProtConsensusAlignmentTS.compareTransformationMatrices(Mset)
+        # else:
+        #     return True
 
     @staticmethod
     def compareTransformationMatricesBis(Mset):
