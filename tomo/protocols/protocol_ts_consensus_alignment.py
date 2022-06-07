@@ -100,8 +100,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     def consensusAlignment(self):
         tsIdList = self.generateTsIdList()
 
-        self.getOutputAlignmentConsensusSetOfTiltSeries()
-
         for tsId in tsIdList:
             Mset = []
 
@@ -119,11 +117,14 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                                                                                        self.shiftTolerance.get(),
                                                                                        self.angleTolerance.get())
 
+            # Consensus achieved
             if averageAlignmentV is not None:
+                self.getOutputAliConsensusSoTS()
+
                 ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
                 newTs = TiltSeries(tsId=tsId)
                 newTs.copyInfo(ts)
-                self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
+                self.outputAliConsensusSoTS.append(newTs)
 
                 for i, ti in enumerate(ts):
                     newTi = TiltImage()
@@ -142,9 +143,32 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 newTs.setDim(ts.getDim())
                 newTs.write()
 
-                self.outputAlignmentConsensusSetOfTiltSeries.update(newTs)
-                self.outputAlignmentConsensusSetOfTiltSeries.updateDim()
-                self.outputAlignmentConsensusSetOfTiltSeries.write()
+                self.outputAliConsensusSoTS.update(newTs)
+                self.outputAliConsensusSoTS.updateDim()
+                self.outputAliConsensusSoTS.write()
+
+            # No consensus achieved (return tilt-series with no alignment information)
+            else:
+                self.getOutputNoAliConsensusSoTS()
+
+                ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
+                newTs = TiltSeries(tsId=tsId)
+                newTs.copyInfo(ts)
+                self.outputNoAliConsensusSoTS.append(newTs)
+
+                for i, ti in enumerate(ts):
+                    newTi = TiltImage()
+                    newTi.copyInfo(ti, copyId=True)
+                    newTi.setLocation(ti.getLocation())
+
+                    newTs.append(newTi)
+
+                newTs.setDim(ts.getDim())
+                newTs.write()
+
+                self.outputNoAliConsensusSoTS.update(newTs)
+                self.outputNoAliConsensusSoTS.updateDim()
+                self.outputNoAliConsensusSoTS.write()
 
         self._store()
 
@@ -207,8 +231,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     #     self._store()
 
     def closeOutputSetsStep(self):
-        self.outputAlignmentConsensusSetOfTiltSeries.setStreamState(Set.STREAM_CLOSED)
-        self.outputAlignmentConsensusSetOfTiltSeries.write()
+        if hasattr(self, "outputAliConsensusSoTS"):
+            self.outputAliConsensusSoTS.setStreamState(Set.STREAM_CLOSED)
+            self.outputAliConsensusSoTS.write()
+
+        if hasattr(self, "outputNoAliConsensusSoTS"):
+            self.outputNoAliConsensusSoTS.setStreamState(Set.STREAM_CLOSED)
+            self.outputNoAliConsensusSoTS.write()
 
         self._store()
 
@@ -220,7 +249,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         # If there is only one matrix in Mset then there has been no consensus in the recursion.
         if Nts < 2:
             print("No consensus achieved for this set of tilt-series.")
-            return 1, 2, 3
+            return None, None, None
 
         Nti = len(Mset[0])
 
@@ -688,15 +717,25 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         return tsIdList
 
-    def getOutputAlignmentConsensusSetOfTiltSeries(self):
-        if not hasattr(self, "outputAlignmentConsensusSetOfTiltSeries"):
-            outputAlignmentConsensusSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AliConsensus')
-            outputAlignmentConsensusSetOfTiltSeries.copyInfo(self.inputMultiSoTS[0].get())
-            outputAlignmentConsensusSetOfTiltSeries.setDim(self.inputMultiSoTS[0].get().getDim())
+    def getOutputAliConsensusSoTS(self):
+        if not hasattr(self, "outputAliConsensusSoTS"):
+            outputAliConsensusSoTS = self._createSetOfTiltSeries(suffix='AliConsensus')
+            outputAliConsensusSoTS.copyInfo(self.inputMultiSoTS[0].get())
+            outputAliConsensusSoTS.setDim(self.inputMultiSoTS[0].get().getDim())
 
-            self._defineOutputs(outputAlignmentConsensusSetOfTiltSeries=outputAlignmentConsensusSetOfTiltSeries)
-            self._defineSourceRelation(self.inputMultiSoTS, outputAlignmentConsensusSetOfTiltSeries)
-        return self.outputAlignmentConsensusSetOfTiltSeries
+            self._defineOutputs(outputAliConsensusSoTS=outputAliConsensusSoTS)
+            self._defineSourceRelation(self.inputMultiSoTS, outputAliConsensusSoTS)
+        return self.outputAliConsensusSoTS
+
+    def getOutputNoAliConsensusSoTS(self):
+        if not hasattr(self, "outputNoAliConsensusSoTS"):
+            outputNoAliConsensusSoTS = self._createSetOfTiltSeries(suffix='NoAliConsensus')
+            outputNoAliConsensusSoTS.copyInfo(self.inputMultiSoTS[0].get())
+            outputNoAliConsensusSoTS.setDim(self.inputMultiSoTS[0].get().getDim())
+
+            self._defineOutputs(outputNoAliConsensusSoTS=outputNoAliConsensusSoTS)
+            self._defineSourceRelation(self.inputMultiSoTS, outputNoAliConsensusSoTS)
+        return self.outputNoAliConsensusSoTS
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
