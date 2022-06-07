@@ -771,12 +771,21 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
-            summary.append("Input Tilt-Series: %d.\nOutput tilt series with consensus applied : %d.\n"
-                           % (len(self.inputMultiSoTS),
-                              self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
-        else:
+        if hasattr(self, 'outputAliConsensusSoTS') or hasattr(self, 'outputNoAliConsensusSoTS'):
+            summary.append("Input Tilt-Series: %d."
+                           % (len(self.inputMultiSoTS)))
+
+        if hasattr(self, 'outputAliConsensusSoTS'):
+            summary.append("Output tilt series with consensus achieved: %d."
+                           % (self.outputAliConsensusSoTS.getSize()))
+
+        if hasattr(self, 'outputNoAliConsensusSoTS'):
+            summary.append("Output tilt-series with no consensus achieved: %d"
+                           % (self.outputNoAliConsensusSoTS.getSize()))
+
+        if not (hasattr(self, 'outputAliConsensusSoTS') or hasattr(self, 'outputNoAliConsensusSoTS')):
             summary.append("Output classes not ready yet.")
+
         return summary
 
     # def _summary(self):
@@ -791,13 +800,21 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     def _methods(self):
         methods = []
-        if hasattr(self, 'outputAlignmentConsensusSetOfTiltSeries'):
-            methods.append("Consensus have been performed over %d transformation matrices from the input sets of "
-                           "tilt-series. New consensus set of tilt-series generated with %d elements.\n"
-                           % (len(self.inputMultiSoTS),
-                              self.outputAlignmentConsensusSetOfTiltSeries.getSize()))
-        else:
+        if hasattr(self, 'outputAliConsensusSoTS') or hasattr(self, 'outputNoAliConsensusSoTS'):
+            methods.append("Input Tilt-Series: %d."
+                           % (len(self.inputMultiSoTS)))
+
+        if hasattr(self, 'outputAliConsensusSoTS'):
+            methods.append("Output tilt series with consensus achieved: %d."
+                           % (self.outputAliConsensusSoTS.getSize()))
+
+        if hasattr(self, 'outputNoAliConsensusSoTS'):
+            methods.append("Output tilt-series with no consensus achieved: %d"
+                           % (self.outputNoAliConsensusSoTS.getSize()))
+
+        if not (hasattr(self, 'outputAliConsensusSoTS') or hasattr(self, 'outputNoAliConsensusSoTS')):
             methods.append("Output classes not ready yet.")
+
         return methods
 
     # def _methods(self):
