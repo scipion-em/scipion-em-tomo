@@ -27,9 +27,10 @@ import math
 
 import numpy as np
 
+from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow.protocol.params import MultiPointerParam, FloatParam, LEVEL_ADVANCED
-from pyworkflow.object import Set
+from pyworkflow.object import Set, Float
 
 from pwem.protocols import EMProtocol
 
@@ -114,39 +115,36 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 Mset.append(M)
 
-            # anglesAvgV, anglesStdV, shiftXAvgV, shiftXStdV, shiftYAvgV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
-            # anglesStdV, shiftXStdV, shiftYStdV = self.calculateAngleAndShiftDistribution(Mset)
+            averageAlignmentV, angleSDV, shiftSDV = self.compareTransformationMatrices(Mset,
+                                                                                       self.shiftTolerance.get(),
+                                                                                       self.angleTolerance.get())
 
-            # enable, anglesStdV, shiftXStdV, shiftYStdV = self.compareTransformationMatrices(Mset)
-            enable = self.compareTransformationMatrices(Mset, self.shiftTolerance.get(), self.angleTolerance.get())
+            if averageAlignmentV is not None:
+                ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
+                newTs = TiltSeries(tsId=tsId)
+                newTs.copyInfo(ts)
+                self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
 
-            ts = self.inputMultiSoTS[0].get().getTiltSeriesFromTsId(tsId)
-            newTs = TiltSeries(tsId=tsId)
-            newTs.copyInfo(ts)
-            newTs._enable = enable
-            self.outputAlignmentConsensusSetOfTiltSeries.append(newTs)
+                for i, ti in enumerate(ts):
+                    newTi = TiltImage()
+                    newTi.copyInfo(ti, copyId=True)
+                    newTi.setLocation(ti.getLocation())
 
-            for i, ti in enumerate(ts):
-                newTi = TiltImage()
-                newTi.copyInfo(ti, copyId=True)
-                newTi.setLocation(ti.getLocation())
-                newTi.setTransform(ti.getTransform())
+                    transform = Transform()
+                    transform.setMatrix(averageAlignmentV[i])
+                    newTi.setTransform(transform)
 
-                # # newTi._angleAvg = Float(anglesAvgV[i])
-                # newTi._angleStd = Float(anglesStdV[i])
-                # # newTi._shiftXAvg = Float(shiftXAvgV[i])
-                # newTi._shiftXStd = Float(shiftXStdV[i])
-                # # newTi._shiftYAvg = Float(shiftYAvgV[i])
-                # newTi._shiftYStd = Float(shiftYStdV[i])
+                    newTi._angleStd = Float(angleSDV[i])
+                    newTi._shiftStd = Float(shiftSDV[i])
 
-                newTs.append(newTi)
+                    newTs.append(newTi)
 
-            newTs.setDim(ts.getDim())
-            newTs.write()
+                newTs.setDim(ts.getDim())
+                newTs.write()
 
-            self.outputAlignmentConsensusSetOfTiltSeries.update(newTs)
-            self.outputAlignmentConsensusSetOfTiltSeries.updateDim()
-            self.outputAlignmentConsensusSetOfTiltSeries.write()
+                self.outputAlignmentConsensusSetOfTiltSeries.update(newTs)
+                self.outputAlignmentConsensusSetOfTiltSeries.updateDim()
+                self.outputAlignmentConsensusSetOfTiltSeries.write()
 
         self._store()
 
@@ -222,7 +220,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         # If there is only one matrix in Mset then there has been no consensus in the recursion.
         if Nts < 2:
             print("No consensus achieved for this set of tilt-series.")
-            return False
+            return 1, 2, 3
 
         Nti = len(Mset[0])
 
@@ -249,7 +247,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         # Compare each pair of matrices
         for j in range(Nts):
-            for k in range(j+1, Nts):
+            for k in range(j + 1, Nts):
                 print("\nComparing tilt-series " + str(j) + " with tilt-series " + str(k))
 
                 # Calculate p matrix for the pair of tilt-series
@@ -292,7 +290,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                         detectedMisali = True
 
                 if detectedMisali:
-                    print("\nMisalignemnt detected between tilt-series " + str(j) + " and tilt-series " + str(k) + "!!!!!!!!!!")
+                    print("\nMisalignment detected between tilt-series " + str(j) + " and tilt-series " + str(
+                        k) + "!!!!!!!!!!")
                     consensusAlignmentMatrix[j][k] = 1
 
         print("consensusAlignmentMatrix")
@@ -318,8 +317,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         else:
             discardedIndexes = []
 
-        # discardedIndexes = list(set(colOnes).intersection(rowOnes))
-        # discardedIndexes.sort(reverse=True)
+        discardedIndexes.sort(reverse=True)
 
         print("Discarded indexes")
         print(discardedIndexes)
@@ -327,11 +325,46 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         if len(discardedIndexes) != 0:
             for n in discardedIndexes:
                 del Mset[n]
-            ProtConsensusAlignmentTS.compareTransformationMatrices(Mset, shiftTol, angleTol)
+            return ProtConsensusAlignmentTS.compareTransformationMatrices(Mset, shiftTol, angleTol)
         else:
             print("consensus achieved for tilt series ")
+            averageAlignmentV = []
+            angleSDV = []
+            shiftSDV = []
 
-            return True
+            for i in range(Nti):
+                averageMatrix = np.zeros((3, 3))
+                angleV = []
+                shiftV = []
+
+                for j in range(Nts):
+                    m = Mset[j][i]
+
+                    # Calculate average alignment
+                    averageMatrix += m
+
+                    # Angle from pTotalError matrix
+                    sinRotationAngle = m[1][0]
+                    angle = math.degrees(math.asin(sinRotationAngle))
+
+                    # Shifts from pError matrix
+                    shiftX = m[0][2]
+                    shiftY = m[1][2]
+
+                    angleV.append(angle)
+                    shiftV.append((shiftX + shiftY) / 2)
+
+                angleSDV.append(np.std(angleV))
+                shiftSDV.append(np.std(shiftV))
+
+                averageMatrix /= Nts
+                averageAlignmentV.append(averageMatrix)
+
+            print(len(averageAlignmentV))
+            print(len(angleSDV))
+            print(len(shiftSDV))
+
+            return averageAlignmentV, angleSDV, shiftSDV
 
             # # pError /= Nti  # Normalized by the number of tilt-images analyzed
             # print("pError" + str(k))
