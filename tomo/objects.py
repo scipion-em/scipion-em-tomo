@@ -1332,6 +1332,7 @@ class SubTomogram(data.Volume):
 
     def setCoordinate3D(self, coordinate):
         self._coordinate = coordinate
+        self.setVolId(coordinate.getVolId())
 
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
