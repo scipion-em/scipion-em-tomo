@@ -43,6 +43,10 @@ from pwem.emlib.image import ImageHandler
 
 import tomo.constants as const
 
+class MATRIX_CONVERSION:
+    RELION = "relion"
+    XMIPP = "xmipp"
+    EMAN = "eman"
 
 def convertMatrix(M, convention=None, direction=None):
     """
@@ -102,15 +106,15 @@ def convertMatrix(M, convention=None, direction=None):
                         N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
             """
 
-    if convention is None or convention == "eman":
+    if convention is None or convention == MATRIX_CONVERSION.EMAN:
         return M
-    elif direction == 'get' and convention == 'relion':
+    elif direction == 'get' and convention in [MATRIX_CONVERSION.RELION, MATRIX_CONVERSION.XMIPP]:
         # Rotation matrix. Remove translation from the Scipion matrix
         R = np.eye(4)
         R[:3, :3] = M[:3, :3]
         Mi = np.linalg.inv(M)
         return Mi @ R @ R
-    elif direction == 'set' and convention == 'relion':
+    elif direction == 'set' and convention in [MATRIX_CONVERSION.RELION, MATRIX_CONVERSION.XMIPP]:
         # Rotation matrix. Remove translation from the Scipion matrix
         R = np.eye(4)
         R[:3, :3] = M[:3, :3]
