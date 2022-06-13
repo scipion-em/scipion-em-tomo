@@ -276,16 +276,23 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 shiftV = []
 
                 for j in range(Nts):
-                    m = Mset[j][i]
+                    # Calculate the sampling factor between the two matrices (for comparing shifts)
+                    samplingFactor = SRset[j] / SRset[0]
+
+                    sampledMatrix = Mset[j][i].copy()
+                    sampledMatrix[0, 2] *= samplingFactor
+                    sampledMatrix[1, 2] *= samplingFactor
+
+                    m = sampledMatrix.copy()
 
                     # Calculate average alignment
                     averageMatrix += m
 
-                    # Angle from pTotalError matrix
+                    # Angle from average alignment matrix
                     sinRotationAngle = m[1][0]
                     angle = math.degrees(math.asin(sinRotationAngle))
 
-                    # Shifts from pError matrix
+                    # Shifts from average alignment matrix
                     shiftX = m[0][2]
                     shiftY = m[1][2]
 
