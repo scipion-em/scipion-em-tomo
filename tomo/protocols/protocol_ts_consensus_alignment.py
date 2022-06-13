@@ -40,7 +40,8 @@ from tomo.protocols import ProtTomoBase
 
 class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     """
-    Perform a consensus of a set of alignments for the same tilt series.
+    Perform a consensus of a set of alignments for the same tilt series. Returns the average alignment matrix of the
+    consensus alignments and its standard deviation of shift and angle.
     """
 
     _label = 'Tilt-series consensus alignment'
