@@ -102,8 +102,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             shiftTolPx = round(self.shiftTolerance.get() / SRset[0])
 
-            print(SRset)
-
             averageAlignmentV, angleSDV, shiftSDV = self.compareTransformationMatrices(Mset,
                                                                                        shiftTolPx,
                                                                                        self.angleTolerance.get(),
@@ -198,8 +196,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             for k in range(j + 1, Nts):
                 # Calculate the sampling factor between the two matrices (for comparing shifts)
                 samplingFactor = SRset[k] / SRset[j]
-                print("samplingFactor")
-                print(samplingFactor)
 
                 # Calculate p matrix for the pair of tilt-series
                 p = np.zeros((3, 3))
@@ -214,9 +210,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 # Calculate error matrix given a calculated p matrix (for a pair of matrices)
                 p /= Nti  # Normalized by the number of comparisons performed
 
-                print("p")
-                print(p)
-
                 detectedMisali = False
 
                 # Calculate error matrix for the pair of tilt-series.
@@ -228,16 +221,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     matrixShiftYCorrected[1, 2] += p[1][2]
 
                     pError = Mset[j][i] - matrixShiftYCorrected
-
-                    print("Mset[j][i]")
-                    print(Mset[j][i])
-                    print("Mset[k][i]")
-                    print(Mset[k][i])
-                    print("matrixShiftYCorrected")
-                    print(matrixShiftYCorrected)
-                    print("pError")
-                    print(pError)
-                    print("------------------------")
 
                     # Angle from pTotalError matrix
                     cosRotationAngle = pError[0][0]
@@ -253,13 +236,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     shiftY = pError[1][2]
 
                     if shiftX > shiftTol or shiftY > shiftTol or angleError > angleTol:
-                        print(shiftX)
-                        print(shiftTol)
-                        print(shiftY)
-                        print(shiftTol)
-                        print(angleError)
-                        print(angleTol)
-                        print("-----------")
                         detectedMisali = True
 
                 if detectedMisali:
