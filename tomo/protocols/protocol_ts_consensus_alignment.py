@@ -62,11 +62,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         form.addParam('shiftTolerance',
                       FloatParam,
-                      label="Shift tolerance (px)",
+                      label="Shift tolerance (A)",
                       expertLevel=LEVEL_ADVANCED,
                       default=5,
                       help='Maximum shift difference between alignments to consider them as equal. it is measured in '
-                           'pixels.')
+                           'Angstroms.')
 
         form.addParam('angleTolerance',
                       FloatParam,
@@ -100,8 +100,12 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             print("\nAnalyzing tilt series " + tsId + "...")
 
+            shiftTolPx = round(self.shiftTolerance.get() / sots.get().getFirstItem().getSamplingRate())
+
+            print(shiftTolPx)
+
             averageAlignmentV, angleSDV, shiftSDV = self.compareTransformationMatrices(Mset,
-                                                                                       self.shiftTolerance.get(),
+                                                                                       shiftTolPx,
                                                                                        self.angleTolerance.get())
 
             # Consensus achieved
