@@ -405,7 +405,15 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
 
-        dims = (self.getDim()[0], self.getDim()[1])
+        # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
+        # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
+        # considered in the tilt.com should be the ones corresponding to the tomogram
+        intorducedDims = kwargs.get('dims', None)  #
+        if intorducedDims:
+            dims = intorducedDims
+        else:
+            dims = (self.getDim()[0], self.getDim()[1])
+        # Swap dimensions case
         if kwargs.get('swapDims', False):
             dims = (dims[1], dims[0])
 
