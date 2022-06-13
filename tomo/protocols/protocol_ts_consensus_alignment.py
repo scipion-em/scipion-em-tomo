@@ -63,15 +63,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         form.addParam('shiftTolerance',
                       FloatParam,
                       label="Shift tolerance (A)",
-                      expertLevel=LEVEL_ADVANCED,
-                      default=5,
+                      default=20,
                       help='Maximum shift difference between alignments to consider them as equal. it is measured in '
                            'Angstroms.')
 
         form.addParam('angleTolerance',
                       FloatParam,
                       label="Angle tolerance (degrees)",
-                      expertLevel=LEVEL_ADVANCED,
                       default=3,
                       help='Maximum angle difference between alignments to consider them as equal. It is measured in '
                            'degrees')
