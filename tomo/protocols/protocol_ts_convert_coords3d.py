@@ -32,6 +32,7 @@ from pyworkflow.object import Set, List, String
 from pyworkflow.protocol.constants import STEPS_PARALLEL
 from pwem.protocols import EMProtocol
 import tomo.objects as tomoObj
+from tomo.constants import CENTER_GRAVITY
 from tomo.protocols import ProtTomoBase
 import xmipptomo.utils as utils
 
@@ -79,14 +80,24 @@ class XmippProtTsConvertCoords3d(EMProtocol, ProtTomoBase):
 
     def convertCoordinates(self):
         sotsc3d = self.inputSetOfCoordinates.get()
-        sot = self.inputSetOfTomograms.get()
 
         self.getOutputSetOfCoordinates3Ds()
 
         for coor3d in sotsc3d:
             tsId = coor3d.getTsId()
+            tomo = self.getTomoFromTsId(tsId)
 
+            newCoord3D = tomoObj.Coordinate3D()
+            newCoord3D.setVolume(tomo)
+            newCoord3D.setX(coor3d.getX(), CENTER_GRAVITY)
+            newCoord3D.setY(coor3d.getY(), CENTER_GRAVITY)
+            newCoord3D.setZ(coor3d.getZ(), CENTER_GRAVITY)
 
+            newCoord3D.setVolId(tsObjId)
+            self.outputSetOfCoordinates3D.append(newCoord3D)
+            self.outputSetOfCoordinates3D.update(newCoord3D)
+
+            self._store()
 
     def getOutputSetOfCoordinates3Ds(self):
         if hasattr(self, "outputSetOfCoordinates3D"):
@@ -107,9 +118,7 @@ class XmippProtTsConvertCoords3d(EMProtocol, ProtTomoBase):
 
         return self.outputSetOfCoordinates3D
 
-
     def getTomoFromTsId(self, tsId):
         for tomo in self.inputSetOfTomograms.get():
             if tomo.getTsId() == tsId:
                 return tomo
-
