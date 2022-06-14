@@ -104,6 +104,8 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
 
         self._store()
 
+    # --------------------------- UTILS functions ----------------------------
+
     def getOutputSetOfCoordinates3Ds(self):
         if hasattr(self, "outputSetOfCoordinates3D"):
             self.outputSetOfCoordinates3D.enableAppend()
@@ -127,3 +129,31 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
         for tomo in self.inputSetOfTomograms.get():
             if tomo.getTsId() == tsId:
                 return tomo
+
+    # --------------------------- INFO functions ----------------------------
+    def _summary(self):
+        summary = []
+
+        if not hasattr(self, 'outputSetOfCoordinates3D'):
+            summary.append("No output coordinates generated yet")
+
+        else:
+            summary.append("Input tilt-series 3d coordinates: %d\n"
+                           "Output 3d coordinates associated to a set of tomograms: %d" %
+                           (self.inputSetOfCoordinates.get().getSize(),
+                            self.outputSetOfCoordinates3D.getSize()))
+
+        return summary
+
+    def _methods(self):
+        methods = []
+
+        if not hasattr(self, 'outputSetOfCoordinates3D'):
+            methods.append("No output coordinates generated yet")
+
+        else:
+            methods.append("%d 3d coordinates associated to a set of tomograms have been generated from the %d input "
+                           "tilt-series 3d coordinates.\n" %
+                           (self.outputSetOfCoordinates3D.getSize(),
+                            self.inputSetOfCoordinates.get().getSize()))
+        return methods
