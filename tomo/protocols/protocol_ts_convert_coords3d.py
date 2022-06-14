@@ -73,8 +73,7 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
 
-        for ts in self.inputSetOfTiltSeries.get():
-            self._insertFunctionStep(self.convertCoordinates)
+        self._insertFunctionStep(self.convertCoordinates)
 
     # --------------------------- STEPS functions ----------------------------
 
@@ -93,7 +92,7 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
             newCoord3D.setY(coor3d.getY(), CENTER_GRAVITY)
             newCoord3D.setZ(coor3d.getZ(), CENTER_GRAVITY)
 
-            newCoord3D.setVolId(tsObjId)
+            newCoord3D.setVolId(coor3d.getObjId())
             self.outputSetOfCoordinates3D.append(newCoord3D)
             self.outputSetOfCoordinates3D.update(newCoord3D)
 
