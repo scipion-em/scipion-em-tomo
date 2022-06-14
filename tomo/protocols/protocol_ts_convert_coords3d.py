@@ -83,6 +83,10 @@ class XmippProtTsConvertCoords3d(EMProtocol, ProtTomoBase):
 
         self.getOutputSetOfCoordinates3Ds()
 
+        for coor3d in sotsc3d:
+            tsId = coor3d.getTsId()
+
+
 
     def getOutputSetOfCoordinates3Ds(self):
         if hasattr(self, "outputSetOfCoordinates3D"):
@@ -102,3 +106,10 @@ class XmippProtTsConvertCoords3d(EMProtocol, ProtTomoBase):
             self._defineSourceRelation(self.inputSetOfTomograms.get(), outputSetOfCoordinates3D)
 
         return self.outputSetOfCoordinates3D
+
+
+    def getTomoFromTsId(self, tsId):
+        for tomo in self.inputSetOfTomograms.get():
+            if tomo.getTsId() == tsId:
+                return tomo
+
