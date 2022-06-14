@@ -74,6 +74,7 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     def _insertAllSteps(self):
 
         self._insertFunctionStep(self.convertCoordinates)
+        self._insertFunctionStep(self.closeOutputSetStep)
 
     # --------------------------- STEPS functions ----------------------------
 
@@ -97,6 +98,11 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
             self.outputSetOfCoordinates3D.update(newCoord3D)
 
             self._store()
+
+    def closeOutputSetStep(self):
+        self.outputSetOfCoordinates3D.setStreamState(Set.STREAM_CLOSED)
+
+        self._store()
 
     def getOutputSetOfCoordinates3Ds(self):
         if hasattr(self, "outputSetOfCoordinates3D"):
