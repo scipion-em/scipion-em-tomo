@@ -39,7 +39,7 @@ import xmipptomo.utils as utils
 METADATA_INPUT_COORDINATES = "fiducialCoordinates.xmd"
 
 
-class XmippProtTsConvertCoords3d(EMProtocol, ProtTomoBase):
+class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     """
     Scipion protocol to convert a set of tilt-series coordinates 3d to a set of coordinates 3d associated to a set of
     tomograms.
