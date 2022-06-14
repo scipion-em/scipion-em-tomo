@@ -45,7 +45,7 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     tomograms.
     """
 
-    _label = 'detect misaligned TS'
+    _label = 'Tilt-series convert coords3D'
     _devStatus = BETA
 
     def __init__(self, **kwargs):
