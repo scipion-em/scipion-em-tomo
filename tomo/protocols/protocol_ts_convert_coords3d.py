@@ -77,3 +77,28 @@ class XmippProtTsConvertCoords3d(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions ----------------------------
 
+    def convertCoordinates(self):
+        sotsc3d = self.inputSetOfCoordinates.get()
+        sot = self.inputSetOfTomograms.get()
+
+        self.getOutputSetOfCoordinates3Ds()
+
+
+    def getOutputSetOfCoordinates3Ds(self):
+        if hasattr(self, "outputSetOfCoordinates3D"):
+            self.outputSetOfCoordinates3D.enableAppend()
+
+        else:
+            outputSetOfCoordinates3D = self._createSetOfCoordinates3D(volSet=self.inputSetOfTomograms.get(),
+                                                                      suffix='Coords3d')
+
+            outputSetOfCoordinates3D.setSamplingRate(self.inputSetOfTomograms.get().getSamplingRate())
+            outputSetOfCoordinates3D.setPrecedents(self.inputSetOfTomograms.get())
+            outputSetOfCoordinates3D.setBoxSize(32)
+
+            outputSetOfCoordinates3D.setStreamState(Set.STREAM_OPEN)
+
+            self._defineOutputs(outputSetOfCoordinates3D=outputSetOfCoordinates3D)
+            self._defineSourceRelation(self.inputSetOfTomograms.get(), outputSetOfCoordinates3D)
+
+        return self.outputSetOfCoordinates3D
