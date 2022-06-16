@@ -97,15 +97,8 @@ class ProtImportTomomasks(ProtTomoImportFiles):
     def _checkMatchingFiles(self):
         nonMatchingTomoMaskNames = []
         matchingTomoMaskDict = {}
-        msgNonMatchingTomos = ''
-        msgNonMatchingTomoMasks = ''
         inTomoSet = self.inputTomos.get()
         tomoIds, tomoBaseNames = zip(*[(tomo.getTsId(), removeBaseExt(tomo.getFileName())) for tomo in inTomoSet])
-
-        def isMember(x, y):
-            # x will be a list of ids and y the basename of the current tomomask. Thus, all the ids will be mapped to
-            # check if one of them is contained in the current basename
-            return x in y
 
         if self._tomoHasValidTsId(inTomoSet[1]):
             # Look for the tsId of each tomogram to be contained in the tomoFileNames
@@ -116,9 +109,9 @@ class ProtImportTomomasks(ProtTomoImportFiles):
 
         for file, _ in self.iterFiles():
             tomoMaskName = self.getTomoMaskName(file)
-            matches = list(map(isMember, list2check, [tomoMaskName]))
+            matches = [True if tomo == tomoMaskName else False for tomo in list(list2check)]
             if any(matches):
-                matchingTomoMaskDict[file] = inTomoSet[matches.index(True) + 1]
+                matchingTomoMaskDict[file] = inTomoSet[matches.index(True) + 1].clone()
             else:
                 nonMatchingTomoMaskNames.append(tomoMaskName)
 
