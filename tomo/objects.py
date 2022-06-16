@@ -43,10 +43,12 @@ from pwem.emlib.image import ImageHandler
 
 import tomo.constants as const
 
+
 class MATRIX_CONVERSION:
     RELION = "relion"
     XMIPP = "xmipp"
     EMAN = "eman"
+
 
 def convertMatrix(M, convention=None, direction=None):
     """
@@ -302,7 +304,7 @@ class TiltSeriesBase(data.SetOfImages):
         return x, y, z
         # x, y, z are floats in Angstroms
 
-    def updateOriginWithResize(self,  resizeFactor):
+    def updateOriginWithResize(self, resizeFactor):
         """ Method to update the origin after resizing the TiltSeries. """
 
         origin = self.getOrigin()
@@ -597,11 +599,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return self._samplingRate.get() * 1e-4 * mag
 
     def getTiltSeriesFromTsId(self, tsId):
-        for ts in self:
-            if ts.getTsId() == tsId:
-                return ts
+        return self[{"_tsId": tsId}]
 
-        return None
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
@@ -2430,7 +2429,7 @@ class TiltSeriesCoordinate(data.EMObject):
 
     def getPosition(self, sampling_rate=1):
         """Returns the position a TiltSeriesCoordinate in a tuple at a specific sampling rate (optional)"""
-        return self.getX()/sampling_rate, self.getY()/sampling_rate, self.getZ()/sampling_rate
+        return self.getX() / sampling_rate, self.getY() / sampling_rate, self.getZ() / sampling_rate
 
     def setPosition(self, x, y, z, sampling_rate):
         """Set the position of the coordinate
@@ -2439,9 +2438,9 @@ class TiltSeriesCoordinate(data.EMObject):
             :param int z: Position of the coordinate in the Z axis
             :param flat sampling_rate: sampling rate in which x,y,z are measured. Default 1 = Å
         """
-        self.setX(x*sampling_rate)
-        self.setY(y*sampling_rate)
-        self.setZ(z*sampling_rate)
+        self.setX(x * sampling_rate)
+        self.setY(y * sampling_rate)
+        self.setZ(z * sampling_rate)
 
     def getTsId(self):
         return self._tsId.get()
@@ -2492,7 +2491,3 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
         from other set of objects to current one.
         """
         self.setTiltSeries(other.getTiltSeries())
-
-
-
-
