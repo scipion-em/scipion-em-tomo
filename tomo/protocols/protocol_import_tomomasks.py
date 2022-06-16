@@ -111,7 +111,7 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             tomoMaskName = self.getTomoMaskName(file)
             matches = [True if tomo == tomoMaskName else False for tomo in list(list2check)]
             if any(matches):
-                matchingTomoMaskDict[file] = inTomoSet[matches.index(True) + 1]
+                matchingTomoMaskDict[file] = inTomoSet[matches.index(True) + 1].clone()
             else:
                 nonMatchingTomoMaskNames.append(tomoMaskName)
 
