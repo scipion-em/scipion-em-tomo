@@ -2470,24 +2470,24 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = Pointer()
+        self._SetOfTiltSeriesPointer = Pointer()
 
-    def getTiltSeries(self):
+    def getSetOfTiltSeries(self):
         """ Returns the Tilt Series associated with
                 this SetOfTiltSeriesCoordinates"""
-        return self._tiltSeriesPointer.get()
+        return self._SetOfTiltSeriesPointer.get()
 
-    def setTiltSeries(self, tiltseries):
+    def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the Tilt Series associated with this set of coordinates.
 
             Params:
 
-            tiltseries: Tilt Series object or a pointer to it.
+            setOfTiltSeries: Tilt Series object or a pointer to it.
                 """
-        if tiltseries.isPointer():
-            self._tiltSeriesPointer.copy(tiltseries)
+        if setOfTiltSeries.isPointer():
+            self._SetOfTiltSeriesPointer.copy(setOfTiltSeries)
         else:
-            self._tiltSeriesPointer.set(tiltseries)
+            self._SetOfTiltSeriesPointer.set(setOfTiltSeries)
 
     def getSummary(self):
         summary = []
@@ -2498,7 +2498,7 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
         """ Copy basic information (id and other properties) but not _mapperPath or _size
         from other set of objects to current one.
         """
-        self.setTiltSeries(other.getTiltSeries())
+        self.setSetOfTiltSeries(other.getSetOfTiltSeries())
 
 
 
