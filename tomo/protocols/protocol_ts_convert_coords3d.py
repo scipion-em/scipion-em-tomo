@@ -81,6 +81,8 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     def convertCoordinates(self):
         sotsc3d = self.inputSetOfCoordinates.get()
 
+        sr = sotsc3d.getTiltSeries().getSamplingRate()
+
         self.getOutputSetOfCoordinates3Ds()
 
         for coor3d in sotsc3d:
@@ -89,15 +91,17 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
 
             newCoord3D = tomoObj.Coordinate3D()
             newCoord3D.setVolume(tomo)
-            newCoord3D.setX(coor3d.getX(), CENTER_GRAVITY)
-            newCoord3D.setY(coor3d.getY(), CENTER_GRAVITY)
-            newCoord3D.setZ(coor3d.getZ(), CENTER_GRAVITY)
+            newCoord3D.setX(coor3d.getX()/sr, CENTER_GRAVITY)
+            newCoord3D.setY(coor3d.getY()/sr, CENTER_GRAVITY)
+            newCoord3D.setZ(coor3d.getZ()/sr, CENTER_GRAVITY)
 
             newCoord3D.setVolId(coor3d.getObjId())
             self.outputSetOfCoordinates3D.append(newCoord3D)
             self.outputSetOfCoordinates3D.update(newCoord3D)
 
-            self._store()
+        self.outputSetOfCoordinates3D.write()
+
+        self._store()
 
     def closeOutputSetStep(self):
         self.outputSetOfCoordinates3D.setStreamState(Set.STREAM_CLOSED)
