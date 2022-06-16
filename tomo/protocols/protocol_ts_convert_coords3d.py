@@ -81,7 +81,7 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     def convertCoordinates(self):
         sotsc3d = self.inputSetOfCoordinates.get()
 
-        sr = sotsc3d.getTiltSeries().getSamplingRate()
+        sr = self.inputSetOfTomograms.get().getSamplingRate()
 
         self.getOutputSetOfCoordinates3Ds()
 
