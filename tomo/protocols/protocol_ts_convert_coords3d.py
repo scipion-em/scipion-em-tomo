@@ -93,9 +93,9 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
             newCoord3D.setVolume(tomo)
             newCoord3D.setX(coor3d.getX()/sr, CENTER_GRAVITY)
             newCoord3D.setY(coor3d.getY()/sr, CENTER_GRAVITY)
-            newCoord3D.setZ(coor3d.getZ()/sr, CENTER_GRAVITY)
+            newCoord3D.setZ(-coor3d.getZ()/sr, CENTER_GRAVITY)
 
-            newCoord3D.setVolId(coor3d.getObjId())
+            newCoord3D.setVolId(tomo.getObjId())
             self.outputSetOfCoordinates3D.append(newCoord3D)
             self.outputSetOfCoordinates3D.update(newCoord3D)
 
