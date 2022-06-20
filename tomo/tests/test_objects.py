@@ -24,7 +24,9 @@
 # *
 # **************************************************************************
 from pyworkflow.tests import BaseTest
-from tomo.objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate
+from tomo.constants import SCIPION
+from tomo.objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, SetOfSubTomograms, SetOfTomograms, Tomogram, \
+    SetOfCoordinates3D, Coordinate3D, SubTomogram
 
 MYTSID = "MYTSID"
 
@@ -87,6 +89,51 @@ class TestTomoModel(BaseTest):
             self.assertEqual(Y_VALUE, posAngs[1], "Y is wrong when set with sampling rate")
             self.assertEqual(Z_VALUE, posAngs[2], "Z is wrong when set with sampling rate")
             self.assertEqual(MYTSID, tsCoord.getTsId(), "TSID is wrong")
+
+
+    def test_set_of_subtomograms(self):
+        """ Tests the SetOfSubtomograms model"""
+
+        # Create tomograms set
+        tomos = SetOfTomograms.create(self.outputPath)
+
+        tomo1 = Tomogram()
+        tomo1.setTsId("TS_1")
+        tomos.append(tomo1)
+
+        tomo2 = Tomogram()
+        tomo2.setTsId("TS_2")
+        tomos.append(tomo2)
+
+        # Create Coordinates set with just one coordinate pointing to just one tomogram
+        coords = SetOfCoordinates3D.create(self.outputPath)
+
+        coord1 = Coordinate3D()
+        coord1.setX(0,SCIPION)
+        coord1.setY(0, SCIPION)
+        coord1.setZ(0, SCIPION)
+        coord1.setTomoId("TS_1")
+        coords.append(coord1)
+
+        coords.setPrecedents(tomos)
+
+        coords.write()
+
+        # Test precedents involved
+        self.assertEqual(len(coords.getPrecedentsInvolved()), 1, "getPrecedentsInvolved does not seem to work")
+
+
+        subtomos = SetOfSubTomograms.create(self.outputPath)
+        subtomos.setCoordinates3D(coords)
+
+        subtomo = SubTomogram()
+        subtomo.setCoordinate3D(coord1)
+        subtomos.append(subtomo)
+
+        subtomos.write()
+
+        self.assertEqual(len(subtomos.getTomograms()), 1, "getTomograms does not return the right element count")
+
 
 
 

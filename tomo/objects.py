@@ -25,23 +25,23 @@
 # *
 # **************************************************************************
 
+import csv
+import math
 import os
-from datetime import datetime
+import statistics
 import threading
 from collections import OrderedDict
-import numpy as np
-import math
-import statistics
-import csv
+from datetime import datetime
 
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pwem.objects import Transform
-import pyworkflow.utils.path as path
+import numpy as np
 import pwem.objects.data as data
+import pyworkflow.utils.path as path
+import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
+from pwem.objects import Transform
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
-import tomo.constants as const
 
 class MATRIX_CONVERSION:
     RELION = "relion"
@@ -852,7 +852,7 @@ class Tomogram(data.Volume):
     location of the first coordinate loaded from the binary file. The volume may be displaced by setting a different
     origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
     """
-
+    TS_ID_FIELD = '_tsId'
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -903,7 +903,7 @@ class Tomogram(data.Volume):
     def copyInfo(self, other):
         """ Copy basic information """
         super().copyInfo(other)
-        self.copyAttributes(other, '_acquisition', '_tsId')
+        self.copyAttributes(other, '_acquisition', self.TS_ID_FIELD)
         if other.hasOrigin():
             self.copyAttributes(other, '_origin')
 
@@ -958,6 +958,7 @@ class Coordinate3D(data.EMObject):
     """This class holds the (x,y,z) position and other information
     associated with a coordinate"""
 
+    TOMO_ID_ATTR = "_tomoId"
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = Pointer(objDoStore=False)
@@ -1208,6 +1209,7 @@ class SetOfCoordinates3D(data.EMSet):
         self._boxSize = Integer()
         self._samplingRate = Float()
         self._precedentsPointer = Pointer()
+        self._tomos = None
 
     def getBoxSize(self):
         """ Return the box size of the particles.
@@ -1338,6 +1340,30 @@ class SetOfCoordinates3D(data.EMSet):
         coord.setVolume(self.getPrecedents()[coord.getVolId()])
         return coord
 
+    def initTomos(self):
+        """ Initialize internal _tomos to a dictionary if not done already"""
+        if self._tomos is None:
+            self._tomos = dict()
+
+    def getPrecedentsInvolved(self):
+        """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
+        subsets are done."""
+
+        tomoId_attr = Coordinate3D.TOMO_ID_ATTR
+        if self._tomos is None:
+
+            self.initTomos()
+
+            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
+
+            for row in uniqueTomos:
+                tsId = row[tomoId_attr]
+                tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+                self._tomos[tsId] = tomo
+
+        return self._tomos
+
+
 
 class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
@@ -1442,7 +1468,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         super().__init__(**kwargs)
         self._acquisition = TomoAcquisition()
         self._coordsPointer = Pointer()
-        self._tomos = dict()
+        self._tomos = None
 
     def copyInfo(self, other):
         """ Copy basic information (sampling rate and ctf)
@@ -1523,12 +1549,37 @@ class SetOfSubTomograms(data.SetOfVolumes):
         # Else, there are coordinates
         tomoId = coord.getVolId()
 
+        self.initTomos()
+
         # If not cached
         if tomoId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[subtomo.getVolId()]
+            tomo = self.getCoordinates3D().getPrecedents()[tomoId]
             self._tomos[tomoId] = tomo
 
         return self._tomos[tomoId]
+
+    def initTomos(self):
+        """ Initialize internal _tomos to a dictionary if not done already"""
+        if self._tomos is None:
+            self._tomos = dict()
+
+    def getTomograms(self):
+        """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
+        subsets are done."""
+
+        tomoId_attr = "_coordinate." + Coordinate3D.TOMO_ID_ATTR
+        if self._tomos is None:
+
+            self.initTomos()
+
+            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
+
+            for row in uniqueTomos:
+                tsId = row[tomoId_attr]
+                tomo = self.getCoordinates3D().getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+                self._tomos[tsId] = tomo
+
+        return self._tomos
 
 
 class AverageSubTomogram(SubTomogram):
