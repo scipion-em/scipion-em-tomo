@@ -464,14 +464,27 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         tsMatrixTransformList = []
 
         for ti in self:
-            transform = ti.getTransform().getMatrix().flatten()
-            transformIMOD = ['%.7f' % transform[0],
-                             '%.7f' % transform[1],
-                             '%.7f' % transform[3],
-                             '%.7f' % transform[4],
-                             '%.3f' % transform[2],
-                             '%.3f' % transform[5]]
+            if ti.getTransform() is not None:
+                transform = ti.getTransform().getMatrix().flatten()
+                transformIMOD = ['%.7f' % transform[0],
+                                 '%.7f' % transform[1],
+                                 '%.7f' % transform[3],
+                                 '%.7f' % transform[4],
+                                 '%.3f' % transform[2],
+                                 '%.3f' % transform[5]]
+            else:
+                from pyworkflow.utils import yellowStr
+                print(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). The identity transformation will be written in the .xf file'))
+                #This is the identity matrix
+                transformIMOD = ['1.0000000',
+                                 '0.0000000',
+                                 '0.0000000',
+                                 '-1.0000000',
+                                 '0.000',
+                                 '0.000']
             tsMatrixTransformList.append(transformIMOD)
+
+
 
         with open(transformFilePath, 'w') as f:
             csvW = csv.writer(f, delimiter='\t')
@@ -2508,24 +2521,24 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = Pointer()
+        self._SetOfTiltSeriesPointer = Pointer()
 
-    def getTiltSeries(self):
+    def getSetOfTiltSeries(self):
         """ Returns the Tilt Series associated with
                 this SetOfTiltSeriesCoordinates"""
-        return self._tiltSeriesPointer.get()
+        return self._SetOfTiltSeriesPointer.get()
 
-    def setTiltSeries(self, tiltseries):
+    def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the Tilt Series associated with this set of coordinates.
 
             Params:
 
-            tiltseries: Tilt Series object or a pointer to it.
+            setOfTiltSeries: Tilt Series object or a pointer to it.
                 """
-        if tiltseries.isPointer():
-            self._tiltSeriesPointer.copy(tiltseries)
+        if setOfTiltSeries.isPointer():
+            self._SetOfTiltSeriesPointer.copy(setOfTiltSeries)
         else:
-            self._tiltSeriesPointer.set(tiltseries)
+            self._SetOfTiltSeriesPointer.set(setOfTiltSeries)
 
     def getSummary(self):
         summary = []
@@ -2536,7 +2549,7 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
         """ Copy basic information (id and other properties) but not _mapperPath or _size
         from other set of objects to current one.
         """
-        self.setTiltSeries(other.getTiltSeries())
+        self.setSetOfTiltSeries(other.getSetOfTiltSeries())
 
 
 
