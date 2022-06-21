@@ -1476,6 +1476,7 @@ class SubTomogram(data.Volume):
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
+    EXPOSE_ITEMS = False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
