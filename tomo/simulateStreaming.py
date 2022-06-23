@@ -53,9 +53,8 @@ class simulateStreaming():
         print('sleeping to launch protocol in Scipion {} s...'.format(timeSleep))
         time.sleep(30)
 
-        for nameFile in os.listdir(pathFolderData):
-            for item in self.angleList:
-                print(self.angleList)
+        for item in self.angleList:
+            for nameFile in os.listdir(pathFolderData):
                 #headPath, nameFile = os.path.split(path)
                 if nameFile[-3:] == 'mrc' and float(nameFile[-7:-4]) == item:
                         print('path:', nameFile)
@@ -83,35 +82,31 @@ class simulateStreaming():
 
     def parseMdoc(self, pathMdoc):
         header = True
-        self.mainText = [None] * self.numtilts
+        self.mainText = []
         self.tiltList = [None] * self.numtilts
         self.angleList = [None] * self.numtilts
         index = 0
-        print('pathMdoc', pathMdoc)
+        print('pathMdoc:', pathMdoc, '\n')
         with open(pathMdoc, 'r') as f:
-            myline = f.readline()
-            while myline:
-                for line in f:
-                    #print('line: ', line)
-                    #print(self.tiltList)
-                    if line.startswith('[ZValue'):
-                        index += 1
-                        header = False
-                        self.tiltList[index] = line
-                    elif header == True:
+            #myline = f.readline()
+            # while myline:
+            for line in f:
+                if line.startswith('[ZValue'):
+                    index += 1
+                    header = False
+                    self.tiltList[index] = line
+                elif header == True:
+                    if line != None:
                         self.mainText.append(line)
-                    else:
-                        if line[:9] == 'TiltAngle':
-                            # print('index: {}, float(line[12:]): {}'.
-                            #       format(index, float(line[12:])))
-                            self.angleList[index] = round(float(line[12:]), 1)
-                        self.tiltList[index] = self.tiltList[index] + line
-
                 else:
-                    self.tiltList.remove(None)
-                    self.angleList.remove(None)
-                    self.mainText.remove(None)
-                    break
+                    if line[:9] == 'TiltAngle':
+                        # print('index: {}, float(line[12:]): {}'.
+                        #       format(index, float(line[12:])))
+                        self.angleList[index] = round(float(line[12:]), 1)
+                    self.tiltList[index] = self.tiltList[index] + line
+
+            self.tiltList.remove(None)
+            self.angleList.remove(None)
 
 if __name__ == '__main__':
     args = sys.argv[1:]
