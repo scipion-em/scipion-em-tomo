@@ -23,14 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+from os import environ
 import os
 import re
 from glob import glob
-import time
 from datetime import timedelta, datetime
 from collections import OrderedDict
-from os.path import join
 from statistics import mean
 
 import numpy as np
@@ -52,9 +50,9 @@ from tomo.convert.mdoc import normalizeTSId, MDoc
 from tomo.objects import TomoAcquisition
 
 from .protocol_base import ProtTomoBase
+import time
 import subprocess
-from os import environ
-from ..simulateStreaming import *
+#from ..simulateStreaming import *
 
 class ProtImportTsBase(ProtImport, ProtTomoBase):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
@@ -270,7 +268,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     # -------------------------- INSERT functions -----------------------------
     def _insertAllSteps(self):
-        self._initialize()
+        #self._initialize() #done by _validate()
+        print("HOLAAA5AAAA")
         self.simulateSreaming()
         self._insertFunctionStep(self.importStep)
 
@@ -593,7 +592,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
               the name structure (see advanced parameter)
             """
         fpath = self.filesPath.get()
-        mdocList = glob(join(fpath, self.filesPattern.get()))
+        mdocList = glob(os.path.join(fpath, self.filesPattern.get()))
         hasDoseList = []
         if not mdocList:
             raise Exception('No mdoc files were found in the '
@@ -930,13 +929,16 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     def simulateSreaming(self):
         fpath = self.filesPath.get()
-        pathMdoc = glob(join(fpath, self.filesPattern.get()))[0]
+        pathMdoc = glob(os.path.join(fpath, self.filesPattern.get()))[0]
         pathFolderData, mdocName = os.path.split(pathMdoc)
-        print('os.getcwd():', os.getcwd())
-        cmd = 'simulateStreaming.py {} {} {}'.format(fpath, mdocName, 30)
+        cmd = 'python simulateStreaming.py {} {} {}'.format(fpath, mdocName, 30)
         cwd = '../'
-        #process = subprocess.Popen(cmd, cwd=cwd, env=environ, stdout=subprocess.PIPE,
-        #                    stderr=subprocess.STDOUT, shell=True)
+        print('os.getcwd(): {}\ncwd: {}'.format(os.getcwd(), cwd))
+        process = subprocess.Popen(cmd, cwd=cwd, env=environ, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, shell=True)
+        output = process.stdout.readline().decode("utf-8")
+        print('output', output)
+
 
         # simulateStreaming(pathOrg=fpath,
         #                   fileNameMdoc=mdocName,
@@ -947,7 +949,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         import shutil
         timeStreamingStep = 20
         fpath = self.filesPath.get()
-        pathMdoc = glob(join(fpath, self.filesPattern.get()))[0]
+        pathMdoc = glob(os.path.join(fpath, self.filesPattern.get()))[0]
         pathFolderData, mdocName = os.path.split(pathMdoc)
         print('pathMdoc: ', pathMdoc)
 
@@ -959,7 +961,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self.filesPath.set(pathStreaming)
         print('pathStreaming: ', pathStreaming)
 
-        print('pathStreaming updated: ', glob(join(fpath, self.filesPattern.get()))[0])
+        print('pathStreaming updated: ', glob(os.path.join(fpath, self.filesPattern.get()))[0])
 
         for path in os.listdir(pathFolderData):
             headPath, nameFile = os.path.split(path)

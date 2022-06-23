@@ -24,43 +24,43 @@
 # *
 # **************************************************************************
 
-from os.path import join
 import time
-import glob
 import sys
-
+import os
+import shutil
 
 def simulateStreaming(pathOrg, fileNameMdoc, timeSleep):
-    import os
-    import shutil
-    pathMdoc = glob(join(pathOrg, fileNameMdoc))
+    pathMdoc = os.path.join(pathOrg, fileNameMdoc)
     pathFolderData, mdocName = os.path.split(pathMdoc)
-    print('pathMdoc: ', pathMdoc)
-
+    #print('pathMdoc: ', pathMdoc)
     # copied all files in streamingFolder. The first the mdoc, after that
     # added files with a sleeptime
     pathStreaming = os.path.join(pathFolderData, 'streamingData')
     os.makedirs(pathStreaming, exist_ok=True)
     shutil.copyfile(pathMdoc, os.path.join(pathStreaming, mdocName))
     #set streaming path for protocolfilesPath.set(pathStreaming)
-    print('pathStreaming: ', pathStreaming)
-
+    #print('pathStreaming: ', pathStreaming)
     #print('pathStreaming updated: ', glob(join(pathOrg, self.filesPattern.get()))[0])
 
-    for path in os.listdir(pathFolderData):
-        headPath, nameFile = os.path.split(path)
+    for nameFile in os.listdir(pathFolderData):
+        #headPath, nameFile = os.path.split(path)
         if nameFile[-3:] == 'mrc':
-            print(nameFile)
-            shutil.copyfile(path,
+            print('path:', nameFile)
+            shutil.copyfile(os.path.join(pathFolderData, nameFile),
                             os.path.join(pathStreaming, nameFile))
+            print('sleeping  {} s...'.format(timeSleep))
             time.sleep(timeSleep)
+
 
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if len(args) == 2:
-        pathOrg = args[1]
-        fileNameMdoc = args[2]
-        timeSleep = args[3]
+    if len(args) >= 1:
+        pathOrg = args[0]
+        fileNameMdoc = args[1]
+        timeSleep = int(args[2])
+        print('\n', pathOrg, '\n', fileNameMdoc, '\n', timeSleep, '\n')
+    else:
+        print('Args mandatories: pathOrg, fileNameMdoc, timeSleep')
 
     simulateStreaming(pathOrg, fileNameMdoc, timeSleep)
