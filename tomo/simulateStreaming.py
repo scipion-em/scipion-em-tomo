@@ -43,27 +43,30 @@ class simulateStreaming():
         # added files with a sleeptime
         os.makedirs(pathStreaming, exist_ok=True)
         self.parseMdoc(pathMdoc)
-
-        #shutil.copyfile(pathMdoc, os.path.join(pathStreaming, mdocName))
         self.copyMdoc()#just the header
-        #set streaming path for protocolfilesPath.set(pathStreaming)
-        #print('pathStreaming: ', pathStreaming)
-        #print('pathStreaming updated: ', glob(join(pathOrg, self.filesPattern.get()))[0])
-
         print('sleeping to launch protocol in Scipion {} s...'.format(timeSleep))
-        time.sleep(30)
+        time.sleep(20)
 
         for item in self.angleList:
-            for nameFile in os.listdir(pathFolderData):
-                #headPath, nameFile = os.path.split(path)
-                if nameFile[-3:] == 'mrc' and float(nameFile[-7:-4]) == item:
-                        print('path:', nameFile)
-                        shutil.copyfile(os.path.join(pathFolderData, nameFile),
-                                        os.path.join(pathStreaming, nameFile))
-                        self.copyMdoc(self.angleList.index(item))
-                        print('sleeping  {} s...'.format(timeSleep))
+            if item != None:
+                for nameFile in os.listdir(pathFolderData):
+                    #headPath, nameFile = os.path.split(path)
+                    if item < 0: itemR = str(item)
+                    else: itemR = '_' + str(item)
+                    if nameFile[-3:] == 'mrc' and nameFile[-8:-4] == itemR:
+                            print('path:', nameFile)
+                            shutil.copyfile(os.path.join(pathFolderData, nameFile),
+                                            os.path.join(pathStreaming, nameFile))
+                            print('self.angleList.index(item): {}, item: {}'.format(
+                                self.angleList.index(item), item))
+                            self.copyMdoc(self.angleList.index(item))
+                            print('sleeping  {} s...'.format(timeSleep))
 
-                        time.sleep(timeSleep)
+                            time.sleep(timeSleep)
+        mrcMainFile = os.path.split(mdocName, '.')[0] + '.mrcs'
+        mrcMainFilePath = os.path.join(pathFolderData, mrcMainFile)
+        mrcMainFileStreamingPath = os.path.join(self.pathStreaming, mrcMainFile)
+        shutil.copyfile(pathFolderData, os.path.join(mrcMainFilePath, mrcMainFileStreamingPath))
 
     def copyMdoc(self, item=None):
         if item == None: #header
@@ -77,8 +80,6 @@ class simulateStreaming():
                 for line in self.tiltList[item]:
                     if line != None:
                         f.write(line)
-
-
 
     def parseMdoc(self, pathMdoc):
         header = True

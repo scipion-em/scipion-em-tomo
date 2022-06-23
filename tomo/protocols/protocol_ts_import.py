@@ -265,9 +265,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     # -------------------------- INSERT functions -----------------------------
     def _insertAllSteps(self):
-        #self._initialize() #done by _validate()
-        print("HOLAAA5AAAA")
-        self.simulateSreaming()
+        self._insertFunctionStep(self._initialize)
+        if self.dataStreaming:
+            self._insertFunctionStep(self.simulateSreaming)
+        print("Before importStep...")
         self._insertFunctionStep(self.importStep)
 
     # -------------------------- STEPS functions ------------------------------
@@ -279,6 +280,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         incomingDoseList = []
         samplingRate = self.samplingRate.get()
         counter = 0
+        print("importStep...")
+
 
         if not self.MDOC_DATA_SOURCE:
             self.info("Using glob pattern: '%s'" % self._globPattern)
@@ -302,6 +305,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         finished = False
         lastDetectedChange = datetime.now()
 
+        print("importStep2...")
+
         # Ignore the timeout variables if we are not really in streaming mode
         if self.dataStreaming:
             timeout = timedelta(seconds=self.timeout.get())
@@ -310,6 +315,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             timeout = timedelta(seconds=5)
             fileTimeout = timedelta(seconds=5)
 
+        print("importStep3...")
         while not finished:
             if self.dataStreaming: time.sleep(3)  # wait 3 seconds before check for new files
             someNew = False  # Check if some new TS has been found
@@ -340,6 +346,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 tsObj.setOrigin(origin)
                 tsObj.setAnglesCount(len(tiltSeriesList))
                 # we need this to set mapper before adding any item
+
                 outputSet.append(tsObj)
 
                 if self.MDOC_DATA_SOURCE:
@@ -594,7 +601,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         if not mdocList:
             raise Exception('No mdoc files were found in the '
                             'introduced path:\n%s' % fpath)
-
+        print('mdoclList: ', mdocList)
         matchingFiles = OrderedDict()
         self.acquisitions = OrderedDict()
         self.sRates = OrderedDict()
@@ -928,7 +935,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         fpath = self.filesPath.get()
         pathMdoc = glob(os.path.join(fpath, self.filesPattern.get()))[0]
         pathFolderData, mdocName = os.path.split(pathMdoc)
-        cmd = 'python simulateStreaming.py {} {} {}'.format(fpath, mdocName, 30)
+        pathStreaming = os.path.join(pathFolderData, 'streamingData')
+        self.filesPath.set(pathStreaming)
+
+        cmd = 'python simulateStreaming.py {} {} {}'.format(fpath, mdocName, pathStreaming, 30)
         cwd = '../'
         print('os.getcwd(): {}\ncwd: {}'.format(os.getcwd(), cwd))
         process = subprocess.Popen(cmd, cwd=cwd, env=environ, stdout=subprocess.PIPE,
@@ -936,10 +946,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         output = process.stdout.readline().decode("utf-8")
         print('output', output)
 
-
-        # simulateStreaming(pathOrg=fpath,
-        #                   fileNameMdoc=mdocName,
-        #                   timeSleep=30)
 
     def simulateStreaming2(self):
         import os
