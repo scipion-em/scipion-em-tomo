@@ -191,7 +191,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            "update the output Set, which can "
                            "be used right away by next steps.")
 
-        form.addParam('timeout', params.IntParam, default=43200,
+        form.addParam('timeout', params.IntParam, default=10800,
                       condition='dataStreaming',
                       label="Timeout (secs)",
                       help="Interval of time (in seconds) after which, "
@@ -199,13 +199,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            "end. When finished, the output Set will be "
                            "closed and no more data will be "
                            "added to it. \n"
-                           "Note 1:  The default value is  high (12 hours) to "
+                           "Note 1:  The default value is  high (3 hours) to "
                            "avoid the protocol finishes during the acq of the "
                            "microscope. You can also stop it from right click "
-                           "and press STOP_STREAMING.\n"
-                           "Note 2: If you're using individual frames when "
-                           "importing movies, the timeout won't be refreshed"
-                           "until a whole movie is stacked.")
+                           "and press STOP_STREAMING.\n")
 
         form.addParam('fileTimeout', params.IntParam, default=30,
                       condition='dataStreaming',
