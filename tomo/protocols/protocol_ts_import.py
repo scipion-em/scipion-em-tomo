@@ -52,7 +52,9 @@ from tomo.convert.mdoc import normalizeTSId, MDoc
 from tomo.objects import TomoAcquisition
 
 from .protocol_base import ProtTomoBase
-
+import subprocess
+from os import environ
+from ..simulateStreaming import *
 
 class ProtImportTsBase(ProtImport, ProtTomoBase):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
@@ -269,6 +271,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     # -------------------------- INSERT functions -----------------------------
     def _insertAllSteps(self):
         self._initialize()
+        self.simulateSreaming()
         self._insertFunctionStep(self.importStep)
 
     # -------------------------- STEPS functions ------------------------------
@@ -312,7 +315,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             fileTimeout = timedelta(seconds=5)
 
         while not finished:
-            time.sleep(3)  # wait 3 seconds before check for new files
+            if self.dataStreaming: time.sleep(3)  # wait 3 seconds before check for new files
             someNew = False  # Check if some new TS has been found
             someAdded = False  # Check if some new were added
             # incompleteTs = False  # Check if there are incomplete TS
@@ -322,21 +325,29 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             if self._existingTs:
                 outputSet.enableAppend()
 
+            #print("matchingFiles: {}".format(matchingFiles))
+            for key, value in matchingFiles.items():
+                for x in value:
+                    print(x[0])
+                #print('------', key, ' : ', value)
+
+
             for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
-                tsObj = tsClass(tsId=ts)
+                tsObj = tsClass(tsId=ts)# tilt serie
                 # Form value has higher priority than the mdoc values
                 samplingRate =\
                     float(samplingRate if samplingRate else self.sRates[ts])
 
                 origin = Transform()
+                #print("Origin: {}".format(origin))
                 tsObj.setOrigin(origin)
                 tsObj.setAnglesCount(len(tiltSeriesList))
-
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
 
                 if self.MDOC_DATA_SOURCE:
+                    #print("self.accumDoses: {}".format(self.accumDoses))
                     accumDoseList = self.accumDoses[ts]
                     # tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
                     incomingDoseList = self.incomingDose[ts]
@@ -603,11 +614,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             # ones introduced by the user in the protocol's form.
             # Otherwise, the corresponding values considered will be the ones
             # read from the mdoc.
-            # This is because because you can't trust mdoc
+            # This is because you can't trust mdoc
             # (often dose is not calibrated in serialem, so you get 0;
             # pixel size might be binned as mdoc comes from a binned record
-            # not movie and  there are no Cs and amp
-            # contrast fields in mdoc)
+            # not movie and  there are no Cs and amp contrast fields in mdoc)
             mdocObj = MDoc(
                 mdoc,
                 voltage=self.voltage.get() if self.voltage.get() else None,
@@ -917,6 +927,47 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
     def isInStreaming(self):
         return self.dataStreaming.get()
+
+    def simulateSreaming(self):
+        fpath = self.filesPath.get()
+        pathMdoc = glob(join(fpath, self.filesPattern.get()))[0]
+        pathFolderData, mdocName = os.path.split(pathMdoc)
+        print('os.getcwd():', os.getcwd())
+        cmd = 'simulateStreaming.py {} {} {}'.format(fpath, mdocName, 30)
+        cwd = '../'
+        #process = subprocess.Popen(cmd, cwd=cwd, env=environ, stdout=subprocess.PIPE,
+        #                    stderr=subprocess.STDOUT, shell=True)
+
+        # simulateStreaming(pathOrg=fpath,
+        #                   fileNameMdoc=mdocName,
+        #                   timeSleep=30)
+
+    def simulateStreaming2(self):
+        import os
+        import shutil
+        timeStreamingStep = 20
+        fpath = self.filesPath.get()
+        pathMdoc = glob(join(fpath, self.filesPattern.get()))[0]
+        pathFolderData, mdocName = os.path.split(pathMdoc)
+        print('pathMdoc: ', pathMdoc)
+
+        # copied all files in streamingFolder. The first the mdoc, after that
+        # added files with a sleeptime
+        pathStreaming = os.path.join(pathFolderData, 'streamingData')
+        os.makedirs(pathStreaming, exist_ok=True)
+        shutil.copyfile(pathMdoc, os.path.join(pathStreaming, mdocName))
+        self.filesPath.set(pathStreaming)
+        print('pathStreaming: ', pathStreaming)
+
+        print('pathStreaming updated: ', glob(join(fpath, self.filesPattern.get()))[0])
+
+        for path in os.listdir(pathFolderData):
+            headPath, nameFile = os.path.split(path)
+            if nameFile[-3:] == 'mrc':
+                print(nameFile)
+                shutil.copyfile(path,
+                                os.path.join(pathStreaming, nameFile))
+                time.sleep(timeStreamingStep)
 
 
 class ProtImportTs(ProtImportTsBase):
