@@ -28,6 +28,22 @@ import time
 import sys
 import os
 import shutil
+'''
+Generates the mrc files in a specific path simulating the microscope 
+adquisition rate. Also generates a mdoc with the information of each mrc file 
+generated at the same rate that the files.
+INPUTS
+    input pathOrg: path with all the files for the simulation. Needs a set of mrc 
+    files endwith '_X.X.mrc' (X.X is the angle of the tilt), a general mdoc file with
+    the information of all the tilts
+    fileNameMdoc: Name of the general mdoc file 
+    timeSleep: Time waiting until the next file is generated
+    
+The delay (timeTrigger) until starts to generate the files is 20 segs
+'''
+
+
+timeTrigger = 2
 
 class simulateStreaming():
     def __int__(self):
@@ -36,41 +52,58 @@ class simulateStreaming():
     def simulateStreaming(self, pathOrg, fileNameMdoc, pathStreaming, timeSleep):
         self.numtilts = 200
         self.pathStreaming = pathStreaming
-        pathMdoc = os.path.join(pathOrg, fileNameMdoc)
-        pathFolderData, mdocName = os.path.split(pathMdoc)
-        #print('pathMdoc: ', pathMdoc)
+        self.fileNameMdoc = fileNameMdoc
+        self.pathMdoc = os.path.join(pathOrg, fileNameMdoc)
+        pathFolderData, mdocName = os.path.split(self.pathMdoc)
         # copied all files in streamingFolder. The first the mdoc, after that
         # added files with a sleeptime
+        if os.path.isdir(pathStreaming):
+            shutil.rmtree(pathStreaming)
         os.makedirs(pathStreaming, exist_ok=True)
-        self.parseMdoc(pathMdoc)
+        self.parseMdoc(self.pathMdoc)
         self.copyMdoc()#just the header
         print('sleeping to launch protocol in Scipion {} s...'.format(timeSleep))
-        time.sleep(20)
+        time.sleep(timeTrigger)
 
         for item in self.angleList:
             if item != None:
                 for nameFile in os.listdir(pathFolderData):
-                    #headPath, nameFile = os.path.split(path)
-                    if item < 0: itemR = str(item)
-                    else: itemR = '_' + str(item)
-                    if nameFile[-3:] == 'mrc' and nameFile[-8:-4] == itemR:
+                    index = nameFile.rfind('_') + 1
+                    if nameFile[-3:] == 'mrc' and nameFile[index:-4] == str(item):
                             print('path:', nameFile)
                             shutil.copyfile(os.path.join(pathFolderData, nameFile),
                                             os.path.join(pathStreaming, nameFile))
-                            print('self.angleList.index(item): {}, item: {}'.format(
-                                self.angleList.index(item), item))
+                            #print('self.angleList.index(item): {}, item: {}'.format(
+                            #    self.angleList.index(item), item))
                             self.copyMdoc(self.angleList.index(item))
                             print('sleeping  {} s...'.format(timeSleep))
 
                             time.sleep(timeSleep)
-        mrcMainFile = os.path.split(mdocName, '.')[0] + '.mrcs'
+
+        mrcBool = False
+        mrcMainFile = self.fileNameMdoc.split('mdoc')[0]
         mrcMainFilePath = os.path.join(pathFolderData, mrcMainFile)
-        mrcMainFileStreamingPath = os.path.join(self.pathStreaming, mrcMainFile)
-        shutil.copyfile(pathFolderData, os.path.join(mrcMainFilePath, mrcMainFileStreamingPath))
+        if os.path.isfile(mrcMainFilePath):
+            mrcBool = True
+        else:
+            mrcMainFile = mrcMainFile + '.mrcs'
+            mrcMainFilePath = os.path.join(pathFolderData, mrcMainFile)
+            if os.path.isfile(mrcMainFilePath):
+                mrcBool = True
+                mrcMainFilePath = os.path.join(pathFolderData, mrcMainFile)
+            else:
+                print('mrc main file not found')
+
+        if mrcBool == True:
+            mrcMainFileStreamingPath = os.path.join(self.pathStreaming,
+                                                    mrcMainFile)
+            shutil.copyfile(mrcMainFilePath, mrcMainFileStreamingPath)
+        else:
+            print('mrc main file not found')
 
     def copyMdoc(self, item=None):
         if item == None: #header
-            self.pathmdocStreaming = os.path.join(self.pathStreaming, "stack10.mdoc")
+            self.pathmdocStreaming = os.path.join(self.pathStreaming, self.fileNameMdoc )
             with open(self.pathmdocStreaming, 'w') as f:
                 for line in self.mainText:
                     if line != None:
