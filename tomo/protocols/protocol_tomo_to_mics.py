@@ -27,14 +27,14 @@ import enum
 from os.path import basename
 
 from pwem.emlib.image import ImageHandler
-from pwem.objects import SetOfMicrographs, Micrograph
+from pwem.objects import SetOfMicrographs, Micrograph, Acquisition
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, IntParam
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import replaceExt, removeExt
 
-from tomo.constants import SCIPION, BOTTOM_LEFT_CORNER
-from tomo.objects import SetOfCoordinates3D, Coordinate3D
+from tomo.constants import BOTTOM_LEFT_CORNER
+from tomo.objects import SetOfCoordinates3D, Coordinate3D, SetOfTomograms
 
 
 class ProtTomoToMicsOutput(enum.Enum):
@@ -59,12 +59,26 @@ class ProtTomoToMics(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     # --------------------------- STEPS functions --------------------------------------------
+    def getInputTomograms(self) -> SetOfTomograms:
+        return self.input.get()
     def createOutputStep(self):
         input = self.input.get()
 
         output = SetOfMicrographs.create(self._getPath())
         # output.copyInfo(input)
         output.setSamplingRate(input.getSamplingRate())
+
+        # Acquisition
+        micAcq = Acquisition()
+        tomoAcq =input.getAcquisition()
+        micAcq.setMagnification(tomoAcq.getMagnification())
+        micAcq.setSphericalAberration(tomoAcq.getSphericalAberration())
+        micAcq.setVoltage(tomoAcq.getVoltage())
+        micAcq.setAmplitudeContrast(tomoAcq.getAmplitudeContrast())
+        micAcq.setDoseInitial(tomoAcq.getDoseInitial())
+        micAcq.setDosePerFrame(tomoAcq.getDosePerFrame())
+
+        output.setAcquisition(micAcq)
 
         # For each tomogram
         for tomo in input:
