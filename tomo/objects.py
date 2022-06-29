@@ -25,28 +25,30 @@
 # *
 # **************************************************************************
 
+import csv
+import math
 import os
-from datetime import datetime
+import statistics
 import threading
 from collections import OrderedDict
-import numpy as np
-import math
-import statistics
-import csv
+from datetime import datetime
 
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pwem.objects import Transform
-import pyworkflow.utils.path as path
+import numpy as np
 import pwem.objects.data as data
+import pyworkflow.utils.path as path
+import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
+from pwem.objects import Transform
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
-import tomo.constants as const
+
 
 class MATRIX_CONVERSION:
     RELION = "relion"
     XMIPP = "xmipp"
     EMAN = "eman"
+
 
 def convertMatrix(M, convention=None, direction=None):
     """
@@ -302,7 +304,7 @@ class TiltSeriesBase(data.SetOfImages):
         return x, y, z
         # x, y, z are floats in Angstroms
 
-    def updateOriginWithResize(self,  resizeFactor):
+    def updateOriginWithResize(self, resizeFactor):
         """ Method to update the origin after resizing the TiltSeries. """
 
         origin = self.getOrigin()
@@ -624,6 +626,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
+    def getTiltSeriesFromTsId(self, tsId):
+        return self[{"_tsId": tsId}]
+
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
@@ -880,7 +885,7 @@ class Tomogram(data.Volume):
     location of the first coordinate loaded from the binary file. The volume may be displaced by setting a different
     origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
     """
-
+    TS_ID_FIELD = '_tsId'
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -931,7 +936,7 @@ class Tomogram(data.Volume):
     def copyInfo(self, other):
         """ Copy basic information """
         super().copyInfo(other)
-        self.copyAttributes(other, '_acquisition', '_tsId')
+        self.copyAttributes(other, '_acquisition', self.TS_ID_FIELD)
         if other.hasOrigin():
             self.copyAttributes(other, '_origin')
 
@@ -986,6 +991,7 @@ class Coordinate3D(data.EMObject):
     """This class holds the (x,y,z) position and other information
     associated with a coordinate"""
 
+    TOMO_ID_ATTR = "_tomoId"
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = Pointer(objDoStore=False)
@@ -1236,6 +1242,7 @@ class SetOfCoordinates3D(data.EMSet):
         self._boxSize = Integer()
         self._samplingRate = Float()
         self._precedentsPointer = Pointer()
+        self._tomos = None
 
     def getBoxSize(self):
         """ Return the box size of the particles.
@@ -1366,6 +1373,30 @@ class SetOfCoordinates3D(data.EMSet):
         coord.setVolume(self.getPrecedents()[coord.getVolId()])
         return coord
 
+    def initTomos(self):
+        """ Initialize internal _tomos to a dictionary if not done already"""
+        if self._tomos is None:
+            self._tomos = dict()
+
+    def getPrecedentsInvolved(self):
+        """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
+        subsets are done."""
+
+        tomoId_attr = Coordinate3D.TOMO_ID_ATTR
+        if self._tomos is None:
+
+            self.initTomos()
+
+            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
+
+            for row in uniqueTomos:
+                tsId = row[tomoId_attr]
+                tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+                self._tomos[tsId] = tomo
+
+        return self._tomos
+
+
 
 class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
@@ -1465,12 +1496,13 @@ class SubTomogram(data.Volume):
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
+    EXPOSE_ITEMS = False
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._acquisition = TomoAcquisition()
         self._coordsPointer = Pointer()
-        self._tomos = dict()
+        self._tomos = None
 
     def copyInfo(self, other):
         """ Copy basic information (sampling rate and ctf)
@@ -1551,12 +1583,37 @@ class SetOfSubTomograms(data.SetOfVolumes):
         # Else, there are coordinates
         tomoId = coord.getVolId()
 
+        self.initTomos()
+
         # If not cached
         if tomoId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[subtomo.getVolId()]
+            tomo = self.getCoordinates3D().getPrecedents()[tomoId]
             self._tomos[tomoId] = tomo
 
         return self._tomos[tomoId]
+
+    def initTomos(self):
+        """ Initialize internal _tomos to a dictionary if not done already"""
+        if self._tomos is None:
+            self._tomos = dict()
+
+    def getTomograms(self):
+        """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
+        subsets are done."""
+
+        tomoId_attr = "_coordinate." + Coordinate3D.TOMO_ID_ATTR
+        if self._tomos is None:
+
+            self.initTomos()
+
+            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
+
+            for row in uniqueTomos:
+                tsId = row[tomoId_attr]
+                tomo = self.getCoordinates3D().getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+                self._tomos[tsId] = tomo
+
+        return self._tomos
 
 
 class AverageSubTomogram(SubTomogram):
@@ -2452,7 +2509,7 @@ class TiltSeriesCoordinate(data.EMObject):
 
     def getPosition(self, sampling_rate=1):
         """Returns the position a TiltSeriesCoordinate in a tuple at a specific sampling rate (optional)"""
-        return self.getX()/sampling_rate, self.getY()/sampling_rate, self.getZ()/sampling_rate
+        return self.getX() / sampling_rate, self.getY() / sampling_rate, self.getZ() / sampling_rate
 
     def setPosition(self, x, y, z, sampling_rate):
         """Set the position of the coordinate
@@ -2461,9 +2518,9 @@ class TiltSeriesCoordinate(data.EMObject):
             :param int z: Position of the coordinate in the Z axis
             :param flat sampling_rate: sampling rate in which x,y,z are measured. Default 1 = Å
         """
-        self.setX(x*sampling_rate)
-        self.setY(y*sampling_rate)
-        self.setZ(z*sampling_rate)
+        self.setX(x * sampling_rate)
+        self.setY(y * sampling_rate)
+        self.setZ(z * sampling_rate)
 
     def getTsId(self):
         return self._tsId.get()
@@ -2485,24 +2542,24 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._tiltSeriesPointer = Pointer()
+        self._SetOfTiltSeriesPointer = Pointer()
 
-    def getTiltSeries(self):
+    def getSetOfTiltSeries(self):
         """ Returns the Tilt Series associated with
                 this SetOfTiltSeriesCoordinates"""
-        return self._tiltSeriesPointer.get()
+        return self._SetOfTiltSeriesPointer.get()
 
-    def setTiltSeries(self, tiltseries):
+    def setSetOfTiltSeries(self, setOfTiltSeries):
         """ Set the Tilt Series associated with this set of coordinates.
 
             Params:
 
-            tiltseries: Tilt Series object or a pointer to it.
+            setOfTiltSeries: Tilt Series object or a pointer to it.
                 """
-        if tiltseries.isPointer():
-            self._tiltSeriesPointer.copy(tiltseries)
+        if setOfTiltSeries.isPointer():
+            self._SetOfTiltSeriesPointer.copy(setOfTiltSeries)
         else:
-            self._tiltSeriesPointer.set(tiltseries)
+            self._SetOfTiltSeriesPointer.set(setOfTiltSeries)
 
     def getSummary(self):
         summary = []
@@ -2513,8 +2570,4 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
         """ Copy basic information (id and other properties) but not _mapperPath or _size
         from other set of objects to current one.
         """
-        self.setTiltSeries(other.getTiltSeries())
-
-
-
-
+        self.setSetOfTiltSeries(other.getSetOfTiltSeries())

@@ -31,6 +31,7 @@ from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
 from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
+from .protocol_ts_consensus_alignment import ProtConsensusAlignmentTS
 from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
@@ -43,3 +44,4 @@ from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
+from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
