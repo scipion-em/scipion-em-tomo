@@ -33,6 +33,7 @@ import pwem.protocols as emprot
 from pyworkflow.tests import BaseTest, setupTestOutput, setupTestProject
 from pwem import Domain
 from pwem.objects import CTFModel, Transform
+from xmipptomo.protocols.protocol_project_top import SubtomoProjectOutput
 
 from . import DataSet
 from ..objects import SetOfTiltSeriesM, SetOfTiltSeries, Coordinate3D, Tomogram
@@ -753,13 +754,13 @@ class TestParticlesToSubtomograms(BaseTest):
                   'plugins are installed')
             return
         subtomograms = self._importSubtomoSet()
-        protSubtraction = self.newProtocol(XmippProtSubtomoProject,
+        projector = self.newProtocol(XmippProtSubtomoProject,
                                            input=subtomograms.outputSubTomograms)
-        self.launchProtocol(protSubtraction)
-        self.assertSetSize(protSubtraction.outputParticles, 4,
-                           "The number of projections generated must be 4")
+        self.launchProtocol(projector)
+        output = getattr(projector, SubtomoProjectOutput.particles.name)
+        self.assertSetSize(output, 4, "The number of projections generated must be 4")
 
-        splitSet = self._splitSet(protSubtraction.outputParticles, 2)
+        splitSet = self._splitSet(output, 2)
         protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
                                       inputSubtomogramSet=subtomograms.outputSubTomograms,
                                       inputSet=splitSet.outputParticles01)
@@ -777,7 +778,7 @@ class TestParticlesToSubtomograms(BaseTest):
                            "The number of subtomograms must be 2")
 
         protClassification2D = self.newProtocol(XmippProtCL2D,
-                                                inputParticles=protSubtraction.outputParticles,
+                                                inputParticles=output,
                                                 numberOfClasses=2,
                                                 numberOfInitialClasses=2)
         self.launchProtocol(protClassification2D)
