@@ -366,6 +366,14 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
+    def _getExcludedViewsIndex(self):
+        """Return a list with a list of the excluded views """
+        excludeViewsList = []
+        for ti in self.iterItems():
+            if not ti.isEnabled():
+                excludeViewsList.append(ti.getIndex())
+        return excludeViewsList
+
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
         newstcomPath = ts_folder + '/newst.com'
@@ -410,6 +418,11 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+        excludedViewsList = self._getExcludedViewsIndex()
+        excludedViewsIndexes = ''
+        if excludedViewsList:
+            excludedViewsIndexes = 'EXCLUDELIST '
+            excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
 
         dims = (self.getDim()[0], self.getDim()[1])
         if kwargs.get('swapDims', False):
@@ -436,13 +449,15 @@ ActionIfGPUFails {},{}\n\
 XTILTFILE {}.xtilt\n\
 OFFSET {}\n\
 SHIFT {} {}\n\
+{}\
 $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        radial[0], radial[1], xAxisTill, log,
                                        scale[0], scale[1], mode,
                                        dims[0], dims[1],
                                        subsetStart[0], subsetStart[1],
                                        actionIfGPUFails[0], actionIfGPUFails[1],
-                                       pathi, offset, shift[0], shift[1]))
+                                       pathi, offset, shift[0], shift[1],
+                                       excludedViewsIndexes))
 
         return tiltcomPath
 
