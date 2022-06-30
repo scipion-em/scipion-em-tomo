@@ -424,7 +424,15 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
             excludedViewsIndexes = 'EXCLUDELIST '
             excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
 
-        dims = (self.getDim()[0], self.getDim()[1])
+        # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
+        # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
+        # considered in the tilt.com should be the ones corresponding to the tomogram
+        intorducedDims = kwargs.get('dims', None)  #
+        if intorducedDims:
+            dims = intorducedDims
+        else:
+            dims = (self.getDim()[0], self.getDim()[1])
+        # Swap dimensions case
         if kwargs.get('swapDims', False):
             dims = (dims[1], dims[0])
 
@@ -1411,6 +1419,7 @@ class SubTomogram(data.Volume):
 
     def setCoordinate3D(self, coordinate):
         self._coordinate = coordinate
+        self.setVolId(coordinate.getVolId())
 
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
