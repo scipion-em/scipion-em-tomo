@@ -366,6 +366,14 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
+    def _getExcludedViewsIndex(self):
+        """Return a list with a list of the excluded views """
+        excludeViewsList = []
+        for ti in self.iterItems():
+            if not ti.isEnabled():
+                excludeViewsList.append(ti.getIndex())
+        return excludeViewsList
+
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
         newstcomPath = ts_folder + '/newst.com'
@@ -410,8 +418,21 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+        excludedViewsList = self._getExcludedViewsIndex()
+        excludedViewsIndexes = ''
+        if excludedViewsList:
+            excludedViewsIndexes = 'EXCLUDELIST '
+            excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
 
-        dims = (self.getDim()[0], self.getDim()[1])
+        # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
+        # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
+        # considered in the tilt.com should be the ones corresponding to the tomogram
+        intorducedDims = kwargs.get('dims', None)  #
+        if intorducedDims:
+            dims = intorducedDims
+        else:
+            dims = (self.getDim()[0], self.getDim()[1])
+        # Swap dimensions case
         if kwargs.get('swapDims', False):
             dims = (dims[1], dims[0])
 
@@ -436,13 +457,15 @@ ActionIfGPUFails {},{}\n\
 XTILTFILE {}.xtilt\n\
 OFFSET {}\n\
 SHIFT {} {}\n\
+{}\
 $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        radial[0], radial[1], xAxisTill, log,
                                        scale[0], scale[1], mode,
                                        dims[0], dims[1],
                                        subsetStart[0], subsetStart[1],
                                        actionIfGPUFails[0], actionIfGPUFails[1],
-                                       pathi, offset, shift[0], shift[1]))
+                                       pathi, offset, shift[0], shift[1],
+                                       excludedViewsIndexes))
 
         return tiltcomPath
 
@@ -1396,6 +1419,7 @@ class SubTomogram(data.Volume):
 
     def setCoordinate3D(self, coordinate):
         self._coordinate = coordinate
+        self.setVolId(coordinate.getVolId())
 
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
