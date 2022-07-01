@@ -33,6 +33,7 @@ from statistics import mean
 
 import numpy as np
 from sqlite3 import OperationalError
+from tomo import Plugin
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
@@ -52,7 +53,6 @@ from tomo.objects import TomoAcquisition
 from .protocol_base import ProtTomoBase
 import time
 import subprocess
-#from ..simulateStreaming import *
 
 class ProtImportTsBase(ProtImport, ProtTomoBase):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
@@ -938,7 +938,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         pathStreaming = os.path.join(pathFolderData, 'streamingData')
         self.filesPath.set(pathStreaming)
 
-        cmd = 'python simulateStreaming.py {} {} {}'.format(fpath, mdocName, pathStreaming, 30)
+        pathPlugin = os.path.join(Plugin.getPluginDir(), "simulateStreaming.py")
+        cmd = 'python pathPlugin {} {} {}'.format(fpath, mdocName, pathStreaming, 30)
         cwd = '../'
         print('os.getcwd(): {}\ncwd: {}'.format(os.getcwd(), cwd))
         process = subprocess.Popen(cmd, cwd=cwd, env=environ, stdout=subprocess.PIPE,
@@ -1033,6 +1034,7 @@ class ProtImportTs(ProtImportTsBase):
                         % (fileName, nImages, nAngles)
         else:
             return None
+        pathPlugin = Plugin.getPluginDir()
 
 
 class ProtImportTsMovies(ProtImportTsBase):
@@ -1094,3 +1096,4 @@ class ProtImportTsMovies(ProtImportTsBase):
                         'should be in the files pattern.'
         else:
             return None
+
