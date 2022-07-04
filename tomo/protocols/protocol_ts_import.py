@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+#                Alberto Garcia Mena (alberto.garcia@cnb.csic.es)
 # *
 # * [1] SciLifeLab, Stockholm University
 # *
@@ -44,6 +45,7 @@ from pyworkflow.utils import yellowStr
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
+from pwem.protocols.protocol_import.base import ProtImportFiles, ProtImport
 
 from tomo.convert import (getAnglesFromHeader, getAnglesFromMdoc,
                           getAnglesFromTlt)
@@ -54,7 +56,8 @@ from .protocol_base import ProtTomoBase
 import time
 import subprocess
 
-class ProtImportTsBase(ProtImport, ProtTomoBase):
+
+class ProtImportTsBase(ProtImport):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
     """
     IMPORT_FROM_FILES = 0
@@ -1097,3 +1100,36 @@ class ProtImportTsMovies(ProtImportTsBase):
         else:
             return None
 
+
+class ProtImportMoviesTomo(ProtImportFiles):
+    """Protocol to import movies from a tomo serie"""
+    _label = 'import movies'
+    _devStatus = pw.BETA
+
+    def _defineAngleParam(self, form):
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam('movies_mdoc_path', params.FileParam,
+                  label='Path to movies mdoc files',
+                  help="Select the path with the movies and the mdoc files associatted. \n"
+                       "The folder can contain movies from several tilt series."
+                       "To avoid some of them, please fill the blacklist form")
+
+
+    def _insertAllSteps(self):
+        self.initializeParams()
+        self._insertFunctionStep('readParameters')
+        self._insertFunctionStep('createOutputStep')
+
+    def initializeParams(self):
+        pass
+
+
+    def readParameters(self):
+        pass
+
+
+    def createOutputStep(self):
+        self._defineOutputs()
+
+    def _validate(self):
+        pass
