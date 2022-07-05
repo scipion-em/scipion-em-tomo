@@ -504,7 +504,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
                                  '0.0000000',
-                                 '-1.0000000',
+                                 '1.0000000',
                                  '0.000',
                                  '0.000']
             tsMatrixTransformList.append(transformIMOD)
