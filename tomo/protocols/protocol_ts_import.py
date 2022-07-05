@@ -1,7 +1,6 @@
 # **************************************************************************
 # *
 # * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
-#                Alberto Garcia Mena (alberto.garcia@cnb.csic.es)
 # *
 # * [1] SciLifeLab, Stockholm University
 # *
@@ -44,7 +43,6 @@ from pyworkflow.object import Integer
 from pyworkflow.utils import yellowStr
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
-from pwem.protocols import ProtImport
 from pwem.protocols.protocol_import.base import ProtImportFiles, ProtImport
 
 from tomo.convert import (getAnglesFromHeader, getAnglesFromMdoc,
@@ -1102,26 +1100,246 @@ class ProtImportTsMovies(ProtImportTsBase):
 
 
 class ProtImportMoviesTomo(ProtImportFiles):
-    """Protocol to import movies from a tomo serie"""
+    """Protocol to import independient movies from a tomo serie. The protocol
+     will input the mdoc files of movies and output a set of tilt images movies
+    """
     _label = 'import movies'
     _devStatus = pw.BETA
 
-    def _defineAngleParam(self, form):
+    def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('movies_mdoc_path', params.FileParam,
+        form.addParam('filesPath', params.FileParam,
                   label='Path to movies mdoc files',
                   help="Select the path with the movies and the mdoc files associatted. \n"
                        "The folder can contain movies from several tilt series."
                        "To avoid some of them, please fill the blacklist form")
+        form.addParam('filesPattern', params.StringParam,
+                      label='Pattern',
+                      help="It determines if the tilt series are going to "
+                           "be imported using the mdoc file or the tilt "
+                           "series files. To import from the mdoc files, "
+                           "the word '.mdoc' must appear in the pattern, "
+                           "if not, a tilt series pattern is expected. "
+                           "In the first case, the angular and acquisition "
+                           "data are directly read from the corresponding "
+                           "mdoc file, while in the second it is read "
+                           "the base name of the matching files, according to "
+                           " the pattern introduced.\n\n"
+                           "*IMPORTING WITH MDOC FILES*\n\n"
+                           "For *tilt series movies*, a mdoc per tilt series "
+                           "movies is expected. "
+                           "The corresponding movie file/s must be located in "
+                           "the same path as the mdoc file. The tilt series "
+                           "id will be the base name of the mdoc files, "
+                           "so the names of the mdoc files must be different, "
+                           "even if they're located in "
+                           "different paths.\n\n"
+                           "For *tilt series*, the only difference is that a "
+                           "stack .mrcs file is expected for each "
+                           "mdoc, which means, per each tilt series desired "
+                           "to be imported.\n\n"
+                           "*IMPORTING WITH A PATTERN OF THE TILT SERIES FILE "
+                           "NAMES*\n\n"
+                           "The pattern can contain standard wildcards such "
+                           "as *, ?, etc.\n\n"
+                           "It should also contains the following special "
+                           "tags:\n"
+                           "   *{TS}*: tilt series identifier, which can be "
+                           "any UNIQUE part of the path. This must be "
+                           "an alpha-numeric sequence (avoid symbols as -) "
+                           "that can not start with a number.\n"
+                           "   *{TO}*: acquisition order, an integer value "
+                           "(important for dose).\n"
+                           "   *{TA}*: tilt angle, a positive or negative "
+                           "float value.\n\n"
+                           "Examples:\n\n"
+                           "To import a set of image stacks (tilt-series "
+                           "or tilt-series movies) as: \n"
+                           "TiltSeries_a_001_0.0.mrc\n"
+                           "TiltSeries_a_002_3.0.mrc\n"
+                           "TiltSeries_a_003_-3.0.mrc\n"
+                           "...\n"
+                           "TiltSeries_b_001_0.0.mrc\n"
+                           "TiltSeries_b_002_3.0.mrc\n"
+                           "TiltSeries_b_003_-3.0.mrc\n"
+                           "...\n"
+                           "The pattern TiltSeries_{TS}_{TO}_{TA}.mrc will "
+                           "identify:\n"
+                           "{TS} as a, b, ...\n"
+                           "{TO} as 001, 002, 003, ...\n"
+                           "{TA} as 0.0, 3.0, -3.0, ...\n")
+        """ Options to blacklist certain items when launching the
+        import protocol.
+        """
+        form.addSection(label="Rejection")
+        form.addParam('blacklistDateFrom', params.StringParam,
+                      label="Reject from",
+                      allowsNull=True,
+                      help="Files acquired after this date will not be imported. "
+                           "Must follow format: YYYY-mm-dd HH:MM:SS \n"
+                           "e.g: 2019-01-14 14:18:05")
+        form.addParam('blacklistDateTo', params.StringParam,
+                      label="Reject before",
+                      allowsNull=True,
+                      help="Files acquired before this date will not be imported. "
+                           "Must follow format: YYYY-mm-dd HH:MM:SS \n"
+                           "e.g: 2019-01-14 14:18:05")
+        form.addParam('useRegexps', params.BooleanParam,
+                      default=True,
+                      label='Rejection file has RegExps',
+                      help="Choose Yes if the rejection file contains regular expressions. Set to No if "
+                           "the rejection file contains file names. Ignore if not using a rejection file")
+        form.addParam('blacklistFile', params.FileParam,
+                      label="Blacklist File",
+                      allowsNull=True,
+                      help="Reject everything included in this file. If Use RegExps is True,"
+                           "lines will be interpreted as regular expressions. E.g: \n"
+                           "(.*)GRID_0[1-5](.*)\n"
+                           "(.*)/GRID_10/Falcon_2019_01_14-16_(.*)\n"
+                           "If Use RegExps is False, lines will be interpreted as file names. E.g.\n"
+                           "/path/to/GRID_10/Falcon_2019_01_14-16_51_20_0_movie.mrcs\n"
+                           "/path/to/GRID_10/Falcon_2019_01_14-16_55_40_0_movie.mrcs"
+                      )
+
+        form.addSection('Streaming')
+
+        form.addParam('dataStreaming', params.BooleanParam, default=True,
+                      label="Process data in streaming?",
+                      help="Select this option if you want import data as it "
+                           "is generated and process on the fly by next "
+                           "protocols. In this case the protocol will "
+                           "keep running to check new files and will "
+                           "update the output Set, which can "
+                           "be used right away by next steps.")
+
+        form.addParam('initialTimeout', params.IntParam, default=60,
+                      condition='dataStreaming',
+                      label="Initial timeout (secs)",
+                      help="Waiting time until the first movie is acquired\n")
+
+        form.addParam('timeout', params.IntParam, default=10800,
+                      condition='dataStreaming',
+                      label="Timeout (secs)",
+                      help="Interval of time (in seconds) after which, "
+                           "if no new file is detected, the protocol will "
+                           "end. When finished, the output Set will be "
+                           "closed and no more data will be "
+                           "added to it. \n"
+                           "Note 1:  The default value is 3 hours to "
+                           "avoid the protocol finishes during the acq of the "
+                           "microscope. You can also stop it from right click "
+                           "and press STOP_STREAMING.\n")
+
+        form.addParam('fileTimeout', params.IntParam, default=10,
+                      condition='dataStreaming',
+                      label="File timeout (secs)",
+                      help="Interval of time (in seconds) after which, if a "
+                           "file has not changed, we consider it as a new "
+                           "file.\n")
+
+
+    #Parse
+    def getBlacklistedItems(self):
+        if not hasattr(self, '_blacklistedItems'):
+            self._blacklistedItems = set()
+        return self._blacklistedItems
+
+
+    def getItemsToBlacklistFromFile(self):
+        if not hasattr(self, '_fileItemsToBlacklist'):
+            blacklistfile = self.blacklistFile.get()
+            blacklistItems = set()
+            if blacklistfile:
+                with open(blacklistfile, 'r') as f:
+                    for blacklistedItem in f:
+                        blacklistedItem = blacklistedItem.strip()
+                        blacklistItems.add(blacklistedItem)
+            self._fileItemsToBlacklist = blacklistItems
+
+        return self._fileItemsToBlacklist
+
+
+    def isBlacklisted(self, fileName):
+        # check if already blacklisted
+        blacklistedItems = self.getBlacklistedItems()
+        if fileName in blacklistedItems:
+            return True
+
+        # Blacklisted by date
+        blacklistDateFrom = self.blacklistDateFrom.get()
+        blacklistDateTo = self.blacklistDateTo.get()
+        doDateBlacklist = blacklistDateFrom is not None or blacklistDateTo is not None
+        if doDateBlacklist:
+            fileDate = datetime.fromtimestamp(os.path.getmtime(fileName))
+            self.info(fileDate)
+            if blacklistDateFrom:
+                parsedDateFrom = datetime.strptime(blacklistDateFrom, "%Y-%m-%d %H:%M:%S")
+                self.info(parsedDateFrom)
+                self.info(parsedDateFrom)
+                if blacklistDateTo:
+                    parsedDateTo = datetime.strptime(blacklistDateTo, "%Y-%m-%d %H:%M:%S")
+                    if parsedDateFrom <= fileDate <= parsedDateTo:
+                        self.info("Blacklist warning: %s is blacklisted by date" % fileName)
+                        blacklistedItems.add(fileName)
+                        return True
+                else:
+                    if parsedDateFrom <= fileDate:
+                        self.info("Blacklist warning: %s is blacklisted by date" % fileName)
+                        blacklistedItems.add(fileName)
+                        return True
+
+            elif blacklistDateTo:
+                parsedDateTo = datetime.strptime(blacklistDateTo, "%Y-%m-%d %H:%M:%S")
+                if fileDate <= parsedDateTo:
+                    self.info("Blacklist warning: %s is blacklisted by date" % fileName)
+                    blacklistedItems.add(fileName)
+                    return True
+
+        # Blacklisted by file
+        items2blacklist = self.getItemsToBlacklistFromFile()
+        for item2blacklist in items2blacklist:
+            if self.useRegexps.get():
+                if re.match(item2blacklist, fileName):
+                    self.info("Blacklist warning: %s matched blacklist regexp %s"
+                              % (fileName, item2blacklist))
+                    blacklistedItems.add(fileName)
+                    return True
+            elif fileName in item2blacklist:
+                self.info("Blacklist warning: %s is blacklisted " % fileName)
+                blacklistedItems.add(fileName)
+                return True
+        return False
+
 
 
     def _insertAllSteps(self):
-        self.initializeParams()
+        self.importStep()
         self._insertFunctionStep('readParameters')
         self._insertFunctionStep('createOutputStep')
 
-    def initializeParams(self):
-        pass
+
+    def importStep(self):
+        self.info('importStep')
+        self.info(str(self.filesPath.get()))
+        self.info("Using glob pattern: '%s'" % self.filesPattern)
+
+        if self.dataStreaming:
+            timeout = timedelta(seconds=self.timeout.get())
+            fileTimeout = timedelta(seconds=self.fileTimeout.get())
+            initialTimeout = timedelta(seconds=self.initialTimeout.get())
+        else:
+            timeout = timedelta(seconds=5)
+            fileTimeout = timedelta(seconds=5)
+            initialTimeout = timedelta(seconds=5)
+
+        print('timeout:{} fileTimeout:{} initialTimeout:{}'.format(
+            timeout, fileTimeout, initialTimeout))
+
+        for i, (fileName, fileId) in enumerate(self.iterFiles()):
+            if self.isBlacklisted(fileName):
+                continue
+            print('fileName: {}'.format(fileName))
+
 
 
     def readParameters(self):
@@ -1131,5 +1349,8 @@ class ProtImportMoviesTomo(ProtImportFiles):
     def createOutputStep(self):
         self._defineOutputs()
 
+
     def _validate(self):
         pass
+
+
