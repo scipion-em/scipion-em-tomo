@@ -53,6 +53,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
     the frames range used for alignment and final sum, the binning factor
     or the cropping options (region of interest)
     """
+    _possibleOutputs = {'outputTiltSeries': SetOfTiltSeries,
+                        OUTPUT_TILT_SERIES_DW: SetOfTiltSeries,
+                        OUTPUT_TILT_SERIES_EVEN: SetOfTiltSeries,
+                        OUTPUT_TILT_SERIES_ODD: SetOfTiltSeries}
 
     # Attributes used for even/odd frames splitting if requested
     evenAvgFrameList = []
