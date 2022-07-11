@@ -608,8 +608,7 @@ class ProtImportTsBase(ProtImport):
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
         self.incomingDose = OrderedDict()
-        warningHeadMsg = yellowStr('The following mdoc files were skipped. '
-                                   'See details below:\n\n')
+        warningHeadMsg = 'The following mdoc files were skipped. See details below:\n\n'
         warningDetailedMsg = []
         skippedMdocs = 0
 
@@ -641,7 +640,7 @@ class ProtImportTsBase(ProtImport):
                 isImportingTsMovies=self._isImportingTsMovies())
             hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
-                warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
+                warningHeadMsg += '\t- %s\n' % mdoc
                 warningDetailedMsg.append(validationError)
                 skippedMdocs += 1
                 # validationErrors.append(validationError)

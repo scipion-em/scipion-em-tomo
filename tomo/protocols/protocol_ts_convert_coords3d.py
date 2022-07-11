@@ -24,17 +24,13 @@
 # *
 # **************************************************************************
 
-import os
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
-import pyworkflow.utils.path as path
-from pyworkflow.object import Set, List, String
-from pyworkflow.protocol.constants import STEPS_PARALLEL
+from pyworkflow.object import Set
 from pwem.protocols import EMProtocol
 import tomo.objects as tomoObj
 from tomo.constants import CENTER_GRAVITY
 from tomo.protocols import ProtTomoBase
-import xmipptomo.utils as utils
 
 METADATA_INPUT_COORDINATES = "fiducialCoordinates.xmd"
 
