@@ -238,9 +238,6 @@ class MDoc:
         zSlices_sorted = sorted(zSlices,
                                 key=lambda d: dt.strptime(d['DateTime'], fmt))
 
-        for a, b in zip(zSlices, zSlices_sorted):
-            print(a['DateTime'], b['DateTime'])
-
         return zSlices_sorted
 
     @staticmethod
