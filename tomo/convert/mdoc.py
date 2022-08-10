@@ -1,5 +1,5 @@
 import os
-import sys
+from datetime import datetime as dt
 from os.path import join, exists
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from pathlib import PureWindowsPath
@@ -79,6 +79,7 @@ class MDoc:
 
         try:
             headerDict, zSlices = self._parseMdoc()
+            zSlices = self._sortByTimestamp(zSlices)
 
             # Get acquisition general info
             self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
@@ -220,6 +221,24 @@ class MDoc:
         # for cases like 0.0000000001
         if round(accumulatedDose) > 0:
             self.mdocHasDose = True
+
+    def _sortByTimestamp(self, zSlices):
+        """ MDOC file is not necessarily sorted by acquisition order,
+            use TimeStamp key to sort Z-slices.
+        """
+        dtValue = zSlices[0].get('DateTime', None)
+        if dtValue is None:
+            return zSlices
+        else:
+            if len(dtValue.split()[0]) == 9:  # year is two digits
+                fmt = '%d-%b-%y  %H:%M:%S'
+            else:
+                fmt = '%d-%b-%Y  %H:%M:%S'
+
+        zSlices_sorted = sorted(zSlices,
+                                key=lambda d: dt.strptime(d['DateTime'], fmt))
+
+        return zSlices_sorted
 
     @staticmethod
     def _getAngleMovieFileName(parentFolder, zSlice, tsFile):
@@ -430,10 +449,6 @@ class TiltMetadata:
 
     def getAccumDose(self):
         return self._accumDose
-
-    # TODO: remove since this is a redefinition (see above)
-    # def getAcqOrder(self):
-    #    return self._acqOrder
 
     def getIncomingDose(self):
         return self._incomingDose
