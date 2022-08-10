@@ -43,10 +43,12 @@ from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
 
+
 class MATRIX_CONVERSION:
     RELION = "relion"
     XMIPP = "xmipp"
     EMAN = "eman"
+
 
 def convertMatrix(M, convention=None, direction=None):
     """
@@ -302,7 +304,7 @@ class TiltSeriesBase(data.SetOfImages):
         return x, y, z
         # x, y, z are floats in Angstroms
 
-    def updateOriginWithResize(self,  resizeFactor):
+    def updateOriginWithResize(self, resizeFactor):
         """ Method to update the origin after resizing the TiltSeries. """
 
         origin = self.getOrigin()
@@ -364,6 +366,14 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
+    def _getExcludedViewsIndex(self):
+        """Return a list with a list of the excluded views """
+        excludeViewsList = []
+        for ti in self.iterItems():
+            if not ti.isEnabled():
+                excludeViewsList.append(ti.getIndex())
+        return excludeViewsList
+
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
         newstcomPath = ts_folder + '/newst.com'
@@ -408,8 +418,21 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
+        excludedViewsList = self._getExcludedViewsIndex()
+        excludedViewsIndexes = ''
+        if excludedViewsList:
+            excludedViewsIndexes = 'EXCLUDELIST '
+            excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
 
-        dims = (self.getDim()[0], self.getDim()[1])
+        # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
+        # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
+        # considered in the tilt.com should be the ones corresponding to the tomogram
+        intorducedDims = kwargs.get('dims', None)  #
+        if intorducedDims:
+            dims = intorducedDims
+        else:
+            dims = (self.getDim()[0], self.getDim()[1])
+        # Swap dimensions case
         if kwargs.get('swapDims', False):
             dims = (dims[1], dims[0])
 
@@ -434,13 +457,15 @@ ActionIfGPUFails {},{}\n\
 XTILTFILE {}.xtilt\n\
 OFFSET {}\n\
 SHIFT {} {}\n\
+{}\
 $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        radial[0], radial[1], xAxisTill, log,
                                        scale[0], scale[1], mode,
                                        dims[0], dims[1],
                                        subsetStart[0], subsetStart[1],
                                        actionIfGPUFails[0], actionIfGPUFails[1],
-                                       pathi, offset, shift[0], shift[1]))
+                                       pathi, offset, shift[0], shift[1],
+                                       excludedViewsIndexes))
 
         return tiltcomPath
 
@@ -479,7 +504,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
                                  '0.0000000',
-                                 '-1.0000000',
+                                 '1.0000000',
                                  '0.000',
                                  '0.000']
             tsMatrixTransformList.append(transformIMOD)
@@ -608,6 +633,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
+
+    def getTiltSeriesFromTsId(self, tsId):
+        return self[{"_tsId": tsId}]
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -1391,6 +1419,7 @@ class SubTomogram(data.Volume):
 
     def setCoordinate3D(self, coordinate):
         self._coordinate = coordinate
+        self.setVolId(coordinate.getVolId())
 
     def getCoordinate3D(self):
         """Since the object Coordinate3D needs a volume, use the information stored in the
@@ -2489,7 +2518,7 @@ class TiltSeriesCoordinate(data.EMObject):
 
     def getPosition(self, sampling_rate=1):
         """Returns the position a TiltSeriesCoordinate in a tuple at a specific sampling rate (optional)"""
-        return self.getX()/sampling_rate, self.getY()/sampling_rate, self.getZ()/sampling_rate
+        return self.getX() / sampling_rate, self.getY() / sampling_rate, self.getZ() / sampling_rate
 
     def setPosition(self, x, y, z, sampling_rate):
         """Set the position of the coordinate
@@ -2498,9 +2527,9 @@ class TiltSeriesCoordinate(data.EMObject):
             :param int z: Position of the coordinate in the Z axis
             :param flat sampling_rate: sampling rate in which x,y,z are measured. Default 1 = Å
         """
-        self.setX(x*sampling_rate)
-        self.setY(y*sampling_rate)
-        self.setZ(z*sampling_rate)
+        self.setX(x * sampling_rate)
+        self.setY(y * sampling_rate)
+        self.setZ(z * sampling_rate)
 
     def getTsId(self):
         return self._tsId.get()
@@ -2551,7 +2580,3 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
         from other set of objects to current one.
         """
         self.setSetOfTiltSeries(other.getSetOfTiltSeries())
-
-
-
-

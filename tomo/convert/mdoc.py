@@ -1,8 +1,10 @@
 import os
-import sys
+from datetime import datetime as dt
 from os.path import join, exists
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from pathlib import PureWindowsPath
+
+SUB_FRAME_PATH = 'SubFramePath'
 
 
 class MDoc:
@@ -74,48 +76,53 @@ class MDoc:
         validateTSFromMdocErrMsg = ''
         tsFile = None
         mdoc = self._mdocFileName
-        headerDict, zSlices = self._parseMdoc()
 
-        # Get acquisition general info
-        self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
-        self._tsId = normalizeTSId(mdoc)
-        parentFolder = getParentFolder(mdoc)
-        if not isImportingTsMovies:
-            # Some mdoc files point to an .st file stored in the ImageFile
-            # header line
-            tsFile = join(parentFolder, headerDict.get("ImageFile", None))
-            if not os.path.exists(tsFile):
-                tsFile = join(parentFolder, self._tsId + '.mrcs')
-            if not os.path.exists(tsFile):
-                tsFile = join(parentFolder, self._tsId + '.mrc')
-            if not os.path.exists(tsFile):
-                tsFile = join(parentFolder, self._tsId + '.st')
-            validateTSFromMdocErrMsg = self._validateTSFromMdoc(mdoc, tsFile)
+        try:
+            headerDict, zSlices = self._parseMdoc()
+            zSlices = self._sortByTimestamp(zSlices)
 
-        # Get acquisition specific (per angle) info
-        self._getSlicesData(zSlices, tsFile)
+            # Get acquisition general info
+            self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
+            self._tsId = normalizeTSId(mdoc)
+            parentFolder = getParentFolder(mdoc)
+            if not isImportingTsMovies:
+                # Some mdoc files point to an .st file stored in the ImageFile
+                # header line
+                tsFile = join(parentFolder, headerDict.get("ImageFile", None))
+                if not os.path.exists(tsFile):
+                    tsFile = join(parentFolder, self._tsId + '.mrcs')
+                if not os.path.exists(tsFile):
+                    tsFile = join(parentFolder, self._tsId + '.mrc')
+                if not os.path.exists(tsFile):
+                    tsFile = join(parentFolder, self._tsId + '.st')
+                validateTSFromMdocErrMsg = self._validateTSFromMdoc(mdoc, tsFile)
 
-        # Check Mdoc info read
-        validateMdocContentsErrorMsgList = self._validateMdocInfoRead(
-            ignoreFilesValidation=ignoreFilesValidation or not
-            isImportingTsMovies)
+            # Get acquisition specific (per angle) info
+            self._getSlicesData(zSlices, tsFile)
 
-        # Check all the possible errors found
-        exceptionMsg = ''
-        if validateTSFromMdocErrMsg:
-            exceptionMsg += validateTSFromMdocErrMsg
-        if validateMdocContentsErrorMsgList:
-            exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
+            # Check Mdoc info read
+            validateMdocContentsErrorMsgList = self._validateMdocInfoRead(
+                ignoreFilesValidation=ignoreFilesValidation or not
+                isImportingTsMovies)
 
-        # If ts images we are assuming slices follow the angle order
-        if not isImportingTsMovies and not exceptionMsg:
-            self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
-                                     reverse=False)
-            for index, tiMd in enumerate(self._tiltsMetadata):
-                tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
+            # Check all the possible errors found
+            exceptionMsg = ''
+            if validateTSFromMdocErrMsg:
+                exceptionMsg += validateTSFromMdocErrMsg
+            if validateMdocContentsErrorMsgList:
+                exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
 
-        return exceptionMsg
+            # If ts images we are assuming slices follow the angle order
+            if not isImportingTsMovies and not exceptionMsg:
+                self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
+                                         reverse=False)
+                for index, tiMd in enumerate(self._tiltsMetadata):
+                    tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
 
+            return exceptionMsg
+        except Exception as e:
+
+            return "\n*CRITICAL mdoc parsing error: %s can't be parsed.*\n %s\n" % (mdoc, str(e))
     def _parseMdoc(self):
         """
         Parse the mdoc file and return a list with a dict key=value for each
@@ -215,6 +222,24 @@ class MDoc:
         if round(accumulatedDose) > 0:
             self.mdocHasDose = True
 
+    def _sortByTimestamp(self, zSlices):
+        """ MDOC file is not necessarily sorted by acquisition order,
+            use TimeStamp key to sort Z-slices.
+        """
+        dtValue = zSlices[0].get('DateTime', None)
+        if dtValue is None:
+            return zSlices
+        else:
+            if len(dtValue.split()[0]) == 9:  # year is two digits
+                fmt = '%d-%b-%y  %H:%M:%S'
+            else:
+                fmt = '%d-%b-%Y  %H:%M:%S'
+
+        zSlices_sorted = sorted(zSlices,
+                                key=lambda d: dt.strptime(d['DateTime'], fmt))
+
+        return zSlices_sorted
+
     @staticmethod
     def _getAngleMovieFileName(parentFolder, zSlice, tsFile):
         if tsFile:
@@ -222,9 +247,11 @@ class MDoc:
         else:
             # PureWindowsPath pathlib is used to make
             # possible deal with different path separators, like \\
-            return join(parentFolder, PureWindowsPath(
-                zSlice['SubFramePath']).parts[-1])
-
+            try:
+                return join(parentFolder, PureWindowsPath(
+                    zSlice[SUB_FRAME_PATH]).parts[-1])
+            except Exception as e:
+                raise ValueError("Slice section does not have %s field." % SUB_FRAME_PATH)
     @staticmethod
     def _getDoseFromMdoc(zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by
@@ -422,10 +449,6 @@ class TiltMetadata:
 
     def getAccumDose(self):
         return self._accumDose
-
-    # TODO: remove since this is a redefinition (see above)
-    # def getAcqOrder(self):
-    #    return self._acqOrder
 
     def getIncomingDose(self):
         return self._incomingDose
