@@ -126,7 +126,7 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
         summary = []
         if self.isFinished() and self.getOutputsSize() >= 1:
             for key, output in self.iterOutputAttributes():
-                summary.append("*%s:* \n %s " % (key, output.getSummary()))
+                summary.append("*%s:*\n%s" % (key, output.getSummary()))
         else:
             summary.append(Message.TEXT_NO_OUTPUT_CO)
         return summary
