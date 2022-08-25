@@ -124,10 +124,7 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        if self.isFinished():
-            summary.append("Output 3D Coordinates not ready yet.")
-
-        if self.getOutputsSize() >= 1:
+        if self.isFinished() and self.getOutputsSize() >= 1:
             for key, output in self.iterOutputAttributes():
                 summary.append("*%s:* \n %s " % (key, output.getSummary()))
         else:
