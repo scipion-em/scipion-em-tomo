@@ -759,9 +759,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 if type(keywords) is str:
                     keywords = [keywords]
                 for errorKeyword in keywords:
-                    self.assertTrue(errorKeyword in errorMsg)
+                    self.assertTrue(errorKeyword in errorMsg, msg="%s not found in error message %s after validating %s."
+                                                                  % (errorKeyword, errorMsg, mdoc))
             else:
-                self.assertTrue(not errorMsg)
+                self.assertTrue(not errorMsg, "There are errors unexpected when validating the Mdocs: %s" % errorMsg)
 
 
 class TestImportTomoMasks(BaseTest):

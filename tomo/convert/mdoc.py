@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 import os
 from datetime import datetime as dt
 from os.path import join, exists
@@ -221,6 +223,9 @@ class MDoc:
         # for cases like 0.0000000001
         if round(accumulatedDose) > 0:
             self.mdocHasDose = True
+        else:
+            logger.warning("Dose not found or almost 0 (%s) in %s" % (accumulatedDose, self._mdocFileName) )
+
 
     def _sortByTimestamp(self, zSlices):
         """ MDOC file is not necessarily sorted by acquisition order,
