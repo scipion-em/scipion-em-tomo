@@ -1601,6 +1601,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         if tsId not in self._tomos:
             tomo = self.getCoordinates3D().getPrecedents()[volId]
             self._tomos[volId] = tomo
+            self._tomos[tsId] = tomo
             return tomo
         else:
             return self._tomos[tsId]
