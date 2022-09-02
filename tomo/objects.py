@@ -1595,9 +1595,9 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         self.initTomos()
 
-        # If not cached (use volId).
-        # NOTE: In streaming cases this may has to be different and renew the cache
-        # or not use volId at all and query precedents by tsIs.
+        # If tsId is not cached, save both identifiers.
+        # NOTE: In streaming cases this may have to be different.
+        # We might not use volId at all and query precedents by tsId.
         if tsId not in self._tomos:
             tomo = self.getCoordinates3D().getPrecedents()[volId]
             self._tomos[volId] = tomo
