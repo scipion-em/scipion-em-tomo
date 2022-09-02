@@ -1590,16 +1590,21 @@ class SetOfSubTomograms(data.SetOfVolumes):
             return None
 
         # Else, there are coordinates
-        tomoId = coord.getVolId()
+        volId = coord.getVolId()
+        tsId = coord.getTomoId()
 
         self.initTomos()
 
-        # If not cached
-        if tomoId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[tomoId]
-            self._tomos[tomoId] = tomo
-
-        return self._tomos[tomoId]
+        # If tsId is not cached, save both identifiers.
+        # NOTE: In streaming cases this may have to be different.
+        # We might not use volId at all and query precedents by tsId.
+        if tsId not in self._tomos:
+            tomo = self.getCoordinates3D().getPrecedents()[volId]
+            self._tomos[volId] = tomo
+            self._tomos[tsId] = tomo
+            return tomo
+        else:
+            return self._tomos[tsId]
 
     def initTomos(self):
         """ Initialize internal _tomos to a dictionary if not done already"""

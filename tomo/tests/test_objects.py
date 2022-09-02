@@ -28,6 +28,8 @@ from tomo.constants import SCIPION
 from tomo.objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, SetOfSubTomograms, SetOfTomograms, Tomogram, \
     SetOfCoordinates3D, Coordinate3D, SubTomogram
 
+TS_1 = "TS_1"
+
 MYTSID = "MYTSID"
 
 SAMPLING_RATE = 10
@@ -98,7 +100,7 @@ class TestTomoModel(BaseTest):
         tomos = SetOfTomograms.create(self.outputPath)
 
         tomo1 = Tomogram()
-        tomo1.setTsId("TS_1")
+        tomo1.setTsId(TS_1)
         tomos.append(tomo1)
 
         tomo2 = Tomogram()
@@ -112,7 +114,7 @@ class TestTomoModel(BaseTest):
         coord1.setX(0,SCIPION)
         coord1.setY(0, SCIPION)
         coord1.setZ(0, SCIPION)
-        coord1.setTomoId("TS_1")
+        coord1.setTomoId(TS_1)
         coords.append(coord1)
 
         coords.setPrecedents(tomos)
@@ -133,6 +135,9 @@ class TestTomoModel(BaseTest):
         subtomos.write()
 
         self.assertEqual(len(subtomos.getTomograms()), 1, "getTomograms does not return the right element count")
+
+        tomo = subtomos.getTomogram(subtomo)
+        self.assertEqual(tomo.getTsId(), TS_1, "Recovered tomogram from SOST.getTomogram() does not work.")
 
 
 
