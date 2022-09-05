@@ -59,9 +59,11 @@ def getAnglesFromHeader(tsImage):
     """ Extract the tilt angles from the tilt-series stack using the
     IMOD program: extracttilts.
     """
+    from pwem import Domain
+    imod = Domain.importFromPlugin("imod", "Plugin")
     anglesFn = '/tmp/angles.txt'
     args = '--input %s --output %s' % (tsImage, anglesFn)
-    pwutils.runJob(None, 'extracttilts', args)
+    pwutils.runJob(None, imod.getImodCmd('extracttilts'), args)
     angles = []
     with open(anglesFn) as f:
         angles = [float(line) for line in f]
