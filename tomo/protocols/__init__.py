@@ -45,3 +45,4 @@ from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
 from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
+from .protocol_import_ts_streaming import ProtImportTsStreaming
