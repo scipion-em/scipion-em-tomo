@@ -582,7 +582,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
               the name structure (see advanced parameter)
             """
         fpath = self.filesPath.get()
-        mdocList = glob(join(fpath, self.filesPattern.get()))
+        mdocList = glob(join(fpath, self.filesPattern.get()))  # Get matching files by the introduced file pattern
+        mdocList = self._excludeByWords(mdocList)  # Check for exclusion words
         hasDoseList = []
         if not mdocList:
             raise Exception('No mdoc files were found in the '

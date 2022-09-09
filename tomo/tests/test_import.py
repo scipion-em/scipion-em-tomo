@@ -621,20 +621,25 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         return testData
 
-    def _runImportTiltSeries(self, isTsMovie=False):
+    def _runImportTiltSeries(self, isTsMovie=False, exclusionWords=None):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
+        attribDict = {
+            'filesPath': self.parentDir,
+            'filesPattern': self.pattern,
+        }
+        if exclusionWords:
+            attribDict['exclusionWords'] = exclusionWords
         protImport = self.newProtocol(
             prot,
-            filesPath=self.parentDir,
-            filesPattern=self.pattern)
+            **attribDict)
         self.launchProtocol(protImport)
         return protImport
 
-    def _checkResults(self, outputSet, isTsMovie, dimensions, prot):
+    def _checkResults(self, outputSet, isTsMovie, dimensions, prot, size=None):
         # Generate the test data
         testDict = self._genTestData(isTsMovie)
         # Check set properties
-        self.assertSetSize(outputSet, size=2)
+        self.assertSetSize(outputSet, size=size)
         self.assertAlmostEqual(outputSet.getSamplingRate(), self.sRate, delta=0.001)
         self.assertEqual(outputSet.getDimensions(), dimensions)
 
@@ -677,14 +682,29 @@ class TestTomoImportTsFromMdoc(BaseTest):
                         self.assertTrue(previousAngle < tiM.getTiltAngle(), "Tilt images are not sorted by angle.")
                     previousAngle = tiM.getTiltAngle()
 
-    def test_importTiltSeriesM(self):
+    def _runTestImportTsM(self, exclusionWords=None, outputSize=None):
         isTsMovie = True
+        label = 'Import TsM'
         # Run protocol
-        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
+        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie, exclusionWords=exclusionWords)
+        if exclusionWords:
+            label += ' excluding words'
+        protImport.setObjLabel(label)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeriesM', None)
-        self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport)  # ts and tsM has different dimensions
-        # because they have been downsampled separately in order to get a lighter test dataset
+        self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport, size=outputSize)  # ts and tsM have
+        # different dimensions because they have been downsampled separately in order to get a lighter test dataset
+        return protImport
+
+    def test_importTiltSeriesM(self):
+        self._runTestImportTsM(outputSize=2)
+
+    def test_importTiltSeriesM_excludingWords(self):
+        """There are 2 mdocs (which means 2 TsM), with tsIds = [stack10, stack31]. Let's exclude the first one
+        using the functionality exclusionWords offered by the protocol"""
+        protImport = self._runTestImportTsM(exclusionWords='stack10', outputSize=1)
+        outputSet = getattr(protImport, 'outputTiltSeriesM', None)
+        self.assertEqual(outputSet.getFirstItem().getTsId(), 'stack31')
 
     def test_importTiltSeries(self):
         isTsMovie = False
@@ -692,7 +712,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
         protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeries', None)
-        self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport)  # ts and tsM have different dimensions
+        self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport, size=2)  # ts and tsM have different dims
         # because they have been downsampled separately in order to get a lighter test dataset
 
     def test_mdocFileCheckerRealOk(self):
