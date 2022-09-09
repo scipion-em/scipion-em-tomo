@@ -771,9 +771,13 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 angles = getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
                 tltFn = os.path.splitext(file)[0] + '.tlt'
-                if not os.path.exists(tltFn):
-                    raise Exception("Missing angles file: %s" % tltFn)
-                angles = getAnglesFromTlt(tltFn)
+                rawtltFn = tltFn.replace(".tlt", ".rawtlt")
+                if os.path.exists(tltFn):
+                    angles = getAnglesFromTlt(tltFn)
+                elif os.path.exists(rawtltFn):
+                    angles = getAnglesFromTlt(rawtltFn)
+                else:
+                    raise Exception("Missing angles file: %s or %s" % (tltFn, rawtltFn))
             elif anglesFrom == self.ANGLES_FROM_RANGE:
                 angles = self._getTiltAngleRange()
             else:

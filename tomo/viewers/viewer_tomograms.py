@@ -31,7 +31,7 @@ for input tomograms.
 """
 
 import os
-from distutils.spawn import find_executable
+from shutil import which
 import tempfile
 
 import pyworkflow.protocol.params as params
@@ -83,7 +83,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
 
     def _validate(self):
         if (self.displayTomo == TOMOGRAM_CHIMERA
-                and find_executable(viewers.viewer_chimera.Chimera.getProgram()) is None):
+                and which(viewers.viewer_chimera.Chimera.getProgram()) is None):
             return ["chimera is not available. "
                     "Either install it or choose option 'slices'. "]
         return []
