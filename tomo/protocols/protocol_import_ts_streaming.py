@@ -26,19 +26,29 @@
 
 from pwem.protocols.protocol_import.base import ProtImportFiles, ProtImport
 import pyworkflow.protocol.params as params
-
+from pyworkflow.object import Set
+import pyworkflow as pw
+from pwem.protocols import EMProtocol
+from pyworkflow.protocol import params, Positive, STATUS_NEW, STEPS_PARALLEL
+import pyworkflow.protocol.constants as cons
 import time
+import os
+from glob import glob
 import subprocess
 
 
 class ProtImportTsStreaming(ProtImport):
     """ class for Tilt-Series import protocols in streaming.
     """
-
+    _devStatus = pw.BETA
+    mdocFilesList = []
+    mdocFilesRead = []
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
-
-
+        self.stepsExecutionMode = STEPS_PARALLEL # Defining that the protocol contain parallel steps
+        self.newSteps = []
+        self.time4NextTilt_current = time.time()
+        self.time4NextTS_current = time.time()
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
@@ -47,81 +57,114 @@ class ProtImportTsStreaming(ProtImport):
                       label="Files directory",
                       help="Root directory of the tilt-series "
                            "(or movies) files.")
-        form.addParam('filesPattern', params.StringParam,
-                      label='Pattern',
-                      help="It determines if the tilt series are going to "
-                           "be imported using the mdoc file or the tilt "
-                           "series files. To import from the mdoc files, "
-                           "the word '.mdoc' must appear in the pattern, "
-                           "if not, a tilt series pattern is expected. "
-                           "In the first case, the angular and acquisition "
-                           "data are directly read from the corresponding "
-                           "mdoc file, while in the second it is read "
-                           "the base name of the matching files, according to "
-                           " the pattern introduced.\n\n"
-                           "*IMPORTING WITH MDOC FILES*\n\n"
-                           "For *tilt series movies*, a mdoc per tilt series "
-                           "movies is expected. "
-                           "The corresponding movie file/s must be located in "
-                           "the same path as the mdoc file. The tilt series "
-                           "id will be the base name of the mdoc files, "
-                           "so the names of the mdoc files must be different, "
-                           "even if they're located in "
-                           "different paths.\n\n"
-                           "For *tilt series*, the only difference is that a "
-                           "stack .mrcs file is expected for each "
-                           "mdoc, which means, per each tilt series desired "
-                           "to be imported.\n\n"
-                           "*IMPORTING WITH A PATTERN OF THE TILT SERIES FILE "
-                           "NAMES*\n\n"
-                           "The pattern can contain standard wildcards such "
-                           "as *, ?, etc.\n\n"
-                           "It should also contains the following special "
-                           "tags:\n"
-                           "   *{TS}*: tilt series identifier, which can be "
-                           "any UNIQUE part of the path. This must be "
-                           "an alpha-numeric sequence (avoid symbols as -) "
-                           "that can not start with a number.\n"
-                           "   *{TO}*: acquisition order, an integer value "
-                           "(important for dose).\n"
-                           "   *{TA}*: tilt angle, a positive or negative "
-                           "float value.\n\n"
-                           "Examples:\n\n"
-                           "To import a set of image stacks (tilt-series "
-                           "or tilt-series movies) as: \n"
-                           "TiltSeries_a_001_0.0.mrc\n"
-                           "TiltSeries_a_002_3.0.mrc\n"
-                           "TiltSeries_a_003_-3.0.mrc\n"
-                           "...\n"
-                           "TiltSeries_b_001_0.0.mrc\n"
-                           "TiltSeries_b_002_3.0.mrc\n"
-                           "TiltSeries_b_003_-3.0.mrc\n"
-                           "...\n"
-                           "The pattern TiltSeries_{TS}_{TO}_{TA}.mrc will "
-                           "identify:\n"
-                           "{TS} as a, b, ...\n"
-                           "{TO} as 001, 002, 003, ...\n"
-                           "{TA} as 0.0, 3.0, -3.0, ...\n")
+
         form.addParam('exclusionWords', params.StringParam,
                       label='Exclusion words:',
                       help="List of words separated by a space that the path "
                            "should not have",
                       expertLevel=params.LEVEL_ADVANCED)
 
+        form.addSection('Streaming')
 
-    def _insertAllSteps(self):
-        self._insertFunctionStep('createOutputStep',
-                                 prerequisites=[], wait=True)
+        form.addParam('dataStreaming', params.BooleanParam, default=True,
+                      label="Process data in streaming?",
+                      help="Select this option if you want import data as it "
+                           "is generated and process on the fly by next "
+                           "protocols. In this case the protocol will "
+                           "keep running to check new files and will "
+                           "update the output Set, which can "
+                           "be used right away by next steps.")
+
+        form.addParam('time4NextTilt', params.IntParam, default=180,
+                      condition='dataStreaming',
+                      label="Time for next Tilt (secs)",
+                      help="Delay until the next tilt is registered. After "
+                           "timeout,\n if there is no new tilt, the tilt serie is considered as completed\n")
+        form.addParam('time4NextTS', params.IntParam, default=1800,
+                      condition='dataStreaming',
+                      label="Time for next TiltSerie (secs)",
+                      help="Interval of time (in seconds) after which, "
+                           "if no new tilt serie is detected, the protocol will "
+                           "end. When finished, the output Set will be "
+                           "closed and no more data will be "
+                           "added to it. \n"
+                           "Note 1:  The default value is  high (30 min) to "
+                           "avoid the protocol finishes during the acq of the "
+                           "microscope. You can also stop it from right click "
+                           "and press STOP_STREAMING.\n")
+        form.addParallelSection(threads=3, mpi=1)
 
 
 
-    def findTSComplete(self):
+    def initializeParams(self):
         pass
 
+    def _insertAllSteps(self):
+        print('_insertAllSteps')
+        self.newSteps.append(self._insertFunctionStep('initializeParams'))
+        self.CloseStep_ID = self._insertFunctionStep('createOutputStep',
+                                                     prerequisites=[],
+                                                     wait=True)
+        self.newSteps.append(self.CloseStep_ID)
+        print('END')
 
-    def matchTSPaths(self):
+        #wait to prevent finish the protocol
+
+    def _stepsCheck(self):
+        print('stepsCheck-------------------')
+        currentTime = time.time()
+        print(str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
+        if int(currentTime - self.time4NextTS_current) > int(self.time4NextTS.get()):
+            print('Timeout reached!!')
+            outputStep = self._getFirstJoinStep()
+            if outputStep and outputStep.isWaiting():
+                outputStep.setStatus(cons.STATUS_NEW)
+            #self.CloseStep_ID.setStatus(cons.STATUS_NEW)
+            self._steps[self.CloseStep_ID].setStatus(cons.STATUS_NEW)
+
+        if self.findMdoc():
+            newStepID = self._insertFunctionStep('readMdoc',prerequisites=[])
+            self.newSteps.append(newStepID)
+            self.updateSteps()
+
+    def createOutputStep(self):
+        pass
+
+    def _getFirstJoinStep(self):
+        for s in self._steps:
+            if s.funcName == self._getFirstJoinStepName():
+                return s
+        return None
+
+    def _getFirstJoinStepName(self):
+        # This function will be used for streaming, to check which is
+        # the first function that need to wait for all micrographs
+        # to have completed, this can be overwritten in subclasses
+        # (eg in Xmipp 'sortPSDStep')
+        return 'createOutputStep'
+
+
+    def findMdoc(self):
+        fpath = self.filesPath.get()
+        self.mdocFilesList = glob(os.path.join(fpath))
+        if self.mdocFilesList == []: return False
+        else:
+            print(self.mdocFilesList)
+            return True
+
+    def readMdoc(self):
+        print('readMdoc')
+
+    def registerTilt(self):
         pass
 
     def sortTS(self):
         pass
 
+    def stakTS(self):
+        pass
+
+    def _summary(self):
+        summary = []
+
+        return summary
