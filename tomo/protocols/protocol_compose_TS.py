@@ -25,44 +25,45 @@
 # **************************************************************************
 
 from pwem.protocols.protocol_import.base import ProtImportFiles, ProtImport
-import pyworkflow.protocol.params as params
-from pyworkflow.object import Set
+from .protocol_ts_import import ProtImportTsBase
 import pyworkflow as pw
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params, Positive, STATUS_NEW, STEPS_PARALLEL
 import pyworkflow.protocol.constants as cons
+from tomo.convert.mdoc import  MDoc
+import pyworkflow.utils as pwutils
 import time
 import os
 from glob import glob
-import subprocess
 
 
-class ProtImportTsStreaming(ProtImport):
+class ProtComposeTS(ProtImport):
     """ class for Tilt-Series import protocols in streaming.
     """
     _devStatus = pw.BETA
+    _label = 'Compose Tilt SerieS'
     mdocFilesList = []
     mdocFilesRead = []
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.stepsExecutionMode = STEPS_PARALLEL # Defining that the protocol contain parallel steps
         self.newSteps = []
-        self.time4NextTilt_current = time.time()
+        self.listMdocsRead = []
         self.time4NextTS_current = time.time()
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
 
-        form.addParam('filesPath', params.PathParam,
-                      label="Files directory",
-                      help="Root directory of the tilt-series "
-                           "(or movies) files.")
+        form.addParam('inputMovies', params.PointerParam, pointerClass='SetOfMovies',
+                      important=True,
+                      label=pwutils.Message.LABEL_INPUT_MOVS,
+                      help='Select a set of previously imported movies.')
 
-        form.addParam('exclusionWords', params.StringParam,
-                      label='Exclusion words:',
-                      help="List of words separated by a space that the path "
-                           "should not have",
-                      expertLevel=params.LEVEL_ADVANCED)
+        form.addParam('filesPath', params.PathParam,
+                      label="Files directory ot the tiltSerie files",
+                      help="Root directory of the tilt-series. "
+                           "Will be search the *.mdoc file for each Tilt Serie")
+
+
 
         form.addSection('Streaming')
 
@@ -96,34 +97,30 @@ class ProtImportTsStreaming(ProtImport):
 
 
 
-    def initializeParams(self):
-        pass
-
     def _insertAllSteps(self):
-        print('_insertAllSteps')
-        self.newSteps.append(self._insertFunctionStep('initializeParams'))
         self.CloseStep_ID = self._insertFunctionStep('createOutputStep',
                                                      prerequisites=[],
                                                      wait=True)
         self.newSteps.append(self.CloseStep_ID)
-        print('END')
-
-        #wait to prevent finish the protocol
 
     def _stepsCheck(self):
-        print('stepsCheck-------------------')
         currentTime = time.time()
-        print(str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
+        #print('stepsCheck ' + str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
+        listCurrent = self.findMdoc()
+        listRemain = [x for x in listCurrent if x not in self.listMdocsRead]
+
         if int(currentTime - self.time4NextTS_current) > int(self.time4NextTS.get()):
             print('Timeout reached!!')
             outputStep = self._getFirstJoinStep()
             if outputStep and outputStep.isWaiting():
                 outputStep.setStatus(cons.STATUS_NEW)
-            #self.CloseStep_ID.setStatus(cons.STATUS_NEW)
-            self._steps[self.CloseStep_ID].setStatus(cons.STATUS_NEW)
 
-        if self.findMdoc():
-            newStepID = self._insertFunctionStep('readMdoc',prerequisites=[])
+        elif listRemain != []:
+            self.listMdocsRead = listCurrent
+            self.time4NextTS_current = time.time()
+
+            newStepID = self._insertFunctionStep('readMdoc', listRemain,
+                                        prerequisites=[], wait=False)
             self.newSteps.append(newStepID)
             self.updateSteps()
 
@@ -146,18 +143,47 @@ class ProtImportTsStreaming(ProtImport):
 
     def findMdoc(self):
         fpath = self.filesPath.get()
-        self.mdocFilesList = glob(os.path.join(fpath))
-        if self.mdocFilesList == []: return False
-        else:
-            print(self.mdocFilesList)
-            return True
+        self.MDOC_DATA_SOURCE = glob(os.path.join(fpath, '*.mdoc'))
+        self.MDOC_DATA_SOURCE.sort(key=os.path.getmtime)
+        return self.MDOC_DATA_SOURCE
 
-    def readMdoc(self):
-        print('readMdoc')
+    def readMdoc(self, listRemains):
+        print(listRemains)
+        for file2Read in listRemains:
+            print(file2Read)
+            mdocObj = MDoc(file2Read)
+            validationError = mdocObj.read(isImportingTsMovies=True,
+                                           ignoreFilesValidation=True)
+            if validationError:
+                print(validationError)
+            else:
+                fileOrderAngleList = []
+                accumulatedDoseList = []
+                incomingDoseList = []
+                for tiltMetadata in mdocObj.getTiltsMetadata():
+                    fileOrderAngleList.append((
+                        tiltMetadata.getAngleMovieFile(),             # Filename
+                        '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition
+                                                                      # order
+                        tiltMetadata.getTiltAngle(),                  # Tilt angle
+                    ))
+                    accumulatedDoseList.append(tiltMetadata.getAccumDose())
+                    incomingDoseList.append(tiltMetadata.getIncomingDose())
+                    #print(tiltMetadata.getAngleMovieFile())
 
-    def registerTilt(self):
+                while time.time() - self.readDateFile(file2Read) < \
+                        2 * self.time4NextTilt.get():
+                    print('waiting...')
+                    time.sleep(self.time4NextTilt.get() / 2)
+
+
+                self.matchTS(mdocObj)
+
+    def readDateFile(self, file):
+        return os.path.getmtime(file)
+
+    def matchTS(self):
         pass
-
     def sortTS(self):
         pass
 
