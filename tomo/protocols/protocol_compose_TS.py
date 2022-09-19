@@ -29,8 +29,13 @@ from .protocol_ts_import import ProtImportTsBase
 import pyworkflow as pw
 from pyworkflow.protocol import params, Positive, STATUS_NEW, STEPS_PARALLEL
 import pyworkflow.protocol.constants as cons
-from tomo.convert.mdoc import  MDoc
+from tomo.convert.mdoc import MDoc
 import pyworkflow.utils as pwutils
+import pwem.objects as emobj
+from pwem.objects import Transform
+import tomo.objects as tomoObj
+from collections import OrderedDict
+
 import time
 import os
 from glob import glob
@@ -47,8 +52,7 @@ class ProtComposeTS(ProtImport):
         ProtImport.__init__(self, **args)
         self.stepsExecutionMode = STEPS_PARALLEL # Defining that the protocol contain parallel steps
         self.newSteps = []
-        self.listMdocsRead = []
-        self.time4NextTS_current = time.time()
+
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
@@ -95,9 +99,15 @@ class ProtComposeTS(ProtImport):
                            "and press STOP_STREAMING.\n")
         form.addParallelSection(threads=3, mpi=1)
 
-
+    def _initialize(self):
+        self.listMdocsRead = []
+        self.time4NextTS_current = time.time()
+        self._counterTS = 0
+        self._outputName = 'outputTiltSeries'
+        self._createOutputName = 'createSetOfTiltSeries'
 
     def _insertAllSteps(self):
+        self._insertFunctionStep(self._initialize)
         self.CloseStep_ID = self._insertFunctionStep('createOutputStep',
                                                      prerequisites=[],
                                                      wait=True)
@@ -140,7 +150,6 @@ class ProtComposeTS(ProtImport):
         # (eg in Xmipp 'sortPSDStep')
         return 'createOutputStep'
 
-
     def findMdoc(self):
         fpath = self.filesPath.get()
         self.MDOC_DATA_SOURCE = glob(os.path.join(fpath, '*.mdoc'))
@@ -148,7 +157,6 @@ class ProtComposeTS(ProtImport):
         return self.MDOC_DATA_SOURCE
 
     def readMdoc(self, listRemains):
-        print(listRemains)
         for file2Read in listRemains:
             print(file2Read)
             mdocObj = MDoc(file2Read)
@@ -158,8 +166,7 @@ class ProtComposeTS(ProtImport):
                 print(validationError)
             else:
                 fileOrderAngleList = []
-                accumulatedDoseList = []
-                incomingDoseList = []
+
                 for tiltMetadata in mdocObj.getTiltsMetadata():
                     fileOrderAngleList.append((
                         tiltMetadata.getAngleMovieFile(),             # Filename
@@ -167,30 +174,108 @@ class ProtComposeTS(ProtImport):
                                                                       # order
                         tiltMetadata.getTiltAngle(),                  # Tilt angle
                     ))
-                    accumulatedDoseList.append(tiltMetadata.getAccumDose())
-                    incomingDoseList.append(tiltMetadata.getIncomingDose())
-                    #print(tiltMetadata.getAngleMovieFile())
-
                 while time.time() - self.readDateFile(file2Read) < \
                         2 * self.time4NextTilt.get():
                     print('waiting...')
                     time.sleep(self.time4NextTilt.get() / 2)
+                if len(tiltMetadata.getAngleMovieFile()) < 4:
+                    print('Mdoc error with less than 2 tilts')
+                    break
+                else:
+                    listMoviesMatched = \
+                        self.matchTS(fileOrderAngleList)
 
-
-                self.matchTS(mdocObj)
+                    self.createTS(mdocObj, listMoviesMatched)
 
     def readDateFile(self, file):
         return os.path.getmtime(file)
 
-    def matchTS(self):
-        pass
-    def sortTS(self):
-        pass
+    def matchTS(self, fileOrderAngleList):
+        print('lets match!')
+        listMdocFiles = []
+        listFolderFiles = []
+        listPathMoviesMatched = []
+        self._loadInputList()
+        print('listOfMdocMovies: {}, listOfFolderMovies: {}'.format(
+             len(fileOrderAngleList), len(self.listOfMovies)))
+        for tilt in fileOrderAngleList:
+            listMdocFiles.append(os.path.basename(tilt[0]))
+            # print('File:{} Order: {} Angle: {}'.format(
+            #     tilt[0], tilt[1], tilt[2]))
 
-    def stakTS(self):
-        pass
+        for movie in self.listOfMovies:
+            listFolderFiles.append(os.path.basename(movie.getFileName()))
+            # print('File:{}'.format(movie.getFileName()))
+
+        listMoviesMatched = [m for m in listMdocFiles if m in listFolderFiles]
+
+        for m in listMdocFiles:
+            for p in self.listOfMovies:
+                if m in p.getFileName():
+                    listPathMoviesMatched.append(p)
+
+        #print(len(listMoviesMatched))
+        return listMoviesMatched
+
+    def _loadInputList(self):
+        """ Load the input set of movies and create a list. """
+        moviesFile = self.inputMovies.get().getFileName()
+        self.debug("Loading input db: %s" % moviesFile)
+        movieSet = emobj.SetOfMovies(filename=moviesFile)
+        movieSet.loadAllProperties()
+        self.listOfMovies = [m.clone() for m in movieSet]
+        movieSet.close()
+        self.debug("Closed db.")
+
+    def createTS(self, mdocObj, listMoviesMatched):
+        fileOrderAngleList = []
+        accumulatedDoseList = []
+        incomingDoseList = []
+
+        for tiltMetadata in mdocObj.getTiltsMetadata():
+            fileOrderAngleList.append((
+                tiltMetadata.getAngleMovieFile(),  # Filename
+                '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition
+                tiltMetadata.getTiltAngle(),  # Tilt angle
+            ))
+            accumulatedDoseList.append(tiltMetadata.getAccumDose())
+            incomingDoseList.append(tiltMetadata.getIncomingDose())
+
+        tsObj = tomoObj.TiltSeries(tsId='TS_' + str(self._counterTS))
+        origin = Transform()  # tilt serie
+        tsObj.setOrigin(origin)
+        tsObj.setAnglesCount(len(fileOrderAngleList))
+
+        counter = 0
+        for f, to, ta in fileOrderAngleList:
+            for movie in self.listOfMovies:
+                if f in movie.getFileName():
+                    ti = tomoObj.TiltImage()
+                    ti.clone(movie)
+                    ti = tomoObj.TiltImage(location=f, _acqOrder=to, _tiltAngle=ta)
+
+                    ti.setAcquisition(tsObj.getAcquisition().clone())
+                    dosePerFrame = incomingDoseList[counter]
+                    accumDose = accumulatedDoseList[counter]
+                    counter += 1
+                    ti.getAcquisition().setDosePerFrame(dosePerFrame)
+                    # Accumulated dose in current ti
+                    ti.getAcquisition().setAccumDose(accumDose)
+                    tsObj.append(ti)
+
+
+        self._counterTS += 1
+
+        # self.outputsToDefine = {'Tilt Series': tsObj}
+        # self._defineOutputs(**self.outputsToDefine)
+
+
+    def _validate(self):
+        errors = [] if len(self.inputMovies.get()) > 1 else \
+            ["More than one Input movie is needed to run."]
+        return errors
 
     def _summary(self):
         summary = []
-
+        summary.append('Finished')
         return summary
