@@ -106,6 +106,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.time4NextTS_current = time.time()
         self._counterTS = 0
         self.SOTS = self._createSetOfTiltSeries(suffix='')
+        self._defineOutputs(SOTS=self.SOTS)
         self.summary = []
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
@@ -209,7 +210,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         fileOrderAngleList = []
         accumulatedDoseList = []
         incomingDoseList = []
-
+        TSObjList = []
         for tiltMetadata in mdocObj.getTiltsMetadata():
             fileOrderAngleList.append((
                 tiltMetadata.getAngleMovieFile(),  # Filename
@@ -220,34 +221,46 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
         fileOrderedAngleList = sorted(fileOrderAngleList, key=lambda angle: float(angle[2]))
         tsObj = tomoObj.TiltSeries(tsId='TS_' + str(self._counterTS))
-        origin = Transform()  # tilt serie
-        tsObj.setOrigin(origin)
+        newTs = tsObj.clone()
+        newTs.copyInfo(tsObj)
+        self.SOTS.append(newTs)
+
+        #tsObj._mapperPath.setStore(True)
         tsObj.setAnglesCount(len(fileOrderedAngleList))
-
-        counter = 0
+        counterTi = 0
         for f, to, ta in fileOrderedAngleList:
-            for movie in self.listOfMovies:
-                if f in movie.getFileName():
-                    ti = tomoObj.TiltImage()
-                    ti.clone(movie)
-                    ti = tomoObj.TiltImage(
-                        location=f, _acqOrder=to, _tiltAngle=ta)
-                    ti.setAcquisition(tsObj.getAcquisition().clone())
-                    ti.setLocation(counter, movie.getFileName())
-                    dosePerFrame = incomingDoseList[counter]
-                    accumDose = accumulatedDoseList[counter]
-                    counter += 1
-                    ti.getAcquisition().setDosePerFrame(dosePerFrame)
-                    # Accumulated dose in current ti
-                    ti.getAcquisition().setAccumDose(accumDose)
-                    tsObj.append(ti)
+            to = int(to) - 1
+            try:
+                for movie in self.listOfMovies:
+                    if os.path.basename(f) in os.path.basename(movie.getFileName()):
+                        ti = tomoObj.TiltImage(
+                            location=movie.getFileName(),
+                            _acqOrder=to,
+                            _tiltAngle=ta)
+                        ti.setIndex(counterTi)
+                        ti.setSamplingRate(movie.getSamplingRate())
+                        ti.setAcquisition(tsObj.getAcquisition().clone())
+                        ti.getAcquisition().setDosePerFrame(incomingDoseList[to])
+                        ti.getAcquisition().setAccumDose(accumulatedDoseList[to])
+                        # ti.copyInfo(movie)
+                        # tiCl = ti.clone()
+                        # tiCl.copyInfo(ti)
+                        TSObjList.append(ti)
+                        counterTi += 1
+            except Exception as e:
+                print(e,f)
+        for ti in TSObjList:
+            newTs = ti.clone()
+            newTs.copyInfo(ti)
+            tsObj.append(newTs)
 
+        #tsObj.write()
+        self._store(tsObj)
         self._counterTS += 1
         return tsObj
 
     def manageSetOfTS(self, tsObj):
         print('manageSetOfTS')
-        self._defineOutputs(SOTS=self.SOTS)
         self.SOTS.enableAppend()
         newTs = tsObj.clone()
         newTs.copyInfo(tsObj)
