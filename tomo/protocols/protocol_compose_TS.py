@@ -105,9 +105,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.listMdocsRead = []
         self.time4NextTS_current = time.time()
         self._counterTS = 0
-        self.SOTS = self._createSetOfTiltSeries(suffix='')
-        self._defineOutputs(SOTS=self.SOTS)
-        self.summary = []
+        self.SOTS = None
+
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
         self.CloseStep_ID = self._insertFunctionStep('createOutputStep',
@@ -117,7 +116,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _stepsCheck(self):
         currentTime = time.time()
-        #print('stepsCheck ' + str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
+        self.debug('stepsCheck ' + str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
         listCurrent = self.findMdoc()
         listRemain = [x for x in listCurrent if x not in self.listMdocsRead]
 
@@ -163,7 +162,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             mdocObj = MDoc(file2Read)
             validationError = mdocObj.read()
             if validationError:
-                print(validationError)
+                self.debug(validationError)
             else:
                 fileOrderAngleList = []
                 for tiltMetadata in mdocObj.getTiltsMetadata():
@@ -180,8 +179,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                     break
                 else:
                     self.matchTS(fileOrderAngleList)
-                    tsObj = self.createTS(mdocObj)
-                    self.manageSetOfTS(tsObj)
+                    self.createTS(mdocObj)
 
     def readDateFile(self, file):
         return os.path.getmtime(file)
@@ -207,10 +205,16 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.debug("Closed db.")
 
     def createTS(self, mdocObj):
+        if self.SOTS == None:
+            self.SOTS = self._createSetOfTiltSeries(suffix='Set')
+            self._defineOutputs(SOTS=self.SOTS)
+            self._defineSourceRelation(self.inputMovies, self.SOTS)
+        else:
+            self.SOTS.enableAppend()
+
         fileOrderAngleList = []
         accumulatedDoseList = []
         incomingDoseList = []
-        TSObjList = []
         for tiltMetadata in mdocObj.getTiltsMetadata():
             fileOrderAngleList.append((
                 tiltMetadata.getAngleMovieFile(),  # Filename
@@ -220,18 +224,27 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             incomingDoseList.append(tiltMetadata.getIncomingDose())
 
         fileOrderedAngleList = sorted(fileOrderAngleList, key=lambda angle: float(angle[2]))
-        tsObj = tomoObj.TiltSeries(tsId='TS_' + str(self._counterTS))
-        newTs = tsObj.clone()
-        newTs.copyInfo(tsObj)
-        self.SOTS.append(newTs)
-
-        #tsObj._mapperPath.setStore(True)
+        tsObj = tomoObj.TiltSeries()
+        tsObj.setObjId(self._counterTS)
         tsObj.setAnglesCount(len(fileOrderedAngleList))
+        print('TS.getAnglesCount(): {}'.format(tsObj.getAnglesCount()))# get the fist element dim
+        #
+        # TS = tsObj.clone()
+        # TS.copyInfo(tsObj)
+        # print('TS.getAnglesCount(): {}'.format(TS.getAnglesCount()))# get the fist element dim daba 0
+
+        self.SOTS.append(tsObj)
+        #self.SOTS.updateDim()#pero pondria z=6 porque la movie tiene esa dim
+
+        print(self.SOTS.getDim())  # get the fist element dim
+
         counterTi = 0
         for f, to, ta in fileOrderedAngleList:
             to = int(to) - 1
             try:
                 for movie in self.listOfMovies:
+                    if self.SOTS.getSamplingRate() == None:
+                        self.SOTS.setSamplingRate(movie.getSamplingRate())
                     if os.path.basename(f) in os.path.basename(movie.getFileName()):
                         ti = tomoObj.TiltImage(
                             location=movie.getFileName(),
@@ -242,31 +255,22 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.setAcquisition(tsObj.getAcquisition().clone())
                         ti.getAcquisition().setDosePerFrame(incomingDoseList[to])
                         ti.getAcquisition().setAccumDose(accumulatedDoseList[to])
-                        # ti.copyInfo(movie)
-                        # tiCl = ti.clone()
-                        # tiCl.copyInfo(ti)
-                        TSObjList.append(ti)
+                        newTi = ti.clone()
+                        newTi.copyInfo(ti)
+                        tsObj.append(newTi)
+                        print(tsObj.getDim())#get the fist element dim
                         counterTi += 1
             except Exception as e:
                 print(e,f)
-        for ti in TSObjList:
-            newTs = ti.clone()
-            newTs.copyInfo(ti)
-            tsObj.append(newTs)
 
-        #tsObj.write()
-        self._store(tsObj)
-        self._counterTS += 1
-        return tsObj
-
-    def manageSetOfTS(self, tsObj):
-        print('manageSetOfTS')
-        self.SOTS.enableAppend()
-        newTs = tsObj.clone()
-        newTs.copyInfo(tsObj)
-        self.SOTS.append(newTs)
+        print('TS.getAnglesCount(): {}'.format(tsObj.getAnglesCount()))# get the fist element dim
+        tsObj.write(properties=False)
         self.SOTS.write()
+        print('SOTS.getDim(): {}'.format(self.SOTS.getDim()))
         self._store(self.SOTS)
+
+        self._counterTS += 1
+
 
     def _validate(self):
         errors = [] if len(self.inputMovies.get()) > 1 else \
