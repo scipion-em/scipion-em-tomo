@@ -64,19 +64,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                       pointerClass='SetOfMicrographs',
                       important=True,
                       label="Input micrographs",
-                      help='Select the SetOfMicrographs aligned')
-
-        form.addParam('inputMovies', params.PointerParam, pointerClass='SetOfMovies',
-                      important=True,
-                      label=pwutils.Message.LABEL_INPUT_MOVS,
-                      help='Select a set of previously imported movies.')
+                      help='Select the SetOfMicrographs to import')
 
         form.addParam('filesPath', params.PathParam,
                       label="Files directory ot the tiltSerie files",
                       help="Root directory of the tilt-series. "
                            "Will be search the *.mdoc file for each Tilt Serie")
-
-
 
         form.addSection('Streaming')
 
@@ -121,12 +114,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _stepsCheck(self):
         currentTime = time.time()
-        self.debug('stepsCheck ' + str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
+        self.debug('stepsCheck ' +
+            str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
         listCurrent = self.findMdoc()
         listRemain = [x for x in listCurrent if x not in self.listMdocsRead]
 
-        if int(currentTime - self.time4NextTS_current) > int(self.time4NextTS.get()):
-            print('Timeout reached!!')
+        if int(currentTime - self.time4NextTS_current) \
+                > int(self.time4NextTS.get()):
             outputStep = self._getFirstJoinStep()
             if outputStep and outputStep.isWaiting():
                 outputStep.setStatus(cons.STATUS_NEW)
@@ -172,15 +166,16 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 fileOrderAngleList = []
                 for tiltMetadata in mdocObj.getTiltsMetadata():
                     fileOrderAngleList.append((
-                        tiltMetadata.getAngleMovieFile(),             # Filename
-                        '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition
+                        tiltMetadata.getAngleMovieFile(),           # Filename
+                        '{:03d}'.format(tiltMetadata.getAcqOrder()),# Acquisition
                         tiltMetadata.getTiltAngle()))
+
                 while time.time() - self.readDateFile(file2Read) < \
                         2 * self.time4NextTilt.get():
                     self.debug('waiting...')
                     time.sleep(self.time4NextTilt.get() / 2)
                 if len(fileOrderAngleList) < 4:
-                    print('Mdoc error. Less than 2 tilts')
+                    self.error('Mdoc error. Less than 4 tilts in the serie')
                     break
                 else:
                     self.matchTS(fileOrderAngleList)
@@ -191,29 +186,28 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def matchTS(self, fileOrderAngleList):
         self._loadInputList()
-        print('listOfMdocMovies: {}, listOfFolderMovies: {}'.format(
-             len(fileOrderAngleList), len(self.listOfMovies)))
+        self.info('Number of tilts in the mdoc file: {}\n '
+                  'Micrographs abailables: {}'.format(
+             len(fileOrderAngleList), len(self.listOfMics)))
         listMdocFiles = [os.path.basename(fp[0]) for fp in fileOrderAngleList]
-        for x, movie in enumerate(self.listOfMovies):
+        for x, movie in enumerate(self.listOfMics):
             if movie.getMicName() not in listMdocFiles:
-                self.debug('deleting: {}'.format(self.listOfMovies[x].getFileName()))
-                del self.listOfMovies[x]
+                self.debug('deleting: {}'.format(self.listOfMics[x].getFileName()))
+                del self.listOfMics[x]
 
     def _loadInputList(self):
-        """ Load the input set of movies and create a list. """
-        moviesFile = self.inputMicrographs.get().getFileName()
-        self.debug("Loading input db: %s" % moviesFile)
-        movieSet = emobj.SetOfMicrographs(filename=moviesFile)
-        movieSet.loadAllProperties()
-        self.listOfMovies = [m.clone() for m in movieSet]
-
-        movieSet.close()
-        self.debug("Closed db.")
+        """ Load the input set of mics and create a list. """
+        micFile = self.inputMicrographs.get().getFileName()
+        self.debug("Loading input db: %s" % micFile)
+        mic_Set = emobj.SetOfMicrographs(filename=micFile)
+        mic_Set.loadAllProperties()
+        self.listOfMics = [m.clone() for m in mic_Set]
+        mic_Set.close()
 
     def createTS(self, mdocObj):
         if self.TiltSeries == None:
             SOTS = self._createSetOfTiltSeries(suffix='Set')
-            self._defineOutputs(TiltSeries=SOTS)#generate self.TiltSeries
+            self._defineOutputs(TiltSeries=SOTS) #generates self.TiltSeries
             self._defineSourceRelation(self.inputMicrographs, SOTS)
             self._store(SOTS)
         else:
@@ -231,56 +225,43 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             accumulatedDoseList.append(tiltMetadata.getAccumDose())
             incomingDoseList.append(tiltMetadata.getIncomingDose())
 
-        fileOrderedAngleList = sorted(fileOrderAngleList, key=lambda angle: float(angle[2]))
+        fileOrderedAngleList = sorted(fileOrderAngleList,
+                                      key=lambda angle: float(angle[2]))
         #create stack -- flexAlign de tomo
 
 
         tsObj = tomoObj.TiltSeries()
         tsObj.setTsId(mdocObj.getTsId())
         tsObj.setAnglesCount(len(fileOrderedAngleList))
-        tsObj.setSamplingRate(self.listOfMovies[0].getSamplingRate())
-        print('TS.getAnglesCount(): {}'.format(tsObj.getAnglesCount()))# get the fist element dim
-        # print('TS.getAnglesCount(): {}'.format(TS.getAnglesCount()))# get the fist element dim daba 0
-        print(fileOrderedAngleList)
+        tsObj.setSamplingRate(self.listOfMics[0].getSamplingRate())
         SOTS.append(tsObj)
-        print(SOTS.getDim())  # get the fist element dim
-        print('num listmovies')
-        print(len(self.listOfMovies))
         counterTi = 0
         for f, to, ta in fileOrderedAngleList:
             to_a = int(to) - 1
             try:
-                for movie in self.listOfMovies:
+                for mic in self.listOfMics:
                     if SOTS.getSamplingRate() == None:
-                        SOTS.setSamplingRate(movie.getSamplingRate())
-                    #print('f: {} minName: {}'.format(os.path.basename(f), movie.getMicName()))
-                    if os.path.basename(f) in movie.getMicName():
-                        print('HELLOOO')
+                        SOTS.setSamplingRate(mic.getSamplingRate())
+                    if os.path.basename(f) in mic.getMicName():
                         ti = tomoObj.TiltImage(
-                            location=movie.getFileName(),
+                            location=mic.getFileName(),
                             _acqOrder=to_a,
                             _tiltAngle=ta)
                         ti.setIndex(counterTi)
-                        ti.setSamplingRate(movie.getSamplingRate())
+                        ti.setSamplingRate(mic.getSamplingRate())
                         ti.setAcquisition(tsObj.getAcquisition().clone())
                         ti.getAcquisition().setDosePerFrame(incomingDoseList[to_a])
                         ti.getAcquisition().setAccumDose(accumulatedDoseList[to_a])
-
                         tsObj.append(ti)
-                        print(ti.getDim())#get the fist element dim
-                        print(tsObj.getDim())#get the fist element dim
                         counterTi += 1
-
             except Exception as e:
-                print(e,f)
+                self.info(e,f)
+
         SOTS.update(tsObj)
         SOTS.updateDim()
-        print('TS.getAnglesCount(): {}'.format(tsObj.getAnglesCount()))# get the fist element dim
         tsObj.write(properties=False)
         SOTS.write()
-        print('SOTS.getDim(): {}'.format(SOTS.getDim()))
         self._store(SOTS)
-
 
 
     def _validate(self):
@@ -290,4 +271,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
+        text = 'Set of Tilt Serie composed'
+        summary.append(text)
         return summary
