@@ -23,17 +23,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os import environ
+
 import os
 import re
 from glob import glob
+import time
 from datetime import timedelta, datetime
 from collections import OrderedDict
+from os.path import join
 from statistics import mean
 
 import numpy as np
 from sqlite3 import OperationalError
-from tomo import Plugin
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
@@ -43,7 +44,7 @@ from pyworkflow.object import Integer
 from pyworkflow.utils import yellowStr
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
-from pwem.protocols.protocol_import.base import ProtImportFiles, ProtImport
+from pwem.protocols import ProtImport
 
 from tomo.convert import (getAnglesFromHeader, getAnglesFromMdoc,
                           getAnglesFromTlt)
@@ -51,11 +52,9 @@ from tomo.convert.mdoc import normalizeTSId, MDoc
 from tomo.objects import TomoAcquisition
 
 from .protocol_base import ProtTomoBase
-import time
-import subprocess
 
 
-class ProtImportTsBase(ProtImport):
+class ProtImportTsBase(ProtImport, ProtTomoBase):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
     """
     IMPORT_FROM_FILES = 0
@@ -192,7 +191,7 @@ class ProtImportTsBase(ProtImport):
                            "update the output Set, which can "
                            "be used right away by next steps.")
 
-        form.addParam('timeout', params.IntParam, default=10800,
+        form.addParam('timeout', params.IntParam, default=43200,
                       condition='dataStreaming',
                       label="Timeout (secs)",
                       help="Interval of time (in seconds) after which, "
@@ -200,10 +199,13 @@ class ProtImportTsBase(ProtImport):
                            "end. When finished, the output Set will be "
                            "closed and no more data will be "
                            "added to it. \n"
-                           "Note 1:  The default value is  high (3 hours) to "
+                           "Note 1:  The default value is  high (12 hours) to "
                            "avoid the protocol finishes during the acq of the "
                            "microscope. You can also stop it from right click "
-                           "and press STOP_STREAMING.\n")
+                           "and press STOP_STREAMING.\n"
+                           "Note 2: If you're using individual frames when "
+                           "importing movies, the timeout won't be refreshed"
+                           "until a whole movie is stacked.")
 
         form.addParam('fileTimeout', params.IntParam, default=30,
                       condition='dataStreaming',
@@ -266,10 +268,7 @@ class ProtImportTsBase(ProtImport):
 
     # -------------------------- INSERT functions -----------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self._initialize)
-        if self.dataStreaming:
-            self._insertFunctionStep(self.simulateSreaming)
-        print("Before importStep...")
+        self._initialize()
         self._insertFunctionStep(self.importStep)
 
     # -------------------------- STEPS functions ------------------------------
@@ -281,8 +280,6 @@ class ProtImportTsBase(ProtImport):
         incomingDoseList = []
         samplingRate = self.samplingRate.get()
         counter = 0
-        print("importStep...")
-
 
         if not self.MDOC_DATA_SOURCE:
             self.info("Using glob pattern: '%s'" % self._globPattern)
@@ -306,8 +303,6 @@ class ProtImportTsBase(ProtImport):
         finished = False
         lastDetectedChange = datetime.now()
 
-        print("importStep2...")
-
         # Ignore the timeout variables if we are not really in streaming mode
         if self.dataStreaming:
             timeout = timedelta(seconds=self.timeout.get())
@@ -316,9 +311,8 @@ class ProtImportTsBase(ProtImport):
             timeout = timedelta(seconds=5)
             fileTimeout = timedelta(seconds=5)
 
-        print("importStep3...")
         while not finished:
-            if self.dataStreaming: time.sleep(3)  # wait 3 seconds before check for new files
+            time.sleep(3)  # wait 3 seconds before check for new files
             someNew = False  # Check if some new TS has been found
             someAdded = False  # Check if some new were added
             # incompleteTs = False  # Check if there are incomplete TS
@@ -328,30 +322,21 @@ class ProtImportTsBase(ProtImport):
             if self._existingTs:
                 outputSet.enableAppend()
 
-            #print("matchingFiles: {}".format(matchingFiles))
-            for key, value in matchingFiles.items():
-                for x in value:
-                    print(x[0])
-                #print('------', key, ' : ', value)
-
-
             for ts, tiltSeriesList in matchingFiles.items():
                 someNew = True
-                tsObj = tsClass(tsId=ts)# tilt serie
+                tsObj = tsClass(tsId=ts)
                 # Form value has higher priority than the mdoc values
                 samplingRate =\
                     float(samplingRate if samplingRate else self.sRates[ts])
 
                 origin = Transform()
-                #print("Origin: {}".format(origin))
                 tsObj.setOrigin(origin)
                 tsObj.setAnglesCount(len(tiltSeriesList))
-                # we need this to set mapper before adding any item
 
+                # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
 
                 if self.MDOC_DATA_SOURCE:
-                    #print("self.accumDoses: {}".format(self.accumDoses))
                     accumDoseList = self.accumDoses[ts]
                     # tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
                     incomingDoseList = self.incomingDose[ts]
@@ -597,18 +582,19 @@ class ProtImportTsBase(ProtImport):
               the name structure (see advanced parameter)
             """
         fpath = self.filesPath.get()
-        mdocList = glob(os.path.join(fpath, self.filesPattern.get()))
+        mdocList = glob(join(fpath, self.filesPattern.get()))
         hasDoseList = []
         if not mdocList:
             raise Exception('No mdoc files were found in the '
                             'introduced path:\n%s' % fpath)
-        print('mdoclList: ', mdocList)
+
         matchingFiles = OrderedDict()
         self.acquisitions = OrderedDict()
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
         self.incomingDose = OrderedDict()
-        warningHeadMsg = 'The following mdoc files were skipped. See details below:\n\n'
+        warningHeadMsg = yellowStr('The following mdoc files were skipped. '
+                                   'See details below:\n\n')
         warningDetailedMsg = []
         skippedMdocs = 0
 
@@ -617,10 +603,11 @@ class ProtImportTsBase(ProtImport):
             # ones introduced by the user in the protocol's form.
             # Otherwise, the corresponding values considered will be the ones
             # read from the mdoc.
-            # This is because you can't trust mdoc
+            # This is because because you can't trust mdoc
             # (often dose is not calibrated in serialem, so you get 0;
             # pixel size might be binned as mdoc comes from a binned record
-            # not movie and  there are no Cs and amp contrast fields in mdoc)
+            # not movie and  there are no Cs and amp
+            # contrast fields in mdoc)
             mdocObj = MDoc(
                 mdoc,
                 voltage=self.voltage.get() if self.voltage.get() else None,
@@ -640,7 +627,7 @@ class ProtImportTsBase(ProtImport):
                 isImportingTsMovies=self._isImportingTsMovies())
             hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
-                warningHeadMsg += '\t- %s\n' % mdoc
+                warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
                 warningDetailedMsg.append(validationError)
                 skippedMdocs += 1
                 # validationErrors.append(validationError)
@@ -931,50 +918,6 @@ class ProtImportTsBase(ProtImport):
     def isInStreaming(self):
         return self.dataStreaming.get()
 
-    def simulateSreaming(self):
-        fpath = self.filesPath.get()
-        pathMdoc = glob(os.path.join(fpath, self.filesPattern.get()))[0]
-        pathFolderData, mdocName = os.path.split(pathMdoc)
-        pathStreaming = os.path.join(pathFolderData, 'streamingData')
-        self.filesPath.set(pathStreaming)
-
-        pathPlugin = os.path.join(Plugin.getPluginDir(), "simulateStreaming.py")
-        cmd = 'python pathPlugin {} {} {}'.format(fpath, mdocName, pathStreaming, 30)
-        cwd = '../'
-        print('os.getcwd(): {}\ncwd: {}'.format(os.getcwd(), cwd))
-        process = subprocess.Popen(cmd, cwd=cwd, env=environ, stdout=subprocess.PIPE,
-                           stderr=subprocess.STDOUT, shell=True)
-        output = process.stdout.readline().decode("utf-8")
-        print('output', output)
-
-
-    def simulateStreaming2(self):
-        import os
-        import shutil
-        timeStreamingStep = 20
-        fpath = self.filesPath.get()
-        pathMdoc = glob(os.path.join(fpath, self.filesPattern.get()))[0]
-        pathFolderData, mdocName = os.path.split(pathMdoc)
-        print('pathMdoc: ', pathMdoc)
-
-        # copied all files in streamingFolder. The first the mdoc, after that
-        # added files with a sleeptime
-        pathStreaming = os.path.join(pathFolderData, 'streamingData')
-        os.makedirs(pathStreaming, exist_ok=True)
-        shutil.copyfile(pathMdoc, os.path.join(pathStreaming, mdocName))
-        self.filesPath.set(pathStreaming)
-        print('pathStreaming: ', pathStreaming)
-
-        print('pathStreaming updated: ', glob(os.path.join(fpath, self.filesPattern.get()))[0])
-
-        for path in os.listdir(pathFolderData):
-            headPath, nameFile = os.path.split(path)
-            if nameFile[-3:] == 'mrc':
-                print(nameFile)
-                shutil.copyfile(path,
-                                os.path.join(pathStreaming, nameFile))
-                time.sleep(timeStreamingStep)
-
 
 class ProtImportTs(ProtImportTsBase):
     """Protocol to import tilt series."""
@@ -1034,7 +977,6 @@ class ProtImportTs(ProtImportTsBase):
                         % (fileName, nImages, nAngles)
         else:
             return None
-        pathPlugin = Plugin.getPluginDir()
 
 
 class ProtImportTsMovies(ProtImportTsBase):
@@ -1096,260 +1038,3 @@ class ProtImportTsMovies(ProtImportTsBase):
                         'should be in the files pattern.'
         else:
             return None
-
-
-class ProtImportMoviesTomo(ProtImportFiles):
-    """Protocol to import independient movies from a tomo serie. The protocol
-     will input the mdoc files of movies and output a set of tilt images movies
-    """
-    _label = 'import movies'
-    _devStatus = pw.BETA
-
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('filesPath', params.FileParam,
-                  label='Path to movies mdoc files',
-                  help="Select the path with the movies and the mdoc files associatted. \n"
-                       "The folder can contain movies from several tilt series."
-                       "To avoid some of them, please fill the blacklist form")
-        form.addParam('filesPattern', params.StringParam,
-                      label='Pattern',
-                      help="It determines if the tilt series are going to "
-                           "be imported using the mdoc file or the tilt "
-                           "series files. To import from the mdoc files, "
-                           "the word '.mdoc' must appear in the pattern, "
-                           "if not, a tilt series pattern is expected. "
-                           "In the first case, the angular and acquisition "
-                           "data are directly read from the corresponding "
-                           "mdoc file, while in the second it is read "
-                           "the base name of the matching files, according to "
-                           " the pattern introduced.\n\n"
-                           "*IMPORTING WITH MDOC FILES*\n\n"
-                           "For *tilt series movies*, a mdoc per tilt series "
-                           "movies is expected. "
-                           "The corresponding movie file/s must be located in "
-                           "the same path as the mdoc file. The tilt series "
-                           "id will be the base name of the mdoc files, "
-                           "so the names of the mdoc files must be different, "
-                           "even if they're located in "
-                           "different paths.\n\n"
-                           "For *tilt series*, the only difference is that a "
-                           "stack .mrcs file is expected for each "
-                           "mdoc, which means, per each tilt series desired "
-                           "to be imported.\n\n"
-                           "*IMPORTING WITH A PATTERN OF THE TILT SERIES FILE "
-                           "NAMES*\n\n"
-                           "The pattern can contain standard wildcards such "
-                           "as *, ?, etc.\n\n"
-                           "It should also contains the following special "
-                           "tags:\n"
-                           "   *{TS}*: tilt series identifier, which can be "
-                           "any UNIQUE part of the path. This must be "
-                           "an alpha-numeric sequence (avoid symbols as -) "
-                           "that can not start with a number.\n"
-                           "   *{TO}*: acquisition order, an integer value "
-                           "(important for dose).\n"
-                           "   *{TA}*: tilt angle, a positive or negative "
-                           "float value.\n\n"
-                           "Examples:\n\n"
-                           "To import a set of image stacks (tilt-series "
-                           "or tilt-series movies) as: \n"
-                           "TiltSeries_a_001_0.0.mrc\n"
-                           "TiltSeries_a_002_3.0.mrc\n"
-                           "TiltSeries_a_003_-3.0.mrc\n"
-                           "...\n"
-                           "TiltSeries_b_001_0.0.mrc\n"
-                           "TiltSeries_b_002_3.0.mrc\n"
-                           "TiltSeries_b_003_-3.0.mrc\n"
-                           "...\n"
-                           "The pattern TiltSeries_{TS}_{TO}_{TA}.mrc will "
-                           "identify:\n"
-                           "{TS} as a, b, ...\n"
-                           "{TO} as 001, 002, 003, ...\n"
-                           "{TA} as 0.0, 3.0, -3.0, ...\n")
-        """ Options to blacklist certain items when launching the
-        import protocol.
-        """
-        form.addSection(label="Rejection")
-        form.addParam('blacklistDateFrom', params.StringParam,
-                      label="Reject from",
-                      allowsNull=True,
-                      help="Files acquired after this date will not be imported. "
-                           "Must follow format: YYYY-mm-dd HH:MM:SS \n"
-                           "e.g: 2019-01-14 14:18:05")
-        form.addParam('blacklistDateTo', params.StringParam,
-                      label="Reject before",
-                      allowsNull=True,
-                      help="Files acquired before this date will not be imported. "
-                           "Must follow format: YYYY-mm-dd HH:MM:SS \n"
-                           "e.g: 2019-01-14 14:18:05")
-        form.addParam('useRegexps', params.BooleanParam,
-                      default=True,
-                      label='Rejection file has RegExps',
-                      help="Choose Yes if the rejection file contains regular expressions. Set to No if "
-                           "the rejection file contains file names. Ignore if not using a rejection file")
-        form.addParam('blacklistFile', params.FileParam,
-                      label="Blacklist File",
-                      allowsNull=True,
-                      help="Reject everything included in this file. If Use RegExps is True,"
-                           "lines will be interpreted as regular expressions. E.g: \n"
-                           "(.*)GRID_0[1-5](.*)\n"
-                           "(.*)/GRID_10/Falcon_2019_01_14-16_(.*)\n"
-                           "If Use RegExps is False, lines will be interpreted as file names. E.g.\n"
-                           "/path/to/GRID_10/Falcon_2019_01_14-16_51_20_0_movie.mrcs\n"
-                           "/path/to/GRID_10/Falcon_2019_01_14-16_55_40_0_movie.mrcs"
-                      )
-
-        form.addSection('Streaming')
-
-        form.addParam('dataStreaming', params.BooleanParam, default=True,
-                      label="Process data in streaming?",
-                      help="Select this option if you want import data as it "
-                           "is generated and process on the fly by next "
-                           "protocols. In this case the protocol will "
-                           "keep running to check new files and will "
-                           "update the output Set, which can "
-                           "be used right away by next steps.")
-
-        form.addParam('initialTimeout', params.IntParam, default=60,
-                      condition='dataStreaming',
-                      label="Initial timeout (secs)",
-                      help="Waiting time until the first movie is acquired\n")
-
-        form.addParam('timeout', params.IntParam, default=10800,
-                      condition='dataStreaming',
-                      label="Timeout (secs)",
-                      help="Interval of time (in seconds) after which, "
-                           "if no new file is detected, the protocol will "
-                           "end. When finished, the output Set will be "
-                           "closed and no more data will be "
-                           "added to it. \n"
-                           "Note 1:  The default value is 3 hours to "
-                           "avoid the protocol finishes during the acq of the "
-                           "microscope. You can also stop it from right click "
-                           "and press STOP_STREAMING.\n")
-
-        form.addParam('fileTimeout', params.IntParam, default=10,
-                      condition='dataStreaming',
-                      label="File timeout (secs)",
-                      help="Interval of time (in seconds) after which, if a "
-                           "file has not changed, we consider it as a new "
-                           "file.\n")
-
-
-    #Parse
-    def getBlacklistedItems(self):
-        if not hasattr(self, '_blacklistedItems'):
-            self._blacklistedItems = set()
-        return self._blacklistedItems
-
-
-    def getItemsToBlacklistFromFile(self):
-        if not hasattr(self, '_fileItemsToBlacklist'):
-            blacklistfile = self.blacklistFile.get()
-            blacklistItems = set()
-            if blacklistfile:
-                with open(blacklistfile, 'r') as f:
-                    for blacklistedItem in f:
-                        blacklistedItem = blacklistedItem.strip()
-                        blacklistItems.add(blacklistedItem)
-            self._fileItemsToBlacklist = blacklistItems
-
-        return self._fileItemsToBlacklist
-
-
-    def isBlacklisted(self, fileName):
-        # check if already blacklisted
-        blacklistedItems = self.getBlacklistedItems()
-        if fileName in blacklistedItems:
-            return True
-
-        # Blacklisted by date
-        blacklistDateFrom = self.blacklistDateFrom.get()
-        blacklistDateTo = self.blacklistDateTo.get()
-        doDateBlacklist = blacklistDateFrom is not None or blacklistDateTo is not None
-        if doDateBlacklist:
-            fileDate = datetime.fromtimestamp(os.path.getmtime(fileName))
-            self.info(fileDate)
-            if blacklistDateFrom:
-                parsedDateFrom = datetime.strptime(blacklistDateFrom, "%Y-%m-%d %H:%M:%S")
-                self.info(parsedDateFrom)
-                self.info(parsedDateFrom)
-                if blacklistDateTo:
-                    parsedDateTo = datetime.strptime(blacklistDateTo, "%Y-%m-%d %H:%M:%S")
-                    if parsedDateFrom <= fileDate <= parsedDateTo:
-                        self.info("Blacklist warning: %s is blacklisted by date" % fileName)
-                        blacklistedItems.add(fileName)
-                        return True
-                else:
-                    if parsedDateFrom <= fileDate:
-                        self.info("Blacklist warning: %s is blacklisted by date" % fileName)
-                        blacklistedItems.add(fileName)
-                        return True
-
-            elif blacklistDateTo:
-                parsedDateTo = datetime.strptime(blacklistDateTo, "%Y-%m-%d %H:%M:%S")
-                if fileDate <= parsedDateTo:
-                    self.info("Blacklist warning: %s is blacklisted by date" % fileName)
-                    blacklistedItems.add(fileName)
-                    return True
-
-        # Blacklisted by file
-        items2blacklist = self.getItemsToBlacklistFromFile()
-        for item2blacklist in items2blacklist:
-            if self.useRegexps.get():
-                if re.match(item2blacklist, fileName):
-                    self.info("Blacklist warning: %s matched blacklist regexp %s"
-                              % (fileName, item2blacklist))
-                    blacklistedItems.add(fileName)
-                    return True
-            elif fileName in item2blacklist:
-                self.info("Blacklist warning: %s is blacklisted " % fileName)
-                blacklistedItems.add(fileName)
-                return True
-        return False
-
-
-
-    def _insertAllSteps(self):
-        self.importStep()
-        self._insertFunctionStep('readParameters')
-        self._insertFunctionStep('createOutputStep')
-
-
-    def importStep(self):
-        self.info('importStep')
-        self.info(str(self.filesPath.get()))
-        self.info("Using glob pattern: '%s'" % self.filesPattern)
-
-        if self.dataStreaming:
-            timeout = timedelta(seconds=self.timeout.get())
-            fileTimeout = timedelta(seconds=self.fileTimeout.get())
-            initialTimeout = timedelta(seconds=self.initialTimeout.get())
-        else:
-            timeout = timedelta(seconds=5)
-            fileTimeout = timedelta(seconds=5)
-            initialTimeout = timedelta(seconds=5)
-
-        print('timeout:{} fileTimeout:{} initialTimeout:{}'.format(
-            timeout, fileTimeout, initialTimeout))
-
-        for i, (fileName, fileId) in enumerate(self.iterFiles()):
-            if self.isBlacklisted(fileName):
-                continue
-            print('fileName: {}'.format(fileName))
-
-
-
-    def readParameters(self):
-        pass
-
-
-    def createOutputStep(self):
-        self._defineOutputs()
-
-
-    def _validate(self):
-        pass
-
-
