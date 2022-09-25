@@ -194,7 +194,7 @@ class TiltSeriesBase(data.SetOfImages):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
         # TiltSeries will always be used inside a SetOfTiltSeries
-        # so, let's do no store the mapper path by default
+        # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
         self._acquisition = TomoAcquisition()
         self._origin = Transform()
@@ -207,7 +207,7 @@ class TiltSeriesBase(data.SetOfImages):
         self._anglesCount = value
 
     def getTsId(self):
-        """ Get unique TiltSerie ID, usually retrieved from the
+        """ Get unique TiltSeries ID, usually retrieved from the
         file pattern provided by the user at the import time.
         """
         return self._tsId.get()
@@ -217,10 +217,10 @@ class TiltSeriesBase(data.SetOfImages):
 
     def copyInfo(self, other, copyId=False):
         """ Copy basic information (id and other properties) but
-        not _mapperPath or _size from other set of tomograms to current one.
+        not _mapperPath or _size from other set of tilt series to current one.
         """
         self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
-        # self.copyAttributes(other, ['_tsId', '_anglesCount'])
+        # self.copyAttributes(other, '_tsId', '_anglesCount')
 
     def append(self, tiltImage):
         tiltImage.setTsId(self.getTsId())
@@ -616,6 +616,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
                     tiOut = tsOut.ITEM_TYPE()
                     tiOut.copyInfo(ti)
+                    tiOut.setAcquisition(ti.getAcquisition())
                     tiOut.copyObjId(ti)
                     tiOut.setLocation(ti.getLocation())
                     if updateTiCallback:
