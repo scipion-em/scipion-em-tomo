@@ -38,7 +38,7 @@ import tomo.objects
 class ProtTomoBase:
     def _createSet(self, SetClass, template, suffix, **kwargs):
         """ Create a set and set the filename using the suffix.
-        If the file exists, it will be delete. """
+        If the file exists, it will be deleted. """
         setFn = self._getPath(template % suffix)
         # Close the connection to the database if
         # it is open before deleting the file
