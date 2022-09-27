@@ -187,11 +187,11 @@ class ProtTsEstimateCTF(ProtTsProcess):
             if isinstance(self.inputTiltSeries.get(), SetOfCTFTomoSeries):
                 inputLabel = 'Input CTFTomoSeries'
             summary.append(
-                inputLabel + ": %d.\nnumber of CTF estimated: %d.\n"
+                inputLabel + ": %d.\nNumber of CTF estimated: %d.\n"
                 % (self._getInputTs().getSize(),
                    self.outputSetOfCTFTomoSeries.getSize()))
         else:
-            summary.append("Output classes not ready yet.")
+            summary.append("Output CTFs are not ready yet.")
         return summary
 
     # --------------------------- UTILS functions ----------------------------

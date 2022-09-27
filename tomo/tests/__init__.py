@@ -55,3 +55,12 @@ DataSet(name='reliontomo', folder='reliontomo',
                'tomo1': '64K_defocus_m2_tomo_10_bin1_WBP_CatBinned1.mrc',
                'tomo2': '64K_defocus_m2_tomo_12_bin1_WBP_CatBinned1.mrc',
         })
+
+DataSet(name='emd_10439', folder='emd_10439',
+        files={
+               'tomogramsDir': 'tomograms',
+               'tomoEmd10439': 'tomograms/emd_10439.mrc',
+               'scipionSqlite3dCoords': 'importFromScipionSqlite/coordinates.sqlite',
+               'scipionSqlite3dCoordsSomeBad': 'importFromScipionSqlite/coordinates_3badCoords.sqlite',
+               'tomomaskAnnotated': 'tomomasksAnnotated/emd_10439_materials.mrc'
+        })

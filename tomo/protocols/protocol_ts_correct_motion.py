@@ -41,6 +41,7 @@ OUTPUT_TILT_SERIES_ODD = 'outputTiltSeriesOdd'
 OUTPUT_TILT_SERIES_EVEN = 'outputTiltSeriesEven'
 EVEN = 'even'
 ODD = 'odd'
+OUTPUT_TILT_SERIES_DW = 'outputTiltSeriesDW'
 
 
 class ProtTsCorrectMotion(ProtTsProcess):
@@ -52,6 +53,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
     the frames range used for alignment and final sum, the binning factor
     or the cropping options (region of interest)
     """
+    _possibleOutputs = {'outputTiltSeries': SetOfTiltSeries,
+                        OUTPUT_TILT_SERIES_DW: SetOfTiltSeries,
+                        OUTPUT_TILT_SERIES_EVEN: SetOfTiltSeries,
+                        OUTPUT_TILT_SERIES_ODD: SetOfTiltSeries}
 
     # Attributes used for even/odd frames splitting if requested
     evenAvgFrameList = []
@@ -233,8 +238,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         # Even and odd stuff
         if self._doSplitEvenOdd():
             template = 'tiltseries%s.sqlite'
-            acq = ts.getAcquisition()
-            sRate = ts.getSamplingRate()
+            sRate = self._getOutputSampling()
             # Even
             if self.outputSetEven:
                 self.outputSetEven.enableAppend()
@@ -248,11 +252,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 self.outputSetOdd = SetOfTiltSeries.create(self._getPath(), template=template, suffix=ODD)
                 self.outputSetOdd.setSamplingRate(sRate)
 
-            tsClass = self.outputSetEven.ITEM_TYPE
-            tsObjEven = tsClass(tsId=tsId)
-            tsObjOdd = tsClass(tsId=tsId)
-            tsObjEven.setAcquisition(ts.getAcquisition())
-            tsObjOdd.setAcquisition(ts.getAcquisition())
+            tsObjEven = TiltSeries()
+            tsObjOdd = TiltSeries()
+            tsObjEven.copyInfo(ts, copyId=True)
+            tsObjOdd.copyInfo(ts, copyId=True)
             self.outputSetEven.append(tsObjEven)
             self.outputSetOdd.append(tsObjOdd)
 
@@ -280,8 +283,31 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.oddAvgFrameList = []
             self.tsMList = []
 
+        # Dose weighting
+        if self._createOutputWeightedTS():
+            if getattr(self, 'outputSetDW', None) is None:
+                self.outputSetDW = self._createOutputSet(suffix='_dose-weighted')
+                self.outputSetDW.setSamplingRate(self._getOutputSampling())
+            else:
+                self.outputSetDW.enableAppend()
+
+            tsObjDW = TiltSeries()
+            tsObjDW.copyInfo(ts, copyId=True)
+            self.outputSetDW.append(tsObjDW)
+
+            for i, ti in enumerate(tiList):
+                tiOut = TiltImage(location=(i+1, tsFnDW))
+                tiOut.copyInfo(ti, copyId=True)
+                tiOut.setAcquisition(ti.getAcquisition())
+                tiOut.setSamplingRate(self._getOutputSampling())
+                tiOut.setIndex(i+1)
+                tiOut.setObjId(ti.getIndex())
+                tsObjDW.append(tiOut)
+
+            self.outputSetDW.update(tsObjDW)
+
     def createOutputStep(self):
-        """" Overwrites the parent method to allow te creation of odd and even outputs"""
+        """" Overwrites the parent method to allow the creation of odd and even outputs"""
         ProtTsProcess.createOutputStep(self)
 
         if self._doSplitEvenOdd():
@@ -293,6 +319,11 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_CLOSED)
             self.outputSetOdd.write()
             self._store(self.outputSetOdd)
+
+        if self._createOutputWeightedTS():
+            self.outputSetDW.setStreamState(self.outputSetDW.STREAM_CLOSED)
+            self.outputSetDW.write()
+            self._store(self.outputSetDW)
 
     def _updateOutput(self, tsIdList):
         """ Update the output set with the finished Tilt-series.
@@ -324,21 +355,32 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.outputSetEven.setStreamState(self.outputSetEven.STREAM_OPEN)
             self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_OPEN)
 
+        if self._createOutputWeightedTS():
+            self.outputSetDW.setStreamState(self.outputSetDW.STREAM_OPEN)
+
         if self._createOutput:
+            outputSet.updateDim()
+            outputs = {self._getOutputName(): outputSet}
+            if self._createOutputWeightedTS():
+                self.outputSetDW.updateDim()
+                outputs.update({OUTPUT_TILT_SERIES_DW: self.outputSetDW})
+
             if self._doSplitEvenOdd():
-                outputSet.updateDim()
                 self.outputSetEven.updateDim()
                 self.outputSetOdd.updateDim()
-                self._defineOutputs(**{self._getOutputName(): outputSet,
-                                       OUTPUT_TILT_SERIES_EVEN: self.outputSetEven,
-                                       OUTPUT_TILT_SERIES_ODD: self.outputSetOdd})
-                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+                outputs.update({OUTPUT_TILT_SERIES_EVEN: self.outputSetEven,
+                                OUTPUT_TILT_SERIES_ODD: self.outputSetOdd
+                                })
+                self._defineOutputs(**outputs)
                 self._defineSourceRelation(self._getInputTsPointer(), self.outputSetEven)
                 self._defineSourceRelation(self._getInputTsPointer(), self.outputSetOdd)
             else:
-                outputSet.updateDim()
-                self._defineOutputs(**{self._getOutputName(): outputSet})
-                self._defineSourceRelation(self._getInputTsPointer(), outputSet)
+                self._defineOutputs(**outputs)
+
+            if self._createOutputWeightedTS():
+                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetDW)
+
+            self._defineSourceRelation(self._getInputTsPointer(), outputSet)
             self._createOutput = False
         else:
             outputSet.write()
@@ -348,11 +390,17 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 self._store(self.outputSetEven)
                 self.outputSetOdd.write()
                 self._store(self.outputSetOdd)
+            if self._createOutputWeightedTS():
+                self.outputSetDW.write()
+                self._store(self.outputSetDW)
 
         outputSet.close()
         if self._doSplitEvenOdd():
             self.outputSetEven.close()
             self.outputSetOdd.close()
+
+        if self._createOutputWeightedTS():
+            self.outputSetDW.close()
 
         if self._tsDict.allDone():
             self._coStep.setStatus(params.STATUS_NEW)
@@ -466,6 +514,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     def _useAlignToSum(self):
         return True
+
+    def _createOutputWeightedTS(self):
+        return False
 
 
 class ProtTsAverage(ProtTsCorrectMotion):

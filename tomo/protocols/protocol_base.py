@@ -38,7 +38,7 @@ import tomo.objects
 class ProtTomoBase:
     def _createSet(self, SetClass, template, suffix, **kwargs):
         """ Create a set and set the filename using the suffix.
-        If the file exists, it will be delete. """
+        If the file exists, it will be deleted. """
         setFn = self._getPath(template % suffix)
         # Close the connection to the database if
         # it is open before deleting the file
@@ -124,12 +124,9 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        if self.isFinished():
-            summary.append("Output 3D Coordinates not ready yet.")
-
-        if self.getOutputsSize() >= 1:
+        if self.isFinished() and self.getOutputsSize() >= 1:
             for key, output in self.iterOutputAttributes():
-                summary.append("*%s:* \n %s " % (key, output.getSummary()))
+                summary.append("*%s:*\n%s" % (key, output.getSummary()))
         else:
             summary.append(Message.TEXT_NO_OUTPUT_CO)
         return summary

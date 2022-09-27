@@ -25,25 +25,19 @@
 # **************************************************************************
 from os import symlink
 from os.path import basename, abspath
-
+from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
-from pyworkflow.utils import removeExt
-from pwem.protocols import EMProtocol
 from tomo.objects import TomoMask
-
-MATERIALS_SUFFIX = '_materials'
+from tomo.utils import isMatchingByTsId
 
 
 class ProtAssignTomo2TomoMask(EMProtocol):
-    """ This protocol assign tomograms to tomo masks (segmentations)."""
+    """ This protocol assign tomograms to tomomasks (segmentations)."""
 
-    _label = 'assign tomograms to tomo masks (segmentations)'
     _devStatus = BETA
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.tomoDict = {}
+    _label = 'assign tomograms to tomo masks (segmentations)'
+    MATERIALS_SUFFIX = '_materials'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -60,23 +54,24 @@ class ProtAssignTomo2TomoMask(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions --------------------------------------------
+
     def createOutputStep(self):
         inTomos = self.inputTomos.get()
         inTomoMasks = self.inTomoMasks.get()
-        outputSetOfTomoMasks = inTomoMasks.create(self._getPath())
-        outputSetOfTomoMasks.copyInfo(inTomoMasks)
+        outputSetOfTomoMasks = inTomoMasks.create(self._getPath(), template='tomomasks%s.sqlite')
+        outputSetOfTomoMasks.setSamplingRate(inTomos.getSamplingRate())
 
-        if self._isMatchingByTsId():
+        if isMatchingByTsId(self.inTomoMasks.get(), self.inputTomos.get()):
             tomoTsIds = [tomo.getTsId() for tomo in inTomos]
             for inTomoMask in inTomoMasks:
                 outTomoMask = self.setMatchingTomogram(tomoTsIds, inTomoMask, inTomos)
                 outputSetOfTomoMasks.append(outTomoMask)
         else:
             # Membrane Annotator tool adds suffix _materials to the generated tomomasks
-            tomoBaseNames = [basename(tomo.getFileName().replace(MATERIALS_SUFFIX, '')) for tomo in inTomos]
+            tomoBaseNames = [basename(tomo.getFileName().replace(self.MATERIALS_SUFFIX, '')) for tomo in inTomos]
             for inTomoMask in inTomoMasks:
                 outTomoMask = self.setMatchingTomogram(tomoBaseNames, inTomoMask, inTomos, isMatchingByTsId=False)
                 outputSetOfTomoMasks.append(outTomoMask)
@@ -84,49 +79,16 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         self._defineOutputs(outputTomoMasks=outputSetOfTomoMasks)
         self._defineSourceRelation(inTomos, outputSetOfTomoMasks)
 
-    # --------------------------- UTILS functions --------------------------------------------
-    def setMatchingTomogram(self, idList, inTomoMask, inTomos, isMatchingByTsId=True):
-        inFileName = inTomoMask.getFileName()
-        outFileName = self._getExtraPath(basename(inFileName))
-        symlink(abspath(inFileName), abspath(outFileName))
-        outTomoMask = TomoMask()
-        outTomoMask.setLocation(inFileName)
-        outTomoMask.copyInfo(inTomoMask)
-        outTomoMask.setFileName = outFileName
-        if isMatchingByTsId:
-            outTomoMask.setVolName(inTomos[idList.index(inTomoMask.getTsId()) + 1].getFileName())
-        else:
-            outTomoMask.setVolName(inTomos[idList.index(basename(inTomoMask.getFileName().replace(
-                MATERIALS_SUFFIX, ''))) + 1].getFileName())
-        return outTomoMask
-
-    def _updateItem(self, item, row):
-        for tomoName in self.tomoDict:
-            if removeExt(tomoName) in item.getFileName():
-                item.setVolName(tomoName)
-                item.setVolId(self.tomoDict.get(tomoName))
-                break
-
-    def _isMatchingByTsId(self):
-        tsId = '_tsId'
-        if hasattr(self.inTomoMasks.get().getFirstItem(), tsId) and \
-                hasattr(self.inputTomos.get().getFirstItem(), tsId):
-            if self.inTomoMasks.get().getFirstItem().getTsId() and self.inputTomos.get().getFirstItem().getTsId():
-                return True
-            else:
-                return False
-        else:
-            return False
-
     # --------------------------- INFO functions --------------------------------------------
+
     def _validate(self):
         errors = []
         inTomoMasks = self.inTomoMasks.get()
         inTomos = self.inputTomos.get()
         tol = 0.01
-        if abs(inTomos.getSamplingRate() - inTomoMasks.getSamplingRate() > tol):
-            errors.append('Sampling rate of input sets of tomomasks and tomograms differ in more '
-                          'than %.2f Å/pix.' % tol)
+        if abs(inTomos.getSamplingRate() - inTomoMasks.getSamplingRate()) > tol:
+            errors.append('The sampling rate of input sets of tomomasks [%.2f Å/pix] and tomograms [%.2f Å/pix] differ '
+                          'in more than %.2f Å/pix.' % (inTomoMasks.getSamplingRate(), inTomos.getSamplingRate(), tol))
         else:
             # Check match by tsId
             tomoMaskTsIds = [tomoMask.getTsId() for tomoMask in inTomoMasks]
@@ -134,7 +96,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
             numberMatchesByTsId = len(set(tomoTsIds) & set(tomoMaskTsIds))  # Length of the intersection of both lists
 
             # Check match by basename
-            tomoMaskBaseNames = [tomoMask.getFileName().replace(MATERIALS_SUFFIX, '') for tomoMask in inTomoMasks]
+            tomoMaskBaseNames = [tomoMask.getFileName().replace(self.MATERIALS_SUFFIX, '') for tomoMask in inTomoMasks]
             tomoBaseNames = [tomo.getFileName() for tomo in inTomos]
             numberMatchesByBaseName = len(set(tomoMaskBaseNames) & set(tomoBaseNames))  # Length of the intersection of both lists
 
@@ -147,7 +109,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         warnings = []
         inTomoMasks = self.inTomoMasks.get()
         inTomos = self.inputTomos.get()
-        if self._isMatchingByTsId():
+        if isMatchingByTsId(inTomoMasks, inTomos):
             notMatchingMsg = ''
             # Check match by tsId
             tomoTsIds = [tomo.getTsId() for tomo in inTomos]
@@ -160,10 +122,10 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         else:
             notMatchingMsg = ''
             # Check match by basename
-            tomoBaseNames = [basename(tomo.getFileName().replace(MATERIALS_SUFFIX, '')) for tomo in inTomos]
+            tomoBaseNames = [basename(tomo.getFileName().replace(self.MATERIALS_SUFFIX, '')) for tomo in inTomos]
             for tomoMask in inTomoMasks:
                 tomoMaskName = tomoMask.getFileName()
-                tomoMaskBaseName = basename(tomoMaskName.replace(MATERIALS_SUFFIX, ''))
+                tomoMaskBaseName = basename(tomoMaskName.replace(self.MATERIALS_SUFFIX, ''))
                 if tomoMaskBaseName not in tomoBaseNames:
                     notMatchingMsg += '\n\t-%s' % tomoMaskName
             if notMatchingMsg:
@@ -174,19 +136,25 @@ class ProtAssignTomo2TomoMask(EMProtocol):
 
     def _summary(self):
         summary = []
-        if not hasattr(self, 'outputSubtomograms'):
-            summary.append("Output subtomograms not ready yet.")
-        else:
-            summary.append("%s tomograms assigned to %s subtomograms." %
-                           (self.getObjectTag('inputTomos'), self.getObjectTag('inputSubtomos')))
+        if self.isFinished():
+            summary.append("%s tomograms assigned to %s tomomasks." %
+                           (self.getObjectTag('inputTomos'), self.getObjectTag('inTomoMasks')))
         return summary
 
-    def _methods(self):
-        methods = []
-        if not hasattr(self, 'outputSubtomograms'):
-            methods.append("Output subtomograms not ready yet.")
+# --------------------------- UTILS functions --------------------------------------------
+    def setMatchingTomogram(self, idList, inTomoMask, inTomos, isMatchingByTsId=True):
+        inFileName = inTomoMask.getFileName()
+        outFileName = self._getExtraPath(basename(inFileName))
+        symlink(abspath(inFileName), abspath(outFileName))
+        outTomoMask = TomoMask()
+        outTomoMask.setLocation(inFileName)
+        outTomoMask.copyInfo(inTomoMask)
+        outTomoMask.setFileName = outFileName
+        if isMatchingByTsId:
+            outTomoMask.setVolName(inTomos[idList.index(inTomoMask.getTsId()) + 1].getFileName())
         else:
-            methods.append("%d %s tomograms assigned to %d %s subtomograms." %
-                           (self.inputTomos.get().getSize(), self.getObjectTag('inputTomos'),
-                            self.inputSubtomos.get().getSize(), self.getObjectTag('inputSubtomos')))
-        return methods
+            outTomoMask.setVolName(inTomos[idList.index(basename(inTomoMask.getFileName().replace(
+                self.MATERIALS_SUFFIX, ''))) + 1].getFileName())
+        # TODO: if the volume has not been matched at this point try to find out if the tsId is contained in the basename
+        return outTomoMask
+
