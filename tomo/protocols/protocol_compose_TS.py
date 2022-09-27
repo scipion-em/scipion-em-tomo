@@ -104,10 +104,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
-        self.CloseStep_ID = self._insertFunctionStep('createOutputStep',
+        self.CloseStep_ID = self._insertFunctionStep('closeSet',
                                                      prerequisites=[],
                                                      wait=True)
         self.newSteps.append(self.CloseStep_ID)
+
 
     def _stepsCheck(self):
         currentTime = time.time()
@@ -130,8 +131,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             self.newSteps.append(newStepID)
             self.updateSteps()
 
-    def createOutputStep(self):
-        pass
+    def closeSet(self):
+        print('Hello')
+        self.TiltSeries.setStreamState(self.TiltSeries.STREAM_CLOSED)
 
     def _getFirstJoinStep(self):
         for s in self._steps:
@@ -144,7 +146,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         # the first function that need to wait for all micrographs
         # to have completed, this can be overwritten in subclasses
         # (eg in Xmipp 'sortPSDStep')
-        return 'createOutputStep'
+        return 'closeSet'
 
     def findMdoc(self):
         """
@@ -225,15 +227,17 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         """
         if self.TiltSeries == None:
             SOTS = self._createSetOfTiltSeries(suffix='Set')
-            SOTS.STREAM_OPEN
+            SOTS.setStreamState(SOTS.STREAM_OPEN)
+            SOTS.enableAppend()
             self._defineOutputs(TiltSeries=SOTS) #generates self.TiltSeries
             self._defineSourceRelation(self.inputMicrographs, SOTS)
             self._store(SOTS)
-
         else:
             SOTS = self.TiltSeries
-            print(SOTS.getFirstItem())
+            SOTS.setStreamState(SOTS.STREAM_OPEN)
             SOTS.enableAppend()
+            self._store(SOTS)
+
         fileOrderAngleList = []
         accumulatedDoseList = []
         incomingDoseList = []
@@ -248,11 +252,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         fileOrderedAngleList = sorted(fileOrderAngleList,
                                       key=lambda angle: float(angle[2]))
 
-
-        tsObj = tomoObj.TiltSeries()
+        tsObj = tomoObj.TiltSeries()#alom,ejor tengo k append todas al inicio
         tsObj.setTsId(mdocObj.getTsId())
-        tsObj.setAnglesCount(len(fileOrderedAngleList))
+        tsObj.setSamplingRate(self.listOfMics[0].getSamplingRate())
         SOTS.append(tsObj)
+
 
         counterTi = 0
         for f, to, ta in fileOrderedAngleList:
@@ -274,8 +278,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.setAcquisition(tsObj.getAcquisition().clone())
                         ti.getAcquisition().setDosePerFrame(incomingDoseList[to_a])
                         ti.getAcquisition().setAccumDose(accumulatedDoseList[to_a])
-                        # Create stack
 
+                        # Create stack
                         self.addTiltImage(ti.getFileName(), tsObj, mic.getMicName(), ti.getTiltAngle(),
                                           ti.getAcquisitionOrder(), ti.getAcquisition(),
                                           ti.getTsId(), ti.getSamplingRate(),
@@ -285,12 +289,16 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             except Exception as e:
                 self.info(e)
 
-        SOTS.update(tsObj)
         SOTS.updateDim()
         tsObj.write(properties=False)
+        SOTS.update(tsObj)
         SOTS.write()
-        self._store(SOTS)
+        #tsObj.close()
 
+        self._store(SOTS)
+        #self._store()
+        #tsObj.clear()
+        #SOTS.close()
 
     def addTiltImage(self, tiFile, tsObject, suffix, ti_ang, ti_Ord, acq,
                      tsIde, samplingRate, objId, index):
@@ -307,17 +315,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param index: position of the slice in the generated slack
         """
         ti = tomoObj.TiltImage(tiltAngle=ti_ang, tsId=tsIde, acquisitionOrder=ti_Ord)
-        print('ti.getDim: {}'.format(ti.getDim()))
         ti.setSamplingRate(samplingRate)
         ti.setIndex(index)
         ti.setAcquisition(acq)
         newLocation = (self._getExtraPath(str(tsIde) + '_' + suffix + '.mrcs'))
-        #el conver mueve de sitio la imagen osea la borra del protocolo anterior
         self.ih.convert(inputObj=tiFile, outputObj= newLocation)
         ti.setLocation(newLocation)
-        print('ti.getDim: {}'.format(ti.getDim()))
         tsObject.append(ti)
-        print('tsObject.getDim: {}'.format(tsObject.getDim()))
         #pw.utils.cleanPath(tiFile)
 
 
