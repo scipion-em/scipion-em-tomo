@@ -254,9 +254,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
         tsObj = tomoObj.TiltSeries()#alom,ejor tengo k append todas al inicio
         tsObj.setTsId(mdocObj.getTsId())
-        tsObj.setSamplingRate(self.listOfMics[0].getSamplingRate())
-        SOTS.append(tsObj)
+        tsObj.getAcquisition().setTiltAxisAngle(mdocObj.getTiltAxisAngle())
 
+        SOTS.append(tsObj)
 
         counterTi = 0
         for f, to, ta in fileOrderedAngleList:
@@ -279,7 +279,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.getAcquisition().setDosePerFrame(incomingDoseList[to_a])
                         ti.getAcquisition().setAccumDose(accumulatedDoseList[to_a])
 
-                        # Create stack
+                        # Create stack and append
                         self.addTiltImage(ti.getFileName(), tsObj, mic.getMicName(), ti.getTiltAngle(),
                                           ti.getAcquisitionOrder(), ti.getAcquisition(),
                                           ti.getTsId(), ti.getSamplingRate(),
@@ -327,8 +327,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
 
     def _validate(self):
-        errors = [] if len(self.inputMovies.get()) > 1 else \
-            ["More than one Input movie is needed to run."]
+        errors = [] if len(self.inputMicrographs.get()) > 1 else \
+            ["More than one Input micrographs is needed to run."]
         return errors
 
     def _summary(self):
