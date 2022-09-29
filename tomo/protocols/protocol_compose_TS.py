@@ -31,6 +31,8 @@ import pyworkflow.protocol.constants as cons
 from tomo.convert.mdoc import MDoc
 import pwem.objects as emobj
 import tomo.objects as tomoObj
+from pwem.objects.data import Transform
+
 from tomo.protocols import ProtTomoBase
 from pwem.emlib.image import ImageHandler
 import time
@@ -168,10 +170,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         launch the create of SetOfTiltSeries and each TiltSerie
         :param listRemains: list of mdoc files in the path
         """
+        print(listRemains)
         for file2Read in listRemains:
             mdocObj = MDoc(file2Read)
             validationError = mdocObj.read()
             if validationError:
+
                 self.debug(validationError)
             else:
                 self.info('mdoc file to read: {}'.format(file2Read))
@@ -276,11 +280,20 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         fileOrderedAngleList = sorted(fileOrderAngleList,
                                       key=lambda angle: float(angle[2]))
 
-        tsObj = tomoObj.TiltSeries()#alom,ejor tengo k append todas al inicio
+        tsObj = tomoObj.TiltSeries()
+
         tsObj.setTsId(mdocObj.getTsId())
+        acq = tsObj.getAcquisition()
+        acq.setVoltage(mdocObj.getVoltage())
+        acq.setMagnification(mdocObj.getMagnification())
+
         tsObj.getAcquisition().setTiltAxisAngle(mdocObj.getTiltAxisAngle())
+        origin = Transform()
+        tsObj.setOrigin(origin)
+
 
         SOTS.append(tsObj)
+
         counterTi = 0
         for f, to, ta in fileOrderedAngleList:
             to_a = int(to) - 1
@@ -301,6 +314,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.setAcquisition(tsObj.getAcquisition().clone())
                         ti.getAcquisition().setDosePerFrame(incomingDoseList[to_a])
                         ti.getAcquisition().setAccumDose(accumulatedDoseList[to_a])
+                        ti.setTransform(origin)
                         tsObj.append(ti)
                         # Create stack and append
                         _, tiFnDW = self._getOutputTiltImagePaths(ti)
@@ -308,7 +322,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         print('\n', f, '\n', tiFnDW, '\n', newLocation)
                         self.ih.convert(f, newLocation)
                         ti.setLocation(newLocation)
-                        pw.utils.cleanPath(f)
+                        #pw.utils.cleanPath(f)
                         if os.path.exists(tiFnDW):
                             self.ih.convert(tiFnDW, (counterTi + 1,
                                     self._getOutputTiltSeriesPath(tsObj, '_d')))
