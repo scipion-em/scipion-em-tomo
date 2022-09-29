@@ -83,6 +83,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                       label="Time for next Tilt (secs)",
                       help="Delay until the next tilt is registered. After "
                            "timeout,\n if there is no new tilt, the tilt serie is considered as completed\n")
+        form.addParam('time4NextMic', params.IntParam, default=12,
+                      condition='dataStreaming',
+                      label="Time for next micograph processed (secs)",
+                      help="Delay until the next micograph is processed by any "
+                           "protocol as aligment, CTF....")
         form.addParam('time4NextTS', params.IntParam, default=1800,
                       condition='dataStreaming',
                       label="Time for next TiltSerie (secs)",
@@ -116,7 +121,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             str(int(int(currentTime) - self.time4NextTS_current)) + ' segs')
         listCurrent = self.findMdoc()
         listRemain = [x for x in listCurrent if x not in self.listMdocsRead]
-
         if int(currentTime - self.time4NextTS_current) \
                 > int(self.time4NextTS.get()):
             outputStep = self._getFirstJoinStep()
@@ -132,8 +136,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             self.updateSteps()
 
     def closeSet(self):
-        print('Hello')
-        self.TiltSeries.setStreamState(self.TiltSeries.STREAM_CLOSED)
+        if self.TiltSeries != None:
+            self.TiltSeries.setStreamState(self.TiltSeries.STREAM_CLOSED)
 
     def _getFirstJoinStep(self):
         for s in self._steps:
@@ -161,7 +165,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     def readMdoc(self, listRemains):
         """
         Main function to launch the match with the set of micrographs and
-        launch the create the SetOfTiltSeries and each TiltSerie
+        launch the create of SetOfTiltSeries and each TiltSerie
         :param listRemains: list of mdoc files in the path
         """
         for file2Read in listRemains:
@@ -184,10 +188,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                     time.sleep(self.time4NextTilt.get() / 2)
                 if len(fileOrderAngleList) < 4:
                     self.error('Mdoc error. Less than 4 tilts in the serie')
-                    break
                 else:
-                    self.matchTS(fileOrderAngleList)
-                    self.createTS(mdocObj)
+                    if self.matchTS(fileOrderAngleList) == True:
+                        self.createTS(mdocObj)
 
     def readDateFile(self, file):
         return os.path.getmtime(file)
@@ -198,7 +201,21 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param fileOrderAngleList: for each tilt:
                 filename, acquisitionOrder, Angle
         """
-        self._loadInputList()
+        len_mics_input_1 = self._loadInputList()
+        while len(fileOrderAngleList) > len_mics_input_1:
+            self.info('fileOrderAngleList: {} listOfMics: {}'.format(
+                len(fileOrderAngleList), len(self.listOfMics)))
+            len_mics_input_1 = self._loadInputList()
+            if len(fileOrderAngleList) == len_mics_input_1:
+                break
+            self.info('Waiting next micrograph...')
+            time.sleep(self.time4NextMic.get())
+            len_mics_input_2 = self._loadInputList()
+            if len_mics_input_2 == len_mics_input_1:
+                self.error('{} micrographs were expected but {} were obtained'.
+                format(len(fileOrderAngleList), len_mics_input_2))
+                return False
+
         self.info('Tilts in the mdoc file: {}\n'
                   'Micrographs abailables: {}'.format(
              len(fileOrderAngleList), len(self.listOfMics)))
@@ -208,17 +225,24 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             if mic.getMicName() in listMdocFiles:
                 listMicsMatched.append(mic)
         self.listOfMics = listMicsMatched
-        self.info('Micrographs matched for the mdoc file: {}'.format(
-            len(self.listOfMics)))
+
+        if len(self.listOfMics) != len(fileOrderAngleList):
+            self.info('Micrographs doesnt match with mdoc read')
+            return False
+        else:
+            self.info('Micrographs matched for the mdoc file: {}'.format(
+                len(self.listOfMics)))
+            return True
 
     def _loadInputList(self):
         """ Load the input set of mics and create a list. """
         micFile = self.inputMicrographs.get().getFileName()
-        self.debug("Loading input db: %s" % micFile)
+        self.info("Loading input db: %s" % micFile)
         mic_Set = emobj.SetOfMicrographs(filename=micFile)
         mic_Set.loadAllProperties()
         self.listOfMics = [m.clone() for m in mic_Set]
         mic_Set.close()
+        return len(self.listOfMics)
 
     def createTS(self, mdocObj):
         """
@@ -257,7 +281,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         tsObj.getAcquisition().setTiltAxisAngle(mdocObj.getTiltAxisAngle())
 
         SOTS.append(tsObj)
-
         counterTi = 0
         for f, to, ta in fileOrderedAngleList:
             to_a = int(to) - 1
@@ -278,13 +301,19 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.setAcquisition(tsObj.getAcquisition().clone())
                         ti.getAcquisition().setDosePerFrame(incomingDoseList[to_a])
                         ti.getAcquisition().setAccumDose(accumulatedDoseList[to_a])
-
+                        tsObj.append(ti)
                         # Create stack and append
-                        self.addTiltImage(ti.getFileName(), tsObj, mic.getMicName(), ti.getTiltAngle(),
-                                          ti.getAcquisitionOrder(), ti.getAcquisition(),
-                                          ti.getTsId(), ti.getSamplingRate(),
-                                          counterTi, counterTi)
-                        #tsObj.append(ti)
+                        _, tiFnDW = self._getOutputTiltImagePaths(ti)
+                        newLocation = (counterTi + 1, self._getOutputTiltSeriesPath(tsObj))
+                        print('\n', f, '\n', tiFnDW, '\n', newLocation)
+                        self.ih.convert(f, newLocation)
+                        ti.setLocation(newLocation)
+                        pw.utils.cleanPath(f)
+                        if os.path.exists(tiFnDW):
+                            self.ih.convert(tiFnDW, (counterTi + 1,
+                                    self._getOutputTiltSeriesPath(tsObj, '_d')))
+                            pw.utils.cleanPath(tiFnDW)
+
                         counterTi += 1
             except Exception as e:
                 self.info(e)
@@ -293,12 +322,20 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         tsObj.write(properties=False)
         SOTS.update(tsObj)
         SOTS.write()
-        #tsObj.close()
-
         self._store(SOTS)
-        #self._store()
-        #tsObj.clear()
-        #SOTS.close()
+
+
+    def _getOutputTiltSeriesPath(self, ts, suffix=''):
+        return self._getExtraPath('%s%s.mrcs' % (ts.getTsId(), suffix))
+
+    def _getOutputTiltImagePaths(self, tiltImageM):
+        """ Return expected output path for correct movie and DW one.
+        """
+        base = self._getExtraPath(self._getTiltImageMRoot(tiltImageM))
+        return base + '.mrc', base + '_OTilt.mrc'
+
+    def _getTiltImageMRoot(self, tim):
+        return '%s_%02d' % (tim.getTsId(), tim.getObjId())
 
     def addTiltImage(self, tiFile, tsObject, suffix, ti_ang, ti_Ord, acq,
                      tsIde, samplingRate, objId, index):
@@ -314,7 +351,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param objId: location of the Tilt Image which will be added
         :param index: position of the slice in the generated slack
         """
-        ti = tomoObj.TiltImage(tiltAngle=ti_ang, tsId=tsIde, acquisitionOrder=ti_Ord)
+        ti = tomoObj.TiltImage(tiltAngle=ti_ang, tsId=tsIde,
+                               acquisitionOrder=ti_Ord, )
         ti.setSamplingRate(samplingRate)
         ti.setIndex(index)
         ti.setAcquisition(acq)
@@ -322,7 +360,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.ih.convert(inputObj=tiFile, outputObj= newLocation)
         ti.setLocation(newLocation)
         tsObject.append(ti)
-        #pw.utils.cleanPath(tiFile)
 
 
 
