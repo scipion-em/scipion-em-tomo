@@ -32,7 +32,7 @@ from tomo.convert.mdoc import MDoc
 import pwem.objects as emobj
 import tomo.objects as tomoObj
 from pwem.objects.data import Transform
-
+from pyworkflow.object import Integer
 from tomo.protocols import ProtTomoBase
 from pwem.emlib.image import ImageHandler
 import time
@@ -170,7 +170,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         launch the create of SetOfTiltSeries and each TiltSerie
         :param listRemains: list of mdoc files in the path
         """
-        print(listRemains)
         for file2Read in listRemains:
             mdocObj = MDoc(file2Read)
             validationError = mdocObj.read()
@@ -254,7 +253,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param mdocObj: mdoc object to manage
         """
         if self.TiltSeries == None:
-            SOTS = self._createSetOfTiltSeries(suffix='Set')
+            SOTS = self._createSetOfTiltSeries(suffix='')
             SOTS.setStreamState(SOTS.STREAM_OPEN)
             SOTS.enableAppend()
             self._defineOutputs(TiltSeries=SOTS) #generates self.TiltSeries
@@ -279,8 +278,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
         fileOrderedAngleList = sorted(fileOrderAngleList,
                                       key=lambda angle: float(angle[2]))
-
         tsObj = tomoObj.TiltSeries()
+        lenAC = Integer(len(fileOrderedAngleList))
+        tsObj.setAnglesCount(lenAC)
 
         tsObj.setTsId(mdocObj.getTsId())
         acq = tsObj.getAcquisition()
@@ -291,10 +291,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         origin = Transform()
         tsObj.setOrigin(origin)
 
-
         SOTS.append(tsObj)
 
+        tsFn = self._getOutputTiltSeriesPath(tsObj)
+        tsFnDW = self._getOutputTiltSeriesPath(tsObj, '_DW')
+
         counterTi = 0
+
         for f, to, ta in fileOrderedAngleList:
             to_a = int(to) - 1
             try:
@@ -304,37 +307,40 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                     if SOTS.getSamplingRate() == None:
                         SOTS.setSamplingRate(mic.getSamplingRate())
                     if os.path.basename(f) in mic.getMicName():
-                        ti = tomoObj.TiltImage(
-                            location=mic.getFileName(),
-                            _acqOrder=to_a,
-                            _tiltAngle=ta)
-                        ti.setTsId(counterTi)
-                        ti.setIndex(counterTi)
+                        ti = tomoObj.TiltImage()
+                        ti.setLocation(mic.getFileName())
+                        ti.setTsId(tsObj.getObjId())
+                        ti.setObjId(counterTi)
+                        ti.setIndex(counterTi + 1)
+                        ti.setAcquisitionOrder(int(to))
+                        ti.setTiltAngle(ta)
                         ti.setSamplingRate(mic.getSamplingRate())
                         ti.setAcquisition(tsObj.getAcquisition().clone())
-                        ti.getAcquisition().setDosePerFrame(incomingDoseList[to_a])
-                        ti.getAcquisition().setAccumDose(accumulatedDoseList[to_a])
+                        ti.getAcquisition().setDosePerFrame(incomingDoseList[int(to_a)])
+                        ti.getAcquisition().setAccumDose(accumulatedDoseList[int(to_a)])
                         ti.setTransform(origin)
-                        tsObj.append(ti)
-                        # Create stack and append
-                        _, tiFnDW = self._getOutputTiltImagePaths(ti)
-                        newLocation = (counterTi + 1, self._getOutputTiltSeriesPath(tsObj))
-                        print('\n', f, '\n', tiFnDW, '\n', newLocation)
+                        tiFn, tiFnDW = self._getOutputTiltImagePaths(ti)
+                        newLocation = (counterTi , tsFn)
+                        print(ti.getDim())
+
                         self.ih.convert(f, newLocation)
                         ti.setLocation(newLocation)
-                        #pw.utils.cleanPath(f)
                         if os.path.exists(tiFnDW):
-                            self.ih.convert(tiFnDW, (counterTi + 1,
-                                    self._getOutputTiltSeriesPath(tsObj, '_d')))
+                            self.ih.convert(tiFnDW, (counterTi , tsFnDW))
                             pw.utils.cleanPath(tiFnDW)
-
+                        tsObj.append(ti)
+                        #tsObj.setDim(ti.getDim())
                         counterTi += 1
             except Exception as e:
                 self.info(e)
 
-        SOTS.updateDim()
+        #print(SOTS._anglesCount)
+
+        print(SOTS._firstDim)
+
         tsObj.write(properties=False)
         SOTS.update(tsObj)
+        SOTS.updateDim()
         SOTS.write()
         self._store(SOTS)
 
@@ -346,7 +352,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         """ Return expected output path for correct movie and DW one.
         """
         base = self._getExtraPath(self._getTiltImageMRoot(tiltImageM))
-        return base + '.mrc', base + '_OTilt.mrc'
+        return base + '.mrc', base + '_Out.mrc'
 
     def _getTiltImageMRoot(self, tim):
         return '%s_%02d' % (tim.getTsId(), tim.getObjId())
