@@ -1131,9 +1131,9 @@ class Coordinate3D(data.EMObject):
 
         Parameters:
 
-            :param int x: Position of the coordinate in the X axis
-            :param int y: Position of the coordinate in the Y axis
-            :param int z: Position of the coordinate in the Z axis
+            :param float x: Position of the coordinate in the X axis
+            :param float y: Position of the coordinate in the Y axis
+            :param float z: Position of the coordinate in the Z axis
             :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner from a
                                             given convention.
 
@@ -1644,6 +1644,7 @@ class SetOfAverageSubTomograms(SetOfSubTomograms):
     It is a SetOfSubTomograms but it is useful to differentiate outputs."""
     ITEM_TYPE = AverageSubTomogram
     REP_TYPE = AverageSubTomogram
+    EXPOSE_ITEMS = True
 
     def __init__(self, **kwargs):
         SetOfSubTomograms.__init__(self, **kwargs)
