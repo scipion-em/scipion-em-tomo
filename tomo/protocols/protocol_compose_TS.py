@@ -175,36 +175,36 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param list_remains: list of mdoc files in the path
         """
         for file2read in list_remains:
-                status, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
+                statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
                 # STREAMING CHECKPOINT
                 while time.time() - self.readDateFile(file2read) < \
                         self.time4NextTilt.get():
                     self.debug('Waiting next tilt... ({} tilts found)'.format(
                         len(mdoc_order_angle_list)))
                     time.sleep(self.time4NextTilt.get() / 2)
-                    status, mdoc_order_angle_list = \
+                    statusMdoc, mdoc_order_angle_list = \
                         self.readingMdocTiltInfo(file2read)
-                if status == True:
+                if statusMdoc == True:
                     if len(mdoc_order_angle_list) < 3:
                         self.error('Mdoc error. Less than 3 tilts in the serie')
                     elif self.matchTS(mdoc_order_angle_list):
                             self.createTS(self.mdoc_obj)
                             #SUMMARY INFO
                             summaryF = self._getPath("summary.txt")
-                            summaryF = open(summaryF, "w")
+                            summaryF = open(summaryF, "a")
                             summaryF.write(
-                                "Tilt Serie ({} tilts) composed from mdoc file: {}".
+                                "Tilt Serie ({} tilts) composed from mdoc file: {}\n".
                                 format(len(mdoc_order_angle_list), file2read))
                             summaryF.close()
 
     def readingMdocTiltInfo(self, file2read):
+        mdoc_order_angle_list = []
         self.mdoc_obj = MDoc(file2read)
         validation_error = self.mdoc_obj.read(ignoreFilesValidation=True)
         if validation_error:
             self.debug(validation_error)
-            return False, ''
+            return False, mdoc_order_angle_list
         self.info('mdoc file to read: {}'.format(file2read))
-        mdoc_order_angle_list = []
         for tilt_metadata in self.mdoc_obj.getTiltsMetadata():
             mdoc_order_angle_list.append((
                 tilt_metadata.getAngleMovieFile(),
@@ -319,8 +319,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         SOTS.updateDim()
         SOTS.write()
         self._store(SOTS)
-
-
 
     def setingTS(self, SOTS, ts_obj, file_ordered_angle_list,
                  incoming_dose_list, accumulated_dose_list, origin):
