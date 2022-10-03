@@ -274,21 +274,42 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
         file_ordered_angle_list = sorted(file_order_angle_list,
                                       key=lambda angle: float(angle[2]))
+        #Tilt Serie object
         ts_obj = tomoObj.TiltSeries()
         len_ac = Integer(len(file_ordered_angle_list))
         ts_obj.setAnglesCount(len_ac)
-
         ts_obj.setTsId(mdoc_obj.getTsId())
         acq = ts_obj.getAcquisition()
         acq.setVoltage(mdoc_obj.getVoltage())
         acq.setMagnification(mdoc_obj.getMagnification())
-
         ts_obj.getAcquisition().setTiltAxisAngle(mdoc_obj.getTiltAxisAngle())
         origin = Transform()
         ts_obj.setOrigin(origin)
-
         SOTS.append(ts_obj)
 
+        self.setingTS(SOTS, ts_obj, file_ordered_angle_list,
+                      incoming_dose_list, accumulated_dose_list, origin)
+
+        SOTS.setStreamState(SOTS.STREAM_CLOSED)
+        ts_obj.write(properties=False)
+        SOTS.update(ts_obj)
+        SOTS.updateDim()
+        SOTS.write()
+        self._store(SOTS)
+
+    def setingTS(self, SOTS, ts_obj, file_ordered_angle_list,
+                 incoming_dose_list, accumulated_dose_list, origin):
+        '''
+        Set all the info in each tilt and set the ts_obj information with all
+        the tilts
+        :param SOTS: Set Ot Tilt Serie
+        :param ts_obj: Tilt Serie Object to add tilts
+        :param file_ordered_angle_list: list of files sorted by angle
+        :param incoming_dose_list: list of dose
+        :param accumulated_dose_list: list of accumulated dose
+        :param origin: transform matrix
+        :return:
+        '''
         ts_fn = self._getOutputTiltSeriesPath(ts_obj)
         ts_fn_dw = self._getOutputTiltSeriesPath(ts_obj, '_DW')
         counter_ti = 0
@@ -309,8 +330,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.setTiltAngle(ta)
                         ti.setSamplingRate(mic.getSamplingRate())
                         ti.setAcquisition(ts_obj.getAcquisition().clone())
-                        ti.getAcquisition().setDosePerFrame(incoming_dose_list[int(to) - 1])
-                        ti.getAcquisition().setAccumDose(accumulated_dose_list[int(to) - 1])
+                        ti.getAcquisition().setDosePerFrame(
+                            incoming_dose_list[int(to) - 1])
+                        ti.getAcquisition().setAccumDose(
+                            accumulated_dose_list[int(to) - 1])
                         ti.setTransform(origin)
                         ti_fn, ti_fn_dw = self._getOutputTiltImagePaths(ti)
                         new_location = (counter_ti, ts_fn)
@@ -318,23 +341,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         self.ih.convert(f, new_location)
                         ti.setLocation(new_location)
                         if os.path.exists(ti_fn_dw):
-                            self.ih.convert(ti_fn_dw, (counter_ti , ts_fn_dw))
+                            self.ih.convert(ti_fn_dw, (counter_ti, ts_fn_dw))
                             pw.utils.cleanPath(ti_fn_dw)
                         ts_obj.append(ti)
                         counter_ti += 1
             except Exception as e:
                 self.error(e)
 
-        SOTS.setStreamState(SOTS.STREAM_CLOSED)
-        ts_obj.write(properties=False)
-        SOTS.update(ts_obj)
-        SOTS.updateDim()
-        SOTS.write()
-        self._store(SOTS)
-
-
     # -------------------------- AUXILIAR FUNCTIONS -----------------------
-
     def _getOutputTiltSeriesPath(self, ts, suffix=''):
         return self._getExtraPath('%s%s.mrcs' % (ts.getTsId(), suffix))
 
