@@ -28,7 +28,7 @@ from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAve
 from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from .protocol_import_tomomasks import ProtImportTomomasks
 from .protocol_ts_base import ProtTomoReconstruct
-from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies, ProtImportMoviesTomo
+from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
 from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
 from .protocol_ts_consensus_alignment import ProtConsensusAlignmentTS
@@ -45,4 +45,4 @@ from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
 from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
-from .protocol_import_ts_streaming import ProtImportTsStreaming
+from .protocol_compose_TS import ProtComposeTS
