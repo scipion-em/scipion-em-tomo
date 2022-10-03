@@ -82,22 +82,22 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         form.addParam('time4NextTilt', params.IntParam, default=180,
                       condition='dataStreaming',
                       label="Time for next Tilt (secs)",
-                      help="Delay (in seconds) until the next tilt is registered. After "
-                           "timeout,\n if there is no new tilt, the tilt serie is considered as completed\n")
+                      help="Delay (in seconds) until the next tilt is "
+                            "registered in the mdoc file. After "
+                           "timeout,\n if there is no new tilt, the tilt serie"
+                           "is considered as completed\n")
         form.addParam('time4NextMic', params.IntParam, default=12,
                       condition='dataStreaming',
                       label="Time for next micograph processed (secs)",
-                      help="Delay (in seconds) until the next micograph is processed by any "
-                           "protocol as aligment, CTF....")
+                      help="Delay (in seconds) until the next micograph is "
+                        "processed by the previous protocol")
         form.addParam('time4NextTS', params.IntParam, default=1800,
                       condition='dataStreaming',
                       label="Time for next TiltSerie (secs)",
                       help="Interval of time (in seconds) after which, "
                            "if no new tilt serie is detected, the protocol will "
-                           "end. When finished, the output Set will be "
-                           "closed and no more data will be "
-                           "added to it. \n"
-                           "Note 1:  The default value is  high (30 min) to "
+                           "end. "
+                           "The default value is  high (30 min) to "
                            "avoid the protocol finishes during the acq of the "
                            "microscope. You can also stop it from right click "
                            "and press STOP_STREAMING.\n")
