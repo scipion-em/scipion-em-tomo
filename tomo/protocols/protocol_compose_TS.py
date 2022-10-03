@@ -176,7 +176,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         """
         for file2read in list_remains:
                 status, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
-                print(mdoc_order_angle_list, '\n')
                 # STREAMING CHECKPOINT
                 while time.time() - self.readDateFile(file2read) < \
                         self.time4NextTilt.get():
@@ -185,7 +184,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                     time.sleep(self.time4NextTilt.get() / 2)
                     status, mdoc_order_angle_list = \
                         self.readingMdocTiltInfo(file2read)
-                    print(mdoc_order_angle_list, '\n')
                 if status == True:
                     if len(mdoc_order_angle_list) < 3:
                         self.error('Mdoc error. Less than 3 tilts in the serie')
@@ -204,7 +202,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         validation_error = self.mdoc_obj.read(ignoreFilesValidation=True)
         if validation_error:
             self.debug(validation_error)
-            return False
+            return False, ''
         self.info('mdoc file to read: {}'.format(file2read))
         mdoc_order_angle_list = []
         for tilt_metadata in self.mdoc_obj.getTiltsMetadata():
