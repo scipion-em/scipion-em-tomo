@@ -106,6 +106,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.listMdocsRead = []
         self.time4NextTS_current = time.time()
         self.ih = ImageHandler()
+        self.waitingMdoc = True
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
@@ -116,18 +117,21 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _stepsCheck(self):
         current_time = time.time()
-        self.debug('stepsCheck ' +
-            str(int(int(current_time) - self.time4NextTS_current)) + ' segs')
+        delay = int(current_time - self.time4NextTS_current)
+        if self.waitingMdoc == True:
+            self.debug('Timeout for next TiltSerie (.mdoc file) ' +
+                    str(self.time4NextTS.get()) + ' segs ...')
+        self.waitingMdoc = False
         list_current = self.findMdoc()
         list_remain = [x for x in list_current if x not in self.listMdocsRead]
         # STREAMING CHECKPOINT
-        if int(current_time - self.time4NextTS_current) \
-                > int(self.time4NextTS.get()):
+        if delay > int(self.time4NextTS.get()):
             output_step = self._getFirstJoinStep()
             if output_step and output_step.isWaiting():
                 output_step.setStatus(cons.STATUS_NEW)
 
         elif list_remain != []:
+            self.waitingMdoc = True
             self.listMdocsRead = list_current
             self.time4NextTS_current = time.time()
             new_step_id = self._insertFunctionStep('readMdoc', list_remain,
@@ -136,7 +140,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             self.updateSteps()
 
     def closeSet(self):
-        self.info('closed')
+        pass
 
     def _getFirstJoinStep(self):
         for s in self._steps:
@@ -171,28 +175,45 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param list_remains: list of mdoc files in the path
         """
         for file2read in list_remains:
-            mdoc_obj = MDoc(file2read)
-            validation_error = mdoc_obj.read()
-            if validation_error:
-                self.debug(validation_error)
-            else:
-                self.info('mdoc file to read: {}'.format(file2read))
-                mdoc_order_angle_list = []
-                for tilt_metadata in mdoc_obj.getTiltsMetadata():
-                    mdoc_order_angle_list.append((
-                        tilt_metadata.getAngleMovieFile(),
-                        '{:03d}'.format(tilt_metadata.getAcqOrder()),
-                        tilt_metadata.getTiltAngle()))
+                status, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
+                print(mdoc_order_angle_list, '\n')
                 # STREAMING CHECKPOINT
                 while time.time() - self.readDateFile(file2read) < \
-                        2 * self.time4NextTilt.get():
-                    self.debug('waiting...')
+                        self.time4NextTilt.get():
+                    self.debug('Waiting next tilt... ({} tilts found)'.format(
+                        len(mdoc_order_angle_list)))
                     time.sleep(self.time4NextTilt.get() / 2)
-                if len(mdoc_order_angle_list) < 3:
-                    self.error('Mdoc error. Less than 3 tilts in the serie')
-                else:
-                    if self.matchTS(mdoc_order_angle_list):
-                        self.createTS(mdoc_obj)
+                    status, mdoc_order_angle_list = \
+                        self.readingMdocTiltInfo(file2read)
+                    print(mdoc_order_angle_list, '\n')
+                if status == True:
+                    if len(mdoc_order_angle_list) < 3:
+                        self.error('Mdoc error. Less than 3 tilts in the serie')
+                    elif self.matchTS(mdoc_order_angle_list):
+                            self.createTS(self.mdoc_obj)
+                            #SUMMARY INFO
+                            summaryF = self._getPath("summary.txt")
+                            summaryF = open(summaryF, "w")
+                            summaryF.write(
+                                "Tilt Serie ({} tilts) composed from mdoc file: {}".
+                                format(len(mdoc_order_angle_list), file2read))
+                            summaryF.close()
+
+    def readingMdocTiltInfo(self, file2read):
+        self.mdoc_obj = MDoc(file2read)
+        validation_error = self.mdoc_obj.read(ignoreFilesValidation=True)
+        if validation_error:
+            self.debug(validation_error)
+            return False
+        self.info('mdoc file to read: {}'.format(file2read))
+        mdoc_order_angle_list = []
+        for tilt_metadata in self.mdoc_obj.getTiltsMetadata():
+            mdoc_order_angle_list.append((
+                tilt_metadata.getAngleMovieFile(),
+                '{:03d}'.format(tilt_metadata.getAcqOrder()),
+                tilt_metadata.getTiltAngle()))
+        return True, mdoc_order_angle_list
+
 
     def readDateFile(self, file):
         return os.path.getmtime(file)
@@ -200,13 +221,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     def matchTS(self, mdoc_order_angle_list):
         """
         Edit the self.listOfMics with the ones in the mdoc file
-        :param fileOrderAngleList: for each tilt:
+        :param mdoc_order_angle_list: for each tilt:
                 filename, acquisitionOrder, Angle
         """
         len_mics_input_1 = self._loadInputList()
         #STREAMING CHECKPOINT
         while len(mdoc_order_angle_list) > len_mics_input_1:
-            self.info('fileOrderAngleList: {} listOfMics: {}'.format(
+            self.info('Tilts in the mdoc file: {} Micrographs  abailables: {}'.format(
                 len(mdoc_order_angle_list), len(self.listOfMics)))
             self.info('Waiting next micrograph...')
             time.sleep(self.time4NextMic.get())
@@ -301,6 +322,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         SOTS.write()
         self._store(SOTS)
 
+
+
     def setingTS(self, SOTS, ts_obj, file_ordered_angle_list,
                  incoming_dose_list, accumulated_dose_list, origin):
         '''
@@ -342,7 +365,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti_fn, ti_fn_dw = self._getOutputTiltImagePaths(ti)
                         new_location = (counter_ti, ts_fn)
 
-                        self.ih.convert(f, new_location)
+                        self.ih.convert(mic.getFileName(), new_location)
                         ti.setLocation(new_location)
                         if os.path.exists(ti_fn_dw):
                             self.ih.convert(ti_fn_dw, (counter_ti, ts_fn_dw))
@@ -373,6 +396,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        text = 'Set of Tilt Serie composed'
-        summary.append(text)
+
+        summaryF = self._getPath("summary.txt")
+        if not os.path.exists(summaryF):
+            summary.append("No summary file yet.")
+        else:
+            summaryF = open(summaryF, "r")
+            for line in summaryF.readlines():
+                summary.append(line.rstrip())
+            summaryF.close()
+
         return summary
