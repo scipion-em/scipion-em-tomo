@@ -49,7 +49,8 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
                       label='Input ctf tomo series')
         form.addParam('criteria',  params.EnumParam,
                       choices=["defocus tolerance"], label="Criteria",
-                      default=0, help="Criteria to validate")
+                      default=0, help="Criteria to validate: \n\n"
+                                      "defocus tolerance: Calculate the defocus deviation taking into account a threshold(percent tolerance) respect to the mean.")
         form.addParam('tolerance', params.FloatParam, label='Tolerance percent',
                       condition='criteria==0', default=20,
                       help="Percent Tolerance")
@@ -82,6 +83,9 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
         """
         # Creating a new copy of ctf tomo series and recalculate the defocus
         # deviation
+        self.outputSetOfgoodCtfTomoSeries = None
+        self.outputSetOfbadCtfTomoSeries = None
+
         for ctfSerie in ctfSeries:
             newCTFTomoSeries = ctfSerie.clone()
             newCTFTomoSeries._isDefocusUDeviationInRange.set(True)
@@ -95,47 +99,47 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
             newCTFTomoSeries.write()
             self.outputSetOfCtfTomoSeries.update(newCTFTomoSeries)
 
-        self.outputSetOfgoodCtfTomoSeries = self.outputSetOfCtfTomoSeries.createCopy(self._getExtraPath(),
-                                                                                     prefix=self.goodCtfName,
-                                                                                     copyInfo=True)
-        self.outputSetOfbadCtfTomoSeries = self.outputSetOfCtfTomoSeries.createCopy(self._getExtraPath(),
-                                                                                    prefix=self.badCtfName,
-                                                                                    copyInfo=True)
-
         for ctfSerie in self.outputSetOfCtfTomoSeries:
             ctfSerieClon = ctfSerie.clone()
             # Store good and bad ctf series
             if ctfSerie.getIsDefocusUDeviationInRange():
+                if self.outputSetOfgoodCtfTomoSeries is None:
+                    self.outputSetOfgoodCtfTomoSeries = self.outputSetOfCtfTomoSeries.createCopy(
+                        self._getExtraPath(),
+                        prefix=self.goodCtfName,
+                        copyInfo=True)
+                else:
+                    self.outputSetOfgoodCtfTomoSeries.enableAppend()
                 self.outputSetOfgoodCtfTomoSeries.append(ctfSerieClon)
             else:
+                if self.outputSetOfbadCtfTomoSeries is None:
+                    self.outputSetOfbadCtfTomoSeries = self.outputSetOfCtfTomoSeries.createCopy(
+                        self._getExtraPath(),
+                        prefix=self.badCtfName,
+                        copyInfo=True)
+                else:
+                    self.outputSetOfbadCtfTomoSeries.enableAppend()
                 self.outputSetOfbadCtfTomoSeries.append(ctfSerieClon)
+
             for item in ctfSerie.iterItems():
                 ctfEstItem = item.clone()
                 ctfSerieClon.append(ctfEstItem)
 
     def createOutputStep(self):
-        self._defineOutputs(**{self.outputCtfName: self.outputSetOfCtfTomoSeries})
-        if len(self.outputSetOfgoodCtfTomoSeries) > 0:
+        if self.outputSetOfgoodCtfTomoSeries is not None:
             self._defineOutputs(**{self.goodCtfName: self.outputSetOfgoodCtfTomoSeries})
-        else:
-            os.remove(self._getExtraPath(self.goodCtfName+'..sqlite'))
-
-        if len(self.outputSetOfbadCtfTomoSeries) > 0:
+        if self.outputSetOfbadCtfTomoSeries is not None:
             self._defineOutputs(**{self.badCtfName: self.outputSetOfbadCtfTomoSeries})
-        else:
-            os.remove(self._getExtraPath(self.badCtfName + '..sqlite'))
 
     def allowsDelete(self, obj):
         return True
 
     def _summary(self):
         summary = []
-        if self.criteria.get() == 0:
-
-            if hasattr(self, 'goodSetOfCTFTomoSeries'):
-                summary.append("Number of good ctf series: %d." % (self.goodSetOfCTFTomoSeries.getSize()))
-            if hasattr(self, 'badSetOfCTFTomoSeries'):
-                summary.append("Number of bad ctf series: %d." % (self.badSetOfCTFTomoSeries.getSize()))
+        if hasattr(self, 'goodSetOfCTFTomoSeries'):
+            summary.append("Number of good ctf series: %d." % (self.goodSetOfCTFTomoSeries.getSize()))
+        if hasattr(self, 'badSetOfCTFTomoSeries'):
+            summary.append("Number of bad ctf series: %d." % (self.badSetOfCTFTomoSeries.getSize()))
 
         return summary
 
