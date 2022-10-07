@@ -85,7 +85,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                       help="Delay (in seconds) until the next tilt is "
                             "registered in the mdoc file. After "
                            "timeout,\n if there is no new tilt, the tilt serie"
-                           "is considered as completed\n")
+                           "is considered as completed.\n"
+                            "Minimum time 20 segs")
         form.addParam('time4NextMic', params.IntParam, default=12,
                       condition='dataStreaming',
                       label="Time for next micograph processed (secs)",
@@ -116,6 +117,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.newSteps.append(self.CloseStep_ID)
 
     def _stepsCheck(self):
+        '''
+        Read all the mdoc files abailable, sort by date and run 'readMdoc'
+
+        '''
         current_time = time.time()
         delay = int(current_time - self.time4NextTS_current)
         if self.waitingMdoc == True:
@@ -132,9 +137,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
         elif list_remain != []:
             self.waitingMdoc = True
-            self.listMdocsRead = list_current
+            self.listMdocsRead.append(list_remain[0])
             self.time4NextTS_current = time.time()
-            new_step_id = self._insertFunctionStep('readMdoc', list_remain,
+            new_step_id = self._insertFunctionStep('readMdoc', list_remain[0],
                                         prerequisites=[], wait=False)
             self.newSteps.append(new_step_id)
             self.updateSteps()
@@ -168,36 +173,41 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.MDOC_DATA_SOURCE.sort(key=os.path.getmtime)
         return self.MDOC_DATA_SOURCE
 
-    def readMdoc(self, list_remains):
+    def readMdoc(self, file2read):
         """
         Main function to launch the match with the set of micrographs and
         launch the create of SetOfTiltSeries and each TiltSerie
-        :param list_remains: list of mdoc files in the path
+        :param file2read: mdoc file in the path
         """
-        for file2read in list_remains:
-                statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
-                # STREAMING CHECKPOINT
-                while time.time() - self.readDateFile(file2read) < \
-                        self.time4NextTilt.get():
-                    self.debug('Waiting next tilt... ({} tilts found)'.format(
-                        len(mdoc_order_angle_list)))
-                    time.sleep(self.time4NextTilt.get() / 2)
-                    statusMdoc, mdoc_order_angle_list = \
-                        self.readingMdocTiltInfo(file2read)
-                if statusMdoc == True:
-                    if len(mdoc_order_angle_list) < 3:
-                        self.error('Mdoc error. Less than 3 tilts in the serie')
-                    elif self.matchTS(mdoc_order_angle_list):
-                            self.createTS(self.mdoc_obj)
-                            #SUMMARY INFO
-                            summaryF = self._getPath("summary.txt")
-                            summaryF = open(summaryF, "a")
-                            summaryF.write(
-                                "Tilt Serie ({} tilts) composed from mdoc file: {}\n".
-                                format(len(mdoc_order_angle_list), file2read))
-                            summaryF.close()
+        statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
+        # STREAMING CHECKPOINT
+        while time.time() - self.readDateFile(file2read) < \
+                self.time4NextTilt.get():
+            self.debug('Waiting next tilt... ({} tilts found)'.format(
+                len(mdoc_order_angle_list)))
+            time.sleep(self.time4NextTilt.get() / 2)
+            statusMdoc, mdoc_order_angle_list = \
+                self.readingMdocTiltInfo(file2read)
+        if statusMdoc == True:
+            if len(mdoc_order_angle_list) < 3:
+                self.error('Mdoc error. Less than 3 tilts in the serie')
+            elif self.matchTS(mdoc_order_angle_list):
+                    self.createTS(self.mdoc_obj)
+                    #SUMMARY INFO
+                    summaryF = self._getPath("summary.txt")
+                    summaryF = open(summaryF, "a")
+                    summaryF.write(
+                        "Tilt Serie ({} tilts) composed from mdoc file: {}\n".
+                        format(len(mdoc_order_angle_list), file2read))
+                    summaryF.close()
 
     def readingMdocTiltInfo(self, file2read):
+        '''
+        :param file2read: mdoc file to read
+        :return: Bool: if the validation of the mdoc goes good or bad
+                 mdoc_order_angle_list: list with info for each tilt
+                    file, acquisition order and tilt Angle
+        '''
         mdoc_order_angle_list = []
         self.mdoc_obj = MDoc(file2read)
         validation_error = self.mdoc_obj.read(ignoreFilesValidation=True)
