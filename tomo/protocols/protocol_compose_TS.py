@@ -1,8 +1,7 @@
 # **************************************************************************
 # *
-# * Authors:     Alberto García Mena (alberto.garcia@cnb.csic.es) [1]
+# * Authors:     Alberto García Mena (alberto.garcia@cnb.csic.es)
 # *
-# * [1] SciLifeLab, Stockholm University
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -50,6 +49,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
+        self.stepsExecutionMode = STEPS_PARALLEL # Defining that the protocol contain parallel steps
         self.newSteps = []
         self.TiltSeries = None
 
@@ -102,6 +102,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                            "avoid the protocol finishes during the acq of the "
                            "microscope. You can also stop it from right click "
                            "and press STOP_STREAMING.\n")
+        form.addParallelSection(threads=3, mpi=1)
 
     def _initialize(self):
         self.listMdocsRead = []
@@ -241,8 +242,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             time.sleep(self.time4NextMic.get())
             len_mics_input_2 = self._loadInputList()
             if len_mics_input_2 == len_mics_input_1:
-                self.error('{} micrographs were expected but {} were obtained'.
-                format(len(mdoc_order_angle_list), len_mics_input_2))
                 return False
             len_mics_input_1 = self._loadInputList()
 
@@ -321,7 +320,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         SOTS.append(ts_obj)
 
         self.setingTS(SOTS, ts_obj, file_ordered_angle_list,
-                      incoming_dose_list, accumulated_dose_list, origin)
+                      incoming_dose_list, accumulated_dose_list)
 
         SOTS.setStreamState(SOTS.STREAM_CLOSED)
         ts_obj.write(properties=False)
@@ -331,7 +330,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self._store(SOTS)
 
     def setingTS(self, SOTS, ts_obj, file_ordered_angle_list,
-                 incoming_dose_list, accumulated_dose_list, origin):
+                 incoming_dose_list, accumulated_dose_list):
         '''
         Set all the info in each tilt and set the ts_obj information with all
         the tilts
@@ -367,9 +366,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                             incoming_dose_list[int(to) - 1])
                         ti.getAcquisition().setAccumDose(
                             accumulated_dose_list[int(to) - 1])
-                        ti.setTransform(origin)
                         ti_fn, ti_fn_dw = self._getOutputTiltImagePaths(ti)
-                        new_location = (counter_ti, ts_fn)
+                        new_location = (counter_ti + 1, ts_fn)
 
                         self.ih.convert(mic.getFileName(), new_location)
                         ti.setLocation(new_location)
