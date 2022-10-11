@@ -37,7 +37,7 @@ class TestTomoComposeTS(BaseTest):
     def setUpClass(self):
         setupTestProject(self)
         self.inputDataSet = DataSet.getDataSet('tomo-em')
-        self.partFolderPath = self.inputDataSet.getFile('ts_tsM_and_mdocs/*')
+        self.partFolderPath = self.inputDataSet.getFile('ts_tsM_and_mdocs/Tomo_10')
         self.pattern = '*.mrc'
 
 
