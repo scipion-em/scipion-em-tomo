@@ -23,13 +23,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
 import math
 
 import numpy as np
 
 from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.protocol.params import MultiPointerParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import MultiPointerParam, FloatParam, EnumParam
 from pyworkflow.object import Set, Float
 
 from pwem.protocols import EMProtocol
@@ -75,6 +76,16 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                       help='Maximum angle difference between alignments to consider them as equal. It is measured in '
                            'degrees')
 
+        form.addParam('globalAlignment',
+                      EnumParam,
+                      choices=["Local", "Global"],
+                      label="Consensus",
+                      default=1,
+                      help="Criteria for consensus alignment. If local, consensus will be performed to the tilt-images "
+                           "individually (different consensus applied individually) and if there is no consensus in "
+                           "some image the series will be discarded. If global, consensus will be performed at the "
+                           "level o tilt-series (the whole pair of alignments must agree).")
+
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.consensusAlignment)
@@ -103,10 +114,18 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             shiftTolPx = round(self.shiftTolerance.get() / SRset[0])
 
-            averageAlignmentV, angleSDV, shiftSDV = self.compareTransformationMatrices(Mset,
-                                                                                       shiftTolPx,
-                                                                                       self.angleTolerance.get(),
-                                                                                       SRset)
+            if self.globalAlignment.get() == 1:
+                averageAlignmentV, angleSDV, shiftSDV = \
+                    self.compareTransformationMatricesGlobal(Mset,
+                                                             shiftTolPx,
+                                                             self.angleTolerance.get(),
+                                                             SRset)
+            else:
+                averageAlignmentV, angleSDV, shiftSDV = \
+                    self.compareTransformationMatricesLocal(Mset,
+                                                            shiftTolPx,
+                                                            self.angleTolerance.get(),
+                                                            SRset)
 
             # Consensus achieved
             if averageAlignmentV is not None:
@@ -176,7 +195,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
-    def compareTransformationMatrices(Mset, shiftTol, angleTol, SRset):
+    def compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset):
         Nts = len(Mset)
 
         # If there is only one matrix in Mset then there has been no consensus in the recursion.
@@ -215,7 +234,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 # Calculate error matrix for the pair of tilt-series.
                 for i in range(Nti):  # Iterate each tilt-image
-                    # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
+                    # Only use p matrix to correct for shiftY in case there exist an Y offset in the whole series
                     matrixShiftYCorrected = Mset[k][i].copy()
                     matrixShiftYCorrected[0, 2] *= samplingFactor
                     matrixShiftYCorrected[1, 2] *= samplingFactor
@@ -264,7 +283,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         if len(discardedIndexes) != 0:
             for n in discardedIndexes:
                 del Mset[n]
-            return ProtConsensusAlignmentTS.compareTransformationMatrices(Mset, shiftTol, angleTol, SRset)
+            return ProtConsensusAlignmentTS.compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset)
         else:
             print("\nConsensus achieved for this tilt-series.")
             averageAlignmentV = []
