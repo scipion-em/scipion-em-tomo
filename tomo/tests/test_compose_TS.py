@@ -22,11 +22,15 @@
 # *
 # **************************************************************************
 import os
+import time
 from pyworkflow.tests import BaseTest, setupTestProject, setupTestOutput
 from . import DataSet
 import pwem.protocols as emprot
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
 from pyworkflow.plugin import Domain
+import pwem.objects as emobj
+import pyworkflow.protocol as pwprot
+
 
 
 class TestTomoComposeTS(BaseTest):
@@ -40,8 +44,39 @@ class TestTomoComposeTS(BaseTest):
         self.partFolderPath = self.inputDataSet.getFile('ts_tsM_and_mdocs/Tomo_10')
         self.pattern = '*.mrc'
 
+    def _updateProtocol(self, prot):
+        prot2 = pwprot.getProtocolFromDb(prot.getProject().path,
+                                         prot.getDbPath(),
+                                         prot.getObjId())
+        # Close DB connections
+        prot2.getProject().closeMapper()
+        prot2.closeMappers()
+        return prot2
 
     def testCompose(self):
+        def checkOutputs(prot, timeout):
+            t0 = time.time()
+            while not (prot.isFinished() or prot.isFailed()):
+                # Time out 6 minutes, just in case
+                tdelta = time.time() - t0
+                if tdelta > timeout:
+                    break
+                time.sleep(10)
+                prot = self._updateProtocol(prot)
+
+                # Check if the protocol is still launched
+                if prot.isLaunched():
+                    continue
+                elif prot.isScheduled():
+                    continue
+
+                if prot.hasAttribute("TiltSeries"):
+                    self.assertIsNotNone(prot.TiltSeries,
+                                         'Set of Tilt Series not generated')
+                elif prot.getObjId() == 'Xcor preAlignment':
+                    self.assertIsNotNone(prot.TiltSeries,
+                                         'Set of Tilt Series not alignment')
+
         #Import movies
         protMovieImport = self.newProtocol(emprot.ProtImportMovies,
                         objLabel='Import movies (SPA)',
@@ -71,16 +106,23 @@ class TestTomoComposeTS(BaseTest):
                                  time4NextTilt=20,
                                  time4NextMic=12,
                                  time4NextTS=60)
-        self.launchProtocol(protCompose)
-        self.assertIsNotNone(protCompose.TiltSeries, 'Set of Tilt Series not generated')
+        self.proj.scheduleProtocol(protCompose)
+        checkOutputs(protCompose, 20)#timeout
+        #self.launchProtocol(protCompose)
+
 
         #xcor prealigment
         imod = Domain.importFromPlugin('imod.protocols', doRaise=True)
         prealigment= self.newProtocol(imod.ProtImodXcorrPrealignment,
+                                      objLabel='Xcor preAlignment',
                                       computeAlignment=0,
                                       binning=2)
         prealigment.inputSetOfTiltSeries.set(protCompose.TiltSeries)
-        self.launchProtocol(prealigment)
-        self.assertIsNotNone(prealigment.TiltSeries, 'TiltSeries not galignment')
+        self.proj.scheduleProtocol(prealigment)
+
+        #self.launchProtocol(prealigment)
+        checkOutputs(prealigment, 20)#timeout
+
+        #self.assertIsNotNone(prealigment.TiltSeries, 'TiltSeries not alignment')
 
 
