@@ -128,7 +128,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                                                             SRset)
 
             # Consensus achieved
-            print(averageAlignmentV)
             if averageAlignmentV is not None:
                 self.getOutputAliConsensusSoTS()
 
@@ -258,7 +257,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     shiftX = pError[0][2]
                     shiftY = pError[1][2]
 
-                    if shiftX > shiftTol or shiftY > shiftTol or angleError > angleTol:
+                    if abs(shiftX) > shiftTol or abs(shiftY) > shiftTol or abs(angleError) > angleTol:
                         detectedMisali = True
 
                 if detectedMisali:
@@ -375,17 +374,19 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         # Apply consensus over each tilt-image
         for i in range(Nti):  # Iterate each tilt-image
+            print("Analyzing image " + str(i))
 
-            # Check if consensus have been reached for this tilt image
-            localConsensus = False
-            numberOfConsensusAlignment = 0
-            tiConsensusAlingment = np.zeros((3, 3))
+            tiConsensusAlignment = np.zeros((3, 3))
 
             angleV = []
             shiftV = []
 
+            # Save all indexes that consensus for this tilt-image
+            consensusIndexes = []
+
             for j in range(Nts):
                 for k in range(j + 1, Nts):
+                    print("Comparing matrices from series " + str(j) + " and " + str(k))
                     # Matrix p for each pair of sets
                     key = "%d_%d" % (j, k)
                     p = P_dict[key]
@@ -414,52 +415,65 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     shiftX = pError[0][2]
                     shiftY = pError[1][2]
 
-                    if shiftX < shiftTol and shiftY < shiftTol and angleError < angleTol:
-                        # First consensus pair achieved
-                        if not localConsensus:
-                            tiConsensusAlingment += Mset[j][i]
-                            numberOfConsensusAlignment += 1
+                    if abs(shiftX) < shiftTol and abs(shiftY) < shiftTol and abs(angleError) < angleTol:
+                        print("Consensus achieved for " + str(j) + " and " + str(k))
+                        consensusIndexes.append(j)
+                        consensusIndexes.append(k)
 
-                            # Angle from alignment matrix
-                            if math.isnan(Mset[j][i][1][0] / Mset[j][i][0][0]):
-                                angleV.append(0)
-                            else:
-                                angleV.append(math.degrees(math.asin(Mset[j][i][1][0])))
+            # Remove repeated indexes
+            consensusIndexes = list(dict.fromkeys(consensusIndexes))
 
-                            # Shifts from average alignment matrix
-                            shiftX = Mset[j][i][0][2]
-                            shiftY = Mset[j][i][1][2]
-
-                            shiftV.append((shiftX + shiftY) / 2)
-
-                        tiConsensusAlingment += matrixShiftYCorrected
-                        numberOfConsensusAlignment += 1
-
-                        # Angle from alignment matrix
-                        if math.isnan(matrixShiftYCorrected[1][0] / matrixShiftYCorrected[0][0]):
-                            angleV.append(0)
-                        else:
-                            angleV.append(math.degrees(math.asin(matrixShiftYCorrected[1][0])))
-
-                        # Shifts from average alignment matrix
-                        shiftX = matrixShiftYCorrected[0][2]
-                        shiftY = matrixShiftYCorrected[1][2]
-
-                        shiftV.append((shiftX + shiftY) / 2)
-
-                        localConsensus = True
-
-            if not localConsensus:
+            # First consensus pair achieved
+            if not consensusIndexes:
                 print("No consensus achieved for tilt-image " + str(i))
                 globalConsensus = False
                 break
 
             else:
-                print("\nConsensus achieved for tilt-image " + str(i))
+                print("Consensus achieved for tilt-image " + str(i))
 
-                # Calculate average alignment matrices
-                tiConsensusAlingment /= numberOfConsensusAlignment
-                averageAlignmentV.append(tiConsensusAlingment)
+                tiConsensusAlignment += Mset[0][i]
+                numberOfConsensusAlignment = len(consensusIndexes)
+
+                # Angle from alignment matrix
+                if math.isnan(Mset[0][i][1][0] / Mset[0][i][0][0]):
+                    angleV.append(0)
+                else:
+                    angleV.append(math.degrees(math.asin(Mset[0][i][1][0])))
+
+                # Shifts from average alignment matrix
+                shiftX = Mset[0][i][0][2]
+                shiftY = Mset[0][i][1][2]
+
+                shiftV.append((shiftX + shiftY) / 2)
+
+                for m in range(1, numberOfConsensusAlignment):
+                    # p matrix for this pair of matrices
+                    key = "%d_%d" % (consensusIndexes[0], consensusIndexes[m])
+                    p = P_dict[key]
+
+                    # Calculate the sampling factor between the two matrices (for comparing shifts)
+                    samplingFactor = SRset[consensusIndexes[0]] / SRset[consensusIndexes[m]]
+
+                    # Only use p matrix to correct for shiftY in case there exist an Y offset in the whole series
+                    matrixShiftYCorrected = Mset[consensusIndexes[m]][i].copy()
+                    matrixShiftYCorrected[0, 2] *= samplingFactor
+                    matrixShiftYCorrected[1, 2] *= samplingFactor
+                    matrixShiftYCorrected[1, 2] += p[1][2]
+
+                    tiConsensusAlignment += matrixShiftYCorrected
+
+                    # Angle from alignment matrix
+                    if math.isnan(matrixShiftYCorrected[1][0] / matrixShiftYCorrected[0][0]):
+                        angleV.append(0)
+                    else:
+                        angleV.append(math.degrees(math.asin(matrixShiftYCorrected[1][0])))
+
+                    # Shifts from average alignment matrix
+                    shiftX = matrixShiftYCorrected[0][2]
+                    shiftY = matrixShiftYCorrected[1][2]
+
+                    shiftV.append((shiftX + shiftY) / 2)
 
                 # Calculate STD angles
                 angleSDV.append(np.std(angleV))
@@ -467,12 +481,14 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 # Calculate STD shifts
                 shiftSDV.append(np.std(shiftV))
 
+                tiConsensusAlignment /= numberOfConsensusAlignment
+                averageAlignmentV.append(tiConsensusAlignment)
+
         if globalConsensus:
             return averageAlignmentV, angleSDV, shiftSDV
 
         else:
             return None, None, None
-
 
     def generateTsIdList(self):
         tsIdList = []
