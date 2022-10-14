@@ -226,18 +226,21 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             filepath = tilt_metadata.getAngleMovieFile()
             tiltA = tilt_metadata.getTiltAngle()
             if self.mdoc_bug_Correction.get():
-                idx = filepath.find(']_')
-                filepath = filepath[:idx + 2] + filepath[idx + 2].upper() +\
-                           filepath[idx + 3:]
-                idx = filepath.find('[-0.01]')
-                if idx != -1:
-                    filepath = filepath[:idx] + '[0.00]' + \
-                               filepath[idx + 7:]
-                    tiltA = 0.00
+                filepath, tiltA = self.fixingMdocBug(filepath, tiltA)
 
             mdoc_order_angle_list.append((filepath,
                 '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
         return True, mdoc_order_angle_list
+
+
+    def fixingMdocBug(self, filepath, tiltA):
+        idx = filepath.find(']_')
+        filepath = filepath[:idx + 2] + filepath[idx + 2].upper() + \
+                   filepath[idx + 3:]
+        if float(tiltA) - round(float(tiltA), 0) != 0:
+            filepath = filepath.replace(str(tiltA), str(round(float(tiltA))) + '.00')
+            tiltA = str(round(float(tiltA))) + '.00'
+        return filepath, tiltA
 
 
     def readDateFile(self, file):
@@ -274,7 +277,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.listOfMics = list_mics_matched
 
         if len(self.listOfMics) != len(mdoc_order_angle_list):
-            self.info('Micrographs doesnt match with mdoc read')
+            self.error('Micrographs doesnt match with mdoc read')
             return False
         else:
             self.info('Micrographs matched for the mdoc file: {}'.format(
@@ -316,14 +319,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             filepath = tilt_metadata.getAngleMovieFile()
             tiltAngle = tilt_metadata.getTiltAngle()
             if self.mdoc_bug_Correction.get():
-                idx = filepath.find(']_')
-                filepath = filepath[:idx + 2] + filepath[idx + 2].upper() +\
-                           filepath[idx + 3:]
-                idx = filepath.find('[-0.01]')
-                if idx != -1:
-                    filepath = filepath[:idx] + '[0.00]' + \
-                               filepath[idx + 7:]
-                    tiltAngle = 0.00
+                filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
 
             file_order_angle_list.append((filepath,  # Filename
                 '{:03d}'.format(tilt_metadata.getAcqOrder()),  # Acquisition
