@@ -105,11 +105,11 @@ class TestTomoComposeTS(BaseTest):
                                  filesPath=self.partFolderPath,
                                  time4NextTilt=20,
                                  time4NextMic=12,
-                                 time4NextTS=60)
+                                 time4NextTS=30)
         #self.proj.scheduleProtocol(protCompose)
         #checkOutputs(protCompose, 20)#timeout
         self.launchProtocol(protCompose)
-        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries not alignment')
+        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries not composed')
 
 
         #xcor prealigment
@@ -123,6 +123,6 @@ class TestTomoComposeTS(BaseTest):
         self.launchProtocol(prealigment)
         #checkOutputs(prealigment, 20)#timeout
 
-        self.assertIsNotNone(prealigment.TiltSeries, 'TiltSeries not alignment')
+        self.assertIsNotNone(prealigment.InterpolatedTiltSeries, 'TiltSeries not alignment')
 
 
