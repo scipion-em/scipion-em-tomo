@@ -125,7 +125,7 @@ class TestTomoComposeTS(BaseTest):
 
         #self.assertIsNotNone(prealigment.InterpolatedTiltSeries, 'TiltSeries dont alignment')
         try:
-            self.assertIsNotNone(prealigment.outputInterpolatedSetTiltSeries,
+            self.assertIsNotNone(prealigment.outputInterpolatedSetOfTiltSeries,
                              'TiltSeries dont alignment')
         except AttributeError as e:
             print(e)
