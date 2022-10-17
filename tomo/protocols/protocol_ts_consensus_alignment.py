@@ -142,9 +142,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     newTi.setLocation(ti.getLocation())
 
                     transform = Transform()
-                    if averageAlignmentV[i] == -1:
-                        pass
-                        # annotate as bad
+                    if averageAlignmentV[i] is None:
+                        newTi.setEnabled(False)
                     else:
                         transform.setMatrix(averageAlignmentV[i])
                     newTi.setTransform(transform)
@@ -427,9 +426,9 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             if not consensusIndexes:
                 print("No consensus achieved for tilt-image " + str(i))
-                averageAlignmentV.append(-1)
-                angleSDV.append(-1)
-                shiftSDV.append(-1)
+                averageAlignmentV.append(None)
+                angleSDV.append(None)
+                shiftSDV.append(None)
 
             else:
                 print("Consensus achieved for tilt-image " + str(i))
@@ -487,12 +486,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 averageAlignmentV.append(tiConsensusAlignment)
 
         # Check if all images are misaligned
-        unrepeatedAverages = list(dict.fromkeys(averageAlignmentV))
+        for a in averageAlignmentV:
+            if a is not None:
+                return averageAlignmentV, angleSDV, shiftSDV
 
-        if len(unrepeatedAverages) == 1 and unrepeatedAverages[0] == -1:
-            return None, None, None
-
-        return averageAlignmentV, angleSDV, shiftSDV
+        return None, None, None
 
     def generateTsIdList(self):
         tsIdList = []
