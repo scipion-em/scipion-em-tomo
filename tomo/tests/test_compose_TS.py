@@ -106,9 +106,10 @@ class TestTomoComposeTS(BaseTest):
                                  time4NextTilt=20,
                                  time4NextMic=12,
                                  time4NextTS=60)
-        self.proj.scheduleProtocol(protCompose)
-        checkOutputs(protCompose, 20)#timeout
-        #self.launchProtocol(protCompose)
+        #self.proj.scheduleProtocol(protCompose)
+        #checkOutputs(protCompose, 20)#timeout
+        self.launchProtocol(protCompose)
+        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries not alignment')
 
 
         #xcor prealigment
@@ -118,11 +119,10 @@ class TestTomoComposeTS(BaseTest):
                                       computeAlignment=0,
                                       binning=2)
         prealigment.inputSetOfTiltSeries.set(protCompose.TiltSeries)
-        self.proj.scheduleProtocol(prealigment)
+        #self.proj.scheduleProtocol(prealigment)
+        self.launchProtocol(prealigment)
+        #checkOutputs(prealigment, 20)#timeout
 
-        #self.launchProtocol(prealigment)
-        checkOutputs(prealigment, 20)#timeout
-
-        #self.assertIsNotNone(prealigment.TiltSeries, 'TiltSeries not alignment')
+        self.assertIsNotNone(prealigment.TiltSeries, 'TiltSeries not alignment')
 
 
