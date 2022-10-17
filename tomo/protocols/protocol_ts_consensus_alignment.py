@@ -142,7 +142,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     newTi.setLocation(ti.getLocation())
 
                     transform = Transform()
-                    transform.setMatrix(averageAlignmentV[i])
+                    if averageAlignmentV[i] == -1:
+                        pass
+                        # annotate as bad
+                    else:
+                        transform.setMatrix(averageAlignmentV[i])
                     newTi.setTransform(transform)
 
                     newTi._angleStd = Float(angleSDV[i])
@@ -370,8 +374,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 key = "%d_%d" % (j, k)
                 P_dict.update({key: p})
 
-        globalConsensus = True
-
         # Apply consensus over each tilt-image
         for i in range(Nti):  # Iterate each tilt-image
             print("Analyzing image " + str(i))
@@ -423,11 +425,11 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             # Remove repeated indexes
             consensusIndexes = list(dict.fromkeys(consensusIndexes))
 
-            # First consensus pair achieved
             if not consensusIndexes:
                 print("No consensus achieved for tilt-image " + str(i))
-                globalConsensus = False
-                break
+                averageAlignmentV.append(-1)
+                angleSDV.append(-1)
+                shiftSDV.append(-1)
 
             else:
                 print("Consensus achieved for tilt-image " + str(i))
@@ -484,11 +486,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 tiConsensusAlignment /= numberOfConsensusAlignment
                 averageAlignmentV.append(tiConsensusAlignment)
 
-        if globalConsensus:
-            return averageAlignmentV, angleSDV, shiftSDV
+        # Check if all images are misaligned
+        unrepeatedAverages = list(dict.fromkeys(averageAlignmentV))
 
-        else:
+        if len(unrepeatedAverages) == 1 and unrepeatedAverages[0] == -1:
             return None, None, None
+
+        return averageAlignmentV, angleSDV, shiftSDV
 
     def generateTsIdList(self):
         tsIdList = []
