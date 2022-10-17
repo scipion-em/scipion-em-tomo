@@ -109,7 +109,7 @@ class TestTomoComposeTS(BaseTest):
         #self.proj.scheduleProtocol(protCompose)
         #checkOutputs(protCompose, 20)#timeout
         self.launchProtocol(protCompose)
-        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries not composed')
+        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries dont composed')
 
 
         #xcor prealigment
@@ -123,6 +123,13 @@ class TestTomoComposeTS(BaseTest):
         self.launchProtocol(prealigment)
         #checkOutputs(prealigment, 20)#timeout
 
-        self.assertIsNotNone(prealigment.InterpolatedTiltSeries, 'TiltSeries not alignment')
+        #self.assertIsNotNone(prealigment.InterpolatedTiltSeries, 'TiltSeries dont alignment')
+        try:
+            self.assertIsNotNone(prealigment.outputInterpolatedTiltSeries,
+                             'TiltSeries dont alignment')
+        except Exception as e:
+            print(e)
+            self.assertIsNotNone(prealigment.InterpolatedTiltSeries,
+                             'TiltSeries dont alignment')
 
 
