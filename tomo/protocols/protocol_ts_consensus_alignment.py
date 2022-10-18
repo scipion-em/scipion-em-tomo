@@ -494,25 +494,12 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         return None, None, None
 
     def generateTsIdList(self):
-        tsIdList = []
-        tmpTsIdList = []
+        resultSet = set(self.inputMultiSoTS[0].get().getUniqueValues('_tsId'))
 
-        for ts in self.inputMultiSoTS[0].get():
-            tsIdList.append(ts.getTsId())
+        for i in range(1, len(self.inputMultiSoTS)):
+            resultSet.intersection_update(set(self.inputMultiSoTS[i].get().getUniqueValues('_tsId')))
 
-        for tsId in tsIdList:
-            for i in range(1, len(self.inputMultiSoTS)):
-                for ts in self.inputMultiSoTS[i].get():
-                    tmpTsIdList.append(ts.getTsId())
-                if tsId not in tmpTsIdList:
-                    tsIdList.remove(tsId)
-                    break
-                tmpTsIdList = []
-
-        if len(tsIdList) == 0:
-            raise Exception("None matching tilt-series between two sets.")
-
-        return tsIdList
+        return list(resultSet)
 
     def getOutputAliConsensusSoTS(self):
         if not hasattr(self, "outputAliConsensusSoTS"):
