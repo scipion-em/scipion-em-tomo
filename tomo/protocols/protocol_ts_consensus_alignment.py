@@ -40,6 +40,7 @@ from tomo.protocols import ProtTomoBase
 
 import logging
 
+
 class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     """
     Perform a consensus of a set of alignments for the same tilt series. Returns the average alignment matrix of the
@@ -48,8 +49,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     _label = 'Tilt-series consensus alignment'
     _devStatus = BETA
-
-    _tsIdList = []
 
     _logger = logging.getLogger()
 
@@ -266,7 +265,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                         detectedMisali = True
 
                 if detectedMisali:
-                    self._logger.info("No consensus achieved between tilt-series " + str(j) + " and tilt-series " + str(k))
+                    self._logger.info(
+                        "No consensus achieved between tilt-series " + str(j) + " and tilt-series " + str(k))
                     consensusAlignmentMatrix[j][k] = 1
 
         colOnes = []
