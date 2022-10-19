@@ -95,8 +95,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     def consensusAlignment(self):
         tsIdList = self.generateTsIdList()
 
-        logger = logging.getLogger()
-
         for tsId in tsIdList:
             Mset = []
             SRset = []
@@ -112,7 +110,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 Mset.append(M)
                 SRset.append(ts.getSamplingRate())
 
-            logger.info("\nAnalyzing tilt series " + tsId + "...")
+            self.info("\nAnalyzing tilt series " + tsId + "...")
 
             shiftTolPx = round(self.shiftTolerance.get() / SRset[0])
 
@@ -199,7 +197,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         self._store()
 
     # --------------------------- UTILS functions ----------------------------
-    def compareTransformationMatricesGlobal(self, Mset, shiftTol, angleTol, SRset):
+    @staticmethod
+    def compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset):
         logger = logging.getLogger()
 
         logger.info("Running global consensus alignment...")
@@ -336,7 +335,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             return averageAlignmentV, angleSDV, shiftSDV
 
-    def compareTransformationMatricesLocal(self, Mset, shiftTol, angleTol, SRset):
+    @staticmethod
+    def compareTransformationMatricesLocal(Mset, shiftTol, angleTol, SRset):
         logger = logging.getLogger()
 
         logger.info("Running local consensus alignment...")
