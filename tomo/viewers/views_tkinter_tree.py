@@ -52,10 +52,12 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TS = 'Tilt series'
     COL_TI = 'Path'
     COL_TI_ANGLE = 'Tilt angle'
+    COL_TI_ENABLED = 'Included'
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DEFOCUS_U = 'Defocus U (A)'
     COL_TI_DOSE = "Accum. dose"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
+                  COL_TI_ENABLED: '_objEnabled',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
                   COL_TI_DOSE: '_acquisition._accumDose'}
 
@@ -81,7 +83,10 @@ class TiltSeriesTreeProvider(TreeProvider):
             tsObj._parentObject = None
             objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
+
                 tiObj = ti.clone()
+                # For some reason .clone() does not clone the enabled nor the creation time
+                tiObj.setEnabled(ti.isEnabled())
                 tiObj._allowsSelection = False
                 tiObj._parentObject = tsObj
                 objects.append(tiObj)
@@ -99,6 +104,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TS, 100),
             (self.COL_TI_ACQ_ORDER, 100),
             (self.COL_TI_ANGLE, 100),
+            (self.COL_TI_ENABLED, 100),
             (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
         ]
@@ -134,6 +140,7 @@ class TiltSeriesTreeProvider(TreeProvider):
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
+                      str(obj.isEnabled()),
                       round(dose, 2) if dose is not None else "",
                       "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
 
@@ -191,7 +198,7 @@ class TiltSeriesDialogView(pwviewer.View):
         self._provider = TiltSeriesTreeProvider(protocol, tiltSeries)
 
     def show(self):
-        dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider,
+        ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
                          allowSelect=False, cancelButton=True)
 
 
