@@ -38,8 +38,6 @@ from pwem.protocols import EMProtocol
 from tomo.objects import TiltSeries, TiltImage
 from tomo.protocols import ProtTomoBase
 
-import logging
-
 
 class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     """
@@ -199,6 +197,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
     def compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset):
+        import logging
         logger = logging.getLogger()
 
         logger.info("Running global consensus alignment...")
@@ -337,6 +336,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     @staticmethod
     def compareTransformationMatricesLocal(Mset, shiftTol, angleTol, SRset):
+        import logging
         logger = logging.getLogger()
 
         logger.info("Running local consensus alignment...")
