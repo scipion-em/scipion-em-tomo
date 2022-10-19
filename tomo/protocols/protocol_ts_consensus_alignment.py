@@ -23,9 +23,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+logger = logging.getLogger(__name__)
 
 import math
-
 import numpy as np
 
 from pwem.objects import Transform
@@ -197,8 +198,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
     def compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset):
-        import logging
-        logger = logging.getLogger()
 
         logger.info("Running global consensus alignment...")
 
@@ -336,8 +335,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     @staticmethod
     def compareTransformationMatricesLocal(Mset, shiftTol, angleTol, SRset):
-        import logging
-        logger = logging.getLogger()
 
         logger.info("Running local consensus alignment...")
 
