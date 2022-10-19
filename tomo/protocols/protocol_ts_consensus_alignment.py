@@ -50,8 +50,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     _label = 'Tilt-series consensus alignment'
     _devStatus = BETA
 
-    _logger = logging.getLogger()
-
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection('Input')
@@ -97,6 +95,8 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     def consensusAlignment(self):
         tsIdList = self.generateTsIdList()
 
+        logger = logging.getLogger()
+
         for tsId in tsIdList:
             Mset = []
             SRset = []
@@ -112,7 +112,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 Mset.append(M)
                 SRset.append(ts.getSamplingRate())
 
-            self._logger.info("\nAnalyzing tilt series " + tsId + "...")
+            logger.info("\nAnalyzing tilt series " + tsId + "...")
 
             shiftTolPx = round(self.shiftTolerance.get() / SRset[0])
 
@@ -200,19 +200,21 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     # --------------------------- UTILS functions ----------------------------
     def compareTransformationMatricesGlobal(self, Mset, shiftTol, angleTol, SRset):
-        self._logger.info("Running global consensus alignment...")
+        logger = logging.getLogger()
+
+        logger.info("Running global consensus alignment...")
 
         Nts = len(Mset)
 
         # If there is only one matrix in Mset then there has been no consensus in the recursion.
         if Nts < 2:
-            self._logger.info("No consensus achieved for this tilt-series.")
+            logger.info("No consensus achieved for this tilt-series.")
             return None, None, None
 
         Nti = len(Mset[0])
 
-        self._logger.info("Number of tilt-series analyzed: " + str(Nts))
-        self._logger.info("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+        logger.info("Number of tilt-series analyzed: " + str(Nts))
+        logger.info("Number of tilt-images per tilt-series analyzed: " + str(Nti))
 
         # Matrix reporting consensus between each pair of tilt series
         consensusAlignmentMatrix = np.zeros((Nts, Nts))
@@ -265,7 +267,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                         detectedMisali = True
 
                 if detectedMisali:
-                    self._logger.info(
+                    logger.info(
                         "No consensus achieved between tilt-series " + str(j) + " and tilt-series " + str(k))
                     consensusAlignmentMatrix[j][k] = 1
 
@@ -292,7 +294,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 del Mset[n]
             return ProtConsensusAlignmentTS.compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset)
         else:
-            self._logger.info("\nConsensus achieved for this tilt-series.")
+            logger.info("\nConsensus achieved for this tilt-series.")
             averageAlignmentV = []
             angleSDV = []
             shiftSDV = []
@@ -335,13 +337,15 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             return averageAlignmentV, angleSDV, shiftSDV
 
     def compareTransformationMatricesLocal(self, Mset, shiftTol, angleTol, SRset):
-        self._logger.info("Running local consensus alignment...")
+        logger = logging.getLogger()
+
+        logger.info("Running local consensus alignment...")
 
         Nts = len(Mset)
         Nti = len(Mset[0])
 
-        self._logger.info("Number of tilt-series analyzed: " + str(Nts))
-        self._logger.info("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+        logger.info("Number of tilt-series analyzed: " + str(Nts))
+        logger.info("Number of tilt-images per tilt-series analyzed: " + str(Nti))
 
         # 2D-array saving all p matrices for each pair of comparisons. Keys follow #tsX_#tsY being p the matrix that
         # spams X set onto Y set
@@ -376,7 +380,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         # Apply consensus over each tilt-image
         for i in range(Nti):  # Iterate each tilt-image
-            self._logger.info("Analyzing image " + str(i))
+            logger.info("Analyzing image " + str(i))
 
             tiConsensusAlignment = np.zeros((3, 3))
 
@@ -388,7 +392,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             for j in range(Nts):
                 for k in range(j + 1, Nts):
-                    self._logger.info("Comparing matrices from series " + str(j) + " and " + str(k))
+                    logger.info("Comparing matrices from series " + str(j) + " and " + str(k))
                     # Matrix p for each pair of sets
                     key = "%d_%d" % (j, k)
                     p = P_dict[key]
@@ -418,7 +422,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     shiftY = pError[1][2]
 
                     if abs(shiftX) < shiftTol and abs(shiftY) < shiftTol and abs(angleError) < angleTol:
-                        self._logger.info("Consensus achieved for " + str(j) + " and " + str(k))
+                        logger.info("Consensus achieved for " + str(j) + " and " + str(k))
                         consensusIndexes.append(j)
                         consensusIndexes.append(k)
 
@@ -426,13 +430,13 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
             consensusIndexes = list(dict.fromkeys(consensusIndexes))
 
             if not consensusIndexes:
-                self._logger.info("No consensus achieved for tilt-image " + str(i))
+                logger.info("No consensus achieved for tilt-image " + str(i))
                 averageAlignmentV.append(None)
                 angleSDV.append(None)
                 shiftSDV.append(None)
 
             else:
-                self._logger.info("Consensus achieved for tilt-image " + str(i))
+                logger.info("Consensus achieved for tilt-image " + str(i))
 
                 tiConsensusAlignment += Mset[0][i]
                 numberOfConsensusAlignment = len(consensusIndexes)
