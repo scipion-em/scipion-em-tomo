@@ -162,8 +162,8 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
             if self.resolutionCriteria.get() == 0:
                 # Some estimation methods don't calculate the resolution
                 if ctfEstItems[0].getResolution() is not None:
-                    self._validateResolution(ctfEstItems,
-                                             self.resolutionTolerance.get())
+                    failedResolutionCriteria = self._validateResolution(ctfEstItems,
+                                                                        self.resolutionTolerance.get())
 
             validate = self.validateCtf(ctfEstItems,
                                         imagesToReject=imagesToReject)
