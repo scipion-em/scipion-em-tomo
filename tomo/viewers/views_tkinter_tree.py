@@ -718,7 +718,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             key = obj.getTsId()
             text = obj.getTsId()
             # TODO: show avg defocus for TomoSeries
-            values = ['', CTFSerieStates.OK if obj.getIsDefocusUDeviationInRange()
+            values = ['', CTFSerieStates.OK if obj.isEnabled()
                       else CTFSerieStates.FAILED]
             opened = False
             selected = obj.isEnabled()
@@ -731,7 +731,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
             values = [str("%0.2f" % tiltAngle),
-                      CTFSerieStates.OK if obj.getIsDefocusUDeviationInRange()
+                      CTFSerieStates.OK if obj.isEnabled()
                       else CTFSerieStates.FAILED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
@@ -754,7 +754,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         }
         if isinstance(obj, tomo.objects.CTFTomoSeries):
             tags = CTFSerieStates.UNCHECKED
-            if not (obj.getIsDefocusUDeviationInRange() and obj.getIsDefocusVDeviationInRange()):
+            if not obj.isEnabled():
                 obj.setEnabled(True)
                 tags = CTFSerieStates.CHECKED
                 self._checkedItems += 1
@@ -1034,12 +1034,15 @@ class CtfEstimationListDialog(ListDialog):
         phShList = []
         resList = []
 
+        for ts in self._inputSetOfTiltSeries:
+            if ts.getTsId() == itemSelected:
+                for item in ts:
+                    angList.append(item.getTiltAngle())
+                break
+
         for ctfSerie in self.provider.getCTFSeries():
-            ts = ctfSerie.getTiltSeries()
             if ctfSerie.getTsId() == itemSelected:
                 for item in ctfSerie.iterItems(orderBy='id'):
-                    index = int(item.getIndex())
-                    angList.append(int(ts[index].getTiltAngle()))
                     defocusUList.append(item.getDefocusU())
                     defocusVList.append(item.getDefocusV())
                     phShList.append(

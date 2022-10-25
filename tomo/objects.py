@@ -1897,19 +1897,15 @@ class CTFTomo(data.CTFModel):
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
         self._index = Integer(kwargs.get('index', None))
-        self._defocusUDeviation = Float()
-        self._isDefocusUDeviationInRange = Boolean(True)
-        self._defocusVDeviation = Float()
-        self._isDefocusVDeviationInRange = Boolean(True)
 
     def copyInfo(self, other, copyId=False):
+        self.copy(other, copyId=copyId)
+
+    def copy(self, other, copyId=True, ignoreAttrs=[]):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
-                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation')
+                            '_resolution', '_fitQuality', '_index')
 
         self.setEnabled(other.isEnabled())
-
-        self.setIsDefocusUDeviationInRange(other.getIsDefocusUDeviationInRange())
-        self.setIsDefocusVDeviationInRange(other.getIsDefocusVDeviationInRange())
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
@@ -1952,24 +1948,6 @@ class CTFTomo(data.CTFModel):
 
     def setIndex(self, value):
         self._index = Integer(value)
-
-    def getdefocusUDeviation(self):
-        return self._defocusUDeviation
-
-    def setIsDefocusUDeviationInRange(self, value):
-        self._isDefocusUDeviationInRange = Boolean(value)
-
-    def getIsDefocusUDeviationInRange(self):
-        return self._isDefocusUDeviationInRange
-
-    def getdefocusVDeviation(self):
-        return self._defocusVDeviation
-
-    def setIsDefocusVDeviationInRange(self, value):
-        self._isDefocusVDeviationInRange = Boolean(value)
-
-    def getIsDefocusVDeviationInRange(self):
-        return self._isDefocusVDeviationInRange
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -2210,20 +2188,6 @@ class CTFTomo(data.CTFModel):
         " Standardize the input values "
         self.standardize()
 
-    def getDefocusUDeviation(self, mean):
-        return abs(self.getDefocusU() - mean)
-
-    def isDefocusUDeviationInRange(self, mean, percentage=20):
-        defocusUDeviation = self.getDefocusUDeviation(mean)
-        return True if defocusUDeviation < (percentage * mean / 100) else False
-
-    def getDefocusVDeviation(self, mean):
-        return abs(self.getDefocusV() - mean)
-
-    def isDefocusVDeviationInRange(self, mean, percentage=20):
-        defocusVDeviation = self.getDefocusVDeviation(mean)
-        return True if defocusVDeviation < (percentage * mean / 100) else False
-
 
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
@@ -2243,6 +2207,7 @@ class CTFTomoSeries(data.EMSet):
     def clone(self, ignoreAttrs=('_mapperPath', '_size')):
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
+        clone.setEnabled(self.isEnabled())
         return clone
 
     def __del__(self):
@@ -2273,13 +2238,13 @@ class CTFTomoSeries(data.EMSet):
 
     def getNumberOfEstimationsInRange(self):
         """ Return the tilt-images range size used for estimation. """
-        return self._estimationsInRange.get()
+        pass
 
     def setNumberOfEstimationsInRange(self, estimationRange):
         """ Set the tilt-images range size used for estimation.
         :param estimationRange: Integer of the range size. """
 
-        self._estimationsInRange = Integer(estimationRange)
+        pass
 
     def getIMODDefocusFileFlag(self):
         """ Return the format file from which the CTF estimation information has been acquired. This parameter is
@@ -2321,70 +2286,27 @@ class CTFTomoSeries(data.EMSet):
         self._IMODDefocusFileFlag = Integer(flag)
 
     def setNumberOfEstimationsInRangeFromDefocusList(self):
-        """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
-
-        estimationRange = 0
-
-        for ctfEstimation in self:
-            # Check that at least one list is provided
-            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(ctfEstimation, "_defocusUList")):
-                raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
-                                "list information available.")
-
-            providedList = ctfEstimation.getDefocusUList() if hasattr(ctfEstimation, "_defocusUList") \
-                else ctfEstimation.getDefocusVList()
-            providedList = providedList.split(",")
-
-            listLength = len(providedList) - 1
-
-            if listLength > estimationRange:
-                estimationRange = listLength
-
-        self.setNumberOfEstimationsInRange(estimationRange)
+        pass
 
     def getIsDefocusUDeviationInRange(self):
-        return self._isDefocusUDeviationInRange
+       return True
 
     def setIsDefocusUDeviationInRange(self, value):
-        self._isDefocusUDeviationInRange = Boolean(value)
+       pass
 
     def getIsDefocusVDeviationInRange(self):
-        return self._isDefocusVDeviationInRange
+        return True
 
     def setIsDefocusVDeviationInRange(self, value):
-        self._isDefocusVDeviationInRange = Boolean(value)
+        pass
 
     def calculateDefocusUDeviation(self, defocusUTolerance=20):
-        defocusUValueList = []
-        for ctfTomo in self:
-            defocusUValueList.append(ctfTomo.getDefocusU())
-
-        mean = statistics.mean(defocusUValueList)
-
-        for ctfTomo in self.iterItems(iterate=False):
-            ctfTomo._defocusUDeviation.set(ctfTomo.getDefocusUDeviation(mean))
-            isDefocusUDeviationInRange = ctfTomo.isDefocusUDeviationInRange(mean,
-                                                                            percentage=defocusUTolerance)
-            if not isDefocusUDeviationInRange:
-                self._isDefocusUDeviationInRange.set(False)
-            ctfTomo._isDefocusUDeviationInRange.set(isDefocusUDeviationInRange)
-            self.update(ctfTomo)
+        pass
 
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
-        defocusVValueList = []
-        for ctfTomo in self:
-            defocusVValueList.append(ctfTomo.getDefocusV())
+        pass
 
-        mean = statistics.mean(defocusVValueList)
 
-        for ctfTomo in self.iterItems(iterate=False):
-            ctfTomo._defocusVDeviation.set(ctfTomo.getDefocusVDeviation(mean))
-            isDefocusVDeviationInRange = ctfTomo.isDefocusVDeviationInRange(mean,
-                                                                            percentage=defocusVTolerance)
-            if not isDefocusVDeviationInRange:
-                self._isDefocusVDeviationInRange.set(False)
-            ctfTomo._isDefocusVDeviationInRange.set(isDefocusVDeviationInRange)
-            self.update(ctfTomo)
 
 
 class SetOfCTFTomoSeries(data.EMSet):
