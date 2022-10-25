@@ -2238,13 +2238,13 @@ class CTFTomoSeries(data.EMSet):
 
     def getNumberOfEstimationsInRange(self):
         """ Return the tilt-images range size used for estimation. """
-        pass
+        return self._estimationsInRange.get()
 
     def setNumberOfEstimationsInRange(self, estimationRange):
         """ Set the tilt-images range size used for estimation.
         :param estimationRange: Integer of the range size. """
 
-        pass
+        self._estimationsInRange = Integer(estimationRange)
 
     def getIMODDefocusFileFlag(self):
         """ Return the format file from which the CTF estimation information has been acquired. This parameter is
@@ -2286,7 +2286,29 @@ class CTFTomoSeries(data.EMSet):
         self._IMODDefocusFileFlag = Integer(flag)
 
     def setNumberOfEstimationsInRangeFromDefocusList(self):
-        pass
+        """ Set the tilt-images estimation range size used for estimation from the defocus info list size. """
+
+        estimationRange = 0
+
+        for ctfEstimation in self:
+            # Check that at least one list is provided
+            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(
+                    ctfEstimation, "_defocusUList")):
+                raise Exception(
+                    "CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                    "list information available.")
+
+            providedList = ctfEstimation.getDefocusUList() if hasattr(
+                ctfEstimation, "_defocusUList") \
+                else ctfEstimation.getDefocusVList()
+            providedList = providedList.split(",")
+
+            listLength = len(providedList) - 1
+
+            if listLength > estimationRange:
+                estimationRange = listLength
+
+        self.setNumberOfEstimationsInRange(estimationRange)
 
     def getIsDefocusUDeviationInRange(self):
        return True
@@ -2305,8 +2327,6 @@ class CTFTomoSeries(data.EMSet):
 
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
         pass
-
-
 
 
 class SetOfCTFTomoSeries(data.EMSet):
