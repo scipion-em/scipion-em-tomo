@@ -34,7 +34,7 @@ import pyworkflow.utils as pwutils
 from .protocol_base import ProtTomoPicking
 
 import tomo.constants as const
-from ..objects import Coordinate3D
+from ..objects import Coordinate3D, SetOfCoordinates3D, SetOfSubTomograms, SetOfTomograms, SubTomogram
 
 
 class ProtTomoExtractCoords(ProtTomoPicking):
@@ -50,20 +50,26 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     _label = 'extract 3D coordinates'
     _devStatus = BETA
 
+    def __init__(self, **kwargs):
+
+        super().__init__(**kwargs)
+        self._tomoDict = None
+        self._inputAreSubtomos = None
+
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
 
         form.addParam('inputSubTomos', params.PointerParam,
-                      pointerClass='SetOfSubTomograms',
-                      label='Subtomograms', important=True,
+                      pointerClass=[SetOfSubTomograms, SetOfCoordinates3D],
+                      label='Subtomograms or 3D coordinates', important=True,
                       help='Select the subtomograms from which you want\n'
                            'to extract the coordinates. The coordinate belonging to '
                            'each subtomogram should be already associated to an initial '
                            'tomogram.')
 
         form.addParam('inputTomos', params.PointerParam,
-                      pointerClass='SetOfTomograms',
+                      pointerClass=SetOfTomograms,
                       label='Tomograms', important=True,
                       help='Select the tomograms to which you want to\n'
                            'associate the coordinates from the subtomograms.')
@@ -81,85 +87,139 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         self._insertFunctionStep('extractCoordinatesStep')
         self._insertFunctionStep('createOutputStep')
 
+    def getTomogramFromItem(self, item):
+        """ Returns the tomogram associated with the item. Item could be either a subtomogram or a 3D coordinate."""
+
+        tomoDict = self.getTomogramDictionary()
+
+        # get the coordinate
+        coord = self.getCoordFromItem(item)
+
+        # If no coordinate, we are dealing with imported subtomograms
+        if coord is None:
+
+            # From file name and subtomo:
+            file = pwutils.removeBaseExt(item.getVolName())
+
+            tomo = tomoDict[file]
+
+        # There are coordinates
+        else:
+            tomo = tomoDict[item.getTomoId()]
+
+        # last resource: vol identifier.
+        if tomo is None:
+            # Try by vol id
+            tomo = tomoDict[item.getVolId()]
+
+        return tomo
+
+
+    def getTomogramDictionary(self):
+        """ Returns a dictionary of tomogram where the key is any of the possible tomogram identifiers to do the matching"""
+
+        if not self._tomoDict:
+            self._tomoDict = dict()
+            # iterate over the SetOfTomograms
+            for tomo in self.getInputTomos().iterItems():
+                # Clone the tomogram
+                tomoClone = tomo.clone()
+
+                # Add the tomogram based on the filename
+                filename = pwutils.removeBaseExt(tomo.getFileName())
+                self._tomoDict[filename] = tomoClone
+
+                # Add it by tilt series id
+                self._tomoDict[tomoClone.getTsId()] = tomoClone
+
+                # Add it by row identifier (the weakest due to join sets renumbering identifiers)
+                self._tomoDict[tomoClone.getObjId()] = tomoClone
+
+        return self._tomoDict
+
+    def extractCoordFromItem(self, item, boxSize, scale):
+
+        coord = self.getCoordFromItem(item)
+
+        tomo = self.getTomogramFromItem(item)
+
+        if tomo is None:
+            self.warning("Tomogram not found for %s" % item)
+            return None
+        else:
+            newCoord = Coordinate3D()
+
+            coord.setVolume(tomo)
+            newCoord.copyObjId(coord)
+            x, y, z = coord.getPosition(const.SCIPION)
+            newCoord.setVolume(tomo)
+            newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
+
+            newCoord.setBoxSize(boxSize)
+            transformation = self.checkMatrix(item)
+            transformation[0, 3] *= scale
+            transformation[1, 3] *= scale
+            transformation[2, 3] *= scale
+            newCoord.setMatrix(transformation)
+            if coord.hasGroupId():
+                newCoord.setGroupId(coord.getGroupId())
+
+            return newCoord
+
+    def areInputSubtomos(self):
+        """
+        Returns true if input re Subtomograms. (Lazy loaded)
+        :param item: an item of the inputset
+        :return:
+        """
+        if self._inputAreSubtomos is None:
+            self._inputAreSubtomos =isinstance(self.getInputSubTomos(), SetOfSubTomograms)
+
+        return self._inputAreSubtomos
+
+    def getCoordFromItem(self, item):
+        """ Returns the Coordinate 3D from the item"""
+        if self.areInputSubtomos():
+            coord = item.getCoordinate3D()
+        else:
+            coord = item
+        return coord
+
+    @classmethod
+    def checkMatrix(cls, item):
+        """ Returns the matrix of item (subtomo or coordinate3D"""
+        transform = item.getTransform().getMatrix() if isinstance(item, SubTomogram) else item.getMatrix()
+        if transform is not None:
+            return transform
+        else:
+            return np.eye(transform.shape[0])
+
+
     def extractCoordinatesStep(self):
         inTomos = self.getInputTomos()
         inSubTomos = self.getInputSubTomos()
         scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
-        print("Scaling coordinates by a factor *%0.2f*" % scale)
-        filesTomo = [pwutils.removeBaseExt(tomo.getFileName()) for tomo in inTomos.iterItems()]
+        self.info("Scaling coordinates by a factor *%0.2f*" % scale)
 
-        suffix = ''
-        self.outputCoords = self._createSetOfCoordinates3D(inTomos, suffix=suffix)
+        # Create the output set of coordinates
+        self.outputCoords = self._createSetOfCoordinates3D(inTomos)
         self.outputCoords.setSamplingRate(inTomos.getSamplingRate())
 
-        def appendCoordFromSubTomo(subTomo, boxSize):
-            coord = subTomo.getCoordinate3D()
-            tomoKey = coord.getVolId()
-            tomo = inTomos[tomoKey]
 
-            if tomo is None:
-                print("Key %s not found, trying to associate tomogram using filename" % tomoKey)
-                try:
-                    idx = filesTomo.index(pwutils.removeBaseExt(subTomo.getVolName()))
-                except:
-                    idx = None
-                if idx is not None:
-                    if len(filesTomo) == 1:
-                        newCoord.setVolume(inTomos.getFirstItem())
-                        coord.setVolume(inTomos.getFirstItem())
-                    else:
-                        newCoord.setVolume(inTomos[idx+1])
-                        coord.setVolume(inTomos[idx+1])
-                    x, y, z = coord.getPosition(const.SCIPION)
-                    newCoord.copyObjId(subTomo)
-
-                    newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
-                    newCoord.setBoxSize(boxSize)
-                    transformation = checkMatrix(subTomo)
-
-                    A = transformation[:3,:3]
-                    T = np.linalg.inv(A) @ transformation
-                    T[:3, 3] *= scale
-                    transformation = A @ T
-
-                    # transformation[0, 3] *= scale
-                    # transformation[1, 3] *= scale
-                    # transformation[2, 3] *= scale
-                    newCoord.setMatrix(transformation)
-                    if coord.hasGroupId():
-                        newCoord.setGroupId(coord.getGroupId())
-                    self.outputCoords.append(newCoord)
-            else:
-                coord.setVolume(tomo)
-                newCoord.copyObjId(subTomo)
-                x, y, z = coord.getPosition(const.SCIPION)
-                newCoord.setVolume(tomo)
-                newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
-
-                newCoord.setBoxSize(boxSize)
-                transformation = checkMatrix(subTomo)
-                transformation[0, 3] *= scale
-                transformation[1, 3] *= scale
-                transformation[2, 3] *= scale
-                newCoord.setMatrix(transformation)
-                if coord.hasGroupId():
-                    newCoord.setGroupId(coord.getGroupId())
-                self.outputCoords.append(newCoord)
-
-        def checkMatrix(subTomo):
-            transform_subTomo = subTomo.getTransform().getMatrix()
-            if transform_subTomo is not None:
-                return transform_subTomo
-            else:
-                return np.eye(transform_subTomo.shape[0])
-
-        newCoord = Coordinate3D()
         if self.boxSize.get() is None:
-            boxSize = inSubTomos.getXDim() * scale
+
+            if self.areInputSubtomos():
+                boxSize = inSubTomos.getXDim() * scale
+            else:
+                boxSize = inSubTomos.getBoxSize() * scale
         else:
             boxSize = self.boxSize.get()
-        for subTomo in inSubTomos:
-            appendCoordFromSubTomo(subTomo, boxSize)
+
+        # For each item (Subtomo or coordinate) in the input
+        for item in inSubTomos:
+            newCoord = self.extractCoordFromItem(item, boxSize, scale)
+            if newCoord:
+                self.outputCoords.append(newCoord)
 
         self.outputCoords.setBoxSize(boxSize)
 
@@ -213,7 +273,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         errors = []
         inputSubTomos = self.getInputSubTomos()
         first = inputSubTomos.getFirstItem()
-        if first.getCoordinate3D() is None:
+        if self.getCoordFromItem(first) is None:
             errors.append('The input particles do not have coordinates!!!')
 
         return errors

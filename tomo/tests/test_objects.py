@@ -26,7 +26,7 @@
 from pyworkflow.tests import BaseTest
 from tomo.constants import SCIPION
 from tomo.objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, SetOfSubTomograms, SetOfTomograms, Tomogram, \
-    SetOfCoordinates3D, Coordinate3D, SubTomogram
+    SetOfCoordinates3D, Coordinate3D, SubTomogram, SetOfTiltSeries, TiltSeries, TiltImage
 
 TS_1 = "TS_1"
 
@@ -141,5 +141,33 @@ class TestTomoModel(BaseTest):
 
 
 
+    def test_set_of_tilt_series(self):
+        """ Tests the SetOfTiltSeries model"""
+
+        # Create the set
+        tiltseries = SetOfTiltSeries.create(self.outputPath)
+        tiltseries.setAnglesCount(3)
+        ts = TiltSeries()
+        ts.setTsId("TS1")
+
+        # We need to append the tilt series before adding tilt images
+        tiltseries.append(ts)
+
+        # Add tilt images
+        ti = TiltImage()
+        ti.setTiltAngle(-3)
+        ts.append(ti)
+
+        # Update properties
+        ts.setAnglesCount(1)
+        tiltseries.update(ts)
+        # This should not persist properties at all
+        ts.write(properties=True)
+
+        # Persist the whole set, this should persist properties of the set
+        tiltseries.write()
+
+        tiltSerieFromFile = SetOfTiltSeries(filename=tiltseries.getFileName())
+        tiltSerieFromFile.loadAllProperties()
 
 
