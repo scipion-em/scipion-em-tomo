@@ -105,7 +105,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         # There are coordinates
         else:
-            tomo = tomoDict[item.getTomoId()]
+            tomo = tomoDict[coord.getTomoId()]
 
         # last resource: vol identifier.
         if tomo is None:
