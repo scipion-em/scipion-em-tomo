@@ -379,13 +379,21 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
-    def _getExcludedViewsIndex(self):
-        """Return a list with a list of the excluded views """
+    def getExcludedViewsIndex(self, caster=int, indexOffset=0):
+        """Return a list with a list of the excluded views.
+
+         :param caster: casting method to cast each index
+         :param indexOffset: Value to add to the index. If you want to start the count in 0 pass -1"""
         excludeViewsList = []
         for ti in self.iterItems():
             if not ti.isEnabled():
-                excludeViewsList.append(ti.getIndex())
+                excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
+
+    def _getExcludedViewsIndex(self):
+
+        return self.getExcludedViewsIndex()
+
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -431,11 +439,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
-        excludedViewsList = self._getExcludedViewsIndex()
+        excludedViewsList = self.getExcludedViewsIndex(caster=str)
         excludedViewsIndexes = ''
         if excludedViewsList:
-            excludedViewsIndexes = 'EXCLUDELIST '
-            excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
+            excludedViewsIndexes = 'EXCLUDELIST %s \n' % ",".join(excludedViewsList)
 
         # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
         # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
