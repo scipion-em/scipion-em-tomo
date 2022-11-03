@@ -107,26 +107,26 @@ with weakImport("xmipptomo"):
 
         def testNoAngles(self):
             # angles =1 cancels the rotation
-            self._runPhantomSubtomo("NO ANGLES", rot=1, tilt=1, psi=1)
+            self._runPhantomTomo("NO ANGLES", rot=1, tilt=1, psi=1)
 
         def testAngles(self):
 
-            self._runPhantomSubtomo("ALL ANGLES")
+            self._runPhantomTomo("ALL ANGLES")
 
         def testOnlyRot(self):
 
-            self._runPhantomSubtomo("ONLY ROT", tilt=1, psi=1)
+            self._runPhantomTomo("ONLY ROT", tilt=1, psi=1)
 
         def testOnlyTilt(self):
 
-            self._runPhantomSubtomo("ONLY TILT", rot=1, psi=1)
+            self._runPhantomTomo("ONLY TILT", rot=1, psi=1)
 
         def testOnlyPsi(self):
 
-            self._runPhantomSubtomo("ONLY PSI", rot=1, tilt=1)
+            self._runPhantomTomo("ONLY PSI", rot=1, tilt=1)
 
-        def _runPhantomSubtomo(self, label, rot=90, tilt=90, psi=90):
-            """ Creates a a phantom subtomo protocol with rotation by default
+        def _runPhantomTomo(self, label, rot=90, tilt=90, psi=90):
+            """ Creates a phantom tomo protocol with rotation by default
 
             :param angles: value for the 3 angles, to cancel rotation use 1
             """
@@ -159,6 +159,90 @@ with weakImport("xmipptomo"):
 
                 # Add the averagers
                 addAveragers(self, stExtraction, EmanProtTomoExtraction._possibleOutputs.subtomograms.name)
+
+
+    # Define the class inside so only the test is available if xmipptomo is.
+    class TestTiltSeriesTransformations(BaseTest):
+        """ This class generates a phantom based workflow with contrlolled tilt series information from a phantom tomogram."""
+
+        @classmethod
+        def setUpClass(cls):
+            setupTestProject(cls)
+
+        def testNoAngles(self):
+            # angles =1 cancels the rotation
+            self._runPhantomTomo("NO ANGLES", rot=1, tilt=1, psi=1)
+
+        # def testAngles(self):
+        #
+        #     self._runPhantomTomo("ALL ANGLES")
+        #
+        # def testOnlyRot(self):
+        #
+        #     self._runPhantomTomo("ONLY ROT", tilt=1, psi=1)
+        #
+        # def testOnlyTilt(self):
+        #
+        #     self._runPhantomTomo("ONLY TILT", rot=1, psi=1)
+        #
+        # def testOnlyPsi(self):
+        #
+        #     self._runPhantomTomo("ONLY PSI", rot=1, tilt=1)
+
+        def _runPhantomTomo(self, label, rot=90, tilt=90, psi=90):
+            """ Creates a phantom tomo protocol with rotation by default
+
+            :param angles: value for the 3 angles, to cancel rotation use 1
+            """
+
+            protPhantom = self.newProtocol(XmippProtPhantomTomo,
+                                           objLabel=label,
+                                           dimensions="200 200 100",
+                                           sampling=4,
+                                           nparticles=10,
+                                           ntomos=3,
+                                           rotmin=0,
+                                           rotmax=rot,
+                                           tiltmin=0,
+                                           tiltmax=tilt,
+                                           psimin=0,
+                                           psimax=psi,
+                                           addNoise=False)
+
+            self.launchProtocol(protPhantom)
+
+            with weakImport("imod"):
+                # Project the tomogram
+                from imod.protocols.protocol_tomoProjection import ProtImodTomoProjection
+                tomoProjection = self.newProtocol(ProtImodTomoProjection,
+                                                inputSetOfTomograms = protPhantom.tomograms)
+
+                self.launchProtocol(tomoProjection)
+
+
+                self.addMisaligner("SHIFT X", tomoProjection.TiltSeries, shiftXNoiseToggle=True, a6param=3)
+                self.addMisaligner("SHIFT Y", tomoProjection.TiltSeries,shiftYNoiseToggle=True, b6param=3)
+                self.addMisaligner("JUST ANGLES", tomoProjection.TiltSeries, angleNoiseToggle=True, c6param=3)
+
+
+        def addMisaligner(self, label, inputTs, **kwargs):
+            """ Adds an xmipp misalinger with the label and parameters passes
+
+            :param label: label for the protocol
+            :param kwargs: params to pass to the misalign protocol
+            """
+
+            with weakImport("xmipptomo"):
+                # Missalign the tilt series
+                from xmipptomo.protocols import XmippProtMisalignTiltSeries
+
+                missAligner = self.newProtocol(XmippProtMisalignTiltSeries,
+                                               objLabel=label,
+                                               inputSetOfTiltSeries=inputTs,
+                                               applyMatrix=True,
+                                               addInverseMatrix=True,
+                                               **kwargs)
+                self.launchProtocol(missAligner)
 
 def addAveragers(test, inputProt, outputName):
     """ Add all the averagers available to be run with the subtomo set"""
