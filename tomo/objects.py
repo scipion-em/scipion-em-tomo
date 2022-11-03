@@ -191,8 +191,12 @@ class TiltImage(data.Image, TiltImageBase):
 
         return fileName + suffix + fileExtension
 
+TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 
 class TiltSeriesBase(data.SetOfImages):
+
+
+
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -202,6 +206,8 @@ class TiltSeriesBase(data.SetOfImages):
         self._acquisition = TomoAcquisition()
         self._origin = Transform()
         self._anglesCount = Integer()
+        self._hasAlignment = Boolean(False)
+
 
     def getAnglesCount(self):
         return self._anglesCount
@@ -226,7 +232,7 @@ class TiltSeriesBase(data.SetOfImages):
         """ Copy basic information (id and other properties) but
         not _mapperPath or _size from other set of tilt series to current one.
         """
-        self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
+        self.copy(other, copyId=copyId, ignoreAttrs=TS_IGNORE_ATTRS)
         # self.copyAttributes(other, '_tsId', '_anglesCount')
 
 
@@ -235,11 +241,15 @@ class TiltSeriesBase(data.SetOfImages):
 
         super().write(properties=False)
 
-    def append(self, tiltImage):
+    def append(self, tiltImage: TiltImageBase):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+        if tiltImage.hasTransform():
+            self._hasAlignment.set(True)
+
+
+    def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
@@ -334,6 +344,12 @@ class TiltSeriesBase(data.SetOfImages):
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
+
+    def __str__(self):
+
+        s = super().__str__()
+
+        return s + ('∅'if not self._hasAlignment.get() else '＊')
 
     def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
@@ -561,6 +577,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
+        self._hasAlignment = Boolean(False)
+
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -605,7 +623,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def getFirstItem(self):
+    def getFirstItem(self)->TiltSeriesBase:
         classItem = data.EMSet.getFirstItem(self)
         self._setItemMapperPath(classItem)
         return classItem
@@ -646,11 +664,20 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
                 self.update(tsOut)
 
+    def update(self, item:TiltSeriesBase):
+
+        self.setDim(item.getDim())
+        self._anglesCount.set(item.getSize())
+        self._hasAlignment.set(item._hasAlignment.get())
+        super().update(item)
+
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
-        firstItem = self.getFirstItem()
-        self.setDim(firstItem.getDim())
-        self._anglesCount.set(firstItem.getSize())
+
+        logger.warning("TO DEVELOPERS: update is called always before this. This call to updateDim could be removed.")
+
+        # firstItem = self.getFirstItem()
+        # self.update(firstItem)
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
@@ -666,8 +693,9 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 
-        return '%s x %s x %s' % (self._anglesCount, self._firstDim[0],
-                                 self._firstDim[1])
+        return '%s x %s x %s, %s' % (self._anglesCount, self._firstDim[0],
+                     self._firstDim[1], '∅'if not self._hasAlignment.get() else '＊')
+
 
 
 class TiltImageM(data.Movie, TiltImageBase):

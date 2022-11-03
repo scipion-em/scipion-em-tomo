@@ -236,7 +236,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
                        label=Message.LABEL_AMPLITUDE,
-                       expertLevel=params.LEVEL_ADVANCED,
+                       expertLevel=params.LEVEL_NORMAL,
                        help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam,
                        label=Message.LABEL_MAGNI_RATE,
