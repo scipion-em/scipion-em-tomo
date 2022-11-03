@@ -24,6 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+logger = logging.getLogger(__name__)
 
 import csv
 import math
@@ -41,6 +43,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+
 
 
 
@@ -188,8 +191,12 @@ class TiltImage(data.Image, TiltImageBase):
 
         return fileName + suffix + fileExtension
 
+TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 
 class TiltSeriesBase(data.SetOfImages):
+
+
+
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -199,12 +206,18 @@ class TiltSeriesBase(data.SetOfImages):
         self._acquisition = TomoAcquisition()
         self._origin = Transform()
         self._anglesCount = Integer()
+        self._hasAlignment = Boolean(False)
+
 
     def getAnglesCount(self):
         return self._anglesCount
 
     def setAnglesCount(self, value):
-        self._anglesCount = value
+
+        if isinstance(value, int):
+            self._anglesCount.set(value)
+        else:
+            self._anglesCount = value
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -219,14 +232,24 @@ class TiltSeriesBase(data.SetOfImages):
         """ Copy basic information (id and other properties) but
         not _mapperPath or _size from other set of tilt series to current one.
         """
-        self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
+        self.copy(other, copyId=copyId, ignoreAttrs=TS_IGNORE_ATTRS)
         # self.copyAttributes(other, '_tsId', '_anglesCount')
 
-    def append(self, tiltImage):
+
+    def write(self, properties=True):
+        """ Do not save properties for this "Second level object"""
+
+        super().write(properties=False)
+
+    def append(self, tiltImage: TiltImageBase):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+        if tiltImage.hasTransform():
+            self._hasAlignment.set(True)
+
+
+    def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
@@ -270,7 +293,7 @@ class TiltSeriesBase(data.SetOfImages):
         self._origin = newOrigin
 
     def getOrigin(self, force=False):
-        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the the object
+        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the object
         it may create a default one.
         :param force: Boolean indicating if the method must return a default origin in case the object has no one
         associated.
@@ -290,7 +313,7 @@ class TiltSeriesBase(data.SetOfImages):
         x, y, z = self.getDim()
         if z > 1:
             z /= -2.
-        print(t)
+
         t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
         return t  # The identity matrix
 
@@ -321,6 +344,12 @@ class TiltSeriesBase(data.SetOfImages):
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
+
+    def __str__(self):
+
+        s = super().__str__()
+
+        return s + ('∅'if not self._hasAlignment.get() else '＊')
 
     def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
@@ -366,13 +395,21 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
-    def _getExcludedViewsIndex(self):
-        """Return a list with a list of the excluded views """
+    def getExcludedViewsIndex(self, caster=int, indexOffset=0):
+        """Return a list with a list of the excluded views.
+
+         :param caster: casting method to cast each index
+         :param indexOffset: Value to add to the index. If you want to start the count in 0 pass -1"""
         excludeViewsList = []
         for ti in self.iterItems():
             if not ti.isEnabled():
-                excludeViewsList.append(ti.getIndex())
+                excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
+
+    def _getExcludedViewsIndex(self):
+
+        return self.getExcludedViewsIndex()
+
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -418,11 +455,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
-        excludedViewsList = self._getExcludedViewsIndex()
+        excludedViewsList = self.getExcludedViewsIndex(caster=str)
         excludedViewsIndexes = ''
         if excludedViewsList:
-            excludedViewsIndexes = 'EXCLUDELIST '
-            excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
+            excludedViewsIndexes = 'EXCLUDELIST %s \n' % ",".join(excludedViewsList)
 
         # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
         # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
@@ -499,7 +535,8 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.3f' % transform[5]]
             else:
                 from pyworkflow.utils import yellowStr
-                print(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). The identity transformation will be written in the .xf file'))
+                logging.info(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). '
+                                       'The identity transformation will be written in the .xf file'))
                 #This is the identity matrix
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
@@ -540,6 +577,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
+        self._hasAlignment = Boolean(False)
+
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -584,7 +623,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def getFirstItem(self):
+    def getFirstItem(self)->TiltSeriesBase:
         classItem = data.EMSet.getFirstItem(self)
         self._setItemMapperPath(classItem)
         return classItem
@@ -625,11 +664,20 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
                 self.update(tsOut)
 
+    def update(self, item:TiltSeriesBase):
+
+        self.setDim(item.getDim())
+        self._anglesCount.set(item.getSize())
+        self._hasAlignment.set(item._hasAlignment.get())
+        super().update(item)
+
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
-        firstItem = self.getFirstItem()
-        self.setDim(firstItem.getDim())
-        self._anglesCount.set(firstItem.getSize())
+
+        logger.warning("TO DEVELOPERS: update is called always before this. This call to updateDim could be removed.")
+
+        # firstItem = self.getFirstItem()
+        # self.update(firstItem)
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
@@ -645,8 +693,9 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 
-        return '%s x %s x %s' % (self._anglesCount, self._firstDim[0],
-                                 self._firstDim[1])
+        return '%s x %s x %s, %s' % (self._anglesCount, self._firstDim[0],
+                     self._firstDim[1], '∅'if not self._hasAlignment.get() else '＊')
+
 
 
 class TiltImageM(data.Movie, TiltImageBase):
@@ -781,7 +830,7 @@ class TiltSeriesDict:
         self._checkNewOutput()
 
     def _checkNewInput(self):
-        # print(">>> DEBUG: _checkNewInput ")
+        logging.debug("TiltSeriesDict._checkNewInput called.")
 
         inputSetFn = self.__inputSet.getFileName()
         mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
@@ -805,7 +854,8 @@ class TiltSeriesDict:
         self.__lastCheck = datetime.now()
 
     def _checkNewOutput(self):
-        # print(">>> DEBUG: _checkNewInput ")
+        logger.debug("TiltSeriesDict._checkNewOutput")
+
         # First check that we have some items in the finished
         self.__lock.acquire()
         doneItems = list(self.__finished)
@@ -1131,9 +1181,9 @@ class Coordinate3D(data.EMObject):
 
         Parameters:
 
-            :param int x: Position of the coordinate in the X axis
-            :param int y: Position of the coordinate in the Y axis
-            :param int z: Position of the coordinate in the Z axis
+            :param float x: Position of the coordinate in the X axis
+            :param float y: Position of the coordinate in the Y axis
+            :param float z: Position of the coordinate in the Z axis
             :param function originFunction: Function to return a Vector to refer a coordinate to the bottom left corner from a
                                             given convention.
 
@@ -1644,6 +1694,7 @@ class SetOfAverageSubTomograms(SetOfSubTomograms):
     It is a SetOfSubTomograms but it is useful to differentiate outputs."""
     ITEM_TYPE = AverageSubTomogram
     REP_TYPE = AverageSubTomogram
+    EXPOSE_ITEMS = True
 
     def __init__(self, **kwargs):
         SetOfSubTomograms.__init__(self, **kwargs)
@@ -1896,19 +1947,15 @@ class CTFTomo(data.CTFModel):
     def __init__(self, **kwargs):
         data.CTFModel.__init__(self, **kwargs)
         self._index = Integer(kwargs.get('index', None))
-        self._defocusUDeviation = Float()
-        self._isDefocusUDeviationInRange = Boolean(True)
-        self._defocusVDeviation = Float()
-        self._isDefocusVDeviationInRange = Boolean(True)
 
     def copyInfo(self, other, copyId=False):
+        self.copy(other, copyId=copyId)
+
+    def copy(self, other, copyId=True, ignoreAttrs=[]):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
-                            '_resolution', '_fitQuality', '_index', '_defocusUDeviation', '_defocusVDeviation')
+                            '_resolution', '_fitQuality', '_index')
 
         self.setEnabled(other.isEnabled())
-
-        self.setIsDefocusUDeviationInRange(other.getIsDefocusUDeviationInRange())
-        self.setIsDefocusVDeviationInRange(other.getIsDefocusVDeviationInRange())
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
@@ -1951,24 +1998,6 @@ class CTFTomo(data.CTFModel):
 
     def setIndex(self, value):
         self._index = Integer(value)
-
-    def getdefocusUDeviation(self):
-        return self._defocusUDeviation
-
-    def setIsDefocusUDeviationInRange(self, value):
-        self._isDefocusUDeviationInRange = Boolean(value)
-
-    def getIsDefocusUDeviationInRange(self):
-        return self._isDefocusUDeviationInRange
-
-    def getdefocusVDeviation(self):
-        return self._defocusVDeviation
-
-    def setIsDefocusVDeviationInRange(self, value):
-        self._isDefocusVDeviationInRange = Boolean(value)
-
-    def getIsDefocusVDeviationInRange(self):
-        return self._isDefocusVDeviationInRange
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -2209,20 +2238,6 @@ class CTFTomo(data.CTFModel):
         " Standardize the input values "
         self.standardize()
 
-    def getDefocusUDeviation(self, mean):
-        return abs(self.getDefocusU() - mean)
-
-    def isDefocusUDeviationInRange(self, mean, percentage=20):
-        defocusUDeviation = self.getDefocusUDeviation(mean)
-        return True if defocusUDeviation < (percentage * mean / 100) else False
-
-    def getDefocusVDeviation(self, mean):
-        return abs(self.getDefocusV() - mean)
-
-    def isDefocusVDeviationInRange(self, mean, percentage=20):
-        defocusVDeviation = self.getDefocusVDeviation(mean)
-        return True if defocusVDeviation < (percentage * mean / 100) else False
-
 
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
@@ -2242,6 +2257,7 @@ class CTFTomoSeries(data.EMSet):
     def clone(self, ignoreAttrs=('_mapperPath', '_size')):
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
+        clone.setEnabled(self.isEnabled())
         return clone
 
     def __del__(self):
@@ -2326,11 +2342,14 @@ class CTFTomoSeries(data.EMSet):
 
         for ctfEstimation in self:
             # Check that at least one list is provided
-            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(ctfEstimation, "_defocusUList")):
-                raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
-                                "list information available.")
+            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(
+                    ctfEstimation, "_defocusUList")):
+                raise Exception(
+                    "CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                    "list information available.")
 
-            providedList = ctfEstimation.getDefocusUList() if hasattr(ctfEstimation, "_defocusUList") \
+            providedList = ctfEstimation.getDefocusUList() if hasattr(
+                ctfEstimation, "_defocusUList") \
                 else ctfEstimation.getDefocusVList()
             providedList = providedList.split(",")
 
@@ -2342,48 +2361,22 @@ class CTFTomoSeries(data.EMSet):
         self.setNumberOfEstimationsInRange(estimationRange)
 
     def getIsDefocusUDeviationInRange(self):
-        return self._isDefocusUDeviationInRange
+       return True
 
     def setIsDefocusUDeviationInRange(self, value):
-        self._isDefocusUDeviationInRange = Boolean(value)
+       pass
 
     def getIsDefocusVDeviationInRange(self):
-        return self._isDefocusVDeviationInRange
+        return True
 
     def setIsDefocusVDeviationInRange(self, value):
-        self._isDefocusVDeviationInRange = Boolean(value)
+        pass
 
     def calculateDefocusUDeviation(self, defocusUTolerance=20):
-        defocusUValueList = []
-        for ctfTomo in self:
-            defocusUValueList.append(ctfTomo.getDefocusU())
-
-        mean = statistics.mean(defocusUValueList)
-
-        for ctfTomo in self.iterItems(iterate=False):
-            ctfTomo._defocusUDeviation.set(ctfTomo.getDefocusUDeviation(mean))
-            isDefocusUDeviationInRange = ctfTomo.isDefocusUDeviationInRange(mean,
-                                                                            percentage=defocusUTolerance)
-            if not isDefocusUDeviationInRange:
-                self._isDefocusUDeviationInRange.set(False)
-            ctfTomo._isDefocusUDeviationInRange.set(isDefocusUDeviationInRange)
-            self.update(ctfTomo)
+        pass
 
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
-        defocusVValueList = []
-        for ctfTomo in self:
-            defocusVValueList.append(ctfTomo.getDefocusV())
-
-        mean = statistics.mean(defocusVValueList)
-
-        for ctfTomo in self.iterItems(iterate=False):
-            ctfTomo._defocusVDeviation.set(ctfTomo.getDefocusVDeviation(mean))
-            isDefocusVDeviationInRange = ctfTomo.isDefocusVDeviationInRange(mean,
-                                                                            percentage=defocusVTolerance)
-            if not isDefocusVDeviationInRange:
-                self._isDefocusVDeviationInRange.set(False)
-            ctfTomo._isDefocusVDeviationInRange.set(isDefocusVDeviationInRange)
-            self.update(ctfTomo)
+        pass
 
 
 class SetOfCTFTomoSeries(data.EMSet):

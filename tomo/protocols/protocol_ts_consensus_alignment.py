@@ -23,13 +23,15 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import math
+import logging
+logger = logging.getLogger(__name__)
 
+import math
 import numpy as np
 
 from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.protocol.params import MultiPointerParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import MultiPointerParam, FloatParam, EnumParam
 from pyworkflow.object import Set, Float
 
 from pwem.protocols import EMProtocol
@@ -46,8 +48,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     _label = 'Tilt-series consensus alignment'
     _devStatus = BETA
-
-    _tsIdList = []
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -75,6 +75,16 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                       help='Maximum angle difference between alignments to consider them as equal. It is measured in '
                            'degrees')
 
+        form.addParam('globalAlignment',
+                      EnumParam,
+                      choices=["Local", "Global"],
+                      label="Consensus",
+                      default=1,
+                      help="Criteria for consensus alignment. If local, consensus will be performed to the tilt-images "
+                           "individually (different consensus applied individually) and if there is no consensus in "
+                           "some image the series will be discarded. If global, consensus will be performed at the "
+                           "level o tilt-series (the whole pair of alignments must agree).")
+
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.consensusAlignment)
@@ -99,14 +109,22 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 Mset.append(M)
                 SRset.append(ts.getSamplingRate())
 
-            print("\nAnalyzing tilt series " + tsId + "...")
+            self.info("\nAnalyzing tilt series " + tsId + "...")
 
             shiftTolPx = round(self.shiftTolerance.get() / SRset[0])
 
-            averageAlignmentV, angleSDV, shiftSDV = self.compareTransformationMatrices(Mset,
-                                                                                       shiftTolPx,
-                                                                                       self.angleTolerance.get(),
-                                                                                       SRset)
+            if self.globalAlignment.get() == 1:
+                averageAlignmentV, angleSDV, shiftSDV = \
+                    self.compareTransformationMatricesGlobal(Mset,
+                                                             shiftTolPx,
+                                                             self.angleTolerance.get(),
+                                                             SRset)
+            else:
+                averageAlignmentV, angleSDV, shiftSDV = \
+                    self.compareTransformationMatricesLocal(Mset,
+                                                            shiftTolPx,
+                                                            self.angleTolerance.get(),
+                                                            SRset)
 
             # Consensus achieved
             if averageAlignmentV is not None:
@@ -123,7 +141,10 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     newTi.setLocation(ti.getLocation())
 
                     transform = Transform()
-                    transform.setMatrix(averageAlignmentV[i])
+                    if averageAlignmentV[i] is None:
+                        newTi.setEnabled(False)
+                    else:
+                        transform.setMatrix(averageAlignmentV[i])
                     newTi.setTransform(transform)
 
                     newTi._angleStd = Float(angleSDV[i])
@@ -176,18 +197,21 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
-    def compareTransformationMatrices(Mset, shiftTol, angleTol, SRset):
+    def compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset):
+
+        logger.info("Running global consensus alignment...")
+
         Nts = len(Mset)
 
         # If there is only one matrix in Mset then there has been no consensus in the recursion.
         if Nts < 2:
-            print("No consensus achieved for this tilt-series.")
+            logger.info("No consensus achieved for this tilt-series.")
             return None, None, None
 
         Nti = len(Mset[0])
 
-        print("Number of tilt-series analyzed: " + str(Nts))
-        print("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+        logger.info("Number of tilt-series analyzed: " + str(Nts))
+        logger.info("Number of tilt-images per tilt-series analyzed: " + str(Nti))
 
         # Matrix reporting consensus between each pair of tilt series
         consensusAlignmentMatrix = np.zeros((Nts, Nts))
@@ -215,7 +239,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
                 # Calculate error matrix for the pair of tilt-series.
                 for i in range(Nti):  # Iterate each tilt-image
-                    # Only use p matrix to correct for shiftY in case there exist an offset in the whole series
+                    # Only use p matrix to correct for shiftY in case there exist an Y offset in the whole series
                     matrixShiftYCorrected = Mset[k][i].copy()
                     matrixShiftYCorrected[0, 2] *= samplingFactor
                     matrixShiftYCorrected[1, 2] *= samplingFactor
@@ -236,11 +260,12 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                     shiftX = pError[0][2]
                     shiftY = pError[1][2]
 
-                    if shiftX > shiftTol or shiftY > shiftTol or angleError > angleTol:
+                    if abs(shiftX) > shiftTol or abs(shiftY) > shiftTol or abs(angleError) > angleTol:
                         detectedMisali = True
 
                 if detectedMisali:
-                    print("No consensus achieved between tilt-series " + str(j) + " and tilt-series " + str(k))
+                    logger.info(
+                        "No consensus achieved between tilt-series " + str(j) + " and tilt-series " + str(k))
                     consensusAlignmentMatrix[j][k] = 1
 
         colOnes = []
@@ -264,9 +289,9 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
         if len(discardedIndexes) != 0:
             for n in discardedIndexes:
                 del Mset[n]
-            return ProtConsensusAlignmentTS.compareTransformationMatrices(Mset, shiftTol, angleTol, SRset)
+            return ProtConsensusAlignmentTS.compareTransformationMatricesGlobal(Mset, shiftTol, angleTol, SRset)
         else:
-            print("\nConsensus achieved for this tilt-series.")
+            logger.info("\nConsensus achieved for this tilt-series.")
             averageAlignmentV = []
             angleSDV = []
             shiftSDV = []
@@ -308,26 +333,174 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
             return averageAlignmentV, angleSDV, shiftSDV
 
+    @staticmethod
+    def compareTransformationMatricesLocal(Mset, shiftTol, angleTol, SRset):
+
+        logger.info("Running local consensus alignment...")
+
+        Nts = len(Mset)
+        Nti = len(Mset[0])
+
+        logger.info("Number of tilt-series analyzed: " + str(Nts))
+        logger.info("Number of tilt-images per tilt-series analyzed: " + str(Nti))
+
+        # 2D-array saving all p matrices for each pair of comparisons. Keys follow #tsX_#tsY being p the matrix that
+        # spams X set onto Y set
+        P_dict = {}
+
+        # Array saving the final consensus alignment
+        averageAlignmentV = []
+        angleSDV = []
+        shiftSDV = []
+
+        # Calculate p matrix for each
+        for j in range(Nts):
+            for k in range(j + 1, Nts):
+                # Calculate the sampling factor between the two matrices (for comparing shifts)
+                samplingFactor = SRset[k] / SRset[j]
+
+                # Calculate p matrix for the pair of tilt-series
+                p = np.zeros((3, 3))
+
+                for i in range(Nti):  # Iterate each tilt-image
+                    sampledMatrix = Mset[k][i].copy()
+                    sampledMatrix[0, 2] *= samplingFactor
+                    sampledMatrix[1, 2] *= samplingFactor
+
+                    p += np.matmul(Mset[j][i], np.linalg.inv(sampledMatrix))
+
+                # Calculate error matrix given a calculated p matrix (for a pair of matrices)
+                p /= Nti  # Normalized by the number of comparisons performed
+
+                key = "%d_%d" % (j, k)
+                P_dict.update({key: p})
+
+        # Apply consensus over each tilt-image
+        for i in range(Nti):  # Iterate each tilt-image
+            logger.info("Analyzing image " + str(i))
+
+            tiConsensusAlignment = np.zeros((3, 3))
+
+            angleV = []
+            shiftV = []
+
+            # Save all indexes that consensus for this tilt-image
+            consensusIndexes = []
+
+            for j in range(Nts):
+                for k in range(j + 1, Nts):
+                    logger.info("Comparing matrices from series " + str(j) + " and " + str(k))
+                    # Matrix p for each pair of sets
+                    key = "%d_%d" % (j, k)
+                    p = P_dict[key]
+
+                    # Calculate the sampling factor between the two matrices (for comparing shifts)
+                    samplingFactor = SRset[k] / SRset[j]
+
+                    # Only use p matrix to correct for shiftY in case there exist an Y offset in the whole series
+                    matrixShiftYCorrected = Mset[k][i].copy()
+                    matrixShiftYCorrected[0, 2] *= samplingFactor
+                    matrixShiftYCorrected[1, 2] *= samplingFactor
+                    matrixShiftYCorrected[1, 2] += p[1][2]
+
+                    pError = Mset[j][i] - matrixShiftYCorrected
+
+                    # Angle from pTotalError matrix
+                    cosRotationAngle = pError[0][0]
+                    sinRotationAngle = pError[1][0]
+
+                    if math.isnan(sinRotationAngle / cosRotationAngle):
+                        angleError = 0
+                    else:
+                        angleError = math.degrees(math.asin(sinRotationAngle))
+
+                    # Shifts from pError matrix
+                    shiftX = pError[0][2]
+                    shiftY = pError[1][2]
+
+                    if abs(shiftX) < shiftTol and abs(shiftY) < shiftTol and abs(angleError) < angleTol:
+                        logger.info("Consensus achieved for " + str(j) + " and " + str(k))
+                        consensusIndexes.append(j)
+                        consensusIndexes.append(k)
+
+            # Remove repeated indexes
+            consensusIndexes = list(dict.fromkeys(consensusIndexes))
+
+            if not consensusIndexes:
+                logger.info("No consensus achieved for tilt-image " + str(i))
+                averageAlignmentV.append(None)
+                angleSDV.append(None)
+                shiftSDV.append(None)
+
+            else:
+                logger.info("Consensus achieved for tilt-image " + str(i))
+
+                tiConsensusAlignment += Mset[0][i]
+                numberOfConsensusAlignment = len(consensusIndexes)
+
+                # Angle from alignment matrix
+                if math.isnan(Mset[0][i][1][0] / Mset[0][i][0][0]):
+                    angleV.append(0)
+                else:
+                    angleV.append(math.degrees(math.asin(Mset[0][i][1][0])))
+
+                # Shifts from average alignment matrix
+                shiftX = Mset[0][i][0][2]
+                shiftY = Mset[0][i][1][2]
+
+                shiftV.append((shiftX + shiftY) / 2)
+
+                for m in range(1, numberOfConsensusAlignment):
+                    # p matrix for this pair of matrices
+                    key = "%d_%d" % (consensusIndexes[0], consensusIndexes[m])
+                    p = P_dict[key]
+
+                    # Calculate the sampling factor between the two matrices (for comparing shifts)
+                    samplingFactor = SRset[consensusIndexes[0]] / SRset[consensusIndexes[m]]
+
+                    # Only use p matrix to correct for shiftY in case there exist an Y offset in the whole series
+                    matrixShiftYCorrected = Mset[consensusIndexes[m]][i].copy()
+                    matrixShiftYCorrected[0, 2] *= samplingFactor
+                    matrixShiftYCorrected[1, 2] *= samplingFactor
+                    matrixShiftYCorrected[1, 2] += p[1][2]
+
+                    tiConsensusAlignment += matrixShiftYCorrected
+
+                    # Angle from alignment matrix
+                    if math.isnan(matrixShiftYCorrected[1][0] / matrixShiftYCorrected[0][0]):
+                        angleV.append(0)
+                    else:
+                        angleV.append(math.degrees(math.asin(matrixShiftYCorrected[1][0])))
+
+                    # Shifts from average alignment matrix
+                    shiftX = matrixShiftYCorrected[0][2]
+                    shiftY = matrixShiftYCorrected[1][2]
+
+                    shiftV.append((shiftX + shiftY) / 2)
+
+                # Calculate STD angles
+                angleSDV.append(np.std(angleV))
+
+                # Calculate STD shifts
+                shiftSDV.append(np.std(shiftV))
+
+                tiConsensusAlignment /= numberOfConsensusAlignment
+                averageAlignmentV.append(tiConsensusAlignment)
+
+        # Check if all images are misaligned
+        for a in averageAlignmentV:
+            if a is not None:
+                return averageAlignmentV, angleSDV, shiftSDV
+
+        return None, None, None
+
     def generateTsIdList(self):
-        tsIdList = []
-        tmpTsIdList = []
+        resultSet = set(self.inputMultiSoTS[0].get().getUniqueValues('_tsId'))
 
-        for ts in self.inputMultiSoTS[0].get():
-            tsIdList.append(ts.getTsId())
+        for i in range(1, len(self.inputMultiSoTS)):
+            resultSet.intersection_update(set(self.inputMultiSoTS[i].get().getUniqueValues('_tsId')))
 
-        for tsId in tsIdList:
-            for i in range(1, len(self.inputMultiSoTS)):
-                for ts in self.inputMultiSoTS[i].get():
-                    tmpTsIdList.append(ts.getTsId())
-                if tsId not in tmpTsIdList:
-                    tsIdList.remove(tsId)
-                    break
-                tmpTsIdList = []
-
-        if len(tsIdList) == 0:
-            raise Exception("None matching tilt-series between two sets.")
-
-        return tsIdList
+        return list(resultSet)
 
     def getOutputAliConsensusSoTS(self):
         if not hasattr(self, "outputAliConsensusSoTS"):

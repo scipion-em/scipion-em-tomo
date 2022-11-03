@@ -143,13 +143,6 @@ class ProtTsEstimateCTF(ProtTsProcess):
             index += 1
             newCTFTomoSeries.append(newCTFTomo)
 
-        newCTFTomoSeries.calculateDefocusUDeviation()
-        newCTFTomoSeries.calculateDefocusVDeviation()
-
-        if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
-                newCTFTomoSeries.getIsDefocusVDeviationInRange()):
-            newCTFTomoSeries.setEnabled(False)
-
         newCTFTomoSeries.write(properties=False)
         outputSet.update(newCTFTomoSeries)
 

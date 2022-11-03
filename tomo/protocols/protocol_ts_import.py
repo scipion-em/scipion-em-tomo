@@ -236,7 +236,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
                        label=Message.LABEL_AMPLITUDE,
-                       expertLevel=params.LEVEL_ADVANCED,
+                       expertLevel=params.LEVEL_NORMAL,
                        help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam,
                        label=Message.LABEL_MAGNI_RATE,
@@ -594,7 +594,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
         self.incomingDose = OrderedDict()
-        warningHeadMsg = 'The following mdoc files were skipped. See details below:\n\n'
+        warningHeadMsg = yellowStr('The following mdoc files were skipped. '
+                                   'See details below:\n\n')
         warningDetailedMsg = []
         skippedMdocs = 0
 
@@ -627,7 +628,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 isImportingTsMovies=self._isImportingTsMovies())
             hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
-                warningHeadMsg += '\t- %s\n' % mdoc
+                warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
                 warningDetailedMsg.append(validationError)
                 skippedMdocs += 1
                 # validationErrors.append(validationError)
