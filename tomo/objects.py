@@ -24,6 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+logger = logging.getLogger(__name__)
 
 import csv
 import math
@@ -41,6 +43,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+
 
 
 
@@ -204,7 +207,11 @@ class TiltSeriesBase(data.SetOfImages):
         return self._anglesCount
 
     def setAnglesCount(self, value):
-        self._anglesCount = value
+
+        if isinstance(value, int):
+            self._anglesCount.set(value)
+        else:
+            self._anglesCount = value
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -221,6 +228,12 @@ class TiltSeriesBase(data.SetOfImages):
         """
         self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
         # self.copyAttributes(other, '_tsId', '_anglesCount')
+
+
+    def write(self, properties=True):
+        """ Do not save properties for this "Second level object"""
+
+        super().write(properties=False)
 
     def append(self, tiltImage):
         tiltImage.setTsId(self.getTsId())
@@ -270,7 +283,7 @@ class TiltSeriesBase(data.SetOfImages):
         self._origin = newOrigin
 
     def getOrigin(self, force=False):
-        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the the object
+        """ Method to get the origin associated to the TiltSeries. If there is no origin associated to the object
         it may create a default one.
         :param force: Boolean indicating if the method must return a default origin in case the object has no one
         associated.
@@ -290,7 +303,7 @@ class TiltSeriesBase(data.SetOfImages):
         x, y, z = self.getDim()
         if z > 1:
             z /= -2.
-        print(t)
+
         t.setShifts(x / -2. * sampling, y / -2. * sampling, z * sampling)
         return t  # The identity matrix
 
@@ -366,13 +379,21 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
-    def _getExcludedViewsIndex(self):
-        """Return a list with a list of the excluded views """
+    def getExcludedViewsIndex(self, caster=int, indexOffset=0):
+        """Return a list with a list of the excluded views.
+
+         :param caster: casting method to cast each index
+         :param indexOffset: Value to add to the index. If you want to start the count in 0 pass -1"""
         excludeViewsList = []
         for ti in self.iterItems():
             if not ti.isEnabled():
-                excludeViewsList.append(ti.getIndex())
+                excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
+
+    def _getExcludedViewsIndex(self):
+
+        return self.getExcludedViewsIndex()
+
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -418,11 +439,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
         mode = kwargs.get('mode', 2)
         subsetStart = kwargs.get('subsetStart', (0, 0))
         actionIfGPUFails = kwargs.get('actionIfGPUFails', (1, 2))
-        excludedViewsList = self._getExcludedViewsIndex()
+        excludedViewsList = self.getExcludedViewsIndex(caster=str)
         excludedViewsIndexes = ''
         if excludedViewsList:
-            excludedViewsIndexes = 'EXCLUDELIST '
-            excludedViewsIndexes += str(excludedViewsList)[1:-1].replace(' ', '') + '\n'
+            excludedViewsIndexes = 'EXCLUDELIST %s \n' % ",".join(excludedViewsList)
 
         # The dimensions considered will be read, by default, from the corresponding tilt series. However, they
         # can be specified via th kwarg dims, as can be the case of a resized tomogram, in which the X and Y dimensions
@@ -499,7 +519,8 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.3f' % transform[5]]
             else:
                 from pyworkflow.utils import yellowStr
-                print(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). The identity transformation will be written in the .xf file'))
+                logging.info(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). '
+                                       'The identity transformation will be written in the .xf file'))
                 #This is the identity matrix
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
@@ -781,7 +802,7 @@ class TiltSeriesDict:
         self._checkNewOutput()
 
     def _checkNewInput(self):
-        # print(">>> DEBUG: _checkNewInput ")
+        logging.debug("TiltSeriesDict._checkNewInput called.")
 
         inputSetFn = self.__inputSet.getFileName()
         mTime = datetime.fromtimestamp(os.path.getmtime(inputSetFn))
@@ -805,7 +826,8 @@ class TiltSeriesDict:
         self.__lastCheck = datetime.now()
 
     def _checkNewOutput(self):
-        # print(">>> DEBUG: _checkNewInput ")
+        logger.debug("TiltSeriesDict._checkNewOutput")
+
         # First check that we have some items in the finished
         self.__lock.acquire()
         doneItems = list(self.__finished)
