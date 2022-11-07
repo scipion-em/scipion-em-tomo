@@ -1729,13 +1729,14 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class LandmarkModel(data.EMObject):
-    """Represents the set of landmarks belonging to an specific tilt-series."""
+    """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
+    def __init__(self, tsId=None, fileName=None, modelName=None, size=5,**kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
         self._modelName = String(modelName)
+        self._size = Integer(size)  # Diameter in Angstroms
         self._tiltSeries = Pointer(objDoStore=False)
 
     def getTiltSeries(self):
@@ -1757,20 +1758,26 @@ class LandmarkModel(data.EMObject):
     def getTsId(self):
         return str(self._tsId)
 
-    def getFileName(self):
-        return str(self._fileName)
-
-    def getModelName(self):
-        return str(self._modelName)
-
     def setTsId(self, tsId):
-        self._tsId = String(tsId)
+        self._tsId.set(tsId)
+
+    def getSize(self):
+        return self._size.get()
+
+    def setSize(self, size):
+        self._size.set(size)
+
+    def getFileName(self):
+        return self._fileName.get()
 
     def setFileName(self, fileName):
-        self._fileName = String(fileName)
+        self._fileName.set(fileName)
+
+    def getModelName(self):
+        return self._modelName.get()
 
     def setModelName(self, modelName):
-        self._modelName = String(modelName)
+        self._modelName.set(modelName)
 
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
@@ -1808,6 +1815,8 @@ class LandmarkModel(data.EMObject):
 
         return outputInfo
 
+    def __str__(self):
+        return "Landmark model for %s, size %s pixels." % (self.getTsId(), self.getSize())
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
