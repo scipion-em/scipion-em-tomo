@@ -196,7 +196,6 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 class TiltSeriesBase(data.SetOfImages):
 
 
-
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -218,6 +217,10 @@ class TiltSeriesBase(data.SetOfImages):
             self._anglesCount.set(value)
         else:
             self._anglesCount = value
+
+    def hasAlignment(self):
+
+        return self._hasAlignment.get()
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -1731,12 +1734,13 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, size=5,**kwargs):
+    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True,**kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
         self._modelName = String(modelName)
         self._size = Integer(size)  # Diameter in Angstroms
+        self._applyTSTransformation = Boolean(applyTSTransformation)
         self._tiltSeries = Pointer(objDoStore=False)
 
     def getTiltSeries(self):
@@ -1766,6 +1770,12 @@ class LandmarkModel(data.EMObject):
 
     def setSize(self, size):
         self._size.set(size)
+
+    def applyTSTransformation(self):
+        return self._applyTSTransformation.get()
+
+    def setApplyTSTransformation(self, apply):
+        self._applyTSTransformation.set(apply)
 
     def getFileName(self):
         return self._fileName.get()
@@ -1816,7 +1826,7 @@ class LandmarkModel(data.EMObject):
         return outputInfo
 
     def __str__(self):
-        return "Landmark model for %s, size %s pixels." % (self.getTsId(), self.getSize())
+        return "Landmark model: %s, size %s pixels, apply TS transform=%s." % (self.getTsId(), self.getSize(), self.applyTSTransformation())
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
