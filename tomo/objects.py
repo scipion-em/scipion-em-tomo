@@ -171,9 +171,11 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other, copyId=False, copyTM=True):
+    def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
         TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
+        if copyStatus:
+            self.setEnabled(other.isEnabled())
 
     def parseFileName(self, suffix="", extension=None):
         """
