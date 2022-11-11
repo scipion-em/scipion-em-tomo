@@ -1064,7 +1064,7 @@ class Coordinate3D(data.EMObject):
         self._z = Float()
         self._volId = Integer()
         self._eulerMatrix = data.Transform()
-        self._groupId = Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
+        self._groupId = Integer(0)  # This may refer to a mesh, ROI, vesicle or any group of coordinates
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
         # coord (it's the tsId)
 
