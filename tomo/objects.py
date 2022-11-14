@@ -268,7 +268,7 @@ class TiltSeriesBase(data.SetOfImages):
             angleList.reverse()
 
         with open(tltFilePath, 'w') as f:
-            f.writelines("%s\n" % angle for angle in angleList)
+            f.writelines("%.3f\n" % angle for angle in angleList)
 
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
