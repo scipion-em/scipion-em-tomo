@@ -191,8 +191,11 @@ class TiltImage(data.Image, TiltImageBase):
 
         return fileName + suffix + fileExtension
 
+TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 
 class TiltSeriesBase(data.SetOfImages):
+
+
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -202,6 +205,8 @@ class TiltSeriesBase(data.SetOfImages):
         self._acquisition = TomoAcquisition()
         self._origin = Transform()
         self._anglesCount = Integer()
+        self._hasAlignment = Boolean(False)
+
 
     def getAnglesCount(self):
         return self._anglesCount
@@ -212,6 +217,10 @@ class TiltSeriesBase(data.SetOfImages):
             self._anglesCount.set(value)
         else:
             self._anglesCount = value
+
+    def hasAlignment(self):
+
+        return self._hasAlignment.get()
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -226,7 +235,7 @@ class TiltSeriesBase(data.SetOfImages):
         """ Copy basic information (id and other properties) but
         not _mapperPath or _size from other set of tilt series to current one.
         """
-        self.copy(other, copyId=copyId, ignoreAttrs=['_mapperPath', '_size'])
+        self.copy(other, copyId=copyId, ignoreAttrs=TS_IGNORE_ATTRS)
         # self.copyAttributes(other, '_tsId', '_anglesCount')
 
 
@@ -235,11 +244,15 @@ class TiltSeriesBase(data.SetOfImages):
 
         super().write(properties=False)
 
-    def append(self, tiltImage):
+    def append(self, tiltImage: TiltImageBase):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+        if tiltImage.hasTransform():
+            self._hasAlignment.set(True)
+
+
+    def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
@@ -334,6 +347,12 @@ class TiltSeriesBase(data.SetOfImages):
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
+
+    def __str__(self):
+
+        s = super().__str__()
+
+        return s + ('∅'if not self._hasAlignment.get() else '＊')
 
     def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
@@ -561,6 +580,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         data.SetOfImages.__init__(self, **kwargs)
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
+        self._hasAlignment = Boolean(False)
+
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -605,7 +626,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def getFirstItem(self):
+    def getFirstItem(self)->TiltSeriesBase:
         classItem = data.EMSet.getFirstItem(self)
         self._setItemMapperPath(classItem)
         return classItem
@@ -646,11 +667,20 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
                 self.update(tsOut)
 
+    def update(self, item:TiltSeriesBase):
+
+        self.setDim(item.getDim())
+        self._anglesCount.set(item.getSize())
+        self._hasAlignment.set(item._hasAlignment.get())
+        super().update(item)
+
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
-        firstItem = self.getFirstItem()
-        self.setDim(firstItem.getDim())
-        self._anglesCount.set(firstItem.getSize())
+
+        logger.warning("TO DEVELOPERS: update is called always before this. This call to updateDim could be removed.")
+
+        # firstItem = self.getFirstItem()
+        # self.update(firstItem)
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
@@ -666,8 +696,9 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 
-        return '%s x %s x %s' % (self._anglesCount, self._firstDim[0],
-                                 self._firstDim[1])
+        return '%s x %s x %s, %s' % (self._anglesCount, self._firstDim[0],
+                     self._firstDim[1], '∅'if not self._hasAlignment.get() else '＊')
+
 
 
 class TiltImageM(data.Movie, TiltImageBase):
@@ -1701,13 +1732,15 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class LandmarkModel(data.EMObject):
-    """Represents the set of landmarks belonging to an specific tilt-series."""
+    """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
+    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True,**kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
         self._modelName = String(modelName)
+        self._size = Integer(size)  # Diameter in Angstroms
+        self._applyTSTransformation = Boolean(applyTSTransformation)
         self._tiltSeries = Pointer(objDoStore=False)
 
     def getTiltSeries(self):
@@ -1729,20 +1762,32 @@ class LandmarkModel(data.EMObject):
     def getTsId(self):
         return str(self._tsId)
 
-    def getFileName(self):
-        return str(self._fileName)
-
-    def getModelName(self):
-        return str(self._modelName)
-
     def setTsId(self, tsId):
-        self._tsId = String(tsId)
+        self._tsId.set(tsId)
+
+    def getSize(self):
+        return self._size.get()
+
+    def setSize(self, size):
+        self._size.set(size)
+
+    def applyTSTransformation(self):
+        return self._applyTSTransformation.get()
+
+    def setApplyTSTransformation(self, apply):
+        self._applyTSTransformation.set(apply)
+
+    def getFileName(self):
+        return self._fileName.get()
 
     def setFileName(self, fileName):
-        self._fileName = String(fileName)
+        self._fileName.set(fileName)
+
+    def getModelName(self):
+        return self._modelName.get()
 
     def setModelName(self, modelName):
-        self._modelName = String(modelName)
+        self._modelName.set(modelName)
 
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
@@ -1780,6 +1825,8 @@ class LandmarkModel(data.EMObject):
 
         return outputInfo
 
+    def __str__(self):
+        return "Landmark model: %s, size %s pixels, apply TS transform=%s." % (self.getTsId(), self.getSize(), self.applyTSTransformation())
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
