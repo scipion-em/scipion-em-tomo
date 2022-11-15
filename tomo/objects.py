@@ -593,7 +593,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -1742,6 +1742,8 @@ class LandmarkModel(data.EMObject):
         self._size = Integer(size)  # Diameter in Angstroms
         self._applyTSTransformation = Boolean(applyTSTransformation)
         self._tiltSeries = Pointer(objDoStore=False)
+        self._count = Integer(0)
+        self._chains = None
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1770,6 +1772,12 @@ class LandmarkModel(data.EMObject):
 
     def setSize(self, size):
         self._size.set(size)
+
+    def getCount(self):
+        return self._count.get()
+
+    def setCount(self, count):
+        self._count.set(count)
 
     def applyTSTransformation(self):
         return self._applyTSTransformation.get()
@@ -1805,8 +1813,20 @@ class LandmarkModel(data.EMObject):
                              'xResid': xResid,
                              'yResid': yResid})
 
+            self._registerChain(chainId)
+
+    def _registerChain(self, chainId):
+        """ registers new chainId in a dictionary to later on store the chain count"""
+
+        if self._chains is None:
+            self._chains = dict()
+
+        if chainId not in self._chains:
+            self._chains[chainId]= None
+            self.setCount(len(self._chains))
+
     def retrieveInfoTable(self):
-        """ This methods return a table containing the information of the lankmark model. One landmark pero line
+        """ This methods return a table containing the information of the landkmark model. One landmark pero line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -1826,7 +1846,10 @@ class LandmarkModel(data.EMObject):
         return outputInfo
 
     def __str__(self):
-        return "Landmark model: %s, size %s pixels, apply TS transform=%s." % (self.getTsId(), self.getSize(), self.applyTSTransformation())
+        return "%s landmarks of %s pixels %s to %s"\
+               % (self.getCount(), self.getSize(),
+                  "to apply" if self.applyTSTransformation() else "applied",
+                  self.getTsId())
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
