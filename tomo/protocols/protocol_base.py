@@ -52,7 +52,7 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfTiltSeriesM,
                                'tiltseriesM%s.sqlite', suffix)
 
-    def _createSetOfTiltSeries(self, suffix=''):
+    def _createSetOfTiltSeries(self, suffix='') -> tomo.objects.SetOfTiltSeries:
         self._ouputSuffix = ''
         return self._createSet(tomo.objects.SetOfTiltSeries,
                                'tiltseries%s.sqlite', suffix)

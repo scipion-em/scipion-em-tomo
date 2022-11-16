@@ -206,6 +206,8 @@ class TiltSeriesBase(data.SetOfImages):
         self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
+        self._interpolated = Boolean(False)
+        self._ctfCorrected = Boolean(False)
 
 
     def getAnglesCount(self):
@@ -221,6 +223,22 @@ class TiltSeriesBase(data.SetOfImages):
     def hasAlignment(self):
 
         return self._hasAlignment.get()
+
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def setCtfCorrected(self, corrected):
+        """ Sets the ctf correction status"""
+        self._ctfCorrected.set(corrected)
+
+    def interpolated(self):
+        """ Returns true if tilt series has been interpolated"""
+        return self._interpolated.get()
+
+    def setInterpolated(self, interpolated):
+        """ Sets the interpolation status of the tilt series"""
+        self._interpolated.set(interpolated)
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -344,6 +362,18 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
+def tiltSeriesToString(tiltSeries):
+
+    # Matrix info
+    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+
+    # Interpolated
+    s += ', interp' if tiltSeries.interpolated() else ''
+
+    # CTF status
+    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+
+    return s
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
@@ -352,7 +382,10 @@ class TiltSeries(TiltSeriesBase):
 
         s = super().__str__()
 
-        return s + ('∅'if not self._hasAlignment.get() else '＊')
+        # Matrix info
+        s += tiltSeriesToString(self)
+
+        return s
 
     def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
@@ -581,7 +614,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
         self._hasAlignment = Boolean(False)
-
+        self._ctfCorrected = Boolean(False)
+        self._interpolated = Boolean(False)
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -589,11 +623,19 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def setAnglesCount(self, value):
         self._anglesCount.set(value)
 
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def interpolated(self):
+        """ Returns true if tilt series has been interpolated"""
+        return self._interpolated.get()
+
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount', '_hasAlignment')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment','_ctfCorrected', '_interpolated')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -671,7 +713,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
         self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
-        self._hasAlignment.set(item._hasAlignment.get())
+        self._hasAlignment.set(item.getAlignment())
+        self._interpolated.set(item.interpolated())
+        self._ctfCorrected.set(item.ctfCorrected())
+
         super().update(item)
 
     def updateDim(self):
@@ -696,10 +741,12 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 
-        return '%s x %s x %s, %s' % (self._anglesCount, self._firstDim[0],
-                     self._firstDim[1], '∅'if not self._hasAlignment.get() else '＊')
+        s = '%s x %s x %s' % (self._anglesCount,
+                             self._firstDim[0],
+                             self._firstDim[1])
+        s += ', ' + tiltSeriesToString(self)
 
-
+        return s
 
 class TiltImageM(data.Movie, TiltImageBase):
     """ Tilt movie. """
