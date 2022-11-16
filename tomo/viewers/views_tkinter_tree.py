@@ -634,7 +634,6 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     """
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
-    CRITERIA_1 = 'Status'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
     COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
     COL_CTF_EST_AST = 'Astigmatism (A)'
@@ -693,7 +692,6 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         cols = [
             (self.COL_CTF_SERIE, 100),
             (self.COL_TILT_ANG, 100),
-            (self.CRITERIA_1, 60),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
             (self.COL_CTF_EST_DEFOCUS_V, 100),
             (self.COL_CTF_EST_AST, 150),
@@ -718,8 +716,9 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             key = obj.getTsId()
             text = obj.getTsId()
             # TODO: show avg defocus for TomoSeries
-            values = ['', CTFSerieStates.OK if obj.isEnabled()
-                      else CTFSerieStates.FAILED]
+            values = ['',
+                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED
+                      ]
             opened = False
             selected = obj.isEnabled()
         else:  # CTFTomo
@@ -731,8 +730,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
             values = [str("%0.2f" % tiltAngle),
-                      CTFSerieStates.OK if obj.isEnabled()
-                      else CTFSerieStates.FAILED,
+                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
                       str("%d" % ast),

@@ -223,6 +223,11 @@ with weakImport("xmipptomo"):
                 self.addMisaligner("SHIFT X", tomoProjection.TiltSeries, shiftXNoiseToggle=True, a6param=3)
                 self.addMisaligner("SHIFT Y", tomoProjection.TiltSeries,shiftYNoiseToggle=True, b6param=3)
                 self.addMisaligner("JUST ANGLES", tomoProjection.TiltSeries, angleNoiseToggle=True, c6param=3)
+                self.addMisaligner("XY & A ", tomoProjection.TiltSeries,
+                                   shiftXNoiseToggle=True, a6param=3,
+                                   shiftYNoiseToggle=True, b6param=3,
+                                   angleNoiseToggle=True, c6param=3
+                                   )
 
 
         def addMisaligner(self, label, inputTs, **kwargs):
