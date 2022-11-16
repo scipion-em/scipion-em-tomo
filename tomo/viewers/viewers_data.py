@@ -45,7 +45,7 @@ SERIES_DW = "outputTiltSeriesDW"
 
 class TomoDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
-    with the Xmipp program xmipp_showj
+    in a dedicated tree view
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
@@ -232,7 +232,8 @@ class TomoMetadataDataViewer(DataViewer):
     _targets = [tomo.objects.SetOfCoordinates3D,
                 tomo.objects.SetOfTiltSeriesCoordinates,
                 tomo.objects.SetOfMeshes,
-                tomo.objects.SetOfLandmarkModels]
+                tomo.objects.SetOfLandmarkModels,
+                tomo.objects.SetOfCTFTomoSeries]
     _label = 'XmippDataViewer'
 
     def __init__(self, **kwargs):

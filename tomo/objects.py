@@ -171,9 +171,11 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def copyInfo(self, other, copyId=False, copyTM=True):
+    def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
         TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
+        if copyStatus:
+            self.setEnabled(other.isEnabled())
 
     def parseFileName(self, suffix="", extension=None):
         """
@@ -196,7 +198,6 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 class TiltSeriesBase(data.SetOfImages):
 
 
-
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -207,6 +208,8 @@ class TiltSeriesBase(data.SetOfImages):
         self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
+        self._interpolated = Boolean(False)
+        self._ctfCorrected = Boolean(False)
 
 
     def getAnglesCount(self):
@@ -218,6 +221,26 @@ class TiltSeriesBase(data.SetOfImages):
             self._anglesCount.set(value)
         else:
             self._anglesCount = value
+
+    def hasAlignment(self):
+
+        return self._hasAlignment.get()
+
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def setCtfCorrected(self, corrected):
+        """ Sets the ctf correction status"""
+        self._ctfCorrected.set(corrected)
+
+    def interpolated(self):
+        """ Returns true if tilt series has been interpolated"""
+        return self._interpolated.get()
+
+    def setInterpolated(self, interpolated):
+        """ Sets the interpolation status of the tilt series"""
+        self._interpolated.set(interpolated)
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -278,7 +301,7 @@ class TiltSeriesBase(data.SetOfImages):
             angleList.reverse()
 
         with open(tltFilePath, 'w') as f:
-            f.writelines("%s\n" % angle for angle in angleList)
+            f.writelines("%.3f\n" % angle for angle in angleList)
 
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
@@ -341,6 +364,18 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
+def tiltSeriesToString(tiltSeries):
+
+    # Matrix info
+    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+
+    # Interpolated
+    s += ', interp' if tiltSeries.interpolated() else ''
+
+    # CTF status
+    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+
+    return s
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
@@ -349,7 +384,10 @@ class TiltSeries(TiltSeriesBase):
 
         s = super().__str__()
 
-        return s + ('∅'if not self._hasAlignment.get() else '＊')
+        # Matrix info
+        s += tiltSeriesToString(self)
+
+        return s
 
     def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
@@ -578,7 +616,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
         self._hasAlignment = Boolean(False)
-
+        self._ctfCorrected = Boolean(False)
+        self._interpolated = Boolean(False)
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -586,11 +625,19 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def setAnglesCount(self, value):
         self._anglesCount.set(value)
 
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def interpolated(self):
+        """ Returns true if tilt series has been interpolated"""
+        return self._interpolated.get()
+
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment','_ctfCorrected', '_interpolated')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -668,7 +715,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
         self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
-        self._hasAlignment.set(item._hasAlignment.get())
+        self._hasAlignment.set(item.getAlignment())
+        self._interpolated.set(item.interpolated())
+        self._ctfCorrected.set(item.ctfCorrected())
+
         super().update(item)
 
     def updateDim(self):
@@ -693,10 +743,12 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 
-        return '%s x %s x %s, %s' % (self._anglesCount, self._firstDim[0],
-                     self._firstDim[1], '∅'if not self._hasAlignment.get() else '＊')
+        s = '%s x %s x %s' % (self._anglesCount,
+                             self._firstDim[0],
+                             self._firstDim[1])
+        s += ', ' + tiltSeriesToString(self)
 
-
+        return s
 
 class TiltImageM(data.Movie, TiltImageBase):
     """ Tilt movie. """
@@ -1059,7 +1111,7 @@ class Coordinate3D(data.EMObject):
         self._z = Float()
         self._volId = Integer()
         self._eulerMatrix = data.Transform()
-        self._groupId = Integer()  # This may refer to a mesh, ROI, vesicle or any group of coordinates
+        self._groupId = Integer(0)  # This may refer to a mesh, ROI, vesicle or any group of coordinates
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
         # coord (it's the tsId)
 
@@ -1729,14 +1781,18 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 
 class LandmarkModel(data.EMObject):
-    """Represents the set of landmarks belonging to an specific tilt-series."""
+    """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, **kwargs):
+    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True,**kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
         self._modelName = String(modelName)
+        self._size = Integer(size)  # Diameter in Angstroms
+        self._applyTSTransformation = Boolean(applyTSTransformation)
         self._tiltSeries = Pointer(objDoStore=False)
+        self._count = Integer(0)
+        self._chains = None
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1757,20 +1813,38 @@ class LandmarkModel(data.EMObject):
     def getTsId(self):
         return str(self._tsId)
 
-    def getFileName(self):
-        return str(self._fileName)
-
-    def getModelName(self):
-        return str(self._modelName)
-
     def setTsId(self, tsId):
-        self._tsId = String(tsId)
+        self._tsId.set(tsId)
+
+    def getSize(self):
+        return self._size.get()
+
+    def setSize(self, size):
+        self._size.set(size)
+
+    def getCount(self):
+        return self._count.get()
+
+    def setCount(self, count):
+        self._count.set(count)
+
+    def applyTSTransformation(self):
+        return self._applyTSTransformation.get()
+
+    def setApplyTSTransformation(self, apply):
+        self._applyTSTransformation.set(apply)
+
+    def getFileName(self):
+        return self._fileName.get()
 
     def setFileName(self, fileName):
-        self._fileName = String(fileName)
+        self._fileName.set(fileName)
+
+    def getModelName(self):
+        return self._modelName.get()
 
     def setModelName(self, modelName):
-        self._modelName = String(modelName)
+        self._modelName.set(modelName)
 
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
@@ -1788,8 +1862,20 @@ class LandmarkModel(data.EMObject):
                              'xResid': xResid,
                              'yResid': yResid})
 
+            self._registerChain(chainId)
+
+    def _registerChain(self, chainId):
+        """ registers new chainId in a dictionary to later on store the chain count"""
+
+        if self._chains is None:
+            self._chains = dict()
+
+        if chainId not in self._chains:
+            self._chains[chainId]= None
+            self.setCount(len(self._chains))
+
     def retrieveInfoTable(self):
-        """ This methods return a table containing the information of the lankmark model. One landmark pero line
+        """ This methods return a table containing the information of the landkmark model. One landmark pero line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -1808,6 +1894,11 @@ class LandmarkModel(data.EMObject):
 
         return outputInfo
 
+    def __str__(self):
+        return "%s landmarks of %s pixels %s to %s"\
+               % (self.getCount(), self.getSize(),
+                  "to apply" if self.applyTSTransformation() else "applied",
+                  self.getTsId())
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""

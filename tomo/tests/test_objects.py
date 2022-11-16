@@ -23,10 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import tempfile
+
 from pyworkflow.tests import BaseTest
 from tomo.constants import SCIPION
 from tomo.objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, SetOfSubTomograms, SetOfTomograms, Tomogram, \
-    SetOfCoordinates3D, Coordinate3D, SubTomogram, SetOfTiltSeries, TiltSeries, TiltImage
+    SetOfCoordinates3D, Coordinate3D, SubTomogram, SetOfTiltSeries, TiltSeries, TiltImage, LandmarkModel
 
 TS_1 = "TS_1"
 
@@ -170,4 +172,29 @@ class TestTomoModel(BaseTest):
         tiltSerieFromFile = SetOfTiltSeries(filename=tiltseries.getFileName())
         tiltSerieFromFile.loadAllProperties()
 
+
+    def test_landmarks(self):
+        """ Test the Landmark model"""
+
+        temp_name = next(tempfile._get_candidate_names())
+        # Verify the count
+        lm = LandmarkModel(fileName=temp_name)
+
+        str(lm) # Should not fail
+
+        self.assertEqual(0, lm.getCount(), "Count not initialized to 0")
+
+        # Chain id 4
+        lm.addLandmark(1, 2, 3, 4, None, None)
+        self.assertEqual(1, lm.getCount(), "Count not increased.")
+
+        # same chain id
+        lm.addLandmark(1, 2, 3, 4, None, None)
+        self.assertEqual(1, lm.getCount(), "Count has been increased?")
+
+        # Add a new chainId 5
+        lm.addLandmark(1, 2, 3, 5, None, None)
+        self.assertEqual(2, lm.getCount(), "Count not increased when not empty.")
+
+        str(lm)
 

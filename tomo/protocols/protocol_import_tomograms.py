@@ -24,8 +24,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
 from os.path import abspath, basename
 
 from pwem.emlib.image import ImageHandler
@@ -130,6 +128,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoSet.setSamplingRate(samplingRate)
 
         self._parseAcquisitionData()
+        fileNameList = []
         for fileName, fileId in self.iterFiles():
             x, y, z, n = imgh.getDimensions(fileName)
             if fileName.endswith('.mrc') or fileName.endswith('.map'):
@@ -153,7 +152,13 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             tomo.setOrigin(origin)  # read origin from form
 
-            newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
+            newFileName = basename(fileName).split(':')[0]
+            if newFileName in fileNameList:
+                newFileName = _getUniqueFileName(self.getPattern(),
+                                                 fileName.split(':')[0])
+
+            fileNameList.append(newFileName)
+
             tsId = removeExt(newFileName)
             tomo.setTsId(tsId)
 

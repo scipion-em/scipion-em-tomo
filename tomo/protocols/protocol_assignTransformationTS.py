@@ -27,6 +27,7 @@
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
+
 import tomo.objects as tomoObj
 from tomo.protocols import ProtTomoBase
 
@@ -47,14 +48,14 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series from which transformation matrices will be obtained.',
-                      label='Set of tilt-series from which get transform')
+                      label='Tilt-series WITH alignment')
 
         form.addParam('setTMSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series on which transformation matrices will be assigned.',
-                      label='Set of tilt-series to which set transform')
+                      label='Tilt-series WITHOUT alignment')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
@@ -77,14 +78,14 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             newTi = tomoObj.TiltImage()
             newTi.copyInfo(tiltImageSetTM, copyId=True)
             newTi.setLocation(tiltImageSetTM.getLocation())
-            newTi.setTransform(tiltImageGetTM.getTransform())
+            newTransform = self.updateTM(tiltImageGetTM.getTransform())
+            newTi.setTransform(newTransform)
             newTs.append(newTi)
 
         newTs.setDim(setTMTS.getDim())
         newTs.write()
 
         outputAssignedTransformSetOfTiltSeries.update(newTs)
-        outputAssignedTransformSetOfTiltSeries.updateDim()
         outputAssignedTransformSetOfTiltSeries.write()
         self._store()
 
@@ -99,41 +100,54 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             self._defineSourceRelation(self.getTMSetOfTiltSeries, outputAssignedTransformSetOfTiltSeries)
         return self.outputAssignedTransformSetOfTiltSeries
 
+    def getSamplingRatio(self):
+        return self.setTMSetOfTiltSeries.get().getSamplingRate() / self.getTMSetOfTiltSeries.get().getSamplingRate()
+
+    def updateTM(self, transform):
+        """ Scale the transform matrix shifts. """
+        matrix = transform.getMatrix()
+
+        matrix[0][2] /= self.getSamplingRatio()
+        matrix[1][2] /= self.getSamplingRatio()
+
+        transform.setMatrix(matrix)
+
+        return transform
+
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
         validateMsgs = []
 
         for tsGetTM, tsSetTM in zip(self.getTMSetOfTiltSeries.get(), self.setTMSetOfTiltSeries.get()):
             if not tsGetTM.getFirstItem().hasTransform():
-                validateMsgs.append("Some tilt-series from the input set of tilt-series does not have a "
+                validateMsgs.append("Some tilt-series from the input set do not have a "
                                     "transformation matrix assigned.")
 
             if tsGetTM.getSize() != tsSetTM.getSize():
-                validateMsgs.append("Some tilt-series from the input set of tilt-series and its target in the assign "
-                                    "transformation set of tilt-series size's do not match. Every input tilt-series "
-                                    "and its target must have the same number of elements")
+                validateMsgs.append("Every input tilt-series and its target "
+                                    "must have the same number of elements.")
 
         if self.getTMSetOfTiltSeries.get().getSize() != self.setTMSetOfTiltSeries.get().getSize():
-            validateMsgs.append("Both input sets of tilt-series size's do not match. Both sets must have the same "
-                                "number of elements.")
+            validateMsgs.append("Both input sets must have the same "
+                                "number of tilt-series.")
 
         return validateMsgs
 
     def _summary(self):
         summary = []
         if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
-            summary.append("Input Tilt-Series: %d.\nTransformation matrices assigned: %d.\n"
+            summary.append("Input tilt-series: %d\nTransformation matrices assigned: %d\n"
                            % (self.getTMSetOfTiltSeries.get().getSize(),
                               self.outputAssignedTransformSetOfTiltSeries.getSize()))
         else:
-            summary.append("Output classes not ready yet.")
+            summary.append("Outputs are not ready yet.")
         return summary
 
     def _methods(self):
         methods = []
         if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
-            methods.append("The transformation matrix has been assigned to %d Tilt-series from the input set.\n"
+            methods.append("The transformation matrix has been assigned to %d tilt-series from the input set.\n"
                            % (self.outputAssignedTransformSetOfTiltSeries.getSize()))
         else:
-            methods.append("Output classes not ready yet.")
+            methods.append("Outputs are not ready yet.")
         return methods

@@ -37,8 +37,10 @@ import numpy as np
 from sqlite3 import OperationalError
 
 import pyworkflow as pw
+import pyworkflow.protocol
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
+import tomo.objects
 from pwem.objects import Transform
 from pyworkflow.object import Integer
 from pyworkflow.utils import yellowStr
@@ -332,6 +334,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 origin = Transform()
                 tsObj.setOrigin(origin)
                 tsObj.setAnglesCount(len(tiltSeriesList))
+                self.setItemExtraAttributes(tsObj)
 
                 # we need this to set mapper before adding any item
                 outputSet.append(tsObj)
@@ -923,13 +926,21 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     def isInStreaming(self):
         return self.dataStreaming.get()
 
+    def setItemExtraAttributes(self, tsObj):
+        """
+        To set extra possible attributes of the TiltSerie or TiltSerieM that may have been defined in the form
+        :param tsObj:
+        :return: None
+        """
+        pass
+
 
 class ProtImportTs(ProtImportTsBase):
     """Protocol to import tilt series."""
     _label = 'import tilt-series'
     _devStatus = pw.BETA
 
-    def _defineAngleParam(self, form):
+    def _defineAngleParam(self, form:pyworkflow.protocol.Form):
         """ Used in subclasses to define the option to fetch tilt angles. """
         group = form.addGroup('Tilt info',
                               condition=self.NOT_MDOC_GUI_COND)
@@ -958,6 +969,26 @@ class ProtImportTs(ProtImportTsBase):
         line.addParam('minAngle', params.FloatParam, default=-60, label='min')
         line.addParam('maxAngle', params.FloatParam, default=60, label='max')
         line.addParam('stepAngle', params.FloatParam, default=3, label='step')
+
+
+        form.addParam('ctfCorrected',params.BooleanParam, default=False,
+                      label="Have images been ctf corrected?",
+                      help="Select yes if images have been ctf corrected")
+
+        form.addParam('interpolated', params.BooleanParam, default=False,
+                      label="Have images been aligned?",
+                      help="Select yes if images have been rotated/interpolated using alignment information.")
+
+    def setItemExtraAttributes(self, tsObj: tomo.objects.TiltSeries):
+        """
+        Sets ctf corrected parameter and interpolation status.
+
+        :param tsObj: Tilt series instance
+        :return: nothing
+        """
+
+        tsObj.setInterpolated(self.interpolated.get())
+        tsObj.setCtfCorrected(self.ctfCorrected.get())
 
     def _validateAngles(self):
         if not self.MDOC_DATA_SOURCE:
