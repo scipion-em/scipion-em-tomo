@@ -114,10 +114,11 @@ class MDoc:
             if validateMdocContentsErrorMsgList:
                 exceptionMsg += ' '.join(validateMdocContentsErrorMsgList)
 
-            # If ts images we are assuming slices follow the angle order
+            # If ts images we are need to set the slice
             if not isImportingTsMovies and not exceptionMsg:
-                self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
-                                         reverse=False)
+                # Do not sort by tilt angle since we are considering also unsorted stacks
+                # self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
+                #                          reverse=False)
                 for index, tiMd in enumerate(self._tiltsMetadata):
                     tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
 
@@ -420,28 +421,17 @@ class MDoc:
 
 class TiltMetadata:
 
-    def __init__(self, angle=None, angleFile=None, acqOrder=None,
-                 accumDose=None, incomingDose=None):
+    def __init__(self, angle, angleFile, acqOrder,
+                 accumDose, incomingDose):
         self._angle = angle
         self._angleFile = angleFile
         self._acqOrder = acqOrder
         self._accumDose = accumDose
         self._incomingDose = incomingDose
 
-    def setTiltAngle(self, tiltAngle):
-        self._angle = tiltAngle
 
     def setAngleMovieFile(self, angleMovieFile):
         self._angleFile = angleMovieFile
-
-    def setAcqOorder(self, order):
-        self._acqOrder = order
-
-    def setAccumDose(self, accumDose):
-        self._accumDose = accumDose
-
-    def setIncomingDose(self, incDose):
-        self._incomingDose = incDose
 
     def getTiltAngle(self):
         return self._angle

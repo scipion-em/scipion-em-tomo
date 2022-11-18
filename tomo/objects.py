@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 import csv
 import math
 import os
-import statistics
 import threading
 from collections import OrderedDict
 from datetime import datetime
@@ -43,6 +42,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+import tomo.objects
 
 
 
@@ -285,24 +285,6 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False):
-        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order.
-        :param tltFilePath: String containing the path where the file is created.
-        :param reverse: Boolean indicating if the angle list must be reversed.
-        """
-
-        angleList = []
-
-        for ti in self.iterItems(orderBy="_tiltAngle"):
-            angleList.append(ti.getTiltAngle())
-
-        if reverse:
-            angleList.reverse()
-
-        with open(tltFilePath, 'w') as f:
-            f.writelines("%.3f\n" % angle for angle in angleList)
-
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
 
@@ -433,15 +415,16 @@ class TiltSeries(TiltSeriesBase):
         return '%s x %s' % (self._firstDim[0],
                             self._firstDim[1])
 
-    def getExcludedViewsIndex(self, caster=int, indexOffset=0):
+    def getExcludedViewsIndex(self, caster=int, indexOffset=0, orderBy="_index"):
         """Return a list with a list of the excluded views.
 
          :param caster: casting method to cast each index
          :param indexOffset: Value to add to the index. If you want to start the count in 0 pass -1"""
+
         excludeViewsList = []
-        for ti in self.iterItems():
+        for index, ti in enumerate(self.iterItems(orderBy=orderBy)):
             if not ti.isEnabled():
-                excludeViewsList.append(caster(ti.getIndex() + indexOffset))
+                excludeViewsList.append(caster(index + indexOffset))
         return excludeViewsList
 
     def _getExcludedViewsIndex(self):
@@ -543,16 +526,40 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 
         return tiltcomPath
 
-    def writeTltFile(self, ts_folder):
-        xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
-        with open(xtiltPath, 'w') as f:
-            for ti in self:
+    def generateTltFile(self, tltFilePath, reverse=False):
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param tltFilePath: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        """
+
+        # Divert this to writeTlt
+        self.writeTltFile(tltFilePath)
+        #
+        # angleList = []
+        #
+        # for ti in self.iterItems(orderBy="_tiltAngle"):
+        #     angleList.append(ti.getTiltAngle())
+        #
+        # if reverse:
+        #     angleList.reverse()
+        #
+        # with open(tltFilePath, 'w') as f:
+        #     f.writelines("%s\n" % angle for angle in angleList)
+
+    def writeTltFile(self, ts_folder_or_file):
+
+        if os.path.isdir(ts_folder_or_file):
+            ts_folder_or_file = ts_folder_or_file + '/%s.tlt' % self.getTsId()
+
+        with open(ts_folder_or_file, 'w') as f:
+            for ti in self.iterItems(orderBy="_index"):
                 f.write(str(ti.getTiltAngle()) + '\n')
 
     def writeXtiltFile(self, ts_folder):
         xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
-            for ti in self:
+            for ti in self.iterItems(orderBy="_index"):
                 f.write('0.00\n')
 
     def writeXfFile(self, transformFilePath):
@@ -562,7 +569,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 
         tsMatrixTransformList = []
 
-        for ti in self:
+        for ti in self.iterItems(orderBy="_index"):
             if ti.getTransform() is not None:
                 transform = ti.getTransform().getMatrix().flatten()
                 transformIMOD = ['%.7f' % transform[0],
@@ -1498,7 +1505,7 @@ class SetOfCoordinates3D(data.EMSet):
 
             self.initTomos()
 
-            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
+        uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
 
             for row in uniqueTomos:
                 tsId = row[tomoId_attr]
