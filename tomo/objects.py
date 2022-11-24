@@ -1517,8 +1517,10 @@ class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
-        self._coordinate = None
+        # These coordinates aren't scaled. To do that, the coordinates and subtomograms sampling rates
+        # should be compared (because of how the extraction protocol works)
         self._volId = Integer()
+        self._coordinate = None
         self._volName = String()
 
     def hasCoordinate3D(self):
