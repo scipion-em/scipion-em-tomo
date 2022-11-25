@@ -633,6 +633,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Returns true if tilt series has been interpolated"""
         return self._interpolated.get()
 
+    def hasAlignment(self):
+        """ Returns true if at least one of its items has alignment information"""
+        return self._hasAlignment.get()
+
     def copyInfo(self, other):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
@@ -715,7 +719,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
         self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
-        self._hasAlignment.set(item.getAlignment())
+        self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
 
@@ -1269,7 +1273,7 @@ class Coordinate3D(data.EMObject):
         self.setZ(z, originFunction)
 
     def getVolume(self):
-        """ Return the micrograph object to which
+        """ Return the tomogram object to which
         this coordinate is associated.
         """
         return self._volumePointer.get()
@@ -1424,7 +1428,7 @@ class SetOfCoordinates3D(data.EMSet):
             yield coord
 
     def getPrecedents(self):
-        """ Returns the SetOfTomograms or Tilt Series associated with
+        """ Returns the SetOfTomograms associated with
                 this SetOfCoordinates"""
         return self._precedentsPointer.get()
 
@@ -1513,8 +1517,10 @@ class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
-        self._coordinate = None
+        # These coordinates aren't scaled. To do that, the coordinates and subtomograms sampling rates
+        # should be compared (because of how the extraction protocol works)
         self._volId = Integer()
+        self._coordinate = None
         self._volName = String()
 
     def hasCoordinate3D(self):
