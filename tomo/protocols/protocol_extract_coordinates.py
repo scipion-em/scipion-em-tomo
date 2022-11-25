@@ -194,17 +194,18 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         else:
             return np.eye(transform.shape[0])
 
-
     def extractCoordinatesStep(self):
         inTomos = self.getInputTomos()
         inSubTomos = self.getInputSubTomos()
-        scale = inSubTomos.getSamplingRate() / inTomos.getSamplingRate()
+        # We're using the coordinates sampling rate instead of the one from the subtomograms because the coordinates
+        # are referred to the set of coordinates associated to the set of subtomograms
+        inCoords = self.getCoordinates()
+        scale = inCoords.getSamplingRate() / inTomos.getSamplingRate()
         self.info("Scaling coordinates by a factor *%0.2f*" % scale)
 
         # Create the output set of coordinates
         self.outputCoords = self._createSetOfCoordinates3D(inTomos)
         self.outputCoords.setSamplingRate(inTomos.getSamplingRate())
-
 
         if self.boxSize.get() is None:
 
@@ -247,6 +248,12 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
     def getInputSubTomos(self):
         return self.inputSubTomos.get()
+
+    def getCoordinates(self):
+        if self.areInputSubtomos():
+            return self.getInputSubTomos().getCoordinates3D()
+        else:
+            return self.getInputSubTomos()
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
