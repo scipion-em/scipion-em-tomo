@@ -446,7 +446,7 @@ class TiltSeries(TiltSeriesBase):
 
     def _getExcludedViewsIndex(self):
 
-        return self.getExcludedViewsIndex(indexOffset=1)
+        return self.getExcludedViewsIndex(indexOffset=0)
 
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
