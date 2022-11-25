@@ -45,8 +45,6 @@ from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
 
-
-
 class MATRIX_CONVERSION:
     RELION = "relion"
     XMIPP = "xmipp"
@@ -193,10 +191,11 @@ class TiltImage(data.Image, TiltImageBase):
 
         return fileName + suffix + fileExtension
 
+
 TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 
-class TiltSeriesBase(data.SetOfImages):
 
+class TiltSeriesBase(data.SetOfImages):
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
@@ -210,7 +209,6 @@ class TiltSeriesBase(data.SetOfImages):
         self._hasAlignment = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
-
 
     def getAnglesCount(self):
         return self._anglesCount
@@ -258,7 +256,6 @@ class TiltSeriesBase(data.SetOfImages):
         self.copy(other, copyId=copyId, ignoreAttrs=TS_IGNORE_ATTRS)
         # self.copyAttributes(other, '_tsId', '_anglesCount')
 
-
     def write(self, properties=True):
         """ Do not save properties for this "Second level object"""
 
@@ -270,7 +267,6 @@ class TiltSeriesBase(data.SetOfImages):
 
         if tiltImage.hasTransform():
             self._hasAlignment.set(True)
-
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
@@ -364,8 +360,8 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
-def tiltSeriesToString(tiltSeries):
 
+def tiltSeriesToString(tiltSeries):
     # Matrix info
     s = '∅' if not tiltSeries.hasAlignment() else '＊'
 
@@ -376,6 +372,7 @@ def tiltSeriesToString(tiltSeries):
     s += ', ctf' if tiltSeries.ctfCorrected() else ''
 
     return s
+
 
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
@@ -447,7 +444,6 @@ class TiltSeries(TiltSeriesBase):
     def _getExcludedViewsIndex(self):
 
         return self.getExcludedViewsIndex()
-
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -573,9 +569,10 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.3f' % transform[5]]
             else:
                 from pyworkflow.utils import yellowStr
-                logging.info(yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). '
-                                       'The identity transformation will be written in the .xf file'))
-                #This is the identity matrix
+                logging.info(
+                    yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). '
+                              'The identity transformation will be written in the .xf file'))
+                # This is the identity matrix
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
                                  '0.0000000',
@@ -583,8 +580,6 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '0.000',
                                  '0.000']
             tsMatrixTransformList.append(transformIMOD)
-
-
 
         with open(transformFilePath, 'w') as f:
             csvW = csv.writer(f, delimiter='\t')
@@ -641,7 +636,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount', '_hasAlignment','_ctfCorrected', '_interpolated')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected', '_interpolated')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -674,7 +669,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def getFirstItem(self)->TiltSeriesBase:
+    def getFirstItem(self) -> TiltSeriesBase:
         classItem = data.EMSet.getFirstItem(self)
         self._setItemMapperPath(classItem)
         return classItem
@@ -715,7 +710,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
                 self.update(tsOut)
 
-    def update(self, item:TiltSeriesBase):
+    def update(self, item: TiltSeriesBase):
 
         self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
@@ -748,11 +743,12 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         """ Return the string representing the dimensions. """
 
         s = '%s x %s x %s' % (self._anglesCount,
-                             self._firstDim[0],
-                             self._firstDim[1])
+                              self._firstDim[0],
+                              self._firstDim[1])
         s += ', ' + tiltSeriesToString(self)
 
         return s
+
 
 class TiltImageM(data.Movie, TiltImageBase):
     """ Tilt movie. """
@@ -1001,6 +997,7 @@ class Tomogram(data.Volume):
     origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
     """
     TS_ID_FIELD = '_tsId'
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1107,6 +1104,7 @@ class Coordinate3D(data.EMObject):
     associated with a coordinate"""
 
     TOMO_ID_ATTR = "_tomoId"
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._volumePointer = Pointer(objDoStore=False)
@@ -1468,8 +1466,8 @@ class SetOfCoordinates3D(data.EMSet):
             boxStr = ' %d x %d x %d' % (boxSize, boxSize, boxSize)
         else:
             boxStr = 'No-Box'
-        s = "%s (%d items, %s%s)" % (self.getClassName(), self.getSize(),
-                                     boxStr, self._appendStreamState())
+        s = "%s (%d items, %s, %s Å/px%s)" % (self.getClassName(), self.getSize(), boxStr,
+                                              self.getSamplingRate(), self._appendStreamState())
 
         return s
 
@@ -1510,7 +1508,6 @@ class SetOfCoordinates3D(data.EMSet):
                 self._tomos[tsId] = tomo
 
         return self._tomos
-
 
 
 class SubTomogram(data.Volume):
@@ -1789,7 +1786,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True,**kwargs):
+    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
@@ -1877,7 +1874,7 @@ class LandmarkModel(data.EMObject):
             self._chains = dict()
 
         if chainId not in self._chains:
-            self._chains[chainId]= None
+            self._chains[chainId] = None
             self.setCount(len(self._chains))
 
     def retrieveInfoTable(self):
@@ -1901,10 +1898,11 @@ class LandmarkModel(data.EMObject):
         return outputInfo
 
     def __str__(self):
-        return "%s landmarks of %s pixels %s to %s"\
+        return "%s landmarks of %s pixels %s to %s" \
                % (self.getCount(), self.getSize(),
                   "to apply" if self.applyTSTransformation() else "applied",
                   self.getTsId())
+
 
 class SetOfLandmarkModels(data.EMSet):
     """Represents a class that groups a set of landmark models."""
@@ -2458,10 +2456,10 @@ class CTFTomoSeries(data.EMSet):
         self.setNumberOfEstimationsInRange(estimationRange)
 
     def getIsDefocusUDeviationInRange(self):
-       return True
+        return True
 
     def setIsDefocusUDeviationInRange(self, value):
-       pass
+        pass
 
     def getIsDefocusVDeviationInRange(self):
         return True
