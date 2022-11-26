@@ -650,7 +650,6 @@ class TestTomoImportTsFromMdoc(BaseTest):
             acq = tsM.getAcquisition()
             self.assertAlmostEqual(tsM.getSamplingRate(), testDataDict[self.PIXEL_SIZE], delta=0.001)
             self.assertAlmostEqual(acq.getVoltage(), testDataDict[self.VOLTAGE], delta=0.1)
-            self.assertAlmostEqual(acq.getMagnification(), testDataDict[self.MAGNIFICATION], delta=0.1)
             self.assertAlmostEqual(acq.getSphericalAberration(), testDataDict[self.SPH_ABERRATION], delta=0.01)
             self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
@@ -729,7 +728,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(noOkMdocDir, dataSet['realFileNoVoltage1']),
             join(noOkMdocDir, dataSet['realFileNoVoltage2'])
         ]
-        VOLTAGE = '*Voltage*'
+        VOLTAGE = 'Voltage'
         expectedErrorKeyWordList = [
             VOLTAGE,  # Missing voltage
             VOLTAGE  # Missing voltage
@@ -746,9 +745,9 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['noDoseMdoc'])
         ]
         expectedErrorKeyWordList = [
-            '*Magnification*',  # Missing Magnification
-            '*PixelSpacing*',  # Missing Sampling Rate
-            '*dose*'  # Not able to get the dose
+            'Magnification',  # Missing Magnification
+            'PixelSpacing',  # Missing Sampling Rate
+            'Dose'  # Not able to get the dose
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -762,8 +761,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['someMissingAnglesMdoc'])
         ]
         expectedErrorKeyWordList = [
-            ['*Voltage*', '*PixelSpacing*'],  # Missing voltage and sampling rate
-            '*TiltAngle*: 1 7 48'  # Missing tilt angles in slices 1, 7 and 48
+            ['Voltage', 'PixelSpacing'],  # Missing voltage and sampling rate
+            'TiltAngle for Z values: 1, 7, 48'  # Missing tilt angles in slices 1, 7 and 48
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
