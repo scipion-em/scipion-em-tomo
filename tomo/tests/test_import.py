@@ -25,11 +25,11 @@
 # **************************************************************************
 import glob
 import os
-from os.path import join, basename, exists, abspath
+from os.path import join, exists, abspath
 
 import numpy
 
-from pyworkflow.tests import BaseTest, setupTestProject, setupTestOutput
+from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink
 from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
@@ -191,7 +191,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         self.launchProtocol(protImportCoordsFromSqlite)
         return getattr(protImportCoordsFromSqlite, 'outputCoordinates', None), \
-            getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
+               getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
 
     def testImport3dCoordsFromSqlite_FullMatch(self):
         setSize = 2339
@@ -203,7 +203,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         # Subset of coordinates 3d
         splitSet = self.newProtocol(ProtSplitSet,
-                         inputSet=outputCoordsSet)
+                                    inputSet=outputCoordsSet)
 
         # Launch the split set protocol
         self.launchProtocol(splitSet)
@@ -211,7 +211,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertCoordinates(splitSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
 
         # Launch the filter set
-        filterSet = self.newProtocol(ProtSetFilter, formula="True" )
+        filterSet = self.newProtocol(ProtSetFilter, formula="True")
         filterSet.inputSet = Pointer(splitSet, extended="outputCoordinates3D01")
 
         self.launchProtocol(filterSet)
@@ -779,14 +779,14 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 if type(keywords) is str:
                     keywords = [keywords]
                 for errorKeyword in keywords:
-                    self.assertTrue(errorKeyword in errorMsg, msg="%s not found in error message %s after validating %s."
-                                                                  % (errorKeyword, errorMsg, mdoc))
+                    self.assertTrue(errorKeyword in errorMsg,
+                                    msg="%s not found in error message %s after validating %s."
+                                        % (errorKeyword, errorMsg, mdoc))
             else:
                 self.assertTrue(not errorMsg, "There are errors unexpected when validating the Mdocs: %s" % errorMsg)
 
 
 class TestImportTomoMasks(BaseTest):
-
     outputPath = None
     ds = None
     samplingRate = 13.68
@@ -869,4 +869,3 @@ class TestImportTomoMasks(BaseTest):
         with self.assertRaises(Exception) as eType:
             self.launchProtocol(protImportTomomasks)
             self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)
-

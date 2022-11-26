@@ -98,7 +98,8 @@ class ProtAssignTomo2TomoMask(EMProtocol):
             # Check match by basename
             tomoMaskBaseNames = [tomoMask.getFileName().replace(self.MATERIALS_SUFFIX, '') for tomoMask in inTomoMasks]
             tomoBaseNames = [tomo.getFileName() for tomo in inTomos]
-            numberMatchesByBaseName = len(set(tomoMaskBaseNames) & set(tomoBaseNames))  # Length of the intersection of both lists
+            numberMatchesByBaseName = len(set(tomoMaskBaseNames) & set(tomoBaseNames))
+            # Length of the intersection of both lists
 
             if numberMatchesByTsId == 0 and numberMatchesByBaseName:
                 errors.append('Unable to find any match between the introduced datasets after checking the tsIds and '
@@ -155,6 +156,6 @@ class ProtAssignTomo2TomoMask(EMProtocol):
         else:
             outTomoMask.setVolName(inTomos[idList.index(basename(inTomoMask.getFileName().replace(
                 self.MATERIALS_SUFFIX, ''))) + 1].getFileName())
-        # TODO: if the volume has not been matched at this point try to find out if the tsId is contained in the basename
+        # TODO: if the volume has not been matched at this point
+        #  try to find out if the tsId is contained in the basename
         return outTomoMask
-

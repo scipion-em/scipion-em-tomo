@@ -94,8 +94,8 @@ class Prot2DParticlesToSubtomograms(EMProtocol, ProtTomoBase):
         if hasattr(self, 'outputSubtomograms'):
             newSize = self.outputSubtomograms.getSize()
             excluded = self.inputSubtomogramSet.get().getSize() - newSize
-            summary.append("Number of subtomogram: %d" % (newSize))
-            summary.append("Number of excluded subtomogram: %d" % (excluded))
+            summary.append("Number of subtomogram: %d" % newSize)
+            summary.append("Number of excluded subtomogram: %d" % excluded)
 
         return summary
 

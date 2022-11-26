@@ -35,7 +35,6 @@ import math
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
-from pyworkflow.object import Pointer, RELATION_SOURCE, OBJECT_PARENT_ID
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries
 
 
@@ -351,6 +350,7 @@ def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
         else:
             sourceNode = sourceNode.getParent()
     return None
+
 
 def getNonInterpolatedTsFromRelations(sourceObj, prot):
     def stopSearchCallback(pObj):
