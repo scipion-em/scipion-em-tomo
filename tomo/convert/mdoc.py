@@ -143,7 +143,7 @@ class MDoc:
                     headerParsed = True
                     zvalue = int(line.split(']')[0].split('=')[1])
                     if zvalue != len(zvalueList):
-                        raise Exception("Unexpected ZValue = %d" % zvalue)
+                        raise Exception("Unexpected Z value = %d" % zvalue)
                     zvalueDict = {}
                     zvalueList.append(zvalueDict)
                 elif line.startswith('[T'):  # auxiliary global information
@@ -224,8 +224,8 @@ class MDoc:
         if round(accumulatedDose) > 0:
             self.mdocHasDose = True
         else:
-            logger.warning("Dose not found or almost 0 (%s) in %s" % (accumulatedDose, self._mdocFileName) )
-
+            logger.debug("Dose not found or almost 0 (%s) in %s" %
+                         (accumulatedDose, self._mdocFileName))
 
     def _sortByTimestamp(self, zSlices):
         """ MDOC file is not necessarily sorted by acquisition order,
@@ -356,7 +356,7 @@ class MDoc:
 
     def _validateMdocInfoRead(self, ignoreFilesValidation=False):
         validateMdocContentsErrorMsgList = []
-        msg = ['\n*Data not found in file*\n%s:\n' % self._mdocFileName]
+        msg = [f'\n{self._mdocFileName} is missing:\n']
         missingFiles = []
         missingAnglesIndices = []
         for i, tiltMetadata in enumerate(self._tiltsMetadata):
@@ -372,25 +372,22 @@ class MDoc:
                     missingFiles.append(file)
 
         if not self._voltage:
-            msg.append('*Voltage*\n')
+            msg.append(' - Voltage\n')
         if not self._magnification:
-            msg.append('*Magnification*\n')
+            msg.append(' - Magnification\n')
         if not self._samplingRate:
-            msg.append('*PixelSpacing*\n')
+            msg.append(' - PixelSpacing\n')
         if not self.mdocHasDose:
-            msg.append('Not able to get the *dose* with the data read.\n'
-                       'Dose related mdoc labels are:\n\n'
-                       '- ExposureDose or\n'
-                       '- FrameDosesAndNumber or\n'
-                       '- DoseRate and ExposureTime or\n'
-                       '- MinMaxMean and CountsPerElectron'
-                       )
+            msg.append(' - Dose values. Related mdoc labels are: '
+                       'ExposureDose or FrameDosesAndNumber or '
+                       '(DoseRate and ExposureTime) or '
+                       '(MinMaxMean and CountsPerElectron)\n')
         if not self.getTiltAxisAngle():
-            msg.append('*RotationAngle (tilt axis angle)*')
+            msg.append(' - RotationAngle (tilt axis angle)\n')
         if missingAnglesIndices:
-            msg.append('*TiltAngle*: %s\n' % ' '.join(missingAnglesIndices))
+            msg.append(' - TiltAngle for Z values: %s\n' % ', '.join(missingAnglesIndices))
         if missingFiles:
-            msg.append('*Missing files*:\n%s\n' % ' '.join(missingFiles))
+            msg.append(' - Missing files: %s\n' % ', '.join(missingFiles))
         if len(msg) > 1:
             validateMdocContentsErrorMsgList.append(' '.join(msg))
 
