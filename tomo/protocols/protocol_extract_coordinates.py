@@ -105,7 +105,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         # There are coordinates
         else:
-          tomo = tomoDict.get(coord.getTomoId(), None)
+            tomo = tomoDict.get(coord.getTomoId(), None)
 
         # last resource: vol identifier.
         if tomo is None:
@@ -114,9 +114,9 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         return tomo
 
-
     def getTomogramDictionary(self):
-        """ Returns a dictionary of tomogram where the key is any of the possible tomogram identifiers to do the matching"""
+        """ Returns a dictionary of tomogram where the key is any of the
+        possible tomogram identifiers to do the matching"""
 
         if not self._tomoDict:
             self._tomoDict = dict()
@@ -173,7 +173,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
         :return:
         """
         if self._inputAreSubtomos is None:
-            self._inputAreSubtomos =isinstance(self.getInputSubTomos(), SetOfSubTomograms)
+            self._inputAreSubtomos = isinstance(self.getInputSubTomos(), SetOfSubTomograms)
 
         return self._inputAreSubtomos
 

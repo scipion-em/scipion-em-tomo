@@ -36,7 +36,6 @@ from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
-import pyworkflow.config as conf
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
 from pyworkflow.plugin import Domain
@@ -195,7 +194,7 @@ class TiltSeriesDialogView(pwviewer.View):
 
     def show(self):
         ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
-                         allowSelect=False, cancelButton=True)
+                   allowSelect=False, cancelButton=True)
 
 
 class TomogramsTreeProvider(TreeProvider):
