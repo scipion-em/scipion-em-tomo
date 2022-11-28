@@ -325,7 +325,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 someNew = True
                 tsObj = tsClass(tsId=ts)
                 # Form value has higher priority than the mdoc values
-                samplingRate =\
+                samplingRate = \
                     float(samplingRate if samplingRate else self.sRates[ts])
 
                 origin = Transform()
@@ -353,7 +353,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                         else:
                             imageFile = f
 
-                        finalDestination =\
+                        finalDestination = \
                             self._getExtraPath(os.path.basename(imageFile))
                         self.copyOrLink(imageFile, finalDestination)
 
@@ -372,8 +372,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                             accumDose = accumDoseList[counter]
                         else:
                             dosePerFrame = self.dosePerFrame.get()
-                            accumDose =\
-                                self.dosePerFrame.get() *\
+                            accumDose = \
+                                self.dosePerFrame.get() * \
                                 int(to if min(toList) == 1 else (int(to) + 1))
 
                         # Incoming dose in current ti
@@ -669,7 +669,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return True if type(self) is ProtImportTsMovies else False
 
     def _genTsAcquisitionFromMdoc(self, mdocObj):
-        acq =\
+        acq = \
             TomoAcquisition(voltage=mdocObj.getVoltage(),
                             sphericalAberration=self.sphericalAberration.get(),
                             amplitudeContrast=self.amplitudeContrast.get(),
@@ -733,7 +733,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         def _addOne(fileList, file, match):
             """ Add one file matching to the list. """
             fileList.append((file, int(match.group('TO')),
-                            float(match.group('TA'))))
+                             float(match.group('TA'))))
 
         def _addMany(fileList, file, match):
             """ Add many 'files' (when angles in header or mdoc)
@@ -981,9 +981,9 @@ class ProtImportTs(ProtImportTsBase):
             nImages = max(z, n)  # Just handle ambiguity with mrc format
             nAngles = len(self._tiltAngleList)
             if nAngles != nImages:
-                return 'Tilt-series %s stack has different number of images '\
-                        '(%d) than the expected number of tilt angles (%d). '\
-                        % (fileName, nImages, nAngles)
+                return 'Tilt-series %s stack has different number of images ' \
+                       '(%d) than the expected number of tilt angles (%d). ' \
+                       % (fileName, nImages, nAngles)
         else:
             return None
 
@@ -1041,7 +1041,7 @@ class ProtImportTsMovies(ProtImportTsBase):
         the angles range.
         """
         if not self.MDOC_DATA_SOURCE and \
-           self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
+                self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
             if not self._anglesInPattern():
                 return 'When importing movies, {TS}, {TA} and {TO} ' \
                         'should be present in the pattern.'

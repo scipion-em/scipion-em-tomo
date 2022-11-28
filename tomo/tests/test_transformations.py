@@ -28,6 +28,7 @@ from pyworkflow.utils import weakImport
 with weakImport("xmipptomo"):
     from xmipptomo.protocols.protocol_phantom_subtomo import XmippProtPhantomSubtomo
 
+
     # Define the class inside so only the test is available if xmipptomo is.
     class TestSubtomoTransformations(BaseTest):
         """ This class check if the transformation matrices are managed properly across different software."""
@@ -35,7 +36,6 @@ with weakImport("xmipptomo"):
         @classmethod
         def setUpClass(cls):
             setupTestProject(cls)
-
 
         def testOnlyShifts(self):
             # Angles =1 cancels the rotation
@@ -46,7 +46,6 @@ with weakImport("xmipptomo"):
             self._runPhantomSubtomo(shifts=1)
 
         def testAll(self):
-
             self._runPhantomSubtomo()
 
         def _runPhantomSubtomo(self, shifts=5, angles=90):
@@ -56,7 +55,7 @@ with weakImport("xmipptomo"):
             :param angles: value for the 3 angles, to cancel rotation use 1
             """
 
-            PHANTOM_DESC="""60 60 60 0
+            PHANTOM_DESC = """60 60 60 0
     con = 1 0 0 0 8 30 0 180 0
     con = 1 0 0 0 8 30 0 0 0
     con = 1 0 0 0 8 30 0 90 0
@@ -64,13 +63,13 @@ with weakImport("xmipptomo"):
     con = 1 0 0 0 8 30 90 90 0
     con = 1 0 0 0 8 30 90 270 0"""
 
-            shiftsStr = "NO" if shifts==1 else "0-%s" % shifts
-            anglesStr = "NO" if angles==1 else "0-%s" % angles
+            shiftsStr = "NO" if shifts == 1 else "0-%s" % shifts
+            anglesStr = "NO" if angles == 1 else "0-%s" % angles
             label = "ST phantoms SHIFT %s, ROT %s" % (shiftsStr, anglesStr)
 
             protPhantom = self.newProtocol(XmippProtPhantomSubtomo,
                                            objLabel=label,
-                                           option=1, # Use phantom description
+                                           option=1,  # Use phantom description
                                            create=PHANTOM_DESC,
                                            sampling=4,
                                            nsubtomos=10,
@@ -90,11 +89,12 @@ with weakImport("xmipptomo"):
             self.launchProtocol(protPhantom)
 
             # Add the averagers
-            addAveragers(self, protPhantom , XmippProtPhantomSubtomo._possibleOutputs.outputSubtomograms.name)
+            addAveragers(self, protPhantom, XmippProtPhantomSubtomo._possibleOutputs.outputSubtomograms.name)
 
 
     # Testing phantoms in tomograms, going through coordinates, extraction and average
     from xmipptomo.protocols.protocol_phantom_tomo import XmippProtPhantomTomo
+
 
     # Define the class inside so only the test is available if xmipptomo is.
     class TestTomoTransformations(BaseTest):
@@ -110,19 +110,15 @@ with weakImport("xmipptomo"):
             self._runPhantomTomo("NO ANGLES", rot=1, tilt=1, psi=1)
 
         def testAngles(self):
-
             self._runPhantomTomo("ALL ANGLES")
 
         def testOnlyRot(self):
-
             self._runPhantomTomo("ONLY ROT", tilt=1, psi=1)
 
         def testOnlyTilt(self):
-
             self._runPhantomTomo("ONLY TILT", rot=1, psi=1)
 
         def testOnlyPsi(self):
-
             self._runPhantomTomo("ONLY PSI", rot=1, tilt=1)
 
         def _runPhantomTomo(self, label, rot=90, tilt=90, psi=90):
@@ -150,9 +146,9 @@ with weakImport("xmipptomo"):
                 # Add eman extraction
                 from emantomo.protocols.protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
                 stExtraction = self.newProtocol(EmanProtTomoExtraction,
-                                                inputCoordinates = protPhantom.coordinates3D,
-                                                boxSize = protPhantom.coordinates3D.getBoxSize(),
-                                                doInvert = True
+                                                inputCoordinates=protPhantom.coordinates3D,
+                                                boxSize=protPhantom.coordinates3D.getBoxSize(),
+                                                doInvert=True
                                                 )
 
                 self.launchProtocol(stExtraction)
@@ -163,7 +159,8 @@ with weakImport("xmipptomo"):
 
     # Define the class inside so only the test is available if xmipptomo is.
     class TestTiltSeriesTransformations(BaseTest):
-        """ This class generates a phantom based workflow with contrlolled tilt series information from a phantom tomogram."""
+        """ This class generates a phantom based workflow with contrlolled
+        tilt series information from a phantom tomogram."""
 
         @classmethod
         def setUpClass(cls):
@@ -215,20 +212,18 @@ with weakImport("xmipptomo"):
                 # Project the tomogram
                 from imod.protocols.protocol_tomoProjection import ProtImodTomoProjection
                 tomoProjection = self.newProtocol(ProtImodTomoProjection,
-                                                inputSetOfTomograms = protPhantom.tomograms)
+                                                  inputSetOfTomograms=protPhantom.tomograms)
 
                 self.launchProtocol(tomoProjection)
 
-
                 self.addMisaligner("SHIFT X", tomoProjection.TiltSeries, shiftXNoiseToggle=True, a6param=3)
-                self.addMisaligner("SHIFT Y", tomoProjection.TiltSeries,shiftYNoiseToggle=True, b6param=3)
+                self.addMisaligner("SHIFT Y", tomoProjection.TiltSeries, shiftYNoiseToggle=True, b6param=3)
                 self.addMisaligner("JUST ANGLES", tomoProjection.TiltSeries, angleNoiseToggle=True, c6param=3)
                 self.addMisaligner("XY & A ", tomoProjection.TiltSeries,
                                    shiftXNoiseToggle=True, a6param=3,
                                    shiftYNoiseToggle=True, b6param=3,
                                    angleNoiseToggle=True, c6param=3
                                    )
-
 
         def addMisaligner(self, label, inputTs, **kwargs):
             """ Adds an xmipp misalinger with the label and parameters passes
@@ -248,6 +243,7 @@ with weakImport("xmipptomo"):
                                                addInverseMatrix=True,
                                                **kwargs)
                 self.launchProtocol(missAligner)
+
 
 def addAveragers(test, inputProt, outputName):
     """ Add all the averagers available to be run with the subtomo set"""

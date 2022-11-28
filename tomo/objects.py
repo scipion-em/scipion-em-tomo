@@ -25,12 +25,12 @@
 # *
 # **************************************************************************
 import logging
+
 logger = logging.getLogger(__name__)
 
 import csv
 import math
 import os
-import statistics
 import threading
 from collections import OrderedDict
 from datetime import datetime
@@ -572,7 +572,8 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                 logging.info(
                     yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). '
                               'The identity transformation will be written in the .xf file'))
-                # This is the identity matrix
+
+                #  This is the identity matrix
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
                                  '0.0000000',

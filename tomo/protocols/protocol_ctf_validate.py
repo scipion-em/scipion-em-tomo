@@ -31,6 +31,7 @@ from pyworkflow import BETA
 import pyworkflow.object as pwobj
 
 from tomo.objects import SetOfCTFTomoSeries
+
 logger = logging.getLogger(__name__)
 
 OUTPUT_BAD_CTF_SERIE = "badCTFTomoSeries"
@@ -44,6 +45,7 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
     """
     _label = 'ctf validate'
     _devStatus = BETA
+
     # -------------------------- DEFINE param functions -----------------------
 
     def _defineParams(self, form):
@@ -170,10 +172,10 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
 
             result = "Pass" if validate else "Rejected"
             printStr += "{0:25} {1:30} {2:30} {3:30} {4:^50}".format(ctfSerie.getTsId(),
-                                                             faileDefocusCriteria,
-                                                             failedAstigmatismCriteria,
-                                                             failedResolutionCriteria,
-                                                             result)
+                                                                     faileDefocusCriteria,
+                                                                     failedAstigmatismCriteria,
+                                                                     failedResolutionCriteria,
+                                                                     result)
             printStr += "\n"
 
             if validate:
@@ -278,7 +280,6 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
                 ctfTomo.setEnabled(isDefocusUDeviationInRange)
         return failedCTF
 
-
     def _getSetOfTiltSeries(self, pointer=False):
         return self.inputCtfTomoSeries.get().getSetOfTiltSeries(pointer=pointer)
 
@@ -316,12 +317,11 @@ class ProtCTFTomoSeriesValidate(EMProtocol):
         printStr += "Number of failed images to reject: %s\n" % imagesToReject
         printStr += '--------------------------------------------------------\n'
         printStr += "{0:35} {1:25} {2:25} {3:25} {4:20}".format('CTFTomoSerie',
-                                                         'Defocus tolerance',
-                                                         'Astigmatism',
-                                                         'Resolution',
-                                                         'Validate').ljust(5, ' ')
+                                                                'Defocus tolerance',
+                                                                'Astigmatism',
+                                                                'Resolution',
+                                                                'Validate').ljust(5, ' ')
         printStr += "\n"
         printStr += '------------------------' * 7
 
         logger.info(printStr)
-

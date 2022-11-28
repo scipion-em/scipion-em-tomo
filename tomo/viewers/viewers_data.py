@@ -226,13 +226,13 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
 
 # Register specific sets in pwem dataviewer.
 DataViewer.registerConfig(tomo.objects.SetOfSubTomograms,
-      config = {MODE: MODE_MD,
-                VISIBLE: 'id _filename _volName _coordinate._x _coordinate._y _coordinate._z '
-                         '_transform._matrix '})
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _filename _volName _coordinate._x _coordinate._y _coordinate._z '
+                                           '_transform._matrix '})
 
 DataViewer.registerConfig(tomo.objects.SetOfCoordinates3D,
-      config = {MODE: MODE_MD,
-                VISIBLE: 'id _tomoId _x _y _z _groupId _eulerMatrix._matrix '})
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _tomoId _x _y _z _groupId _eulerMatrix._matrix '})
 
 DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
 DataViewer.registerConfig(tomo.objects.SetOfMeshes)

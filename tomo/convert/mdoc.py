@@ -125,6 +125,7 @@ class MDoc:
         except Exception as e:
 
             return "\n*CRITICAL mdoc parsing error: %s can't be parsed.*\n %s\n" % (mdoc, str(e))
+
     def _parseMdoc(self):
         """
         Parse the mdoc file and return a list with a dict key=value for each
@@ -257,6 +258,7 @@ class MDoc:
                     zSlice[SUB_FRAME_PATH]).parts[-1])
             except Exception as e:
                 raise ValueError("Slice section does not have %s field." % SUB_FRAME_PATH)
+
     @staticmethod
     def _getDoseFromMdoc(zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by
