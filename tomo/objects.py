@@ -1408,23 +1408,42 @@ class SetOfCoordinates3D(data.EMSet):
             >>>     '/path/to/Tomo.file' retrieved correctly
 
         """
+
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         if volume is None:
-            volId = None
+            coordWhere = '1'
         elif isinstance(volume, int):
-            volId = volume
-        elif isinstance(volume, data.Volume):
-            volId = volume.getObjId()
+            logger.warning("FOR DEVELOPERS: Do not use volId, use volName")
+            coordWhere = '_volId=%d' % volume
+        elif isinstance(volume, Tomogram):
+            coordWhere = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
-        # Iterate over all coordinates if tomoId is None,
-        # otherwise use tomoId to filter the where selection
-        coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
-            coord.setVolume(self.getPrecedents()[coord.getVolId()])
+            # Associate the tomogram
+            self._associateVolume(coord)
             yield coord
+
+    def _getTomogram(self, tsId):
+        """ Returns  the tomogram from a tsId"""
+        tomos = self._getTomograms()
+
+        if tsId not in tomos.keys():
+            tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+            self._tomos[tsId] = tomo
+            return tomo
+        else:
+            return self._tomos[tsId]
+
+    def _getTomograms(self):
+        if self._tomos is None:
+            self.initTomos()
+
+        return self._tomos
 
     def getPrecedents(self):
         """ Returns the SetOfTomograms associated with
@@ -1474,17 +1493,16 @@ class SetOfCoordinates3D(data.EMSet):
 
     def getFirstItem(self):
         coord = data.EMSet.getFirstItem(self)
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        self._associateVolume(coord)
         return coord
+
+    def _associateVolume(self, coord):
+        coord.setVolume(self._getTomogram(coord.getTomoId()))
 
     def __getitem__(self, itemId):
         """Add a pointer to a Tomogram before returning the Coordinate3D"""
         coord = data.EMSet.__getitem__(self, itemId)
-        # In case pointer is lost in a for loop
-        # clone = self.getPrecedents().getClass()()
-        # clone.copy(self)
-        # coord.setVolume(clone[coord.getVolId()])
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        self._associateVolume(coord)
         return coord
 
     def initTomos(self):
@@ -1497,16 +1515,13 @@ class SetOfCoordinates3D(data.EMSet):
         subsets are done."""
 
         tomoId_attr = Coordinate3D.TOMO_ID_ATTR
-        if self._tomos is None:
 
-            self.initTomos()
+        uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
 
-            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
-
-            for row in uniqueTomos:
-                tsId = row[tomoId_attr]
-                tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
-                self._tomos[tsId] = tomo
+        for row in uniqueTomos:
+            tsId = row[tomoId_attr]
+            # This should register the tomogram in the internal _tomos
+            self._getTomogram(tsId)
 
         return self._tomos
 
