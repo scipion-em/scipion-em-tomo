@@ -572,6 +572,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                 logging.info(
                     yellowStr('WARNING: The Tilt series lacks of alignment information (transformation matrices). '
                               'The identity transformation will be written in the .xf file'))
+
                 #  This is the identity matrix
                 transformIMOD = ['1.0000000',
                                  '0.0000000',
@@ -1466,8 +1467,8 @@ class SetOfCoordinates3D(data.EMSet):
             boxStr = ' %d x %d x %d' % (boxSize, boxSize, boxSize)
         else:
             boxStr = 'No-Box'
-        s = "%s (%d items, %s%s)" % (self.getClassName(), self.getSize(),
-                                     boxStr, self._appendStreamState())
+        s = "%s (%d items, %s, %s Å/px%s)" % (self.getClassName(), self.getSize(), boxStr,
+                                              self.getSamplingRate(), self._appendStreamState())
 
         return s
 
