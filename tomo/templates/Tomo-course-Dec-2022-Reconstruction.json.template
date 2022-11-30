@@ -1,4 +1,4 @@
- Course 2022, day 1: Reconstruction of HIV (EMPIAR-10164)
+ Course 2022 day 1 Reconstruction of HIV EMPIAR10164
  [
     {
         "object.className": "ProtImportTsMovies",
@@ -10,7 +10,7 @@
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "~EMPIAR-10164 mdocs folder|/home/scipion/data/Day1_HIV/frames/|2|pathtomdocs",
+        "filesPath": "~EMPIAR-10164 mdocs folder|/home/scipion/data/Day1_HIV/frames/|2|pathtomdocs~",
         "filesPattern": "*.mdoc",
         "exclusionWords": null,
         "mdocInfo": null,
