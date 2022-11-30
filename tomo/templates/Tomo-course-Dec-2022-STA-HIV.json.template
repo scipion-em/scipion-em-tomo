@@ -87,7 +87,7 @@
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "starFile": "/home/tomo/data/workshop2022/Day3_HIV/coords.star",
+        "starFile": "/home/scipion/data/Day3_HIV/coords.star",
         "samplingRate": 1.35,
         "boxSize": 20,
         "inTomos": "156.outputTomograms"
