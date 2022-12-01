@@ -10,7 +10,7 @@
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "/home/scipion/data/datasets/Day3_HIV/Tomograms/TS_43.mrc",
+        "filesPath": "~Path to HIV tomogram:|/home/scipion/data/datasets/Day3_HIV/Tomograms/TS_43.mrc|2|pathtotomo~",
         "filesPattern": null,
         "copyFiles": false,
         "samplingRate": 1.0,
