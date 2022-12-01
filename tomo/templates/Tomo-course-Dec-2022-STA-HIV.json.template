@@ -61,7 +61,7 @@
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to tomograms|/home/tomo/data/Day3_HIV/Tomograms/|2|tomopath~",
+        "filesPath": "~Path to tomograms|/home/scipion/data/Day3_HIV/Tomograms/|2|tomopath~",
         "filesPattern": "*.mrc",
         "copyFiles": false,
         "samplingRate": 5.4,
