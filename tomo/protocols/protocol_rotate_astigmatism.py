@@ -25,7 +25,6 @@
 # **************************************************************************
 
 import os
-#from xmipptomo import utils
 from pyworkflow import BETA
 from pyworkflow.object import Set
 import pyworkflow.protocol.params as params
@@ -33,6 +32,7 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 import tomo.objects as tomoObj
 from tomo.protocols import ProtTomoBase
+import math
 
 
 class ProtRotateAstigmatism(EMProtocol, ProtTomoBase):
@@ -145,7 +145,6 @@ class ProtRotateAstigmatism(EMProtocol, ProtTomoBase):
     @staticmethod
     def calculateRotationAngleFromTM(ti):
         """ This method calculates que tilt image rotation angle from its associated transformation matrix."""
-        import math
         tm = ti.getTransform().getMatrix()
         cosRotationAngle = tm[0][0]
         sinRotationAngle = tm[1][0]
