@@ -132,7 +132,7 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
         tomoDict = {}
 
         for tomo in self.inputSetOfTomograms.get():
-            tomoDict[tomo.getObjId()] = tomo
+            tomoDict[tomo.getTsId()] = tomo
 
         return tomoDict
 
