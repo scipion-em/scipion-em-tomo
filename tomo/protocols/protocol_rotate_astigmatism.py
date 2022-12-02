@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 
-import os
 from pyworkflow import BETA
 from pyworkflow.object import Set
 import pyworkflow.protocol.params as params
