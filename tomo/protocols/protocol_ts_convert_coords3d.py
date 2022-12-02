@@ -80,15 +80,14 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
         sr = self.inputSetOfTomograms.get().getSamplingRate()
 
         self.getOutputSetOfCoordinates3Ds()
+        tomoDict = self.getTomoDict()
 
         for coor3d in sotsc3d:
             tsId = coor3d.getTsId()
-            tomo = self.getTomoFromTsId(tsId)
 
-            if isinstance(tomo, bool) and not tomo:
-                pass
+            if tsId in tomoDict.keys():
+                tomo = tomoDict[tsId]
 
-            else:
                 newCoord3D = tomoObj.Coordinate3D()
                 newCoord3D.setVolume(tomo)
                 newCoord3D.setX(coor3d.getX()/sr, CENTER_GRAVITY)
@@ -129,11 +128,13 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
 
         return self.outputSetOfCoordinates3D
 
-    def getTomoFromTsId(self, tsId):
+    def getTomoDict(self):
+        tomoDict = {}
+
         for tomo in self.inputSetOfTomograms.get():
-            if tomo.getTsId() == tsId:
-                return tomo
-        return False
+            tomoDict[tomo.getObjId()] = tomo
+
+        return tomoDict
 
     # --------------------------- INFO functions ----------------------------
     def _summary(self):
