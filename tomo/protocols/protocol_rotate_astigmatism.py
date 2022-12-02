@@ -141,7 +141,9 @@ class ProtRotateAstigmatism(EMProtocol, ProtTomoBase):
 
         self._store()
 
-    def calculateRotationAngleFromTM(self, ti):
+    # --------------------------- UTILS functions ----------------------------
+    @staticmethod
+    def calculateRotationAngleFromTM(ti):
         """ This method calculates que tilt image rotation angle from its associated transformation matrix."""
         import math
         tm = ti.getTransform().getMatrix()
@@ -151,7 +153,6 @@ class ProtRotateAstigmatism(EMProtocol, ProtTomoBase):
 
         return rotationAngle
 
-    # --------------------------- UTILS functions ----------------------------
     def getOutputSetOfCTFTomoSeries(self):
         if hasattr(self, "outputSetOfCTFTomoSeries"):
             self.outputSetOfCTFTomoSeries.enableAppend()
