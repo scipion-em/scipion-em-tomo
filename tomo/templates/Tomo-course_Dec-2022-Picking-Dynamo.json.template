@@ -11,7 +11,7 @@ Course 2022, day 2: Non vectorial picking with Dynamo and Eman on HIV (EMPIAR-10
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to HIV tomogram:|/home/scipion/data/datasets/Day3_HIV/Tomograms/TS_43.mrc|2|pathtotomo~",
+        "filesPath": "~Path to HIV tomogram:|/home/scipion/data/Day3_HIV/Tomograms/TS_43.mrc|2|pathtotomo~",
         "filesPattern": null,
         "copyFiles": false,
         "samplingRate": 1.0,
