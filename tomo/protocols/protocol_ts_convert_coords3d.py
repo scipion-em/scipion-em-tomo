@@ -80,20 +80,23 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
         sr = self.inputSetOfTomograms.get().getSamplingRate()
 
         self.getOutputSetOfCoordinates3Ds()
+        tomoDict = self.getTomoDict()
 
         for coor3d in sotsc3d:
             tsId = coor3d.getTsId()
-            tomo = self.getTomoFromTsId(tsId)
 
-            newCoord3D = tomoObj.Coordinate3D()
-            newCoord3D.setVolume(tomo)
-            newCoord3D.setX(coor3d.getX()/sr, CENTER_GRAVITY)
-            newCoord3D.setY(coor3d.getY()/sr, CENTER_GRAVITY)
-            newCoord3D.setZ(-coor3d.getZ()/sr, CENTER_GRAVITY)
+            if tsId in tomoDict.keys():
+                tomo = tomoDict[tsId]
 
-            newCoord3D.setVolId(tomo.getObjId())
-            self.outputSetOfCoordinates3D.append(newCoord3D)
-            self.outputSetOfCoordinates3D.update(newCoord3D)
+                newCoord3D = tomoObj.Coordinate3D()
+                newCoord3D.setVolume(tomo)
+                newCoord3D.setX(coor3d.getX()/sr, CENTER_GRAVITY)
+                newCoord3D.setY(coor3d.getY()/sr, CENTER_GRAVITY)
+                newCoord3D.setZ(-coor3d.getZ()/sr, CENTER_GRAVITY)
+
+                newCoord3D.setVolId(tomo.getObjId())
+                self.outputSetOfCoordinates3D.append(newCoord3D)
+                self.outputSetOfCoordinates3D.update(newCoord3D)
 
         self.outputSetOfCoordinates3D.write()
 
@@ -125,10 +128,13 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
 
         return self.outputSetOfCoordinates3D
 
-    def getTomoFromTsId(self, tsId):
+    def getTomoDict(self):
+        tomoDict = {}
+
         for tomo in self.inputSetOfTomograms.get():
-            if tomo.getTsId() == tsId:
-                return tomo
+            tomoDict[tomo.getTsId()] = tomo
+
+        return tomoDict
 
     # --------------------------- INFO functions ----------------------------
     def _summary(self):
