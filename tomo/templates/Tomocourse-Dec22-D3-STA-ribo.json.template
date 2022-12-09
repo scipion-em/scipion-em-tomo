@@ -2,7 +2,7 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
 [
     {
         "object.className": "ProtImportTomograms",
-        "object.id": "7175",
+        "object.id": "2",
         "object.label": "tomo - import tomograms",
         "object.comment": "",
         "_useQueue": false,
@@ -29,8 +29,8 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
     },
     {
         "object.className": "ProtImodTomoNormalization",
-        "object.id": "7506",
-        "object.label": "imod - Tomo normalization (copy 3)",
+        "object.id": "48",
+        "object.label": "imod - Tomo normalization",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -49,12 +49,12 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "scaleSd": 1.0,
         "scaleMax": 255.0,
         "scaleMin": 0.0,
-        "inputSetOfTomograms": "7175.outputTomograms"
+        "inputSetOfTomograms": "2.outputTomograms"
     },
     {
         "object.className": "SphireProtCRYOLOTomoPicking",
-        "object.id": "7660",
-        "object.label": "sphire - cryolo tomo picking (copy 6)",
+        "object.id": "92",
+        "object.label": "sphire - cryolo tomo picking",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -75,12 +75,12 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "hostName": "localhost",
         "numberOfThreads": 10,
         "numberOfMpi": 1,
-        "inputTomograms": "7506.Tomograms"
+        "inputTomograms": "48.Tomograms"
     },
     {
         "object.className": "EmanProtTomoExtraction",
-        "object.id": "7705",
-        "object.label": "emantomo - extraction from tomogram (copy 13)",
+        "object.id": "137",
+        "object.label": "emantomo - extraction from tomogram",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -93,12 +93,12 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "doInvert": true,
         "doNormalize": false,
         "normproc": 0,
-        "inputCoordinates": "7660.output3DCoordinates"
+        "inputCoordinates": "92.output3DCoordinates"
     },
     {
         "object.className": "XmippProtCreateMask3D",
-        "object.id": "7753",
-        "object.label": "xmipp3 - create 3d mask (copy 4)",
+        "object.id": "177",
+        "object.label": "xmipp3 - create 3d mask",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -141,7 +141,7 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
     },
     {
         "object.className": "XmippProtSubtomoProject",
-        "object.id": "7905",
+        "object.id": "242",
         "object.label": "xmipptomo - subtomo projection",
         "object.comment": "",
         "_useQueue": false,
@@ -153,12 +153,12 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "dirParam": 2,
         "rangeParam": 0,
         "cropParam": 10,
-        "input": "7705.subtomograms"
+        "input": "137.subtomograms"
     },
     {
         "object.className": "XmippProtGpuCrrCL2D",
-        "object.id": "8010",
-        "object.label": "xmipp3 - gl2d (copy)",
+        "object.id": "278",
+        "object.label": "xmipp3 - gl2d",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -175,27 +175,12 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "useAttraction": true,
         "hostName": "localhost",
         "numberOfMpi": 8,
-        "inputParticles": "7905.particles"
-    },
-    {
-        "object.className": "ProtUserSubSet",
-        "object.id": "8059",
-        "object.label": "good_particles",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "other": null,
-        "sqliteFile": "Runs/008010_XmippProtGpuCrrCL2D/classes2D_state.sqlite,",
-        "outputClassName": "SetOfParticles",
-        "inputObject": "8010.outputClasses"
+        "inputParticles": "242.particles"
     },
     {
         "object.className": "ProtSubSet",
-        "object.id": "8114",
-        "object.label": "pwem - subset (2)",
+        "object.id": "355",
+        "object.label": "pwem - subset",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -207,13 +192,13 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "selectIds": false,
         "range": null,
         "setOperation": 0,
-        "inputFullSet": "7705.subtomograms",
-        "inputSubSet": "8059.outputParticles"
+        "inputFullSet": "137.subtomograms",
+        "inputSubSet": "697.output"
     },
     {
         "object.className": "EmanProtTomoInitialModel",
-        "object.id": "8180",
-        "object.label": "emantomo - tomo initial model (copy 14)",
+        "object.id": "394",
+        "object.label": "emantomo - tomo initial model",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -230,13 +215,13 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "shrink": 1,
         "applySim": false,
         "returnSubtomos": true,
-        "mask": "7753.outputMask",
-        "particles": "8114.outputSubTomograms"
+        "mask": "177.outputMask",
+        "particles": "355.outputSubTomograms"
     },
     {
         "object.className": "EmanProtTomoRefinement",
-        "object.id": "9875",
-        "object.label": "emantomo - subtomogram refinement (copy 10)",
+        "object.id": "440",
+        "object.label": "emantomo - subtomogram refinement",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -256,51 +241,22 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "extraParams": null,
         "hostName": "localhost",
         "numberOfThreads": 50,
-        "numberOfMpi": 1,
-        "maskFile": "7753.outputMask",
-        "inputSetOfSubTomogram": "8114.outputSubTomograms",
-        "inputRef": "8180.averageSubTomogram.1"
+        "maskFile": "177.outputMask",
+        "inputSetOfSubTomogram": "355.outputSubTomograms",
+        "inputRef": "394.average"
     },
     {
-        "object.className": "ProtImportVolumes",
-        "object.id": "9998",
-        "object.label": "pwem - import volumes (copy)",
+        "object.className": "ProtClassesSelector",
+        "object.id": "697",
+        "object.label": "pwem - numeric classes extractor",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "importFrom": 0,
-        "filesPath": "/data/tomo/ScipionUserData/Tomo_course_dec_2022_STA_ribo/Runs/009875_EmanProtTomoRefinement/extra/spt_00/",
-        "filesPattern": "threed_05_*.hdf",
-        "copyFiles": false,
-        "emdbId": null,
-        "setHalfMaps": false,
-        "half1map": null,
-        "half2map": null,
-        "samplingRate": 9.12,
-        "setOrigCoord": false,
-        "x": null,
-        "y": null,
-        "z": null,
-        "dataStreaming": false,
-        "timeout": 43200,
-        "fileTimeout": 30
-    },
-    {
-        "object.className": "XmippProtResolution3D",
-        "object.id": "10062",
-        "object.label": "xmipp3 - resolution 3D (copy 7)",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "doFSC": true,
-        "doComputeBfactor": true,
-        "inputVolume": "9998.outputVolumes.1",
-        "referenceVolume": "9998.outputVolumes.2"
+        "extractRepresentative": false,
+        "firstNElements": 4,
+        "inputClasses": "278.outputClasses"
     }
 ]
