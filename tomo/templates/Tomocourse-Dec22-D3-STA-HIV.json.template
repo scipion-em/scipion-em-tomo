@@ -279,7 +279,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "/home/tomo/data/workshop2022/Day3_HIV/Masks/mask_align_bin4.mrc",
+        "maskPath": "~Path to Bin4 mask:|/home/scipion/data/Day3_HIV/Masks/mask_align_bin4.mrc|2|maskb4~",
         "samplingRate": 5.4
     },
     {
@@ -341,7 +341,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "/home/tomo/data/workshop2022/Day3_HIV/Masks/mask_align_bin2.mrc",
+        "maskPath": "Path to bin2 mask|/home/scipion/data/Day3_HIV/Masks/mask_align_bin2.mrc|2|maskb2~",
         "samplingRate": 2.7
     },
     {

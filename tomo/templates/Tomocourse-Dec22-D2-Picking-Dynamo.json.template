@@ -103,12 +103,12 @@ Course 2022, day 2: Non vectorial picking with Dynamo and Eman on HIV (EMPIAR-10
         "runName": null,
         "runMode": 0,
         "method": 0,
-        "SigmaGaussian": 0.8,
-        "nIter": 2,
+        "SigmaGaussian": 0.5,
+        "nIter": 10,
         "Lambda": -1.0,
         "TimeStep": 0.1,
         "hostName": "localhost",
-        "numberOfThreads": 4,
+        "numberOfThreads": 12,
         "inputSetTomograms": "2.outputTomograms"
     },
     {
