@@ -1056,7 +1056,7 @@ class Tomogram(data.Volume):
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
-    EXPOSE_ITEMS = True
+    EXPOSE_ITEMS = False
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
@@ -1342,6 +1342,12 @@ class Coordinate3D(data.EMObject):
 
     def setTomoId(self, tomoId):
         self._tomoId.set(tomoId)
+
+    def composeCoordId(self, sampligRate):
+        return "%s,%s,%s,%s" % (self.getTomoId(),
+                                int(sampligRate * self._x.get()),
+                                int(sampligRate * self._y.get()),
+                                int(sampligRate * self._z.get()))
 
 
 class SetOfCoordinates3D(data.EMSet):
