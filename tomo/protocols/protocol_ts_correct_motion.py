@@ -69,7 +69,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     outputSetOdd = None
 
     # -------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
+    def _defineParams(self, form, addEvenOddParam=True):
         form.addSection(label=Message.LABEL_INPUT)
 
         form.addParam('inputTiltSeriesM', params.PointerParam,
@@ -119,7 +119,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
         line.addParam('cropDimX', params.IntParam, default=0, label='X')
         line.addParam('cropDimY', params.IntParam, default=0, label='Y')
 
-        if self.evenOddCapable:
+        if self.evenOddCapable and addEvenOddParam:
             form.addParam('splitEvenOdd', params.BooleanParam,
                           default=False,
                           label='Split & sum odd/even frames?',

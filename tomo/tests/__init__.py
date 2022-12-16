@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
 
 from pyworkflow.tests import DataSet
 
@@ -56,11 +57,18 @@ DataSet(name='reliontomo', folder='reliontomo',
                'tomo2': '64K_defocus_m2_tomo_12_bin1_WBP_CatBinned1.mrc',
         })
 
-DataSet(name='emd_10439', folder='emd_10439',
-        files={
-               'tomogramsDir': 'tomograms',
-               'tomoEmd10439': 'tomograms/emd_10439.mrc',
-               'scipionSqlite3dCoords': 'importFromScipionSqlite/coordinates.sqlite',
-               'scipionSqlite3dCoordsSomeBad': 'importFromScipionSqlite/coordinates_3badCoords.sqlite',
-               'tomomaskAnnotated': 'tomomasksAnnotated/emd_10439_materials.mrc'
-        })
+EMD_10439 = 'emd_10439'
+
+
+class DataSetEmd10439(Enum):
+    tomoEmd10439 = 'tomograms/emd_10439.mrc'
+    coords3dStarFile = 'importFromStarFiles/picking_001_parts.star'
+    coords3dStarFileWithSRate = 'importFromStarFiles/picking_001_parts_with_sRate.star'
+    subtomogramsStarFile = 'importFromStarFiles/class_ap_r_ali_k1_split.star'
+    scipionSqlite3dCoords = 'importFromScipionSqlite/coordinates.sqlite'
+    tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
+    coords39Sqlite = 'coordinates/coordinates39.sqlite'
+
+
+DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
+
