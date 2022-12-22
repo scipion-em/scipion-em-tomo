@@ -343,7 +343,7 @@ def _getTsIdLabel(setObject):
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
     logger.debug("Retrieving relations for %s." % sourceObj)
     p = protocol.getProject()
-    graph = p.getSourceGraph(False)  # Graph with all the relations
+    graph = p.getSourceGraph(True)  # Graph with all the relations
     sourceNode = graph.getNode(sourceObj.strId())  # Node corresponding to the source object
     # Climb up in the relations graph until the target condition provided in the callback input is fulfilled
     nodes = sourceNode.getParents()
