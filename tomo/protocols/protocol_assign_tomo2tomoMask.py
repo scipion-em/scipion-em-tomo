@@ -23,13 +23,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
 from os import symlink
 from os.path import basename, abspath
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
-from tomo.objects import TomoMask
+from tomo.objects import TomoMask, SetOfTomoMasks
 from tomo.utils import isMatchingByTsId
+
+
+class assignT2TMaskOutputs(Enum):
+    tomoMasks = SetOfTomoMasks
 
 
 class ProtAssignTomo2TomoMask(EMProtocol):
@@ -37,6 +42,7 @@ class ProtAssignTomo2TomoMask(EMProtocol):
 
     _devStatus = BETA
     _label = 'assign tomograms to tomo masks (segmentations)'
+    _possibleOutputs = assignT2TMaskOutputs
     MATERIALS_SUFFIX = '_materials'
 
     def _defineParams(self, form):
@@ -76,8 +82,9 @@ class ProtAssignTomo2TomoMask(EMProtocol):
                 outTomoMask = self.setMatchingTomogram(tomoBaseNames, inTomoMask, inTomos, isMatchingByTsId=False)
                 outputSetOfTomoMasks.append(outTomoMask)
 
-        self._defineOutputs(outputTomoMasks=outputSetOfTomoMasks)
+        self._defineOutputs(**{assignT2TMaskOutputs.tomoMasks.name: outputSetOfTomoMasks})
         self._defineSourceRelation(inTomos, outputSetOfTomoMasks)
+        self._defineSourceRelation(inTomoMasks, outputSetOfTomoMasks)
 
     # --------------------------- INFO functions --------------------------------------------
 

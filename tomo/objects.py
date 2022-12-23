@@ -1518,11 +1518,14 @@ class SetOfCoordinates3D(data.EMSet):
 
 
 class SubTomogram(data.Volume):
+    """The coordinate associated to each subtomogram is not scaled. To do that, the coordinates and the subtomograms
+    sampling rates should be compared (because of how the extraction protocol works). But when shifts are applied to
+    the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
+    shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
-        # These coordinates aren't scaled. To do that, the coordinates and subtomograms sampling rates
-        # should be compared (because of how the extraction protocol works)
         self._volId = Integer()
         self._coordinate = None
         self._volName = String()
