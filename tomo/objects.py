@@ -1056,7 +1056,7 @@ class Tomogram(data.Volume):
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
-    EXPOSE_ITEMS = True
+    EXPOSE_ITEMS = False
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
@@ -1343,6 +1343,12 @@ class Coordinate3D(data.EMObject):
     def setTomoId(self, tomoId):
         self._tomoId.set(tomoId)
 
+    def composeCoordId(self, sampligRate):
+        return "%s,%s,%s,%s" % (self.getTomoId(),
+                                int(sampligRate * self._x.get()),
+                                int(sampligRate * self._y.get()),
+                                int(sampligRate * self._z.get()))
+
 
 class SetOfCoordinates3D(data.EMSet):
     """ Encapsulate the logic of a set of volumes coordinates.
@@ -1512,11 +1518,14 @@ class SetOfCoordinates3D(data.EMSet):
 
 
 class SubTomogram(data.Volume):
+    """The coordinate associated to each subtomogram is not scaled. To do that, the coordinates and the subtomograms
+    sampling rates should be compared (because of how the extraction protocol works). But when shifts are applied to
+    the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
+    shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
-        # These coordinates aren't scaled. To do that, the coordinates and subtomograms sampling rates
-        # should be compared (because of how the extraction protocol works)
         self._volId = Integer()
         self._coordinate = None
         self._volName = String()
