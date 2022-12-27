@@ -42,7 +42,7 @@ from tomo import __version__
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 with open('requirements.txt') as f:
@@ -168,7 +168,7 @@ setup(
     # MANIFEST.in as well.
     # include_package_data=True,
     package_data={  # Optional
-       'tomo': ['icon.gif', 'protocols.conf'],
+       'tomo': ['icon.png', 'protocols.conf'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may

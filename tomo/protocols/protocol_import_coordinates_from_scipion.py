@@ -23,7 +23,7 @@
 # *
 # **************************************************************************
 
-from os.path import basename, exists
+from os.path import exists
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import String
@@ -31,7 +31,7 @@ from pyworkflow.protocol import FileParam, IntParam, PointerParam
 from pyworkflow.utils import Message, removeBaseExt, yellowStr
 from ..constants import SCIPION, ERR_COORDS_FROM_SQLITE_NO_MATCH
 from .protocol_base import ProtTomoBase
-from ..objects import SetOfTomograms, SetOfCoordinates3D
+from ..objects import SetOfCoordinates3D
 
 
 class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
@@ -157,7 +157,7 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
                             (nOfNonMatchingCoords, pattern * nOfNonMatchingCoords)).format(*notFoundCoords)))
 
         self.notMatchingMsg = String(notFoundTomosMsg + '\n\n' + notFoundCoordsMsg if
-                                        notFoundTomosMsg else notFoundCoordsMsg)
+                                     notFoundTomosMsg else notFoundCoordsMsg)
 
     @staticmethod
     def _getMatchingIndexByFileName(coordTomoId, tomoBaseNameList):

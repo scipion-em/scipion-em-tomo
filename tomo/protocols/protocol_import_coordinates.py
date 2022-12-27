@@ -33,7 +33,6 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
-from pyworkflow.utils import copyFile
 
 from ..objects import SetOfCoordinates3D
 from .protocol_base import ProtTomoImportFiles

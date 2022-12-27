@@ -27,8 +27,10 @@ import tempfile
 
 from pyworkflow.tests import BaseTest
 from tomo.constants import SCIPION
-from tomo.objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, SetOfSubTomograms, SetOfTomograms, Tomogram, \
-    SetOfCoordinates3D, Coordinate3D, SubTomogram, SetOfTiltSeries, TiltSeries, TiltImage, LandmarkModel
+from tomo.objects import (SetOfTiltSeriesCoordinates, TiltSeriesCoordinate,
+                          SetOfSubTomograms, SetOfTomograms, Tomogram,
+                          SetOfCoordinates3D, Coordinate3D, SubTomogram,
+                          SetOfTiltSeries, TiltSeries, TiltImage, LandmarkModel)
 
 TS_1 = "TS_1"
 
@@ -73,7 +75,8 @@ class TestTomoModel(BaseTest):
         self.assertEqual(Y_VALUE / SAMPLING_RATE, posPixels[1], "Y is wrong in pixels")
         self.assertEqual(Z_VALUE / SAMPLING_RATE, posPixels[2], "Z is wrong in pixels")
 
-        tsCoord.setPosition(X_VALUE/SAMPLING_RATE, Y_VALUE/SAMPLING_RATE, Z_VALUE/SAMPLING_RATE, sampling_rate=SAMPLING_RATE)
+        tsCoord.setPosition(X_VALUE / SAMPLING_RATE, Y_VALUE / SAMPLING_RATE,
+                            Z_VALUE / SAMPLING_RATE, sampling_rate=SAMPLING_RATE)
         posAngs = tsCoord.getPosition()
         self.assertEqual(X_VALUE, posAngs[0], "X is wrong when set with sampling rate")
         self.assertEqual(Y_VALUE, posAngs[1], "Y is wrong when set with sampling rate")
@@ -81,8 +84,6 @@ class TestTomoModel(BaseTest):
 
         tsCoord.setTsId(MYTSID)
         self.assertEqual(MYTSID, tsCoord.getTsId(), "TSID is wrong")
-
-
 
         set = SetOfTiltSeriesCoordinates.create(self.outputPath)
         set.append(tsCoord)
@@ -93,7 +94,6 @@ class TestTomoModel(BaseTest):
             self.assertEqual(Y_VALUE, posAngs[1], "Y is wrong when set with sampling rate")
             self.assertEqual(Z_VALUE, posAngs[2], "Z is wrong when set with sampling rate")
             self.assertEqual(MYTSID, tsCoord.getTsId(), "TSID is wrong")
-
 
     def test_set_of_subtomograms(self):
         """ Tests the SetOfSubtomograms model"""
@@ -113,7 +113,7 @@ class TestTomoModel(BaseTest):
         coords = SetOfCoordinates3D.create(self.outputPath)
 
         coord1 = Coordinate3D()
-        coord1.setX(0,SCIPION)
+        coord1.setX(0, SCIPION)
         coord1.setY(0, SCIPION)
         coord1.setZ(0, SCIPION)
         coord1.setTomoId(TS_1)
@@ -125,7 +125,6 @@ class TestTomoModel(BaseTest):
 
         # Test precedents involved
         self.assertEqual(len(coords.getPrecedentsInvolved()), 1, "getPrecedentsInvolved does not seem to work")
-
 
         subtomos = SetOfSubTomograms.create(self.outputPath)
         subtomos.setCoordinates3D(coords)
@@ -140,8 +139,6 @@ class TestTomoModel(BaseTest):
 
         tomo = subtomos.getTomogram(subtomo)
         self.assertEqual(tomo.getTsId(), TS_1, "Recovered tomogram from SOST.getTomogram() does not work.")
-
-
 
     def test_set_of_tilt_series(self):
         """ Tests the SetOfTiltSeries model"""
@@ -172,7 +169,6 @@ class TestTomoModel(BaseTest):
         tiltSerieFromFile = SetOfTiltSeries(filename=tiltseries.getFileName())
         tiltSerieFromFile.loadAllProperties()
 
-
     def test_landmarks(self):
         """ Test the Landmark model"""
 
@@ -180,7 +176,7 @@ class TestTomoModel(BaseTest):
         # Verify the count
         lm = LandmarkModel(fileName=temp_name)
 
-        str(lm) # Should not fail
+        str(lm)  # Should not fail
 
         self.assertEqual(0, lm.getCount(), "Count not initialized to 0")
 
@@ -197,4 +193,3 @@ class TestTomoModel(BaseTest):
         self.assertEqual(2, lm.getCount(), "Count not increased when not empty.")
 
         str(lm)
-

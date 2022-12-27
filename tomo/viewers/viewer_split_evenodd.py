@@ -26,11 +26,10 @@
 # *
 # **************************************************************************
 
-from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
+from pyworkflow.viewer import DESKTOP_TKINTER
 from pyworkflow.protocol.params import EnumParam
 from tomo.protocols import ProtSplitEvenOddTomoSet
 from pwem.viewers.viewer_base import EmProtocolViewer
-from pwem.objects import (SetOfVolumes)
 
 
 class SplitEvenOddViewer(EmProtocolViewer):
