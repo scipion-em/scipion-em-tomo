@@ -1,4 +1,5 @@
 Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
+You'll need to download its dataset -> scipion3 testdata --donwnload tomo-tutorial
 [
     {
         "object.className": "ProtImportTomograms",
@@ -11,10 +12,10 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to tomogram|/home/scipion/data/Day3_Ribo/IS002_291013_005.mrc|2|tomopath~",
+        "filesPath": "~Path to tomogram|%(SCIPION_TESTS)s/tomo-tutorials/Day3-Ribo/IS002_291013_005.mrc|2|tomopath~",
         "filesPattern": "",
         "copyFiles": false,
-        "samplingRate": 2.28,
+        "samplingRate": 9.12,
         "importAcquisitionFrom": 0,
         "acquisitionData": null,
         "acquisitionAngleMax": 60.0,
@@ -26,30 +27,6 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "x": null,
         "y": null,
         "z": null
-    },
-    {
-        "object.className": "ProtImodTomoNormalization",
-        "object.id": "48",
-        "object.label": "imod - Tomo normalization",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "binning": 4.0,
-        "floatDensities": 0,
-        "modeToOutput": 0,
-        "scaleRangeToggle": 1,
-        "scaleRangeMax": 255.0,
-        "scaleRangeMin": 0.0,
-        "antialias": 5,
-        "meanSdToggle": 1,
-        "scaleMean": 0.0,
-        "scaleSd": 1.0,
-        "scaleMax": 255.0,
-        "scaleMin": 0.0,
-        "inputSetOfTomograms": "2.outputTomograms"
     },
     {
         "object.className": "SphireProtCRYOLOTomoPicking",
@@ -75,7 +52,7 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "hostName": "localhost",
         "numberOfThreads": 10,
         "numberOfMpi": 1,
-        "inputTomograms": "48.Tomograms"
+        "inputTomograms": "2.outputTomograms"
     },
     {
         "object.className": "EmanProtTomoExtraction",
@@ -174,7 +151,7 @@ Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
         "numberOfClassifyIterations": 5,
         "useAttraction": true,
         "hostName": "localhost",
-        "numberOfMpi": 8,
+        "numberOfMpi": 4,
         "inputParticles": "242.particles"
     },
     {

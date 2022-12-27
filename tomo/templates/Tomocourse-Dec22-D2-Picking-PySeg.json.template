@@ -1,17 +1,44 @@
 Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_10439) tomogram.
 [
     {
-        "object.className": "ProtImportTomograms",
+        "object.className": "ProtImportVolumes",
         "object.id": "2",
-        "object.label": "tomo - import tomograms",
+        "object.label": "Download emd 10439 map",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
+        "importFrom": 1,
+        "filesPath": null,
+        "filesPattern": null,
+        "copyFiles": false,
+        "emdbId": 10439,
+        "setHalfMaps": false,
+        "half1map": null,
+        "half2map": null,
+        "samplingRate": 13.68,
+        "setOrigCoord": false,
+        "x": null,
+        "y": null,
+        "z": null,
+        "dataStreaming": false,
+        "timeout": 43200,
+        "fileTimeout": 30
+    },
+    {
+        "object.className": "ProtImportTomograms",
+        "object.id": "3",
+        "object.label": "tomo - import tomograms",
+        "object.comment": "",
+        "_useQueue": false,
+        "_prerequisites": "2",
+        "_queueParams": null,
+        "runName": null,
+        "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to emd_10439.map|/home/scipion/data/Day2_pyseg/emd_10439.map|2|emdmap~",
+        "filesPath": "Runs/000002_ProtImportVolumes/extra/emd_10439.map",
         "filesPattern": null,
         "copyFiles": false,
         "samplingRate": 13.68,
@@ -49,7 +76,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "scaleSd": 1.0,
         "scaleMax": 255.0,
         "scaleMin": 0.0,
-        "inputSetOfTomograms": "2.outputTomograms"
+        "inputSetOfTomograms": "3.outputTomograms"
     },
     {
         "object.className": "ProtJjsoftProtDenoiseTomogram",
@@ -129,7 +156,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inTomos": "2.outputTomograms",
+        "inTomos": "3.outputTomograms",
         "inTomoMasks": "268.tomoMasks"
     },
     {
@@ -215,7 +242,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "hostName": "localhost",
         "numberOfThreads": 3,
         "numberOfMpi": 1,
-        "inTomoSet": "2.outputTomograms",
+        "inTomoSet": "3.outputTomograms",
         "inFilsProt": "878."
     },
     {
@@ -241,7 +268,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inputTomos": "2.outputTomograms",
+        "inputTomos": "3.outputTomograms",
         "input": "987.outputCoordinates"
     },
     {
