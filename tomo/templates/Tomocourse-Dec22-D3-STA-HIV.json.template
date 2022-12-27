@@ -10,7 +10,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "~Path to HIV folder dataset|/home/scipion/data/Day3_HIV/TS/|2|datasetpath~",
+        "filesPath": "~Path to HIV folder dataset|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/TS/|2|datasetpath~",
         "filesPattern": "{TS}*.mrc",
         "exclusionWords": null,
         "mdocInfo": null,
@@ -34,6 +34,25 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "fileTimeout": 30
     },
     {
+        "object.className": "ProtImodImportTransformationMatrix",
+        "object.id": "3",
+        "object.label": "imod - Import transformation matrix",
+        "object.comment": "",
+        "_useQueue": false,
+        "_prerequisites": "",
+        "_queueParams": null,
+        "runName": null,
+        "runMode": 0,
+        "importFrom": 0,
+        "filesPath": "~Path to folder with  .xf file|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/TS|2|xffolder~",
+        "filesPattern": "TS_43.xf",
+        "copyFiles": false,
+        "exclusionWords": null,
+        "binningTM": 1,
+        "binningTS": 1,
+        "inputSetOfTiltSeries": "2.outputTiltSeries"
+    },
+    {
         "object.className": "ProtImodImportSetOfCtfTomoSeries",
         "object.id": "113",
         "object.label": "imod - Import tomo CTFs",
@@ -44,11 +63,11 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to folder with  .defocus files|/home/scipion/data/Day3_HIV/CTF|2|ctfsfolder~",
+        "filesPath": "~Path to folder with  .defocus files|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/CTF|2|ctfsfolder~",
         "filesPattern": "*.defocus",
         "copyFiles": false,
         "exclusionWords": null,
-        "inputSetOfTiltSeries": "2.outputTiltSeries"
+        "inputSetOfTiltSeries": "3.TiltSeries"
     },
     {
         "object.className": "ProtImportTomograms",
@@ -61,7 +80,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to tomograms|/home/scipion/data/Day3_HIV/Tomograms/|2|tomopath~",
+        "filesPath": "~Path to tomograms|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/Tomograms/|2|tomopath~",
         "filesPattern": "*.mrc",
         "copyFiles": false,
         "samplingRate": 5.4,
@@ -87,7 +106,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "starFile": "~Path to coords.star file|/home/scipion/data/Day3_HIV/coords.star|2|coordspath~",
+        "starFile": "~Path to coords.star file|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/coords.star|2|coordspath~",
         "samplingRate": 1.35,
         "boxSize": 20,
         "inTomos": "156.outputTomograms"
@@ -107,7 +126,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "flipYZ": true,
         "flipZ": true,
         "swapXY": false,
-        "inputTS": "2.outputTiltSeries",
+        "inputTS": "3.TiltSeries",
         "inputCtfTs": "113.CTFTomoSeries",
         "inputCoords": "227.coordinates"
     },
@@ -122,7 +141,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "runName": null,
         "runMode": 0,
         "recTomoMode": 0,
-        "tomoId": "TS_45",
+        "tomoId": "TS_43",
         "binFactor": 4.0,
         "width": -1,
         "height": -1,
@@ -279,7 +298,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "~Path to Bin4 mask|/home/scipion/data/Day3_HIV/Masks/mask_align_bin4.mrc|2|maskb4~",
+        "maskPath": "~Path to Bin4 mask|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/Masks/mask_align_bin4.mrc|2|maskb4~",
         "samplingRate": 5.4
     },
     {
@@ -341,7 +360,7 @@ Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164)
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "~Path to bin2 mask|/home/scipion/data/Day3_HIV/Masks/mask_align_bin2.mrc|2|maskb2~",
+        "maskPath": "~Path to bin2 mask|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/Masks/mask_align_bin2.mrc|2|maskb2~",
         "samplingRate": 2.7
     },
     {
