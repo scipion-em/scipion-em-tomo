@@ -168,7 +168,7 @@ setup(
     # MANIFEST.in as well.
     # include_package_data=True,
     package_data={  # Optional
-       'tomo': ['icon.png', 'protocols.conf'],
+       'tomo': ['icon.png', 'protocols.conf', 'templates/*'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
