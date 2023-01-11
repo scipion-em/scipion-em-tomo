@@ -190,7 +190,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "applyConeWeight": false,
         "coneAngle": 10.0,
         "applyOffsets": false,
-        "outputInFloat16": true,
+        "outputInFloat16": false,
         "inReParticles": "270.relionParticles"
     },
     {
