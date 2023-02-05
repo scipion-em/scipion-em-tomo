@@ -68,6 +68,7 @@ class DataSetEmd10439(Enum):
     coords3dStarFileWithSRate = 'importFromStarFiles/picking_001_parts_with_sRate.star'
     subtomogramsStarFile = 'importFromStarFiles/class_ap_r_ali_k1_split.star'
     scipionSqlite3dCoords = 'importFromScipionSqlite/coordinates.sqlite'
+    scipionSqlite3dCoordsSomeBad = 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
     coords39Sqlite = 'coordinates/coordinates39.sqlite'
 
