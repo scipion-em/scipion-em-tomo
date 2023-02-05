@@ -48,7 +48,7 @@ from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 
 from tomo.convert import (getAnglesFromHeader, getAnglesFromMdoc,
-                          getAnglesFromTlt)
+                          getAnglesAndDosesFromTlt)
 from tomo.convert.mdoc import normalizeTSId, MDoc
 from tomo.objects import TomoAcquisition
 
@@ -371,10 +371,23 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                             dosePerFrame = incomingDoseList[counter]
                             accumDose = accumDoseList[counter]
                         else:
+                            # Check if there are doses as a second column in the tlt file
                             dosePerFrame = self.dosePerFrame.get()
-                            accumDose = \
-                                self.dosePerFrame.get() * \
-                                int(to if min(toList) == 1 else (int(to) + 1))
+                            doses = []
+                            anglesFrom = self.getEnumText('anglesFrom')
+                            if anglesFrom == self.ANGLES_FROM_TLT:
+                                tltFn = os.path.splitext(imageFile)[0] + '.tlt'
+                                rawtltFn = tltFn.replace(".tlt", ".rawtlt")
+                                if os.path.exists(tltFn):
+                                    _, doses = getAnglesAndDosesFromTlt(tltFn)
+                                elif os.path.exists(rawtltFn):
+                                    _, doses = getAnglesAndDosesFromTlt(rawtltFn)
+                            if doses:
+                                accumDose = doses[counter]
+                            else:
+                                accumDose = \
+                                    self.dosePerFrame.get() * \
+                                    int(to if min(toList) == 1 else (int(to) + 1))
 
                         # Incoming dose in current ti
                         ti.getAcquisition().setDosePerFrame(dosePerFrame)
@@ -751,9 +764,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 tltFn = os.path.splitext(file)[0] + '.tlt'
                 rawtltFn = tltFn.replace(".tlt", ".rawtlt")
                 if os.path.exists(tltFn):
-                    angles = getAnglesFromTlt(tltFn)
+                    angles, _ = getAnglesAndDosesFromTlt(tltFn)
                 elif os.path.exists(rawtltFn):
-                    angles = getAnglesFromTlt(rawtltFn)
+                    angles, _ = getAnglesAndDosesFromTlt(rawtltFn)
                 else:
                     raise Exception("Missing angles file: %s or %s" % (tltFn, rawtltFn))
             elif anglesFrom == self.ANGLES_FROM_RANGE:
