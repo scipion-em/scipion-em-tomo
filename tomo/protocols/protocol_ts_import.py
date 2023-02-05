@@ -945,7 +945,9 @@ class ProtImportTs(ProtImportTsBase):
                             "or from the image header, or from an"
                             "mdoc or tlt file (should have the SAME filename "
                             "but with the .mdoc or .tlt or .rawtlt "
-                            "extension at the end).")
+                            "extension at the end). If a tlt or rawtlt file is used, "
+                            "it is optional to pass the accumulated dose as second "
+                            "column beside each angle separated by space")
 
         line = group.addLine('Tilt angles range',
                              condition='anglesFrom==0',  # ANGLES_FROM_RANGE
