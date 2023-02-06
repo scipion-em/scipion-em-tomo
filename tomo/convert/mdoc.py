@@ -326,7 +326,7 @@ class MDoc:
                 newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
 
         # # Calculated as in Grigorieff paper -->
-        #  https://doi.org/10.7554/eLife.06980.001
+        #  https://dx.doi.org/10.7554/eLife.06980.001
         # if not newDose and
         #   _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON,
         #   EXPOSURE_TIME, DIVIDED_BY_TWO]):

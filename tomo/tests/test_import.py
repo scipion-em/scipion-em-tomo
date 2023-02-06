@@ -827,7 +827,7 @@ class TestImportTomoMasks(BaseTest):
                                                 binning=2)
 
         cls.launchProtocol(protTomoNormalization)
-        outputTomos = getattr(protTomoNormalization, 'outputSetOfTomograms', None)
+        outputTomos = getattr(protTomoNormalization, 'Tomograms', None)
         cls.assertIsNotNone(outputTomos, 'No tomograms were genetated in tomo normalization.')
 
         return outputTomos
@@ -835,7 +835,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksAllGood(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inTomoSetBinned)
 
         self.launchProtocol(protImportTomomasks)
@@ -851,7 +851,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksDiffSize(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inTomoSet)
 
         with self.assertRaises(Exception) as eType:
@@ -862,7 +862,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksNoneMatch(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inNotMatchingTomoSet)
 
         with self.assertRaises(Exception) as eType:
