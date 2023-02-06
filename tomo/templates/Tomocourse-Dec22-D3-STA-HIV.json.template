@@ -142,8 +142,8 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "tomoSource": 0,
         "boxSize": 96.0,
         "downFactor": 1.0,
-        "doInvert": false,
-        "doNormalize": false,
+        "doInvert": true,
+        "doNormalize": true,
         "normproc": 0,
         "inputCoordinates": "3355.outputCoordinates3D"
     },
