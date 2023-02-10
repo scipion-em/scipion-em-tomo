@@ -25,16 +25,26 @@
 # **************************************************************************
 import glob
 import os
-from os.path import join
+from os.path import join, exists, abspath
 
 import numpy
-from pyworkflow.tests import BaseTest, setupTestProject
-from tomo.protocols.protocol_ts_import import MDoc
 
+from pyworkflow.tests import BaseTest, setupTestProject
+from pyworkflow.utils import magentaStr, createLink
+from pyworkflow.object import Pointer
+from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
+
+from tomo.protocols.protocol_ts_import import MDoc
 from . import DataSet
-from ..constants import BOTTOM_LEFT_CORNER
-from ..utils import existsPlugin
+from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
+    ERR_NON_MATCHING_TOMOS
 import tomo.protocols
+from ..protocols import ProtImportTomograms, ProtImportTomomasks
+from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
+from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
+from ..utils import existsPlugin
+
+from imod.protocols import ProtImodTomoNormalization
 
 
 class TestTomoImportSubTomograms(BaseTest):
@@ -141,42 +151,132 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
-        cls.tomogram = cls.dataset.getFile('tomo1')
+        cls.tomoDs = DataSet.getDataSet('tomo-em')
+        cls.emdDs = DataSet.getDataSet('emd_10439')
+        cls.sqBoxSize = 20
+        cls.sqSamplingRate = 13.68
 
-    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
+    def _importTomograms(self, filesPath, samplingRate, pattern=None):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
-                                              filesPath=self.tomogram,
-                                              samplingRate=5)
+                                              filesPath=filesPath,
+                                              filesPattern=pattern,
+                                              samplingRate=samplingRate)
 
         self.launchProtocol(protImportTomogram)
+        outputTomos = getattr(protImportTomogram, 'outputTomograms', None)
+        self.assertIsNotNone(outputTomos, 'No tomograms were genetated.')
 
-        output = getattr(protImportTomogram, 'outputTomograms', None)
+        return outputTomos
 
-        self.assertIsNotNone(output,
-                             "There was a problem with tomogram output")
-
-        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
+    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
+        sRate = 5.5
+        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
                                                    objLabel='Import from %s - %s' % (program, ext),
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_AUTO,
-                                                   filesPath=self.dataset.getPath(),
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern=pattern, boxSize=32,
-                                                   samplingRate=5.5)
+                                                   auto=IMPORT_FROM_AUTO,
+                                                   filesPath=self.tomoDs.getPath(),
+                                                   importTomograms=self._importTomograms(self.tomoDs.getFile('tomo1'),
+                                                                                         sRate),
+                                                   filesPattern=pattern,
+                                                   boxSize=32,
+                                                   samplingRate=sRate)
         self.launchProtocol(protImportCoordinates3d)
-
         return protImportCoordinates3d
 
-    def test_import_set_of_coordinates_3D(self):
+    def _runImportSetoOfCoordsFromScipionSqlite(self, sqliteFile, inTomos, boxSize, objLabel):
+        protImportCoordsFromSqlite = self.newProtocol(ProtImportCoordinates3DFromScipion,
+                                                      objLabel=objLabel,
+                                                      sqliteFile=sqliteFile,
+                                                      importTomograms=inTomos,
+                                                      boxSize=boxSize)
 
+        self.launchProtocol(protImportCoordsFromSqlite)
+        return getattr(protImportCoordsFromSqlite, 'outputCoordinates', None), \
+               getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
+
+    def testImport3dCoordsFromSqlite_FullMatch(self):
+        setSize = 2339
+        inTomos = self._importTomograms(self.emdDs.getFile('tomoEmd10439'), self.sqSamplingRate)
+        outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
+            self.emdDs.getFile('scipionSqlite3dCoords'), inTomos, self.sqBoxSize, 'Scipion - Full match')
+        self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
+        self.assertFalse(outputTomoSet)
+
+        # Subset of coordinates 3d
+        splitSet = self.newProtocol(ProtSplitSet,
+                                    inputSet=outputCoordsSet)
+
+        # Launch the split set protocol
+        self.launchProtocol(splitSet)
+        # test we have teh tomograms associatted
+        self.assertCoordinates(splitSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
+
+        # Launch the filter set
+        filterSet = self.newProtocol(ProtSetFilter, formula="True")
+        filterSet.inputSet = Pointer(splitSet, extended="outputCoordinates3D01")
+
+        self.launchProtocol(filterSet)
+        # test the set is correct
+        self.assertCoordinates(filterSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
+
+        # Launch the edit set
+        editSet = self.newProtocol(ProtSetEditor, formula="True")
+        editSet.inputSet = Pointer(filterSet, extended="outputCoordinates3D01")
+
+        self.launchProtocol(editSet)
+        # test the set is correct
+        self.assertCoordinates(editSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
+
+    def testImport3dCoordsFromSqlite_SomeCoordsExcluded(self):
+        setSize = 2335
+        inTomos = self._importTomograms(self.emdDs.getFile('tomoEmd10439'), self.sqSamplingRate)
+        outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
+            self.emdDs.getFile('scipionSqlite3dCoordsSomeBad'), inTomos, self.sqBoxSize,
+            'Scipion - Some coords excluded')
+        self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
+        self.assertFalse(outputTomoSet)
+
+    def testImport3dCoordsFromSqlite_SomeTomosAndCoordsExcluded(self):
+        # Generate a symbolic link to another tomogram to have a set of two, and the coordinates referred only to one
+        # of them
+        setSize = 2335
+        workingPath = self.getOutputPath()
+        emTomogram = self.tomoDs.getFile('tomo1')
+        mrcTomogram = self.emdDs.getFile('tomoEmd10439')
+
+        for tomgramPath in [emTomogram, mrcTomogram]:
+
+            fileName = os.path.basename(tomgramPath).replace(".ed", ".mrc")
+            linkedTomo = join(workingPath, fileName)
+            if not exists(linkedTomo):
+                os.symlink(abspath(tomgramPath), abspath(linkedTomo))
+
+        inTomos = self._importTomograms(workingPath, self.sqSamplingRate, pattern='*.mrc')
+        outputCoordsSet, outputTomoSet = self._runImportSetoOfCoordsFromScipionSqlite(
+            self.emdDs.getFile('scipionSqlite3dCoordsSomeBad'), inTomos, self.sqBoxSize,
+            'Scipion - Some tomos and coords excluded')
+        self.assertCoordinates(outputCoordsSet, setSize, self.sqBoxSize, self.sqSamplingRate)
+
+    def testImport3dCoordsFromSqlite_NoneMatch(self):
+        inTomos = self._importTomograms(self.tomoDs.getFile('tomo1'), self.sqSamplingRate)
+        with self.assertRaises(Exception) as eType:
+            self._runImportSetoOfCoordsFromScipionSqlite(
+                self.emdDs.getFile('scipionSqlite3dCoords'), inTomos, self.sqBoxSize, 'Scipion - No match')
+            self.assertEqual(str(eType.exception), ERR_COORDS_FROM_SQLITE_NO_MATCH)
+
+    def test_import_set_of_coordinates_3D(self):
+        boxSize = 32
+        samplingRate = 5.5
+
+        # From txt
         protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 5)
+        self.assertCoordinates(output, 5, boxSize, samplingRate)
 
+        # From emantomo file
         if existsPlugin('emantomo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
             output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 19)
+            self.assertCoordinates(output, 19, boxSize, samplingRate)
 
             # Check se are not loosing precision
             firstCoord = output.getFirstItem()
@@ -186,18 +286,26 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
             self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
 
-
+        # From dynamo file
         if existsPlugin('dynamo'):
             protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
             output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 5)
+            self.assertCoordinates(output, 5, boxSize, samplingRate)
 
-    def assertCoordinates(self, coordSet, size):
-        self.assertTrue(coordSet,
-                        "There was a problem with coordinates 3d output")
+    def assertCoordinates(self, coordSet, size, boxSize, samplingRate):
+        self.assertTrue(coordSet, 'No 3d coordinates were generated.')
         self.assertSetSize(coordSet, size=size)
-        self.assertTrue(coordSet.getBoxSize() == 32)
-        self.assertTrue(coordSet.getSamplingRate() == 5.5)
+        self.assertTrue(coordSet.getBoxSize() == boxSize)
+        self.assertTrue(coordSet.getSamplingRate() == samplingRate)
+
+        self.assertIsNotNone(coordSet.getPrecedents(), "Tomograms not associated in the output set")
+
+        for coord in coordSet.iterCoordinates():
+            # Access the coordinate, this should work if tomograms are assocciated
+            Y = coord.getY(BOTTOM_LEFT_CORNER)
+            Y = coord.getY(TOP_LEFT_CORNER)
+
+            break
 
 
 class TestTomoImportTomograms(BaseTest):
@@ -266,6 +374,7 @@ class TestTomoImportTomograms(BaseTest):
 
             break
 
+
 class TestTomoBaseProtocols(BaseTest):
     @classmethod
     def setUpClass(cls):
@@ -317,6 +426,7 @@ class TestTomoImportTsFromPattern(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.getFile = cls.dataset.getFile('etomo')
         cls.getFileM = cls.dataset.getFile('empiar')
+        cls.tiltAxisAngle = 84.1
 
     def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
@@ -330,7 +440,7 @@ class TestTomoImportTsFromPattern(BaseTest):
             samplingRate=0.675,
             doseInitial=0,
             dosePerFrame=0.375,
-            tiltAxisAngle=84.1
+            tiltAxisAngle=self.tiltAxisAngle
         )
         self.launchProtocol(protImport)
         return protImport
@@ -350,7 +460,7 @@ class TestTomoImportTsFromPattern(BaseTest):
             samplingRate=1.35,
             doseInitial=0,
             dosePerFrame=0.3,
-            tiltAxisAngle=84.1)
+            tiltAxisAngle=self.tiltAxisAngle)
         self.launchProtocol(protImport)
         return protImport
 
@@ -378,6 +488,7 @@ class TestTomoImportTsFromPattern(BaseTest):
         self.assertSetSize(set, size)
         for ts in set:
             self.assertEquals(ts.getSize(), anglesCount, "Size of tilt images is wrong.")
+            self.assertEqual(ts.getAcquisition().getTiltAxisAngle(), self.tiltAxisAngle)
             for i, ti in enumerate(ts):
                 self.assertFalse(os.path.isabs(ti.getFileName()),
                                  "Tilt image file %s is not absolute!. Should be relative.")
@@ -510,20 +621,25 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         return testData
 
-    def _runImportTiltSeries(self, isTsMovie=False):
+    def _runImportTiltSeries(self, isTsMovie=False, exclusionWords=None):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
+        attribDict = {
+            'filesPath': self.parentDir,
+            'filesPattern': self.pattern,
+        }
+        if exclusionWords:
+            attribDict['exclusionWords'] = exclusionWords
         protImport = self.newProtocol(
             prot,
-            filesPath=self.parentDir,
-            filesPattern=self.pattern)
+            **attribDict)
         self.launchProtocol(protImport)
         return protImport
 
-    def _checkResults(self, outputSet, isTsMovie, dimensions, prot):
+    def _checkResults(self, outputSet, isTsMovie, dimensions, prot, size=None):
         # Generate the test data
         testDict = self._genTestData(isTsMovie)
         # Check set properties
-        self.assertSetSize(outputSet, size=2)
+        self.assertSetSize(outputSet, size=size)
         self.assertAlmostEqual(outputSet.getSamplingRate(), self.sRate, delta=0.001)
         self.assertEqual(outputSet.getDimensions(), dimensions)
 
@@ -534,7 +650,6 @@ class TestTomoImportTsFromMdoc(BaseTest):
             acq = tsM.getAcquisition()
             self.assertAlmostEqual(tsM.getSamplingRate(), testDataDict[self.PIXEL_SIZE], delta=0.001)
             self.assertAlmostEqual(acq.getVoltage(), testDataDict[self.VOLTAGE], delta=0.1)
-            self.assertAlmostEqual(acq.getMagnification(), testDataDict[self.MAGNIFICATION], delta=0.1)
             self.assertAlmostEqual(acq.getSphericalAberration(), testDataDict[self.SPH_ABERRATION], delta=0.01)
             self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
@@ -561,19 +676,34 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertEqual(tiM.getAcquisitionOrder(), acqOrderList[i])
 
                 if not isTsMovie:
-                    self.assertEqual(i+1, tiM.getIndex())
+                    self.assertEqual(i + 1, tiM.getIndex())
                     if previousAngle is not None:
                         self.assertTrue(previousAngle < tiM.getTiltAngle(), "Tilt images are not sorted by angle.")
                     previousAngle = tiM.getTiltAngle()
 
-    def test_importTiltSeriesM(self):
+    def _runTestImportTsM(self, exclusionWords=None, outputSize=None):
         isTsMovie = True
+        label = 'Import TsM'
         # Run protocol
-        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
+        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie, exclusionWords=exclusionWords)
+        if exclusionWords:
+            label += ' excluding words'
+        protImport.setObjLabel(label)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeriesM', None)
-        self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport)  # ts and tsM has different dimensions
-        # because they have been downsampled separately in order to get a lighter test dataset
+        self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport, size=outputSize)  # ts and tsM have
+        # different dimensions because they have been downsampled separately in order to get a lighter test dataset
+        return protImport
+
+    def test_importTiltSeriesM(self):
+        self._runTestImportTsM(outputSize=2)
+
+    def test_importTiltSeriesM_excludingWords(self):
+        """There are 2 mdocs (which means 2 TsM), with tsIds = [stack10, stack31]. Let's exclude the first one
+        using the functionality exclusionWords offered by the protocol"""
+        protImport = self._runTestImportTsM(exclusionWords='stack10', outputSize=1)
+        outputSet = getattr(protImport, 'outputTiltSeriesM', None)
+        self.assertEqual(outputSet.getFirstItem().getTsId(), 'stack31')
 
     def test_importTiltSeries(self):
         isTsMovie = False
@@ -581,7 +711,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
         protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeries', None)
-        self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport)  # ts and tsM have different dimensions
+        self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport, size=2)  # ts and tsM have different dims
         # because they have been downsampled separately in order to get a lighter test dataset
 
     def test_mdocFileCheckerRealOk(self):
@@ -598,7 +728,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(noOkMdocDir, dataSet['realFileNoVoltage1']),
             join(noOkMdocDir, dataSet['realFileNoVoltage2'])
         ]
-        VOLTAGE = '*Voltage*'
+        VOLTAGE = 'Voltage'
         expectedErrorKeyWordList = [
             VOLTAGE,  # Missing voltage
             VOLTAGE  # Missing voltage
@@ -615,9 +745,9 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['noDoseMdoc'])
         ]
         expectedErrorKeyWordList = [
-            '*Magnification*',  # Missing Magnification
-            '*PixelSpacing*',  # Missing Sampling Rate
-            '*dose*'  # Not able to get the dose
+            'Magnification',  # Missing Magnification
+            'PixelSpacing',  # Missing Sampling Rate
+            'Dose'  # Not able to get the dose
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -631,8 +761,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['someMissingAnglesMdoc'])
         ]
         expectedErrorKeyWordList = [
-            ['*Voltage*', '*PixelSpacing*'],  # Missing voltage and sampling rate
-            '*TiltAngle*: 1 7 48'  # Missing tilt angles in slices 1, 7 and 48
+            ['Voltage', 'PixelSpacing'],  # Missing voltage and sampling rate
+            'TiltAngle for Z values: 1, 7, 48'  # Missing tilt angles in slices 1, 7 and 48
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -648,6 +778,93 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 if type(keywords) is str:
                     keywords = [keywords]
                 for errorKeyword in keywords:
-                    self.assertTrue(errorKeyword in errorMsg)
+                    self.assertTrue(errorKeyword in errorMsg,
+                                    msg="%s not found in error message %s after validating %s."
+                                        % (errorKeyword, errorMsg, mdoc))
             else:
-                self.assertTrue(not errorMsg)
+                self.assertTrue(not errorMsg, "There are errors unexpected when validating the Mdocs: %s" % errorMsg)
+
+
+class TestImportTomoMasks(BaseTest):
+    outputPath = None
+    ds = None
+    samplingRate = 13.68
+    inTomoSet = None
+    inTomoSetBinned = None
+    inNotMatchingTomoSet = None
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        ds = DataSet.getDataSet('emd_10439')
+        cls.ds = ds
+        cls.inTomoSet = cls._importTomograms(ds.getFile('tomoEmd10439'))
+        cls.inTomoSetBinned = cls._normalizeTomo()
+        # Create a link pointing to the tomogram but renaming it in a way that it won't be possible to match it with
+        # the tomomask
+        nonMatchingTomoName = join(ds.getPath(), 'nonMatchingTomo.mrc')
+        createLink(ds.getFile('tomoEmd10439'), nonMatchingTomoName)
+        cls.inNotMatchingTomoSet = cls._importTomograms(nonMatchingTomoName)
+
+    @classmethod
+    def _importTomograms(cls, filesPath):
+        print(magentaStr("\n==> Importing data - tomograms:"))
+        protImportTomogram = cls.newProtocol(ProtImportTomograms,
+                                             filesPath=filesPath,
+                                             samplingRate=cls.samplingRate)
+
+        cls.launchProtocol(protImportTomogram)
+        outputTomos = getattr(protImportTomogram, 'outputTomograms', None)
+        cls.assertIsNotNone(outputTomos, 'No tomograms were genetated.')
+
+        return outputTomos
+
+    @classmethod
+    def _normalizeTomo(cls):
+        print(magentaStr("\n==> Tomogram normalization:"))
+        protTomoNormalization = cls.newProtocol(ProtImodTomoNormalization,
+                                                inputSetOfTomograms=cls.inTomoSet,
+                                                binning=2)
+
+        cls.launchProtocol(protTomoNormalization)
+        outputTomos = getattr(protTomoNormalization, 'Tomograms', None)
+        cls.assertIsNotNone(outputTomos, 'No tomograms were genetated in tomo normalization.')
+
+        return outputTomos
+
+    def testImportTomoMasksAllGood(self):
+        print(magentaStr("\n==> Importing data - tomoMasks:"))
+        protImportTomomasks = self.newProtocol(ProtImportTomomasks,
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
+                                               inputTomos=self.inTomoSetBinned)
+
+        self.launchProtocol(protImportTomomasks)
+        tomoMaskSet = getattr(protImportTomomasks, 'outputTomoMasks', None)
+
+        self.assertIsNotNone(tomoMaskSet, 'No tomograms were genetated.')
+        self.assertSetSize(tomoMaskSet, 1)
+        self.assertEqual(tomoMaskSet.getDimensions(), (464, 464, 250))
+        self.assertEqual(tomoMaskSet.getSamplingRate(), 2 * self.samplingRate)
+        self.assertFalse(protImportTomomasks.warnMsg)
+
+    # The tomogram and the tomomask have different sizes
+    def testImportTomoMasksDiffSize(self):
+        print(magentaStr("\n==> Importing data - tomoMasks:"))
+        protImportTomomasks = self.newProtocol(ProtImportTomomasks,
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
+                                               inputTomos=self.inTomoSet)
+
+        with self.assertRaises(Exception) as eType:
+            self.launchProtocol(protImportTomomasks)
+            self.assertEqual(str(eType.exception), ERR_NO_TOMOMASKS_GEN)
+
+    # Tomomask and tomogram doesn't correspond
+    def testImportTomoMasksNoneMatch(self):
+        print(magentaStr("\n==> Importing data - tomoMasks:"))
+        protImportTomomasks = self.newProtocol(ProtImportTomomasks,
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
+                                               inputTomos=self.inNotMatchingTomoSet)
+
+        with self.assertRaises(Exception) as eType:
+            self.launchProtocol(protImportTomomasks)
+            self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)

@@ -30,10 +30,14 @@ import os
 import re
 import importlib
 import numpy as np
+import math
+import logging
+logger = logging.getLogger(__name__)
 
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries
 
 
 def existsPlugin(plugin):
@@ -323,3 +327,61 @@ def generatePointCloud(v, tomoDim):
                 pointCloud.append([0, 0, int(z * tomoDim[2])])
 
     return pointCloud
+
+
+def isMatchingByTsId(set1, set2):
+    return True if getattr(set1.getFirstItem(), _getTsIdLabel(set1), None) and \
+                   getattr(set2.getFirstItem(), _getTsIdLabel(set2), None) else False
+
+
+def _getTsIdLabel(setObject):
+    """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
+    corresponding coordinate)"""
+    return '_tomoId' if type(setObject) in [SetOfCoordinates3D, SetOfSubTomograms] else '_tsId'
+
+
+def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
+    logger.debug("Retrieving relations for %s." % sourceObj)
+    p = protocol.getProject()
+    graph = p.getSourceGraph(True)  # Graph with all the relations
+    sourceNode = graph.getNode(sourceObj.strId())  # Node corresponding to the source object
+    # Climb up in the relations graph until the target condition provided in the callback input is fulfilled
+    nodes = sourceNode.getParents()
+    while nodes:
+        sourceNode = nodes.pop()
+        if not sourceNode.isRoot():
+            relatedOutput = sourceNode.pointer.get()
+            logger.debug("Checking related object: %s" % relatedOutput)
+            if stopSearchCallback(relatedOutput):
+                return relatedOutput
+            else:
+                parents = sourceNode.getParents()
+                if parents is not None:
+                    nodes += parents
+    return None
+
+
+def getNonInterpolatedTsFromRelations(sourceObj, prot):
+    def stopSearchCallback(pObj):
+        return type(pObj) == SetOfTiltSeries and pObj.getFirstItem().getFirstItem().hasTransform()
+    return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
+
+
+def getObjFromRelation(sourceObj, prot, targetObj):
+    def stopSearchCallback(pObj):
+        return type(pObj) == targetObj
+    return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
+
+
+def getRotationAngleAndShiftFromTM(ti):
+    """ This method calculates que tilt image in-plane rotation angle and shifts from its associated transformation
+    matrix."""
+
+    tm = ti.getTransform().getMatrix()
+    cosRotationAngle = tm[0][0]
+    sinRotationAngle = tm[1][0]
+    rotationAngle = math.degrees(math.atan(sinRotationAngle / cosRotationAngle))
+
+    shifts = [tm[0][2], tm[0][2]]
+
+    return rotationAngle, shifts

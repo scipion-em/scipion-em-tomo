@@ -32,7 +32,7 @@
 # from convention to bottom left corner)
 # Input parameter of lambda functions is a tuple/list with the dimensions of a Tomogram
 # This functions return the vector in VOXELS. No decimal places allowed --> (int(vx), int(vy), int(vz))
-BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp, Imod
+BOTTOM_LEFT_CORNER = lambda dim: (0, 0, 0)  # Eman, Xmipp, Imod, crYOLO
 TOP_LEFT_CORNER = lambda dim: (0, dim[1], 0)
 CENTER_GRAVITY = lambda dim: (0.5 * dim[0], 0.5 * dim[1], 0.5 * dim[2])
 
@@ -42,3 +42,26 @@ CENTER_GRAVITY = lambda dim: (0.5 * dim[0], 0.5 * dim[1], 0.5 * dim[2])
 SCIPION = lambda dim: None
 
 # ----------------------------------------------------------------------------
+# Error message when non-matching tomograms are found in protocol import 3d coordinates from Scipion sqlite
+ERR_COORDS_FROM_SQLITE_NO_MATCH = 'No matching tomograms were found to the introduced coordinates. Coordinates ' \
+                                  'attribute tomoId should be the same as the corresponding tomogram attribute tsId ' \
+                                  'or be contained in its name.'
+
+# Import tomomasks error messages
+ERR_NO_TOMOMASKS_GEN = 'No tomomasks were generated. Check the output log for more details.'
+ERR_NON_MATCHING_TOMOS = 'No matching tomograms were found with the input tomomasks. The match is carried out by ' \
+                         'checking if the tsId of each tomogram is contained in the basename of the tomomaks. If ' \
+                         'the tomograms do not have that attribute, then the base name is considered.'
+
+
+# ---------------------------- TRANSFORMATION MATRIX Conventions ----------------------------
+
+# A detailed description of the transformation convention adopted by Scipion and its conversion to other packages is
+# available in the help of the function "convertMatrix" defined in the "objects.py" file
+TR_SCIPION = None
+TR_RELION = "relion"
+TR_EMAN = "eman"
+
+# Conversion direction constants
+SET = "set"
+GET = "get"

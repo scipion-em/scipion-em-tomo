@@ -28,6 +28,7 @@ import os
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
+from pwem.convert.headers import getFileFormat, MRC
 from pyworkflow.object import Set, Integer
 from pyworkflow.protocol import STATUS_NEW
 from pyworkflow.utils.properties import Message
@@ -86,12 +87,16 @@ class ProtTsEstimateCTF(ProtTsProcess):
         if not ih.existsLocation(ti):
             raise Exception("Missing input file: %s" % ti)
 
+        tiFName = ti.getFileName()
+        # Make xmipp considers the input object as TS to work as expected
+        if getFileFormat(tiFName) == MRC:
+            tiFName = tiFName.split(':')[0] + ':mrcs'
+        tiFName = str(ti.getIndex()) + '@' + tiFName
+
         if downFactor != 1:
-            # Replace extension by 'mrc' because there are some formats
-            # that cannot be written (such as dm3)
-            ih.scaleFourier(ti.getFileName(), tiFn, downFactor)
+            ih.scaleFourier(tiFName, tiFn, downFactor)
         else:
-            ih.convert(ti, tiFn, emlib.DT_FLOAT)
+            ih.convert(tiFName, tiFn, emlib.DT_FLOAT)
 
     def _estimateCtf(self, workingDir, tiFn, tiltImage, *args):
         raise Exception("_estimateCTF function should be implemented!")
@@ -138,13 +143,6 @@ class ProtTsEstimateCTF(ProtTsProcess):
             index += 1
             newCTFTomoSeries.append(newCTFTomo)
 
-        newCTFTomoSeries.calculateDefocusUDeviation()
-        newCTFTomoSeries.calculateDefocusVDeviation()
-
-        if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
-                newCTFTomoSeries.getIsDefocusVDeviationInRange()):
-            newCTFTomoSeries.setEnabled(False)
-
         newCTFTomoSeries.write(properties=False)
         outputSet.update(newCTFTomoSeries)
 
@@ -182,11 +180,11 @@ class ProtTsEstimateCTF(ProtTsProcess):
             if isinstance(self.inputTiltSeries.get(), SetOfCTFTomoSeries):
                 inputLabel = 'Input CTFTomoSeries'
             summary.append(
-                inputLabel + ": %d.\nnumber of CTF estimated: %d.\n"
+                inputLabel + ": %d.\nNumber of CTF estimated: %d.\n"
                 % (self._getInputTs().getSize(),
                    self.outputSetOfCTFTomoSeries.getSize()))
         else:
-            summary.append("Output classes not ready yet.")
+            summary.append("Output CTFs are not ready yet.")
         return summary
 
     # --------------------------- UTILS functions ----------------------------

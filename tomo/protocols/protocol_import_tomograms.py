@@ -24,14 +24,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
 from os.path import abspath, basename
 
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.utils.path import createAbsLink
+from pyworkflow.utils.path import createAbsLink, removeExt
 import pyworkflow.protocol.params as params
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
@@ -114,11 +112,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importTomogramsStep(
-            self,
-            pattern,
-            samplingRate
-    ):
+    def importTomogramsStep(self, pattern, samplingRate):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
@@ -134,17 +128,9 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoSet.setSamplingRate(samplingRate)
 
         self._parseAcquisitionData()
+        fileNameList = []
         for fileName, fileId in self.iterFiles():
             x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.mrc') or fileName.endswith('.map'):
-                fileName += ':mrc'
-                if z == 1 and n != 1:
-                    zDim = n
-                    n = 1
-                else:
-                    zDim = z
-            else:
-                zDim = z
 
             origin = Transform()
 
@@ -153,27 +139,33 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             else:
                 origin.setShifts(x / -2. * samplingRate,
                                  y / -2. * samplingRate,
-                                 zDim / -2. * samplingRate)
+                                 z / -2. * samplingRate)
 
             tomo.setOrigin(origin)  # read origin from form
 
-            newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
+            newFileName = basename(fileName).split(':')[0]
+            if newFileName in fileNameList:
+                newFileName = _getUniqueFileName(self.getPattern(),
+                                                 fileName.split(':')[0])
 
-            # newFileName = abspath(self._getVolumeFileName(newFileName))
+            fileNameList.append(newFileName)
+
+            tsId = removeExt(newFileName)
+            tomo.setTsId(tsId)
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
-            createAbsLink(fileName, abspath(self._getExtraPath(newFileName)))
-            if n == 1:
+            createAbsLink(abspath(fileName), abspath(self._getExtraPath(newFileName)))
+            tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
+
+            if n == 1:  # One volume per file
                 tomo.cleanObjId()
                 tomo.setFileName(self._getExtraPath(newFileName))
-                tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                 tomoSet.append(tomo)
-            else:
+            else:  # A stack of volumes per file (not common)
                 for index in range(1, n+1):
                     tomo.cleanObjId()
                     tomo.setLocation(index, self._getExtraPath(newFileName))
-                    tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
                     tomoSet.append(tomo)
 
         self._defineOutputs(outputTomograms=tomoSet)

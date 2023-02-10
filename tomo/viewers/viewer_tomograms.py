@@ -31,7 +31,7 @@ for input tomograms.
 """
 
 import os
-from distutils.spawn import find_executable
+from shutil import which
 import tempfile
 
 import pyworkflow.protocol.params as params
@@ -41,8 +41,6 @@ import pwem.viewers as viewers
 from pwem.emlib.image import ImageHandler
 
 
-from tomo.protocols import ProtImportTomograms, \
-    ProtImportSubTomograms
 from tomo.objects import SetOfSubTomograms
 
 
@@ -54,7 +52,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
     """ Wrapper to visualize tomo objects
     with default viewers such as xmipp/showj and chimera. """
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
-    _targets = [ProtImportTomograms, ProtImportSubTomograms, SetOfSubTomograms]
+    _targets = []
     _label = 'viewer input tomogram'
 
     def _defineParams(self, form):
@@ -83,7 +81,7 @@ class ViewerProtImportTomograms(EmProtocolViewer):
 
     def _validate(self):
         if (self.displayTomo == TOMOGRAM_CHIMERA
-                and find_executable(viewers.viewer_chimera.Chimera.getProgram()) is None):
+                and which(viewers.viewer_chimera.Chimera.getProgram()) is None):
             return ["chimera is not available. "
                     "Either install it or choose option 'slices'. "]
         return []

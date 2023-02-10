@@ -24,5 +24,7 @@
 # *
 # **************************************************************************
 
-from .viewers_data import TomoDataViewer, TSMotionCorrectionViewer, CtfEstimationTomoViewer
+from .viewers_data import (TomoDataViewer, TSMotionCorrectionViewer,
+                           CtfEstimationTomoViewer)
 from .viewer_tomograms import ViewerProtImportTomograms
+from .viewer_split_evenodd import SplitEvenOddViewer

@@ -27,6 +27,7 @@
 import glob
 import threading
 from tkinter import *
+import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -35,7 +36,6 @@ from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
-import pyworkflow.config as conf
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
 from pyworkflow.plugin import Domain
@@ -51,10 +51,12 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TS = 'Tilt series'
     COL_TI = 'Path'
     COL_TI_ANGLE = 'Tilt angle'
+    COL_TI_ENABLED = 'Included'
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DEFOCUS_U = 'Defocus U (A)'
     COL_TI_DOSE = "Accum. dose"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
+                  COL_TI_ENABLED: '_objEnabled',
                   COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
                   COL_TI_DOSE: '_acquisition._accumDose'}
 
@@ -80,7 +82,10 @@ class TiltSeriesTreeProvider(TreeProvider):
             tsObj._parentObject = None
             objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
+
                 tiObj = ti.clone()
+                # For some reason .clone() does not clone the enabled nor the creation time
+                tiObj.setEnabled(ti.isEnabled())
                 tiObj._allowsSelection = False
                 tiObj._parentObject = tsObj
                 objects.append(tiObj)
@@ -98,6 +103,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TS, 100),
             (self.COL_TI_ACQ_ORDER, 100),
             (self.COL_TI_ANGLE, 100),
+            (self.COL_TI_ENABLED, 100),
             (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
         ]
@@ -128,11 +134,12 @@ class TiltSeriesTreeProvider(TreeProvider):
             key = '%s.%s' % (tsId, objId)
             text = objId
 
-            dose = obj.getAcquisition().getAccumDose()
-            adqOrder = obj.getAcquisitionOrder()
+            dose = obj.getAcquisition().getAccumDose() if hasattr(obj.getAcquisition(), '_accumDose') else None
+            adqOrder = obj.getAcquisitionOrder() if hasattr(obj, '_acqOrder') else None
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
+                      str(obj.isEnabled()),
                       round(dose, 2) if dose is not None else "",
                       "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
 
@@ -190,8 +197,8 @@ class TiltSeriesDialogView(pwviewer.View):
         self._provider = TiltSeriesTreeProvider(protocol, tiltSeries)
 
     def show(self):
-        dlg = ListDialog(self._tkParent, 'TiltSeries display', self._provider,
-                         allowSelect=False, cancelButton=True)
+        ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
+                   allowSelect=False, cancelButton=True)
 
 
 class TomogramsTreeProvider(TreeProvider):
@@ -204,7 +211,7 @@ class TomogramsTreeProvider(TreeProvider):
         self._mode = mode
 
     def getColumns(self):
-        return [('Tomogram', 300), ('status', 150)]
+        return [('Tomogram', 300), ("# coords", 100), ('status', 150)]
 
     def getObjectInfo(self, tomo):
         if self._mode == 'txt':
@@ -225,11 +232,11 @@ class TomogramsTreeProvider(TreeProvider):
 
         if not os.path.isfile(filePath):
             return {'key': tomogramName, 'parent': None,
-                    'text': tomogramName, 'values': ("TODO"),
+                    'text': tomogramName, 'values': (tomo.count, "TODO"),
                     'tags': ("pending")}
         else:
             return {'key': tomogramName, 'parent': None,
-                    'text': tomogramName, 'values': ("DONE"),
+                    'text': tomogramName, 'values': (tomo.count, "DONE"),
                     'tags': ("done")}
 
     def getObjectPreview(self, obj):
@@ -329,27 +336,34 @@ class TomogramsDialog(ToolbarListDialog):
                                        "Tomogram List",
                                        allowsEmptySelection=False,
                                        itemDoubleClick=self.doubleClickViewer,
+                                       allowSelect=False,
                                        **kwargs)
         else:
             ToolbarListDialog.__init__(self, parent,
                                        "Tomogram List",
                                        allowsEmptySelection=False,
                                        itemDoubleClick=self.doubleClickOnTomogram,
+                                       allowSelect=False,
                                        **kwargs)
 
     def refresh_gui_viewer(self):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui_viewer)
         else:
-            pwutils.cleanPath(os.path.join(self.path, 'mesh.txt'))
+            meshFile = os.path.join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
+            self.tomo.count = np.loadtxt(meshFile, delimiter=',').shape[0]
             pwutils.cleanPath(self.macroPath)
+            self.tree.update()
 
     def refresh_gui(self):
         self.tree.update()
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
+            meshFile = os.path.join(self.path, pwutils.removeBaseExt(self.tomo.getFileName()) + '.txt')
+            self.tomo.count = np.loadtxt(meshFile, delimiter=',').shape[0]
             pwutils.cleanPath(self.macroPath)
+            self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
@@ -364,7 +378,7 @@ class TomogramsDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui_viewer)
 
     def lanchIJForTomogram(self, path, tomogram):
-        self.macroPath = os.path.join(conf.Config.SCIPION_TMP, "AutoSave_ROI.ijm")
+        self.macroPath = os.path.join(self.path, "AutoSave_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
@@ -528,7 +542,7 @@ class TomogramsDialog(ToolbarListDialog):
         runJavaIJapp(4, app, args).wait()
 
     def lanchIJForViewing(self, path, tomogram):
-        self.macroPath = os.path.join(conf.Config.SCIPION_TMP, "View_ROI.ijm")
+        self.macroPath = os.path.join(self.path, "View_ROI.ijm")
         tomogramFile = tomogram.getFileName()
         tomogramName = os.path.basename(tomogramFile)
 
@@ -619,7 +633,6 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     """
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
-    CRITERIA_1 = 'Status'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
     COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
     COL_CTF_EST_AST = 'Astigmatism (A)'
@@ -678,7 +691,6 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         cols = [
             (self.COL_CTF_SERIE, 100),
             (self.COL_TILT_ANG, 100),
-            (self.CRITERIA_1, 60),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
             (self.COL_CTF_EST_DEFOCUS_V, 100),
             (self.COL_CTF_EST_AST, 150),
@@ -703,8 +715,9 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             key = obj.getTsId()
             text = obj.getTsId()
             # TODO: show avg defocus for TomoSeries
-            values = ['', CTFSerieStates.OK if obj.getIsDefocusUDeviationInRange()
-                      else CTFSerieStates.FAILED]
+            values = ['',
+                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED
+                      ]
             opened = False
             selected = obj.isEnabled()
         else:  # CTFTomo
@@ -716,8 +729,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
             values = [str("%0.2f" % tiltAngle),
-                      CTFSerieStates.OK if obj.getIsDefocusUDeviationInRange()
-                      else CTFSerieStates.FAILED,
+                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
                       str("%d" % ast),
@@ -739,7 +751,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         }
         if isinstance(obj, tomo.objects.CTFTomoSeries):
             tags = CTFSerieStates.UNCHECKED
-            if not (obj.getIsDefocusUDeviationInRange() and obj.getIsDefocusVDeviationInRange()):
+            if not obj.isEnabled():
                 obj.setEnabled(True)
                 tags = CTFSerieStates.CHECKED
                 self._checkedItems += 1
@@ -1003,6 +1015,8 @@ class CtfEstimationListDialog(ListDialog):
                     ctfId = int(itemSelected.split('.')[-1])
                     # TODO: sort ctfSerie by id
                     fig = self._show2DPLot(ctfSerie, ctfId)
+                    if fig is None:
+                        return
                     canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
                     canvas.draw()
                     canvas.get_tk_widget().pack(fill=BOTH, expand=0)
@@ -1013,16 +1027,21 @@ class CtfEstimationListDialog(ListDialog):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         angList = []
         defocusUList = []
+        defocusVList = []
         phShList = []
         resList = []
 
+        for ts in self._inputSetOfTiltSeries:
+            if ts.getTsId() == itemSelected:
+                for item in ts:
+                    angList.append(item.getTiltAngle())
+                break
+
         for ctfSerie in self.provider.getCTFSeries():
-            ts = ctfSerie.getTiltSeries()
             if ctfSerie.getTsId() == itemSelected:
                 for item in ctfSerie.iterItems(orderBy='id'):
-                    index = int(item.getIndex())
-                    angList.append(int(ts[index].getTiltAngle()))
                     defocusUList.append(item.getDefocusU())
+                    defocusVList.append(item.getDefocusV())
                     phShList.append(
                         item.getPhaseShift() if item.hasPhaseShift() else 0)
                     resList.append(item.getResolution())
@@ -1035,6 +1054,9 @@ class CtfEstimationListDialog(ListDialog):
                 defocusPlot.set_ylabel('DefocusU', color='tab:red')
                 defocusPlot.plot(angList, defocusUList, marker='.',
                                  color='tab:red', label='DefocusU (A)')
+                defocusPlot.set_ylabel('DefocusV', color='tab:blue')
+                defocusPlot.plot(angList, defocusVList, marker='.',
+                                 color='tab:blue', label='DefocusV (A)')
 
                 if item.hasPhaseShift():
                     phShPlot = defocusPlot.twinx()

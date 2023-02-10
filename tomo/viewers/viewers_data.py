@@ -30,7 +30,7 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.viewer as pwviewer
 from pwem.protocols import EMProtocol
-from pwem.viewers import ObjectView
+from pwem.viewers import ObjectView, DataViewer, MODE, MODE_MD, VISIBLE
 from pyworkflow.protocol import LabelParam
 
 from .views import ClassesSubTomogramsView
@@ -40,11 +40,12 @@ from tomo.protocols import ProtTsCorrectMotion
 
 SERIES_EVEN = "outputTiltSeriesEven"
 SERIES_ODD = "outputTiltSeriesOdd"
+SERIES_DW = "outputTiltSeriesDW"
 
 
 class TomoDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
-    with the Xmipp program xmipp_showj
+    in a dedicated tree view
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
@@ -80,7 +81,15 @@ class TomoDataViewer(pwviewer.Viewer):
         elif issubclass(cls, tomo.objects.SetOfMeshes):
             from .views_tkinter_tree import TomogramsTreeProvider, TomogramsDialog
             outputMeshes = obj
-            tomoList = [item.clone() for item in outputMeshes.iterVolumes()]
+            tomos = outputMeshes.getPrecedents()
+            volIds = outputMeshes.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
+            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
+
+            tomoList = []
+            for objId in volIds:
+                tomogram = tomos[objId[0]].clone()
+                tomogram.count = objId[1]
+                tomoList.append(tomogram)
             path = self.protocol._getExtraPath()
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
             path = os.path.join(path, '..')
@@ -102,6 +111,10 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
         form.addParam('displayFullTiltSeries', LabelParam,
                       label='Display full frame aligned tilt series',
                       help='Shows full frames aligned set of tilt series')
+        if self.hasDWSet():
+            form.addParam('displayFullTiltSeriesDW', LabelParam,
+                          label='Display full frame aligned tilt series (dose-weighted)',
+                          help='Shows full frames aligned set of tilt series')
         if self.hasEvenSet():
             form.addParam('displayEvenTiltSeries', LabelParam,
                           label='Display even frames aligned tilt series',
@@ -111,6 +124,9 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
                 form.addParam('displayOddTiltSeries', LabelParam,
                               label='Display odd frames aligned tilt series',
                               help='Shows even frames aligned set of tilt series')
+
+    def hasDWSet(self):
+        return hasattr(self.protocol, SERIES_DW)
 
     def hasEvenSet(self):
         return hasattr(self.protocol, SERIES_EVEN)
@@ -133,9 +149,13 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
     def _displayFullTiltSeries(self, param=None):
         return self._visualize(self.protocol.outputTiltSeries)
 
+    def _displayFullTiltSeriesDW(self, param=None):
+        return self._visualize(self.protocol.outputTiltSeriesDW)
+
     def _getVisualizeDict(self):
         return {
             'displayFullTiltSeries': self._displayFullTiltSeries,
+            'displayFullTiltSeriesDW': self._displayFullTiltSeriesDW,
             'displayEvenTiltSeries': self._displayEvenTiltSeries,
             'displayOddTiltSeries': self._displayOddTiltSeries,
         }
@@ -202,3 +222,19 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
                                       CtfEstimationTomoViewer.plot2D):
             return self.plot2D
         return None
+
+
+# Register specific sets in pwem dataviewer.
+DataViewer.registerConfig(tomo.objects.SetOfSubTomograms,
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _filename _volName _coordinate._x _coordinate._y _coordinate._z '
+                                           '_transform._matrix '})
+
+DataViewer.registerConfig(tomo.objects.SetOfCoordinates3D,
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _tomoId _x _y _z _groupId _eulerMatrix._matrix '})
+
+DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
+DataViewer.registerConfig(tomo.objects.SetOfMeshes)
+DataViewer.registerConfig(tomo.objects.SetOfLandmarkModels)
+DataViewer.registerConfig(tomo.objects.SetOfCTFTomoSeries)

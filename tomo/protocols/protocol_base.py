@@ -38,7 +38,7 @@ import tomo.objects
 class ProtTomoBase:
     def _createSet(self, SetClass, template, suffix, **kwargs):
         """ Create a set and set the filename using the suffix.
-        If the file exists, it will be delete. """
+        If the file exists, it will be deleted. """
         setFn = self._getPath(template % suffix)
         # Close the connection to the database if
         # it is open before deleting the file
@@ -52,7 +52,7 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfTiltSeriesM,
                                'tiltseriesM%s.sqlite', suffix)
 
-    def _createSetOfTiltSeries(self, suffix=''):
+    def _createSetOfTiltSeries(self, suffix='') -> tomo.objects.SetOfTiltSeries:
         self._ouputSuffix = ''
         return self._createSet(tomo.objects.SetOfTiltSeries,
                                'tiltseries%s.sqlite', suffix)
@@ -83,7 +83,7 @@ class ProtTomoBase:
 
         return classes
 
-    def _createSetOfLandmarkModels(self, suffix=''):
+    def _createSetOfLandmarkModels(self, suffix='') -> tomo.objects.SetOfLandmarkModels:
         return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
 
     def _createSetOfMeshes(self, volSet, suffix=''):
@@ -124,12 +124,9 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
-        if self.isFinished():
-            summary.append("Output 3D Coordinates not ready yet.")
-
-        if self.getOutputsSize() >= 1:
+        if self.isFinished() and self.getOutputsSize() >= 1:
             for key, output in self.iterOutputAttributes():
-                summary.append("*%s:* \n %s " % (key, output.getSummary()))
+                summary.append("*%s:*\n%s" % (key, output.getSummary()))
         else:
             summary.append(Message.TEXT_NO_OUTPUT_CO)
         return summary
