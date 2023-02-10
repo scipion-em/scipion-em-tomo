@@ -30,7 +30,7 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.viewer as pwviewer
 from pwem.protocols import EMProtocol
-from pwem.viewers import ObjectView, DataViewer, MODE, MODE_MD
+from pwem.viewers import ObjectView, DataViewer, MODE, MODE_MD, VISIBLE
 from pyworkflow.protocol import LabelParam
 
 from .views import ClassesSubTomogramsView
@@ -224,23 +224,17 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         return None
 
 
-class TomoMetadataDataViewer(DataViewer):
-    """ Wrapper to visualize any Set of something different than a set of images, useful to make subsets
-        with the Xmipp program xmipp_showj
-        """
-    _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [tomo.objects.SetOfCoordinates3D,
-                tomo.objects.SetOfTiltSeriesCoordinates,
-                tomo.objects.SetOfMeshes,
-                tomo.objects.SetOfLandmarkModels,
-                tomo.objects.SetOfCTFTomoSeries]
-    _label = 'XmippDataViewer'
+# Register specific sets in pwem dataviewer.
+DataViewer.registerConfig(tomo.objects.SetOfSubTomograms,
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _filename _volName _coordinate._x _coordinate._y _coordinate._z '
+                                           '_transform._matrix '})
 
-    def __init__(self, **kwargs):
-        DataViewer.__init__(self, **kwargs)
-        self._views = []
+DataViewer.registerConfig(tomo.objects.SetOfCoordinates3D,
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _tomoId _x _y _z _groupId _eulerMatrix._matrix '})
 
-    def _visualize(self, obj, **kwargs):
-        fn = obj.getFileName()
-        self._addObjView(obj, fn, {MODE: MODE_MD})
-        return self._views
+DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
+DataViewer.registerConfig(tomo.objects.SetOfMeshes)
+DataViewer.registerConfig(tomo.objects.SetOfLandmarkModels)
+DataViewer.registerConfig(tomo.objects.SetOfCTFTomoSeries)

@@ -131,15 +131,6 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         fileNameList = []
         for fileName, fileId in self.iterFiles():
             x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.mrc') or fileName.endswith('.map'):
-                fileName += ':mrc'
-                if z == 1 and n != 1:
-                    zDim = n
-                    n = 1
-                else:
-                    zDim = z
-            else:
-                zDim = z
 
             origin = Transform()
 
@@ -148,7 +139,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             else:
                 origin.setShifts(x / -2. * samplingRate,
                                  y / -2. * samplingRate,
-                                 zDim / -2. * samplingRate)
+                                 z / -2. * samplingRate)
 
             tomo.setOrigin(origin)  # read origin from form
 
@@ -164,7 +155,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
             if fileName.endswith(':mrc'):
                 fileName = fileName[:-4]
-            createAbsLink(fileName, abspath(self._getExtraPath(newFileName)))
+            createAbsLink(abspath(fileName), abspath(self._getExtraPath(newFileName)))
             tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
 
             if n == 1:  # One volume per file

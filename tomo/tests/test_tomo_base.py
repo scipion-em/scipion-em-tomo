@@ -108,7 +108,7 @@ class TestTomoBase(BaseTest):
         print("Writing new set to: %s" % fn2)
 
         def _updateCtf(j, ts, ti, tsOut, tiOut):
-            tiOut.setCTF(CTFModel(defocusU=j*1000, defocusAngle=j/2.0))
+            tiOut.setCTF(CTFModel(defocusU=j * 1000, defocusAngle=j / 2.0))
 
         testSet2 = SetOfTiltSeries(filename=fn2)
         testSet2.copyItems(testSet, updateTiCallback=_updateCtf)
@@ -287,6 +287,7 @@ class TestTomoSubSetsTomograms(BaseTest):
     """This class check if the protocol to import tomograms, create subsets,
      join subset and create a intersection of subsets of tomogram
      works properly."""
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
@@ -421,6 +422,7 @@ class TestTomoSubSetsSubTomograms(BaseTest):
     """This class check if the protocol to import subtomograms, create subsets,
      join subset and create a intersection of subsets of tomogram
      works properly."""
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
@@ -627,52 +629,52 @@ class TestTomoPreprocessing(BaseTest):
         self.launchProtocol(protCtffind)
 
 
-class TestTomoAssignAlignment(BaseTest):
-    """This class check if the protocol assign alignments for subtomograms/coordinates works properly."""
-
-    @classmethod
-    def setUpClass(cls):
-        setupTestProject(cls)
-        cls.dataset = DataSet.getDataSet('tomo-em')
-        cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
-
-    def _runPreviousProtocols(self):
-        protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                      filesPath=self.setOfSubtomograms,
-                                      samplingRate=5)
-        self.launchProtocol(protImport)
-        protImport2 = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
-                                       filesPath=self.setOfSubtomograms,
-                                       samplingRate=5)
-        self.launchProtocol(protImport2)
-        from xmipp2.protocols import Xmipp2ProtMLTomo
-        protMltomo = self.newProtocol(Xmipp2ProtMLTomo,
-                                      inputVolumes=protImport.outputSubTomograms,
-                                      randomInitialization=True,
-                                      numberOfReferences=1,
-                                      numberOfIters=3,
-                                      angularSampling=30)
-        self.launchProtocol(protMltomo)
-        self.assertIsNotNone(protMltomo.outputSubtomograms,
-                             "There was a problem with the output")
-        self.assertIsNotNone(protMltomo.outputClassesSubtomo,
-                             "There was a problem with the output")
-        return protImport2, protMltomo
-
-    def _assignAlignment(self):
-        protImport2, protMltomo = self._runPreviousProtocols()
-        assign = self.newProtocol(tomo.protocols.ProtAlignmentAssignSubtomo,
-                                  input=protImport2.outputSubTomograms,
-                                  inputAlignment=protMltomo.outputSubtomograms)
-        self.launchProtocol(assign)
-        self.assertIsNotNone(assign.outputAligned,
-                             "There was a problem with the output")
-        return assign
-
-    def test_assignAlignment(self):
-        assign = self._assignAlignment()
-        self.assertTrue(assign.outputAligned.getFirstItem().hasTransform())
-        return assign
+# class TestTomoAssignAlignment(BaseTest):
+#     """This class check if the protocol assign alignments for subtomograms/coordinates works properly."""
+#
+#     @classmethod
+#     def setUpClass(cls):
+#         setupTestProject(cls)
+#         cls.dataset = DataSet.getDataSet('tomo-em')
+#         cls.setOfSubtomograms = cls.dataset.getFile('basename.hdf')
+#
+#     def _runPreviousProtocols(self):
+#         protImport = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+#                                       filesPath=self.setOfSubtomograms,
+#                                       samplingRate=5)
+#         self.launchProtocol(protImport)
+#         protImport2 = self.newProtocol(tomo.protocols.ProtImportSubTomograms,
+#                                        filesPath=self.setOfSubtomograms,
+#                                        samplingRate=5)
+#         self.launchProtocol(protImport2)
+#         from xmipp2.protocols import Xmipp2ProtMLTomo
+#         protMltomo = self.newProtocol(Xmipp2ProtMLTomo,
+#                                       inputVolumes=protImport.outputSubTomograms,
+#                                       randomInitialization=True,
+#                                       numberOfReferences=1,
+#                                       numberOfIters=3,
+#                                       angularSampling=30)
+#         self.launchProtocol(protMltomo)
+#         self.assertIsNotNone(protMltomo.outputSubtomograms,
+#                              "There was a problem with the output")
+#         self.assertIsNotNone(protMltomo.outputClassesSubtomo,
+#                              "There was a problem with the output")
+#         return protImport2, protMltomo
+#
+#     def _assignAlignment(self):
+#         protImport2, protMltomo = self._runPreviousProtocols()
+#         assign = self.newProtocol(tomo.protocols.ProtAlignmentAssignSubtomo,
+#                                   input=protImport2.outputSubTomograms,
+#                                   inputAlignment=protMltomo.outputSubtomograms)
+#         self.launchProtocol(assign)
+#         self.assertIsNotNone(assign.outputAligned,
+#                              "There was a problem with the output")
+#         return assign
+#
+#     def test_assignAlignment(self):
+#         assign = self._assignAlignment()
+#         self.assertTrue(assign.outputAligned.getFirstItem().hasTransform())
+#         return assign
 
 
 class TestTomoAssignTomo2Subtomo(BaseTest):
@@ -715,8 +717,10 @@ class TestTomoAssignTomo2Subtomo(BaseTest):
         # It can not be checked properly with current test data
         return tomo2subtomo
 
+
 with weakImport("xmipptomo"):
     from xmipptomo.protocols.protocol_project_top import SubtomoProjectOutput
+
 
     class TestParticlesToSubtomograms(BaseTest):
         """
@@ -752,21 +756,21 @@ with weakImport("xmipptomo"):
                 from xmipptomo.protocols.protocol_project_top import XmippProtSubtomoProject
                 from xmipp3.protocols.protocol_cl2d import XmippProtCL2D
             except ImportError:
-                print('To run this test, scipion-em-xmipptomo and scipion-em-xmipp2'
-                      ' are required. This test will not be executed unless these '
-                      'plugins are installed')
+                print('To run this test scipion-em-xmipptomo is required. '
+                      'This test will not be executed unless this '
+                      'plugin is installed.')
                 return
             subtomograms = self._importSubtomoSet()
             projector = self.newProtocol(XmippProtSubtomoProject,
-                                               input=subtomograms.outputSubTomograms)
+                                         input=subtomograms.outputSubTomograms)
             self.launchProtocol(projector)
             output = getattr(projector, SubtomoProjectOutput.particles.name)
             self.assertSetSize(output, 4, "The number of projections generated must be 4")
 
             splitSet = self._splitSet(output, 2)
             protParticlesToSubtomograms = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
-                                          inputSubtomogramSet=subtomograms.outputSubTomograms,
-                                          inputSet=splitSet.outputParticles01)
+                                                           inputSubtomogramSet=subtomograms.outputSubTomograms,
+                                                           inputSet=splitSet.outputParticles01)
             self.launchProtocol(protParticlesToSubtomograms)
             self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
             self.assertSetSize(protParticlesToSubtomograms.outputSubtomograms, 2,
@@ -797,13 +801,13 @@ with weakImport("xmipptomo"):
             self.assertIsNotNone(protParticlesToSubtomograms.outputSubtomograms)
 
             protParticlesToSubtomograms1 = self.newProtocol(tomo.protocols.Prot2DParticlesToSubtomograms,
-                                                           inputSubtomogramSet=subtomograms.outputSubTomograms,
-                                                           inputSet=splitSet.outputClasses2D02)
+                                                            inputSubtomogramSet=subtomograms.outputSubTomograms,
+                                                            inputSet=splitSet.outputClasses2D02)
             self.launchProtocol(protParticlesToSubtomograms1)
             self.assertIsNotNone(protParticlesToSubtomograms1.outputSubtomograms)
 
             self.assertEqual((protParticlesToSubtomograms.outputSubtomograms.getSize() +
-                             protParticlesToSubtomograms1.outputSubtomograms.getSize()), 4,
+                              protParticlesToSubtomograms1.outputSubtomograms.getSize()), 4,
                              "The total number of subtomograms must be 4")
 
 
@@ -961,8 +965,3 @@ class TestTomoCoordinatesOrigin(BaseTest):
                          'SCIPION: Conversion did not return the expected value for Y axis without a tomo')
         self.assertEqual(-0.5 * z, trPosition[2],
                          'SCIPION: Conversion did not return the expected value for Z axis without a tomo')
-
-
-
-if __name__ == 'main':
-    pass

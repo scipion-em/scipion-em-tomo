@@ -43,7 +43,6 @@ import pyworkflow.utils as pwutils
 import tomo.objects
 from pwem.objects import Transform
 from pyworkflow.object import Integer
-from pyworkflow.utils import yellowStr
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
@@ -69,7 +68,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     ANGLES_FROM_FILENAME = 'Filename'
     ANGLES_FROM_HEADER = 'Header'
     ANGLES_FROM_MDOC = 'Mdoc'
-    ANGLES_FROM_TLT = 'Tlt'
+    ANGLES_FROM_TLT = 'Tlt file'
     ANGLES_FROM_RANGE = 'Range'
 
     NOT_MDOC_GUI_COND = ('filesPattern is None or ' +
@@ -99,46 +98,39 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            "(or movies) files.")
         form.addParam('filesPattern', params.StringParam,
                       label='Pattern',
-                      help="It determines if the tilt series are going to "
-                           "be imported using the mdoc file or the tilt "
+                      help="This determines if the tilt series / movies are going to "
+                           "be imported using the mdoc files or the tilt "
                            "series files. To import from the mdoc files, "
                            "the word '.mdoc' must appear in the pattern, "
                            "if not, a tilt series pattern is expected. "
                            "In the first case, the angular and acquisition "
-                           "data are directly read from the corresponding "
-                           "mdoc file, while in the second it is read "
-                           "the base name of the matching files, according to "
-                           " the pattern introduced.\n\n"
+                           "data are read from the corresponding "
+                           "mdoc files, while in the second case they are read from "
+                           "the name of the matching files.\n\n"
                            "*IMPORTING WITH MDOC FILES*\n\n"
-                           "For *tilt series movies*, a mdoc per tilt series "
-                           "movies is expected. "
-                           "The corresponding movie file/s must be located in "
-                           "the same path as the mdoc file. The tilt series "
-                           "id will be the base name of the mdoc files, "
-                           "so the names of the mdoc files must be different, "
-                           "even if they're located in "
-                           "different paths.\n\n"
-                           "For *tilt series*, the only difference is that a "
-                           "stack .mrcs file is expected for each "
-                           "mdoc, which means, per each tilt series desired "
-                           "to be imported.\n\n"
-                           "*IMPORTING WITH A PATTERN OF THE TILT SERIES FILE "
-                           "NAMES*\n\n"
-                           "The pattern can contain standard wildcards such "
-                           "as *, ?, etc.\n\n"
-                           "It should also contains the following special "
-                           "tags:\n"
+                           "For *tilt series movies*, ONE mdoc per tilt series "
+                           "is expected. The movie files must be located in "
+                           "the same folder as the mdocs. The filenames will be "
+                           "fetched from the _SubFramePath_ value in mdoc. \n"
+                           "Example pattern: _TS*.mdoc_\n\n"
+                           "For *tilt series*, ONE _mrcs_ stack should match ONE "
+                           "mdoc file per each tilt series. To import unstacked "
+                           "images use the filename pattern (see below) instead of mdoc.\n\n"
+                           "*IMPORTING WITH A FILENAME PATTERN (tilt series and "
+                           "movies)*\n\nThe pattern can contain wildcards such "
+                           "as *, ?, etc. It should also contain the following "
+                           "special tags:\n\n"
                            "   *{TS}*: tilt series identifier, which can be "
                            "any UNIQUE part of the path. This must be "
-                           "an alpha-numeric sequence (avoid symbols as -) "
-                           "that can not start with a number.\n"
+                           "an alpha-numeric sequence (avoid dash (-) symbol) "
+                           "and can not start with a number.\n"
                            "   *{TO}*: acquisition order, an integer value "
-                           "(important for dose).\n"
+                           "(important for dose information).\n"
                            "   *{TA}*: tilt angle, a positive or negative "
                            "float value.\n\n"
-                           "Examples:\n\n"
-                           "To import a set of image stacks (tilt-series "
-                           "or tilt-series movies) as: \n"
+                           "Example:\n\n"
+                           "To import a set of images (tilt-series "
+                           "or tilt-series movies) like: \n"
                            "TiltSeries_a_001_0.0.mrc\n"
                            "TiltSeries_a_002_3.0.mrc\n"
                            "TiltSeries_a_003_-3.0.mrc\n"
@@ -147,7 +139,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                            "TiltSeries_b_002_3.0.mrc\n"
                            "TiltSeries_b_003_-3.0.mrc\n"
                            "...\n"
-                           "The pattern TiltSeries_{TS}_{TO}_{TA}.mrc will "
+                           "Use pattern TiltSeries_{TS}_{TO}_{TA}.mrc, which will "
                            "identify:\n"
                            "{TS} as a, b, ...\n"
                            "{TO} as 001, 002, 003, ...\n"
@@ -160,7 +152,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         form.addParam('mdocInfo', params.LabelParam,
                       condition='not (%s)' % self.NOT_MDOC_GUI_COND,
                       label='Acquisition values provided below will override '
-                            'the mdoc corresponding values',
+                            'the corresponding mdoc values',
                       important=True)
         self._defineAngleParam(form)
         form.addParam('importAction', params.EnumParam,
@@ -238,10 +230,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
                        label=Message.LABEL_AMPLITUDE,
-                       expertLevel=params.LEVEL_NORMAL,
+                       expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_AMPLITUDE)
-        group.addParam('magnification', params.IntParam,
+        group.addParam('magnification', params.IntParam, default=50000,
                        label=Message.LABEL_MAGNI_RATE,
+                       expertLevel=params.LEVEL_ADVANCED,
                        allowsNull=True,
                        help=Message.TEXT_MAGNI_RATE)
         group.addParam('samplingRate', params.FloatParam,
@@ -250,7 +243,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_SAMP_RATE)
         group.addParam('tiltAxisAngle', params.FloatParam,
                        label='Tilt axis angle (deg.)',
-                       allowsNull=True)
+                       allowsNull=True,
+                       help="The rotation angle is the angle from the vertical "
+                            "to the axis of tilting, where counterclockwise is "
+                            "positive.\n See "
+                            "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
         line = group.addLine('Dose (electrons/sq.Å)',
                              help="Initial accumulated dose (usually 0) and "
                                   "dose per tilt image (electrons/sq.Å). ")
@@ -328,7 +325,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 someNew = True
                 tsObj = tsClass(tsId=ts)
                 # Form value has higher priority than the mdoc values
-                samplingRate =\
+                samplingRate = \
                     float(samplingRate if samplingRate else self.sRates[ts])
 
                 origin = Transform()
@@ -356,7 +353,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                         else:
                             imageFile = f
 
-                        finalDestination =\
+                        finalDestination = \
                             self._getExtraPath(os.path.basename(imageFile))
                         self.copyOrLink(imageFile, finalDestination)
 
@@ -375,8 +372,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                             accumDose = accumDoseList[counter]
                         else:
                             dosePerFrame = self.dosePerFrame.get()
-                            accumDose =\
-                                self.dosePerFrame.get() *\
+                            accumDose = \
+                                self.dosePerFrame.get() * \
                                 int(to if min(toList) == 1 else (int(to) + 1))
 
                         # Incoming dose in current ti
@@ -385,11 +382,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                         ti.getAcquisition().setAccumDose(accumDose)
                         tiltSeriesObjList.append(ti)
                         counter += 1
-                    # TODO: variable e is assigned but never used
-                    except OperationalError as e:
-                        raise Exception("%s is an invalid for the {TS} field, "
-                                        "it must be an alpha-numeric sequence "
-                                        "(avoid symbols as -) that can not "
+                    except OperationalError:
+                        raise Exception("%s is an invalid {TS} tag. "
+                                        "It must be an alpha-numeric sequence "
+                                        "(avoid symbols like -) that can not "
                                         "start with a number." % ts)
 
                 # Sort tilt image metadata if importing tilt series
@@ -515,7 +511,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             if not self.samplingRate.get():
                 errMsg.append('Sampling rate should be a float')
             if not self.dosePerFrame.get():
-                errMsg.append('Dose per frame should be a float')
+                errMsg.append('Dose per tilt should be a float')
             if self.tiltAxisAngle.get() is None:
                 errMsg.append('Tilt axis angle should be a float')
 
@@ -589,16 +585,15 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         mdocList = self._excludeByWords(mdocList)  # Check for exclusion words
         hasDoseList = []
         if not mdocList:
-            raise Exception('No mdoc files were found in the '
-                            'introduced path:\n%s' % fpath)
+            raise Exception(f'There are no mdoc files matching the pattern '
+                            f'{join(fpath, self.filesPattern.get())}')
 
         matchingFiles = OrderedDict()
         self.acquisitions = OrderedDict()
         self.sRates = OrderedDict()
         self.accumDoses = OrderedDict()
         self.incomingDose = OrderedDict()
-        warningHeadMsg = yellowStr('The following mdoc files were skipped. '
-                                   'See details below:\n\n')
+        warningHeadMsg = 'The following mdoc files were skipped:\n'
         warningDetailedMsg = []
         skippedMdocs = 0
 
@@ -607,11 +602,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             # ones introduced by the user in the protocol's form.
             # Otherwise, the corresponding values considered will be the ones
             # read from the mdoc.
-            # This is because because you can't trust mdoc
-            # (often dose is not calibrated in serialem, so you get 0;
+            # This is because you can't trust mdoc
+            # (often dose is not calibrated in serialEM, so you get 0;
             # pixel size might be binned as mdoc comes from a binned record
-            # not movie and  there are no Cs and amp
-            # contrast fields in mdoc)
+            # not movie and there are no Cs and amp contrast fields in mdoc)
             mdocObj = MDoc(
                 mdoc,
                 voltage=self.voltage.get() if self.voltage.get() else None,
@@ -631,7 +625,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 isImportingTsMovies=self._isImportingTsMovies())
             hasDoseList.append(mdocObj.mdocHasDose)
             if validationError:
-                warningHeadMsg += yellowStr('\t- %s\n' % mdoc)
+                warningHeadMsg += '    %s\n' % mdoc
                 warningDetailedMsg.append(validationError)
                 skippedMdocs += 1
                 # validationErrors.append(validationError)
@@ -646,8 +640,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             for tiltMetadata in mdocObj.getTiltsMetadata():
                 fileOrderAngleList.append((
                     tiltMetadata.getAngleMovieFile(),             # Filename
-                    '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition
-                                                                  # order
+                    '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition order
                     tiltMetadata.getTiltAngle(),                  # Tilt angle
                 ))
                 accumulatedDoseList.append(tiltMetadata.getAccumDose())
@@ -668,26 +661,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     print(warningHeadMsg + ' '.join(warningDetailedMsg))
                 return matchingFiles
             else:
-                # If the only info missing is the dose related data,
-                # it's suggested to introduce it manually
-                if not any(hasDoseList):
-                    raise Exception('*The dose was not possible to be '
-                                    'obtained from any of the provided '
-                                    'mdoc files.\n'
-                                    'Please check the data of your mdoc '
-                                    'files or introduce a dose value in the '
-                                    'protocol form.\n\n'
-                                    'Dose related mdoc labels are:\n\n'
-                                    '- ExposureDose or\n'
-                                    '- FrameDosesAndNumber or\n'
-                                    '- DoseRate and ExposureTime or\n'
-                                    '- MinMaxMean and CountsPerElectron'
-                                    )
-                else:
-                    raise Exception('*All the mdoc files introduced present '
-                                    'validation errors.*\n\n%s' %
-                                    (warningHeadMsg +
-                                     ' '.join(warningDetailedMsg)))
+                raise Exception(warningHeadMsg + ' '.join(warningDetailedMsg))
         else:
             return matchingFiles
 
@@ -695,7 +669,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return True if type(self) is ProtImportTsMovies else False
 
     def _genTsAcquisitionFromMdoc(self, mdocObj):
-        acq =\
+        acq = \
             TomoAcquisition(voltage=mdocObj.getVoltage(),
                             sphericalAberration=self.sphericalAberration.get(),
                             amplitudeContrast=self.amplitudeContrast.get(),
@@ -759,7 +733,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         def _addOne(fileList, file, match):
             """ Add one file matching to the list. """
             fileList.append((file, int(match.group('TO')),
-                            float(match.group('TA'))))
+                             float(match.group('TA'))))
 
         def _addMany(fileList, file, match):
             """ Add many 'files' (when angles in header or mdoc)
@@ -940,7 +914,7 @@ class ProtImportTs(ProtImportTsBase):
     _label = 'import tilt-series'
     _devStatus = pw.BETA
 
-    def _defineAngleParam(self, form:pyworkflow.protocol.Form):
+    def _defineAngleParam(self, form: pyworkflow.protocol.Form):
         """ Used in subclasses to define the option to fetch tilt angles. """
         group = form.addGroup('Tilt info',
                               condition=self.NOT_MDOC_GUI_COND)
@@ -954,30 +928,29 @@ class ProtImportTs(ProtImportTsBase):
                        display=params.EnumParam.DISPLAY_HLIST,
                        label='Import angles from',
                        help="Choose how the tilt angles will be inferred. "
-                            "It can be taken from a range: Min, Max, Step "
+                            "They can be taken from a range (Min, Max, Step) "
                             "or from the image header, or from an"
-                            "mdoc or tlt file (should have the SAME file name "
-                            "but with the .mdoc or .tlt "
+                            "mdoc or tlt file (should have the SAME filename "
+                            "but with the .mdoc or .tlt or .rawtlt "
                             "extension at the end).")
 
-        line = group.addLine('Tilt angular range',
+        line = group.addLine('Tilt angles range',
                              condition='anglesFrom==0',  # ANGLES_FROM_RANGE
-                             help="Specify the tilting angular range. "
-                                  "Depending on the collection schema, the "
-                                  "order of the acquisition does not need to "
-                                  "be the same order of the angular range. ")
+                             help="Specify the tilt angles range. "
+                                  "The original acquisition order does not have "
+                                  "to match the order of tilt angles.")
         line.addParam('minAngle', params.FloatParam, default=-60, label='min')
         line.addParam('maxAngle', params.FloatParam, default=60, label='max')
         line.addParam('stepAngle', params.FloatParam, default=3, label='step')
 
-
-        form.addParam('ctfCorrected',params.BooleanParam, default=False,
-                      label="Have images been ctf corrected?",
-                      help="Select yes if images have been ctf corrected")
+        form.addParam('ctfCorrected', params.BooleanParam, default=False,
+                      label="Have images been CTF corrected?",
+                      help="Select Yes if images have been CTF corrected")
 
         form.addParam('interpolated', params.BooleanParam, default=False,
                       label="Have images been aligned?",
-                      help="Select yes if images have been rotated/interpolated using alignment information.")
+                      help="Select Yes if images have been rotated/interpolated "
+                           "using alignment information.")
 
     def setItemExtraAttributes(self, tsObj: tomo.objects.TiltSeries):
         """
@@ -1008,9 +981,9 @@ class ProtImportTs(ProtImportTsBase):
             nImages = max(z, n)  # Just handle ambiguity with mrc format
             nAngles = len(self._tiltAngleList)
             if nAngles != nImages:
-                return 'Tilt-series %s stack has different number of images '\
-                        '(%d) than the expected number of tilt angles (%d). '\
-                        % (fileName, nImages, nAngles)
+                return 'Tilt-series %s stack has different number of images ' \
+                       '(%d) than the expected number of tilt angles (%d). ' \
+                       % (fileName, nImages, nAngles)
         else:
             return None
 
@@ -1023,17 +996,16 @@ class ProtImportTsMovies(ProtImportTsBase):
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
         group = form.addGroup('Tilt info',
-                              condition=self.NOT_MDOC_GUI_COND)
+                              condition=False)
 
-        group.addParam('anglesFrom', params.EnumParam,
-                       default=0,
-                       choices=[self.ANGLES_FROM_FILENAME],
-                       display=params.EnumParam.DISPLAY_HLIST,
-                       label='Import angles from',
-                       help='Angles will be parsed from the filename pattern.'
-                            'The special token {TA} should be specified as '
-                            ' part of the pattern, that will be used to match '
-                            ' the value of the angle for each TiltSeriesMovie.'
+        group.addHidden('anglesFrom', params.EnumParam,
+                        default=0,
+                        choices=[self.ANGLES_FROM_FILENAME],
+                        display=params.EnumParam.DISPLAY_HLIST,
+                        label='Import angles from',
+                        help='Angles will be parsed from the filename pattern.'
+                             'The special token {TA} should be specified as '
+                             ' part of the pattern.'
                        )
 
     def _defineAcquisitionParams(self, form):
@@ -1044,6 +1016,7 @@ class ProtImportTsMovies(ProtImportTsBase):
                        help='A gain reference related to a set of movies '
                             'for gain correction')
         group.addParam('darkFile', params.FileParam,
+                       expertLevel=params.LEVEL_ADVANCED,
                        label='Dark image',
                        help='A dark image related to a set of movies')
         return group
@@ -1068,9 +1041,9 @@ class ProtImportTsMovies(ProtImportTsBase):
         the angles range.
         """
         if not self.MDOC_DATA_SOURCE and \
-           self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
+                self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
             if not self._anglesInPattern():
-                return 'When importing movies, {TA} and {TO} ' \
-                        'should be in the files pattern.'
+                return 'When importing movies, {TS}, {TA} and {TO} ' \
+                        'should be present in the pattern.'
         else:
             return None

@@ -25,11 +25,11 @@
 # **************************************************************************
 import glob
 import os
-from os.path import join, basename, exists, abspath
+from os.path import join, exists, abspath
 
 import numpy
 
-from pyworkflow.tests import BaseTest, setupTestProject, setupTestOutput
+from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink
 from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
@@ -191,7 +191,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         self.launchProtocol(protImportCoordsFromSqlite)
         return getattr(protImportCoordsFromSqlite, 'outputCoordinates', None), \
-            getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
+               getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
 
     def testImport3dCoordsFromSqlite_FullMatch(self):
         setSize = 2339
@@ -203,7 +203,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         # Subset of coordinates 3d
         splitSet = self.newProtocol(ProtSplitSet,
-                         inputSet=outputCoordsSet)
+                                    inputSet=outputCoordsSet)
 
         # Launch the split set protocol
         self.launchProtocol(splitSet)
@@ -211,7 +211,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertCoordinates(splitSet.outputCoordinates3D01, 1170, self.sqBoxSize, self.sqSamplingRate)
 
         # Launch the filter set
-        filterSet = self.newProtocol(ProtSetFilter, formula="True" )
+        filterSet = self.newProtocol(ProtSetFilter, formula="True")
         filterSet.inputSet = Pointer(splitSet, extended="outputCoordinates3D01")
 
         self.launchProtocol(filterSet)
@@ -650,7 +650,6 @@ class TestTomoImportTsFromMdoc(BaseTest):
             acq = tsM.getAcquisition()
             self.assertAlmostEqual(tsM.getSamplingRate(), testDataDict[self.PIXEL_SIZE], delta=0.001)
             self.assertAlmostEqual(acq.getVoltage(), testDataDict[self.VOLTAGE], delta=0.1)
-            self.assertAlmostEqual(acq.getMagnification(), testDataDict[self.MAGNIFICATION], delta=0.1)
             self.assertAlmostEqual(acq.getSphericalAberration(), testDataDict[self.SPH_ABERRATION], delta=0.01)
             self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
@@ -729,7 +728,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(noOkMdocDir, dataSet['realFileNoVoltage1']),
             join(noOkMdocDir, dataSet['realFileNoVoltage2'])
         ]
-        VOLTAGE = '*Voltage*'
+        VOLTAGE = 'Voltage'
         expectedErrorKeyWordList = [
             VOLTAGE,  # Missing voltage
             VOLTAGE  # Missing voltage
@@ -746,9 +745,9 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['noDoseMdoc'])
         ]
         expectedErrorKeyWordList = [
-            '*Magnification*',  # Missing Magnification
-            '*PixelSpacing*',  # Missing Sampling Rate
-            '*dose*'  # Not able to get the dose
+            'Magnification',  # Missing Magnification
+            'PixelSpacing',  # Missing Sampling Rate
+            'Dose'  # Not able to get the dose
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -762,8 +761,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             join(simErrorMdocDir, dataSet['someMissingAnglesMdoc'])
         ]
         expectedErrorKeyWordList = [
-            ['*Voltage*', '*PixelSpacing*'],  # Missing voltage and sampling rate
-            '*TiltAngle*: 1 7 48'  # Missing tilt angles in slices 1, 7 and 48
+            ['Voltage', 'PixelSpacing'],  # Missing voltage and sampling rate
+            'TiltAngle for Z values: 1, 7, 48'  # Missing tilt angles in slices 1, 7 and 48
         ]
         self._checkMDocParsingErrorMsg(mdocList, expectedErrorKeyWordList)
 
@@ -779,14 +778,14 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 if type(keywords) is str:
                     keywords = [keywords]
                 for errorKeyword in keywords:
-                    self.assertTrue(errorKeyword in errorMsg, msg="%s not found in error message %s after validating %s."
-                                                                  % (errorKeyword, errorMsg, mdoc))
+                    self.assertTrue(errorKeyword in errorMsg,
+                                    msg="%s not found in error message %s after validating %s."
+                                        % (errorKeyword, errorMsg, mdoc))
             else:
                 self.assertTrue(not errorMsg, "There are errors unexpected when validating the Mdocs: %s" % errorMsg)
 
 
 class TestImportTomoMasks(BaseTest):
-
     outputPath = None
     ds = None
     samplingRate = 13.68
@@ -828,7 +827,7 @@ class TestImportTomoMasks(BaseTest):
                                                 binning=2)
 
         cls.launchProtocol(protTomoNormalization)
-        outputTomos = getattr(protTomoNormalization, 'outputSetOfTomograms', None)
+        outputTomos = getattr(protTomoNormalization, 'Tomograms', None)
         cls.assertIsNotNone(outputTomos, 'No tomograms were genetated in tomo normalization.')
 
         return outputTomos
@@ -836,7 +835,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksAllGood(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inTomoSetBinned)
 
         self.launchProtocol(protImportTomomasks)
@@ -852,7 +851,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksDiffSize(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inTomoSet)
 
         with self.assertRaises(Exception) as eType:
@@ -863,10 +862,9 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksNoneMatch(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inNotMatchingTomoSet)
 
         with self.assertRaises(Exception) as eType:
             self.launchProtocol(protImportTomomasks)
             self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)
-

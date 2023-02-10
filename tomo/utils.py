@@ -31,11 +31,12 @@ import re
 import importlib
 import numpy as np
 import math
+import logging
+logger = logging.getLogger(__name__)
 
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
-from pyworkflow.object import Pointer, RELATION_SOURCE, OBJECT_PARENT_ID
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries
 
 
@@ -340,17 +341,25 @@ def _getTsIdLabel(setObject):
 
 
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
+    logger.debug("Retrieving relations for %s." % sourceObj)
     p = protocol.getProject()
-    graph = p.getSourceGraph(False)  # Graph with all the relations
+    graph = p.getSourceGraph(True)  # Graph with all the relations
     sourceNode = graph.getNode(sourceObj.strId())  # Node corresponding to the source object
     # Climb up in the relations graph until the target condition provided in the callback input is fulfilled
-    while not sourceNode.isRoot():
-        relatedOutput = sourceNode.getParent().pointer.get()
-        if stopSearchCallback(relatedOutput):
-            return relatedOutput
-        else:
-            sourceNode = sourceNode.getParent()
+    nodes = sourceNode.getParents()
+    while nodes:
+        sourceNode = nodes.pop()
+        if not sourceNode.isRoot():
+            relatedOutput = sourceNode.pointer.get()
+            logger.debug("Checking related object: %s" % relatedOutput)
+            if stopSearchCallback(relatedOutput):
+                return relatedOutput
+            else:
+                parents = sourceNode.getParents()
+                if parents is not None:
+                    nodes += parents
     return None
+
 
 def getNonInterpolatedTsFromRelations(sourceObj, prot):
     def stopSearchCallback(pObj):

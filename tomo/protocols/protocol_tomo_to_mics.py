@@ -40,6 +40,7 @@ from tomo.objects import SetOfCoordinates3D, Coordinate3D, SetOfTomograms
 class ProtTomoToMicsOutput(enum.Enum):
     outputMicrographs = SetOfMicrographs()
 
+
 class ProtTomoToMics(EMProtocol):
     """ Turns tomograms into set of micrographs to apply SPA picking methods."""
     _label = 'tomograms to micrographs'
@@ -61,6 +62,7 @@ class ProtTomoToMics(EMProtocol):
     # --------------------------- STEPS functions --------------------------------------------
     def getInputTomograms(self) -> SetOfTomograms:
         return self.input.get()
+
     def createOutputStep(self):
         input = self.input.get()
 
@@ -70,7 +72,7 @@ class ProtTomoToMics(EMProtocol):
 
         # Acquisition
         micAcq = Acquisition()
-        tomoAcq =input.getAcquisition()
+        tomoAcq = input.getAcquisition()
         micAcq.setMagnification(tomoAcq.getMagnification())
         micAcq.setSphericalAberration(tomoAcq.getSphericalAberration())
         micAcq.setVoltage(tomoAcq.getVoltage())
@@ -97,7 +99,7 @@ class ProtTomoToMics(EMProtocol):
         data = img.getData()
 
         # For each slice
-        for index in range(0, len(data),self.slicesGap.get()):
+        for index in range(0, len(data), self.slicesGap.get()):
             self.debug("Creating micrograph for slice %s" % index)
             micName = tomoSliceToMicName(tomo, index)
             outputMicName = self._getExtraPath(micName)
@@ -132,6 +134,7 @@ class ProtTomoToMics(EMProtocol):
 
 class Prot2DcoordsTo3DCoordsOutput(enum.Enum):
     outputCoordinates = SetOfCoordinates3D()
+
 
 class Prot2DcoordsTo3DCoords(EMProtocol):
     """ Turns 2d coordinates into set of 3d coordinates. Works in coordination with 'tomograms to micrographs' protocol"""
@@ -170,10 +173,9 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
 
         # For each 2d coordinate
         for cord2d in coordinates:
-
             # Extract Z
             micName = coordinates.getMicrographs()[cord2d.getMicId()].getFileName()
-            z , fileName = sliceAndNameFromMicName(micName)
+            z, fileName = sliceAndNameFromMicName(micName)
             newCoord = Coordinate3D()
             newCoord.setVolume(tomoDict[fileName])
             newCoord.setX(cord2d.getX(), BOTTOM_LEFT_CORNER)
@@ -187,7 +189,6 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
         self._defineSourceRelation(self.coordinates, output)
 
     # --------------------------- UTILS functions --------------------------------------------
-
 
     # --------------------------- INFO functions --------------------------------------------
     def _summary(self):
@@ -205,6 +206,7 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
 
 def tomoSliceToMicName(tomo, slice):
     return "S%s_%s" % (slice, basename(tomo.getFileName()))
+
 
 def sliceAndNameFromMicName(micname):
     """ Extracts z and tomo name from a micname composed with tomoSliceToMicName"""
