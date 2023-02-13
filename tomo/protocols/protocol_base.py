@@ -48,7 +48,7 @@ class ProtTomoBase:
         setObj = SetClass(filename=setFn, **kwargs)
         return setObj
 
-    def _createSetOfTiltSeriesM(self, suffix=''):
+    def _createSetOfTiltSeriesM(self, suffix='')->tomo.objects.SetOfTiltSeriesM:
         return self._createSet(tomo.objects.SetOfTiltSeriesM,
                                'tiltseriesM%s.sqlite', suffix)
 
@@ -57,26 +57,26 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfTiltSeries,
                                'tiltseries%s.sqlite', suffix)
 
-    def _createSetOfCoordinates3D(self, volSet, suffix=''):
+    def _createSetOfCoordinates3D(self, volSet, suffix='')->tomo.objects.SetOfCoordinates3D:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                      'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
         coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
-    def _createSetOfTomograms(self, suffix=''):
+    def _createSetOfTomograms(self, suffix='')->tomo.objects.SetOfTomograms:
         return self._createSet(tomo.objects.SetOfTomograms,
                                'tomograms%s.sqlite', suffix)
 
-    def _createSetOfSubTomograms(self, suffix=''):
+    def _createSetOfSubTomograms(self, suffix='') -> tomo.objects.SetOfSubTomograms:
         return self._createSet(tomo.objects.SetOfSubTomograms,
                                'subtomograms%s.sqlite', suffix)
 
-    def _createSetOfAverageSubTomograms(self, suffix=''):
+    def _createSetOfAverageSubTomograms(self, suffix='')-> tomo.objects.SetOfAverageSubTomograms:
         return self._createSet(tomo.objects.SetOfAverageSubTomograms,
                                'avgSubtomograms%s.sqlite', suffix)
 
-    def _createSetOfClassesSubTomograms(self, subTomograms, suffix=''):
+    def _createSetOfClassesSubTomograms(self, subTomograms, suffix='')->tomo.objects.SetOfClassesSubTomograms:
         classes = self._createSet(tomo.objects.SetOfClassesSubTomograms,
                                   'subtomogramClasses%s.sqlite', suffix)
         classes.setImages(subTomograms)
@@ -86,7 +86,7 @@ class ProtTomoBase:
     def _createSetOfLandmarkModels(self, suffix='') -> tomo.objects.SetOfLandmarkModels:
         return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
 
-    def _createSetOfMeshes(self, volSet, suffix=''):
+    def _createSetOfMeshes(self, volSet, suffix='')->tomo.objects.SetOfMeshes:
         meshSet = self._createSet(tomo.objects.SetOfMeshes,
                                   'meshes%s.sqlite', suffix)
         meshSet.setPrecedents(volSet)

@@ -1614,9 +1614,12 @@ class SubTomogram(data.Volume):
         self._transform = newTransform
 
     def getTransform(self, convention=None):
-        matrix = self._transform.getMatrix()
-        return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
-
+        
+        if convention is not None:
+            matrix = self._transform.getMatrix()
+            return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
+        else:
+            return self._transform
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram

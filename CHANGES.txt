@@ -1,3 +1,16 @@
+v3.1.3:
+
+ developers:
+  - Subtomogram getTransform returns its contained transform if non convention is passed
+  - Transformation subtomo test labels improved
+  - tomo-em dataset definition: 3 trams added
+  - TestImportTomoMasks: output names fixed
+
+V3.1.2:
+  - HIV STA Template not using 16 bit mrc
+V3.1.1:
+  - Templates folder added for packaging
 v3.1.0:
-  - First plugin release
+  - First plugin release.See README.rst for more details
+  - Tomography 2022 course: 5 templates added. Need You'll need to download its dataset -> scipion3 testdata --download tomo-tutorial
 

@@ -25,12 +25,12 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: '3.9'
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools wheel twine 
-        pip install scipion-pyworkflow 
+        pip install setuptools wheel twine
+        pip install numpy==1.18.4 
         pip install scipion-em
     - name: Build and publish
       env:
