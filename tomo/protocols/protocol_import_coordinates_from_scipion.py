@@ -22,7 +22,7 @@
 # *  e-mail address 'scipion-users@lists.sourceforge.net'
 # *
 # **************************************************************************
-
+from enum import Enum
 from os.path import exists
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
@@ -34,11 +34,16 @@ from .protocol_base import ProtTomoBase
 from ..objects import SetOfCoordinates3D
 
 
+class outputObjs(Enum):
+    coordinates = SetOfCoordinates3D
+
+
 class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
     """Protocol to import a set of 3d coordinates from Scipion sqlite file"""
 
     _label = 'import 3D coordinates from scipion'
     _devStatus = BETA
+    _possibleOutputs = outputObjs
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -81,10 +86,17 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
         if self.notMatchingMsg:
             self._store()
 
-        # Define the outputs
+        # Set some set attributes
         outCoordsSet.setSamplingRate(inTomoSet.getSamplingRate())
         outCoordsSet.setBoxSize(self.boxSize.get())
-        self._defineOutputs(outputCoordinates=outCoordsSet)
+        # Set volume pointers (required by getCoordinates().getX, Y and Z
+        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in inTomoSet}
+        for coord in outCoordsSet.iterCoordinates():
+            coord.setVolume(tomoIdsDict[coord.getTomoId()])
+
+        # Define outputs and relations
+        self._defineOutputs(**{outputObjs.coordinates.name: outCoordsSet})
+        self._defineSourceRelation(inTomoSet, outCoordsSet)
 
     # --------------------------- INFO functions ------------------------------
 
