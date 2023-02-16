@@ -1,4 +1,6 @@
 v3.1.0:
   - First plugin release.See README.rst for more details
   - Tomography 2022 course: 5 templates added. Need You'll need to download its dataset -> scipion3 testdata --download tomo-tutorial
+v3.1.4:
+- Added an option to import the dose accumulation using a tlt file as second column
 
