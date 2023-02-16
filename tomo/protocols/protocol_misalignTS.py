@@ -40,7 +40,7 @@ MISALIGNED_TS_NAME = "MisalignedTiltSeries"
 INTERPOLATED_TS_NAME = "InterpolatedTiltSeries"
 
 
-class XmippProtMisalignTiltSeries(EMProtocol, ProtTomoBase):
+class ProtTomoMisalignTiltSeries(EMProtocol, ProtTomoBase):
     """
     Introduce misalignment in the transformation matrix of a tilt-series.
     NOTE: The Interpolated tilt series in this case resembles a not aligned tilt series
