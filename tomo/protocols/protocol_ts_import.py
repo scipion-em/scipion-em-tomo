@@ -376,12 +376,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                             doses = []
                             anglesFrom = self.getEnumText('anglesFrom')
                             if anglesFrom == self.ANGLES_FROM_TLT:
-                                tltFn = os.path.splitext(imageFile)[0] + '.tlt'
-                                rawtltFn = tltFn.replace(".tlt", ".rawtlt")
-                                if os.path.exists(tltFn):
-                                    _, doses = getAnglesAndDosesFromTlt(tltFn)
-                                elif os.path.exists(rawtltFn):
-                                    _, doses = getAnglesAndDosesFromTlt(rawtltFn)
+                                _, doses = self.getFromTlt(imageFile)
                             if doses:
                                 accumDose = doses[counter]
                             else:
@@ -761,14 +756,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     raise Exception("Missing angles file: %s" % mdocFn)
                 angles = getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
-                tltFn = os.path.splitext(file)[0] + '.tlt'
-                rawtltFn = tltFn.replace(".tlt", ".rawtlt")
-                if os.path.exists(tltFn):
-                    angles, _ = getAnglesAndDosesFromTlt(tltFn)
-                elif os.path.exists(rawtltFn):
-                    angles, _ = getAnglesAndDosesFromTlt(rawtltFn)
-                else:
-                    raise Exception("Missing angles file: %s or %s" % (tltFn, rawtltFn))
+                angles, _ = self.getFromTlt(file)
             elif anglesFrom == self.ANGLES_FROM_RANGE:
                 angles = self._getTiltAngleRange()
             else:
@@ -836,6 +824,18 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     def isBlacklisted(self, fileName):
         """ Overwrite in subclasses """
         return False
+
+    def getFromTlt(self, file):
+        """ Gets angles and doses from a tlt or rawtlt file """
+        tltFn = os.path.splitext(file)[0] + '.tlt'
+        rawtltFn = tltFn.replace(".tlt", ".rawtlt")
+        if os.path.exists(tltFn):
+            angles, doses = getAnglesAndDosesFromTlt(tltFn)
+        elif os.path.exists(rawtltFn):
+            angles, doses = getAnglesAndDosesFromTlt(rawtltFn)
+        else:
+            raise Exception("Missing angles file: %s or %s" % (tltFn, rawtltFn))
+        return angles, doses
 
     @classmethod
     def worksInStreaming(cls):
