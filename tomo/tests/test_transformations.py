@@ -24,6 +24,8 @@
 # **************************************************************************
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import weakImport
+from tomo.protocols import ProtTomoMisalignTiltSeries
+
 
 with weakImport("xmipptomo"):
     from xmipptomo.protocols.protocol_phantom_subtomo import XmippProtPhantomSubtomo, OutputPhantomSubtomos
@@ -242,23 +244,21 @@ with weakImport("xmipptomo"):
                                    )
 
         def addMisaligner(self, label, inputTs, **kwargs):
-            """ Adds a xmipp misalinger with the label and parameters passes
+            """ Adds a misalinger with the label and parameters passes
 
             :param label: label for the protocol
             :param kwargs: params to pass to the misalign protocol
             """
 
-            with weakImport("xmipptomo"):
-                # Missalign the tilt series
-                from xmipptomo.protocols import XmippProtMisalignTiltSeries
 
-                missAligner = self.newProtocol(XmippProtMisalignTiltSeries,
-                                               objLabel=label,
-                                               inputSetOfTiltSeries=inputTs,
-                                               applyMatrix=True,
-                                               addInverseMatrix=True,
-                                               **kwargs)
-                self.launchProtocol(missAligner)
+
+            missAligner = self.newProtocol(ProtTomoMisalignTiltSeries,
+                                           objLabel=label,
+                                           inputSetOfTiltSeries=inputTs,
+                                           applyMatrix=True,
+                                           addInverseMatrix=True,
+                                           **kwargs)
+            self.launchProtocol(missAligner)
 
 
 def addAveragers(test, inputProt, outputName, label):
