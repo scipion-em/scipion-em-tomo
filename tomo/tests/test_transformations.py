@@ -26,7 +26,7 @@ from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import weakImport
 
 with weakImport("xmipptomo"):
-    from xmipptomo.protocols.protocol_phantom_subtomo import XmippProtPhantomSubtomo
+    from xmipptomo.protocols.protocol_phantom_subtomo import XmippProtPhantomSubtomo, OutputPhantomSubtomos
 
 
     # Define the class inside so only the test is available if xmipptomo is.
@@ -46,13 +46,14 @@ with weakImport("xmipptomo"):
             self._runPhantomSubtomo(shifts=1)
 
         def testAll(self):
-            self._runPhantomSubtomo()
+            self._runPhantomSubtomo(expected=(51,14,71,4,4,1))
 
-        def _runPhantomSubtomo(self, shifts=5, angles=90):
+        def _runPhantomSubtomo(self, shifts=5, angles=90, expected=None):
             """ Creates a phantom subtomo protocol with shift and rotation by default
 
             :param shifts: value for the 3 shifts, to cancel shifts use 1
             :param angles: value for the 3 angles, to cancel rotation use 1
+            :param expected: List of Tuple or just a tuple where the tuple are expected values for rot, tilt, psi, x, y, z
             """
 
             PHANTOM_DESC = """60 60 60 0
@@ -80,12 +81,16 @@ with weakImport("xmipptomo"):
                                            create=PHANTOM_DESC,
                                            sampling=4,
                                            nsubtomos=10,
+                                           randomseed=True, # Force random function to return the same values.
+                                           rotate=True,
+                                           uniformAngularDistribution=False,
                                            rotmin=0,
                                            rotmax=angles,
                                            tiltmin=0,
                                            tiltmax=angles,
                                            psimin=0,
                                            psimax=angles,
+                                           applyShift=True,
                                            xmin=0,
                                            xmax=shifts,
                                            ymin=0,
@@ -94,6 +99,26 @@ with weakImport("xmipptomo"):
                                            zmax=shifts)
 
             self.launchProtocol(protPhantom)
+
+
+            output = getattr(protPhantom, OutputPhantomSubtomos.outputSubtomograms.name)
+            if expected:
+                if not isinstance(expected, list):
+                    expected = [expected]
+
+                for index, expectedvalues in enumerate(expected):
+
+                    rot, tilt, psi, x, y, z = expectedvalues
+
+                    item = output[index+1]
+
+                    self.assertEquals(rot,item.phantom_rot.get(), "Rot value not expected fot item %s" % index )
+                    self.assertEquals(tilt, item.phantom_tilt.get(), "Tilt value not expected fot item %s" % index)
+                    self.assertEquals(psi, item.phantom_psi.get(), "Psi value not expected fot item %s" % index)
+                    self.assertEquals(x, item.phantom_shiftX.get(), "Shift X value not expected fot item %s" % index)
+                    self.assertEquals(y, item.phantom_shiftY.get(), "Shift Y value not expected fot item %s" % index)
+                    self.assertEquals(z, item.phantom_shiftZ.get(), "Shift Z value not expected fot item %s" % index)
+
 
             # Add the averagers
             addAveragers(self, protPhantom, XmippProtPhantomSubtomo._possibleOutputs.outputSubtomograms.name, label4Averagers)
@@ -217,7 +242,7 @@ with weakImport("xmipptomo"):
                                    )
 
         def addMisaligner(self, label, inputTs, **kwargs):
-            """ Adds an xmipp misalinger with the label and parameters passes
+            """ Adds a xmipp misalinger with the label and parameters passes
 
             :param label: label for the protocol
             :param kwargs: params to pass to the misalign protocol
