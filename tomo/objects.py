@@ -1392,7 +1392,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume=None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
         If volume=None, the iteration is performed over the whole
         set of coordinates.
@@ -1415,27 +1415,29 @@ class SetOfCoordinates3D(data.EMSet):
 
         """
         if volume is None:
-            volId = None
+            coordWhere = '1'
         elif isinstance(volume, int):
-            volId = volume
+            coordWhere = '_volId=%d' % int(volume)
         elif isinstance(volume, data.Volume):
-            volId = volume.getObjId()
+            coordWhere = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
         # Iterate over all coordinates if tomoId is None,
         # otherwise use tomoId to filter the where selection
-        coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
-
+        tomos = self.getPrecedentsInvolved()
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
-            coord.setVolume(self.getPrecedents()[coord.getVolId()])
+            coord.setVolume(tomos[coord.getTomoId()])
             yield coord
 
     def getPrecedents(self):
         """ Returns the SetOfTomograms associated with
                 this SetOfCoordinates"""
         return self._precedentsPointer.get()
+
+    def getPrecedent(self, tomoId):
+        return self.getPrecedentsInvolved()[tomoId]
 
     def setPrecedents(self, precedents):
         """ Set the tomograms  or Tilt Series associated with this set of coordinates.
