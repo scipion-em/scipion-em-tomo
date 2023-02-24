@@ -1891,7 +1891,7 @@ class LandmarkModel(data.EMObject):
             self.setCount(len(self._chains))
 
     def retrieveInfoTable(self):
-        """ This methods return a table containing the information of the landkmark model. One landmark pero line
+        """ This method returns a table containing the information of the landkmark model. One landmark pero line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -1911,7 +1911,7 @@ class LandmarkModel(data.EMObject):
         return outputInfo
 
     def __str__(self):
-        return "%s landmarks of %s pixels %s to %s" \
+        return "%s landmarks of %s Å %s to %s" \
                % (self.getCount(), self.getSize(),
                   "to apply" if self.applyTSTransformation() else "applied",
                   self.getTsId())
