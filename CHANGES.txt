@@ -1,5 +1,7 @@
 v3.1.3:
-
+ users:
+  - Tutorials templates renamed
+  - LandMarkModel shows Å not pixels in its description
  developers:
   - Subtomogram getTransform returns its contained transform if non convention is passed
   - Transformation subtomo test labels improved
