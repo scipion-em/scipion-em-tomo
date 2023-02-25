@@ -101,14 +101,15 @@ def getAnglesFromMdoc(mdocFn):
     return [float(d['TiltAngle']) for d in parseMdoc(mdocFn)]
 
 
-def getAnglesFromTlt(tltFn):
+def getAnglesAndDosesFromTlt(tltFn):
     """ Parse the tilt-angles from tlt file. """
     angles = []
-
+    doses = []
     with open(tltFn) as f:
         for line in f:
-            line = line.strip()
+            line = line.strip().split(" ")
             if line:
-                angles.append(float(line))
-
-    return angles
+                angles.append(float(line[0]))
+                if len(line) == 2:
+                    doses.append(float(line[1]))
+    return angles, doses
