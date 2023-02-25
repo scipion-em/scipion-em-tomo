@@ -53,17 +53,15 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ANGLE = 'Tilt angle'
     COL_TI_ENABLED = 'Included'
     COL_TI_ACQ_ORDER = 'Order'
-    COL_TI_DEFOCUS_U = 'Defocus U (A)'
     COL_TI_DOSE = "Accum. dose"
+    COL_TI_TRANSFORM =  "T. Matrix"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_ENABLED: '_objEnabled',
-                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
                   COL_TI_DOSE: '_acquisition._accumDose'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
         self.tiltseries = tiltSeries
-        self._hasCtf = tiltSeries.getFirstItem().getFirstItem().hasCTF()
         TreeProvider.__init__(self, sortingColumnName=self.COL_TS)
         self.selectedDict = {}
         self.mapper = protocol.mapper
@@ -106,10 +104,8 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TI_ENABLED, 100),
             (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
+            (self.COL_TI_TRANSFORM, 300),
         ]
-
-        if self._hasCtf:
-            cols.insert(3, (self.COL_TI_DEFOCUS_U, 80))
 
         return cols
 
@@ -121,7 +117,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     def _getParentObject(pobj, default=None):
         return getattr(pobj, '_parentObject', default)
 
-    def getObjectInfo(self, obj):
+    def getObjectInfo(self, obj: tomo.objects.TiltImageBase):
         objId = obj.getObjId()
         tsId = obj.getTsId()
 
@@ -136,15 +132,15 @@ class TiltSeriesTreeProvider(TreeProvider):
 
             dose = obj.getAcquisition().getAccumDose() if hasattr(obj.getAcquisition(), '_accumDose') else None
             adqOrder = obj.getAcquisitionOrder() if hasattr(obj, '_acqOrder') else None
+            matrix = "" if not obj.hasTransform() else obj.getTransform().getMatrixAsList()
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
                       str(obj.isEnabled()),
                       round(dose, 2) if dose is not None else "",
-                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
+                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1]),
+                      matrix,]
 
-            if self._hasCtf:
-                values.insert(2, "%d" % obj.getCTF().getDefocusU())
             opened = False
 
         return {
