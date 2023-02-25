@@ -1967,13 +1967,12 @@ class SetOfLandmarkModels(data.EMSet):
             return self._setOfTiltSeriesPointer.get()
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
-        """ Set the set of tilt-series from which this set of landmark models were calculted.
+        """ Set the set of tilt-series from which this set of landmark models were calculated.
         :param tiltSeries: Either a TiltSeries object or a pointer to it.
         """
 
         if setOfTiltSeries.isPointer():
-            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
-
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries, copyId=False)
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
