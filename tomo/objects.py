@@ -1392,7 +1392,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume=None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
         If volume=None, the iteration is performed over the whole
         set of coordinates.
@@ -1415,27 +1415,29 @@ class SetOfCoordinates3D(data.EMSet):
 
         """
         if volume is None:
-            volId = None
+            coordWhere = '1'
         elif isinstance(volume, int):
-            volId = volume
+            coordWhere = '_volId=%d' % int(volume)
         elif isinstance(volume, data.Volume):
-            volId = volume.getObjId()
+            coordWhere = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
         # Iterate over all coordinates if tomoId is None,
         # otherwise use tomoId to filter the where selection
-        coordWhere = '1' if volId is None else '_volId=%d' % int(volId)
-
+        tomos = self.getPrecedentsInvolved()
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
-            coord.setVolume(self.getPrecedents()[coord.getVolId()])
+            coord.setVolume(tomos[coord.getTomoId()])
             yield coord
 
     def getPrecedents(self):
         """ Returns the SetOfTomograms associated with
                 this SetOfCoordinates"""
         return self._precedentsPointer.get()
+
+    def getPrecedent(self, tomoId):
+        return self.getPrecedentsInvolved()[tomoId]
 
     def setPrecedents(self, precedents):
         """ Set the tomograms  or Tilt Series associated with this set of coordinates.
@@ -1614,9 +1616,12 @@ class SubTomogram(data.Volume):
         self._transform = newTransform
 
     def getTransform(self, convention=None):
-        matrix = self._transform.getMatrix()
-        return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
-
+        
+        if convention is not None:
+            matrix = self._transform.getMatrix()
+            return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
+        else:
+            return self._transform
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
@@ -1888,7 +1893,7 @@ class LandmarkModel(data.EMObject):
             self.setCount(len(self._chains))
 
     def retrieveInfoTable(self):
-        """ This methods return a table containing the information of the landkmark model. One landmark pero line
+        """ This method returns a table containing the information of the landkmark model. One landmark pero line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -1908,7 +1913,7 @@ class LandmarkModel(data.EMObject):
         return outputInfo
 
     def __str__(self):
-        return "%s landmarks of %s pixels %s to %s" \
+        return "%s landmarks of %s Å %s to %s" \
                % (self.getCount(), self.getSize(),
                   "to apply" if self.applyTSTransformation() else "applied",
                   self.getTsId())
@@ -1962,13 +1967,12 @@ class SetOfLandmarkModels(data.EMSet):
             return self._setOfTiltSeriesPointer.get()
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
-        """ Set the set of tilt-series from which this set of landmark models were calculted.
+        """ Set the set of tilt-series from which this set of landmark models were calculated.
         :param tiltSeries: Either a TiltSeries object or a pointer to it.
         """
 
         if setOfTiltSeries.isPointer():
-            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
-
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries, copyId=False)
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 
