@@ -133,7 +133,18 @@ class TestUtilsExtractCoords(TestUtilsSetsOfCoordsAndSubtomos):
     extraction protocol"""
 
     def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
-                                    tomoId=None, expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
+                                    expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
+        """Checks the results of a coordinate extraction protocol.
+
+        :param inSet: input set from which the coordinates were extracted. It can be a SetOf3DCoordinates or a
+        SetOfSubTomograms.
+        :param outCoords: the resulting SetOf3DCoordinates after the coordinate extraction.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py.
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
+        and eye matrix (False) or not (True)."""
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
         inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
@@ -156,7 +167,7 @@ class TestUtilsExtractCoords(TestUtilsSetsOfCoordsAndSubtomos):
             super().check3dTransformMatrix(outCoordTrMatrix, orientedParticles=orientedParticles)
             super().checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
             # Check the tomoId
-            self.assertEqual(outCoord.getTomoId(), tomoId)
+            self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
 
 
 class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
@@ -164,19 +175,17 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
     extraction protocol"""
 
     def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                               convention=TR_SCIPION, orientedParticles=False, expectedTomoId=None):
+                               convention=TR_SCIPION, orientedParticles=False):
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
 
         :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
         :param outSubtomos: the resulting SetOfSubTomograms.
-        :param expectedSetSize: expected box size to compare.
-        :param expectedSRate: expected sampling rate to compare.
-        :param expectedBoxSize: expected box size to compare.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be and eye matrix
-        (False) or not (True).
-        :param expectedTomoId: expected tomoId to compare.
-        :"""
+        (False) or not (True)."""
         scaleFactor = outSubtomos.getSamplingRate() / inCoords.getSamplingRate()
         # Check the critical properties of the set
         self.assertSetSize(outSubtomos, expectedSetSize)
@@ -184,14 +193,14 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
         self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
         self.assertTrue(outSubtomos.hasCoordinates3D())
         # Check the subtomograms that compose the set
-        for subtomo in outSubtomos:
-            subtomoTr = subtomo.getTransform(convention=convention)
+        for incoord, outSubtomo in zip(inCoords, outSubtomos):
+            subtomoTr = outSubtomo.getTransform(convention=convention)
             subtomoMatrix = subtomoTr.getMatrix()
-            coordinate = subtomo.getCoordinate3D()
+            coordinate = outSubtomo.getCoordinate3D()
             coordTr = coordinate._eulerMatrix
             coordMatrix = coordinate.getMatrix(convention=convention)
-            self.assertTrue(exists(subtomo.getFileName()))
-            self.assertEqual(subtomo.getSamplingRate(), expectedSRate)
+            self.assertTrue(exists(outSubtomo.getFileName()))
+            self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
             # The shifts in the subtomograms transformation matrix should have been scaled properly
             super().checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
             # Imported coordinates were picked using PySeg, so they must have an orientation
@@ -201,7 +210,7 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
             super().check3dTransformMatrix(coordMatrix, orientedParticles=orientedParticles)
             self.assertTrue(np.array_equal(subtomoMatrix, coordMatrix))
             # Check the tomoId
-            self.assertEqual(coordinate.getTomoId(), expectedTomoId)
+            self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
         # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
         # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
@@ -212,10 +221,16 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
 
 
 class TestUtilsAverageOfSubtomos(BaseTest):
-    """Test class that contains auxiliary methods to exhaustively check the results of an average of
-    subtomograms protocol"""
+    """Test class that contains auxiliary methods to exhaustively check properties of an average subtomogram, which
+    can be the result of an average of subtomograms, an initial model or refinement of subtomograms."""
 
     def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
+        """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
+        an initial model or refinement of subtomograms.
+
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated."""
         testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
         self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
         self.assertTrue(avg.getFileName().endswith(".mrc"))
@@ -224,7 +239,7 @@ class TestUtilsAverageOfSubtomos(BaseTest):
         self.assertEqual(avg.getDimensions(), testBoxSize)
         # Check the halves
         if hasHalves:
-            self.assertTrue(avg.hasHalfMaps(), "Halves not registered")
+            self.assertTrue(avg.hasHalfMaps(), "Halves not registered.")
             half1, half2 = avg.getHalfMaps().split(',')
             self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
             self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
