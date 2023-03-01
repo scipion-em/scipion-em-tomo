@@ -36,7 +36,7 @@ from pyworkflow.plugin import Domain
 
 from ..objects import SetOfCoordinates3D
 from .protocol_base import ProtTomoImportFiles
-from ..convert import TomoImport
+from ..convert import TomoImport, EmTableCoordImport
 from ..utils import existsPlugin
 
 import tomo.constants as const
@@ -45,7 +45,9 @@ IMPORT_FROM_AUTO = 'auto'
 IMPORT_FROM_TXT = 'txt'
 IMPORT_FROM_EMAN = 'eman'
 IMPORT_FROM_DYNAMO = 'dynamo'
-IMPORT_FROM_CHOICES = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_EMAN, IMPORT_FROM_DYNAMO]
+IMPORT_FROM_CBOX = 'cbox'
+
+IMPORT_FROM_CHOICES = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_EMAN, IMPORT_FROM_DYNAMO, IMPORT_FROM_CBOX]
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -59,7 +61,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         from which the import can be done.
         (usually packages formats such as: xmipp3, eman2, relion...etc.
         """
-        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT]
+        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]
         if existsPlugin('emantomo'):
             importChoices.append(IMPORT_FROM_EMAN)
         if existsPlugin('dynamo'):
@@ -105,7 +107,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 fileName = basename(os.path.splitext(coordFile)[0])
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() == IMPORT_FROM_EMAN or self.getImportFrom() == IMPORT_FROM_TXT:
+                    if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]:
                         def addCoordinate(coord, x, y, z):
                             coord.setVolume(tomo.clone())
                             coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
@@ -217,6 +219,8 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 return IMPORT_FROM_EMAN
             elif coordFile.endswith('.tbl') and existsPlugin('dynamo'):
                 return IMPORT_FROM_DYNAMO
+            elif coordFile.endswith('.cbox'):
+                return IMPORT_FROM_CBOX
         return -1
 
     def getImportClass(self):
@@ -233,6 +237,9 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         elif importFrom == IMPORT_FROM_DYNAMO:
             readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
             return readDynCoord
+
+        elif importFrom == IMPORT_FROM_CBOX:
+            return EmTableCoordImport("cryolo", "CoordinateX", "CoordinateY", "CoordinateZ")
 
         elif importFrom == IMPORT_FROM_TXT:
             return TomoImport(self)
