@@ -228,6 +228,7 @@ class TestUtilsAverageOfSubtomos(BaseTest):
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
         an initial model or refinement of subtomograms.
 
+        :param avg: AverageSubtomogram.
         :param expectedBoxSize: expected box size, in pixels, to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated."""
