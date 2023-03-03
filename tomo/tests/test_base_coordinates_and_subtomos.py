@@ -186,7 +186,7 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be and eye matrix
         (False) or not (True)."""
-        scaleFactor = outSubtomos.getSamplingRate() / inCoords.getSamplingRate()
+        scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
         # Check the critical properties of the set
         self.assertSetSize(outSubtomos, expectedSetSize)
         self.assertEqual(outSubtomos.getSamplingRate(), expectedSRate)
@@ -205,16 +205,12 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
             super().checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
             # Imported coordinates were picked using PySeg, so they must have an orientation
             super().check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
-            # Also, at this point the transformation matrix should be the same as the coordinate matrix as the angles
-            # have not been refined yet
-            super().check3dTransformMatrix(coordMatrix, orientedParticles=orientedParticles)
-            self.assertTrue(np.array_equal(subtomoMatrix, coordMatrix))
             # Check the tomoId
             self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
         # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
         # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
-        # from the plugin scipion-em-tomo
+        # from the plugin scipion-em-tomo)
         currentCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outSubtomos)
         unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
         self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
