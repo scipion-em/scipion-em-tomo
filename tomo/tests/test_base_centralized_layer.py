@@ -24,18 +24,14 @@
 # *
 # **************************************************************************
 from os.path import exists
-
 from flatbuffers.builder import np
-
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION
 from tomo.objects import SetOfSubTomograms
 
 
-class TestUtilsSetsOfCoordsAndSubtomos(BaseTest):
-    """Test class that contains auxiliary methods to exhaustively check the results of operations carried out
-    with SetOf3DCoordinates or SetOfSubTomograms"""
+class TestBaseCentralizedLayer(BaseTest):
 
     def check3dTransformMatrix(self, outMatrix, orientedParticles=False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
@@ -83,11 +79,11 @@ class TestUtilsSetsOfCoordsAndSubtomos(BaseTest):
 
     @staticmethod
     def getMinAndMaxCoordValuesFromSet(inSet):
-        """Get the extreme values of the coordinates from an introduced set. The output is a numpy array 
-         with the following values [x_min, x_max, y_min, y_max, z_min, z_max]. It's very useful to compare 
+        """Get the extreme values of the coordinates from an introduced set. The output is a numpy array
+         with the following values [x_min, x_max, y_min, y_max, z_min, z_max]. It's very useful to compare
          sets of subtomograms or coordinates. The coordinates are expected to be referred to the center of
          the tomogram (Scipion-like)
-         
+
          :param inSet: it can be a SetOf3DCoordinates or a SetOfSubTomograms."""
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
@@ -127,11 +123,6 @@ class TestUtilsSetsOfCoordsAndSubtomos(BaseTest):
         zc_max = extremes[5]
         self.assertTrue(xc_max < xt / 2 and yc_max < yt / 2 and zc_max < zt / 2)
 
-
-class TestUtilsExtractCoords(TestUtilsSetsOfCoordsAndSubtomos):
-    """Test class that contains auxiliary methods to exhaustively check the results of a coordinates
-    extraction protocol"""
-
     def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
                                     expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
         """Checks the results of a coordinate extraction protocol.
@@ -164,15 +155,10 @@ class TestUtilsExtractCoords(TestUtilsSetsOfCoordsAndSubtomos):
             # Check the transformation matrices and shifts
             inSetTrMatrix = inElement.getMatrix(convention=convention)
             outCoordTrMatrix = outCoord.getMatrix(convention=convention)
-            super().check3dTransformMatrix(outCoordTrMatrix, orientedParticles=orientedParticles)
-            super().checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
+            self.check3dTransformMatrix(outCoordTrMatrix, orientedParticles=orientedParticles)
+            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
             # Check the tomoId
             self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
-
-
-class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
-    """Test class that contains auxiliary methods to exhaustively check the results of a sutomogram
-    extraction protocol"""
 
     def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
                                convention=TR_SCIPION, orientedParticles=False):
@@ -202,9 +188,9 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
             self.assertTrue(exists(outSubtomo.getFileName()))
             self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
             # The shifts in the subtomograms transformation matrix should have been scaled properly
-            super().checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
+            self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
             # Imported coordinates were picked using PySeg, so they must have an orientation
-            super().check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
+            self.check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
             # Check the tomoId
             self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
@@ -214,11 +200,6 @@ class TestUtilsExtractSubtomos(TestUtilsSetsOfCoordsAndSubtomos):
         currentCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outSubtomos)
         unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
         self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
-
-
-class TestUtilsAverageOfSubtomos(BaseTest):
-    """Test class that contains auxiliary methods to exhaustively check properties of an average subtomogram, which
-    can be the result of an average of subtomograms, an initial model or refinement of subtomograms."""
 
     def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
@@ -240,4 +221,25 @@ class TestUtilsAverageOfSubtomos(BaseTest):
             half1, half2 = avg.getHalfMaps().split(',')
             self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
             self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
+
+    def checkSubtomograms(self, subtomograms, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1, tomograms=None):
+        # Check the set
+        self.assertSetSize(subtomograms, expectedSetSize)
+        self.assertEqual(subtomograms.getSamplingRate(), expectedSRate)
+        if tomograms:
+            for tomo in tomograms:
+                tomoName = tomo.getFileName()
+                tomoObjId = tomo.getObjId()
+                tomoOrigin = tomo.getOrigin()
+                tomoId = tomo.getTsId()
+                for subtomo in subtomograms.iterSubtomos(volume=tomo):
+                    self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
+                    self.assertEqual(subtomo.getVolName(), tomoName)
+                    self.assertEqual(subtomo.getVolId(), tomoObjId)
+                    self.assertEqual(subtomo.getOrigin(), tomoOrigin)
+                    self.assertEqual(subtomo.getCoordinate3D().getTomoId(), tomoId)
+        else:
+            for subtomo in subtomograms:
+                self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
+                self.assertFalse(subtomo.hasCoordinate3D())
 
