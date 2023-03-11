@@ -132,6 +132,16 @@ class TiltImageBase:
         self._tiltAngle = Float(tiltAngle)
         self._tsId = String(tsId)
         self._acqOrder = Integer(acquisitionOrder)
+        self._oddEvenFileNames = CsvList(pType=str)
+
+    def hasOddEven(self):
+        return not self._oddEvenFileNames.isEmpty()
+
+    def getOddEven(self):
+        return self._oddEvenFileNames
+
+    def setOddEven(self, listFileNames):
+        return self._oddEvenFileNames.set(listFileNames)
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -168,6 +178,7 @@ class TiltImage(data.Image, TiltImageBase):
     def __init__(self, location=None, **kwargs):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
+
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
@@ -207,11 +218,18 @@ class TiltSeriesBase(data.SetOfImages):
         self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
+        self._hasOddEven = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
 
     def getAnglesCount(self):
         return self._anglesCount
+
+    def hasOddEven(self):
+        return self._hasOddEven.get()
+
+    def setHasOddEven(self, booleanValue):
+        self._hasOddEven.set(booleanValue)
 
     def setAnglesCount(self, value):
 
@@ -267,6 +285,9 @@ class TiltSeriesBase(data.SetOfImages):
 
         if tiltImage.hasTransform():
             self._hasAlignment.set(True)
+
+        if tiltImage.hasOddEven():
+            self._hasOddEven.set(True)
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
@@ -370,6 +391,9 @@ def tiltSeriesToString(tiltSeries):
 
     # CTF status
     s += ', ctf' if tiltSeries.ctfCorrected() else ''
+
+    # Odd even associated
+    s += ', oe' if tiltSeries.hasOddEven() else ''
 
     return s
 
@@ -612,8 +636,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
         self._hasAlignment = Boolean(False)
+        self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
+
+    def hasOddEven(self):
+        return self._hasOddEven.get()
+
+    def setHasOddEven(self, booleanValue):
+        self._hasOddEven.set(booleanValue)
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -718,6 +749,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
+        self._hasOddEven.set(item.hasOddEven())
 
         super().update(item)
 
@@ -1061,6 +1093,13 @@ class SetOfTomograms(data.SetOfVolumes):
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
+        self._hasOddEven = Boolean(False)
+
+    def hasOddEven(self):
+        return self._hasOddEven.get()
+
+    def setHasOddEven(self, booleanValue):
+        self._hasOddEven.set(booleanValue)
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
