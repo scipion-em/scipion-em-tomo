@@ -375,7 +375,7 @@ def tiltSeriesToString(tiltSeries):
     if tiltSeries.ctfCorrected():
         s.append('ctfCorr')
 
-    return (", " + ",".join(s)) if len(s) else ""
+    return (", " + ", ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
