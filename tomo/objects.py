@@ -362,16 +362,20 @@ class TiltSeriesBase(data.SetOfImages):
 
 
 def tiltSeriesToString(tiltSeries):
+    s = []
     # Matrix info
-    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+    if tiltSeries.hasAlignment():
+        s.append(u'\u21c4 hasAln')
 
     # Interpolated
-    s += ', interp' if tiltSeries.interpolated() else ''
+    if tiltSeries.interpolated():
+        s.append(u'\u21f2 interp')
 
     # CTF status
-    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+    if tiltSeries.ctfCorrected():
+        s.append('ctfCorr')
 
-    return s
+    return (", " + ",".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -746,7 +750,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         s = '%s x %s x %s' % (self._anglesCount,
                               self._firstDim[0],
                               self._firstDim[1])
-        s += ', ' + tiltSeriesToString(self)
+        s += tiltSeriesToString(self)
 
         return s
 
