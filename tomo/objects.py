@@ -1522,6 +1522,11 @@ class SetOfCoordinates3D(data.EMSet):
 
         return self._tomos
 
+    def append(self, item: Coordinate3D):
+        if self.getBoxSize() is None and item.getBoxSize() is not None:
+            self.setBoxSize(item.getBoxSize())
+        super().append(item)
+
 
 class SubTomogram(data.Volume):
     """The coordinate associated to each subtomogram is not scaled. To do that, the coordinates and the subtomograms
