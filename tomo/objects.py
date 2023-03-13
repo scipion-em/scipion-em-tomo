@@ -365,15 +365,15 @@ def tiltSeriesToString(tiltSeries):
     s = []
     # Matrix info
     if tiltSeries.hasAlignment():
-        s.append('✔ ali')
+        s.append('+ali')
 
     # Interpolated
     if tiltSeries.interpolated():
-        s.append('❗ interp')
+        s.append('! interp')
 
     # CTF status
     if tiltSeries.ctfCorrected():
-        s.append('✔ ctf')
+        s.append('+ctf')
 
     return (", " + ", ".join(s)) if len(s) else ""
 
