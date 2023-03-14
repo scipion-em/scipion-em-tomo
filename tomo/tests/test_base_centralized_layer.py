@@ -222,7 +222,18 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
             self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
 
-    def checkSubtomograms(self, subtomograms, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1, tomograms=None):
+    def checkSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1, tomograms=None):
+        """Checks the main properties of set of a set subtomograms, which can be the result of a subtomogram
+        importing protocol, for example.
+
+        :param subtomograms: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param tomograms: SetOfTomograms. If provided, additional features regarding how each subtomogram is referred
+        to the corresponding tomogram will be carried out. If not provided, it will be considered that the subtomograms
+        are not referred to any tomograms (as in some subtomogram importing cases).
+        """
         # Check the set
         self.assertSetSize(subtomograms, expectedSetSize)
         self.assertEqual(subtomograms.getSamplingRate(), expectedSRate)
@@ -230,13 +241,13 @@ class TestBaseCentralizedLayer(BaseTest):
             for tomo in tomograms:
                 tomoName = tomo.getFileName()
                 tomoObjId = tomo.getObjId()
-                tomoOrigin = tomo.getOrigin()
+                tomoOrigin = tomo.getOrigin().getMatrix()
                 tomoId = tomo.getTsId()
                 for subtomo in subtomograms.iterSubtomos(volume=tomo):
                     self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
                     self.assertEqual(subtomo.getVolName(), tomoName)
                     self.assertEqual(subtomo.getVolId(), tomoObjId)
-                    self.assertEqual(subtomo.getOrigin(), tomoOrigin)
+                    self.assertTrue(np.array_equal(subtomo.getOrigin().getMatrix(), tomoOrigin))
                     self.assertEqual(subtomo.getCoordinate3D().getTomoId(), tomoId)
         else:
             for subtomo in subtomograms:
