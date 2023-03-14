@@ -1289,12 +1289,6 @@ class Coordinate3D(data.EMObject):
             # which may have been previously stored is deleted when calling setVolume
             self.setTomoId(volume.getTsId())
 
-    def copyInfo(self, coord):
-        """ Copy information from other coordinate. """
-        self.setPosition(*coord.getPosition(const.CENTER_GRAVITY))
-        self.setObjId(coord.getObjId())
-        self.setBoxSize(coord.getBoxSize())
-
     def setBoxSize(self, boxSize):
         self._boxSize = boxSize
 

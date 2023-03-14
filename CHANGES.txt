@@ -1,8 +1,10 @@
 v3.1.4:
-    - hide transform matrix column for TS movies
-    - fix CTF viewer help (close #253)
-    - change TS flags
-    - Added an option to import the dose accumulation using a tlt file as second column
+  - cbox format from cryolo implemented to import 3d coordinates
+  - hide transform matrix column for TS movies
+  - fix CTF viewer help (close #253)
+  - change TS flags
+  - Added an option to import the dose accumulation using a tlt file as second column
+
 v3.1.3:
  users:
   - Tutorials templates renamed
