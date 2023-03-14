@@ -362,16 +362,20 @@ class TiltSeriesBase(data.SetOfImages):
 
 
 def tiltSeriesToString(tiltSeries):
+    s = []
     # Matrix info
-    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+    if tiltSeries.hasAlignment():
+        s.append('+ali')
 
     # Interpolated
-    s += ', interp' if tiltSeries.interpolated() else ''
+    if tiltSeries.interpolated():
+        s.append('! interp')
 
     # CTF status
-    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+    if tiltSeries.ctfCorrected():
+        s.append('+ctf')
 
-    return s
+    return (", " + ", ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -746,7 +750,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         s = '%s x %s x %s' % (self._anglesCount,
                               self._firstDim[0],
                               self._firstDim[1])
-        s += ', ' + tiltSeriesToString(self)
+        s += tiltSeriesToString(self)
 
         return s
 
@@ -1511,6 +1515,11 @@ class SetOfCoordinates3D(data.EMSet):
                 self._tomos[tsId] = tomo
 
         return self._tomos
+
+    def append(self, item: Coordinate3D):
+        if self.getBoxSize() is None and item.getBoxSize() is not None:
+            self.setBoxSize(item.getBoxSize())
+        super().append(item)
 
 
 class SubTomogram(data.Volume):

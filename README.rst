@@ -1,23 +1,13 @@
-================
+===========
 Tomo plugin
-================
+===========
 
 Base Scipion plugin for electron cryo-tomography and subtomogram averaging.
 
-Current development
--------------------
-
 This plugin is currently in **BETA** mode.
 
-
-Installation
-------------
-
-You will need to use `3.0.0 <https://scipion-em.github.io/docs/release-3.0.0/docs/scipion-modes/how-to-install.html>`_ version of Scipion to run these protocols.
-
-
 Protocols
------------
+---------
 
 * **import tilt-series**: Protocol to import tilt series.
 * **import tilt-series movies**: Protocol to import tilt series movies.
@@ -68,7 +58,7 @@ Clone or download the plugin repository
 
 .. code-block::
 
-    git clone https://github.com/scipion-em/scipion-em-tomo.git
+    git clone -b devel https://github.com/scipion-em/scipion-em-tomo.git
 
 Install the plugin in developer mode.
 
