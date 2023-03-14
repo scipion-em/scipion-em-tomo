@@ -373,7 +373,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti = tomoObj.TiltImage()
                         ti.setLocation(mic.getFileName())
                         ti.setTsId(ts_obj.getObjId())
-                        ti.setObjId(counter_ti)
+                        ti.setObjId(counter_ti + 1)
                         ti.setIndex(counter_ti + 1)
                         ti.setAcquisitionOrder(int(to))
                         ti.setTiltAngle(ta)

@@ -37,7 +37,7 @@ from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 from tomo.protocols.protocol_ts_import import MDoc
 from . import DataSet
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
-    ERR_NON_MATCHING_TOMOS
+    ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
@@ -271,6 +271,29 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertCoordinates(output, 5, boxSize, samplingRate)
+
+        # From txt
+        protCoordinates = self._runTomoImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX')
+        output = getattr(protCoordinates, 'outputCoordinates', None)
+        self.assertCoordinates(output, 3, boxSize, samplingRate)
+
+        def checkCoordinates(expectedValues,coordSet):
+
+            for index, row in enumerate(expectedValues):
+
+                coord = coordSet[index+1]
+                self.assertEqual(coord.getX(SCIPION), row[0], "X coordinate not converted properly")
+                self.assertEqual(coord.getY(SCIPION), row[1], "Y coordinate not converted properly")
+                self.assertEqual(coord.getZ(SCIPION), row[2], "Z coordinate not converted properly")
+
+        expectedCoords = [
+            [-512, -512, -256],
+            [0, 0, 0],
+            [512, 512, 256],
+        ]
+
+        checkCoordinates(expectedCoords, output)
+
 
         # From emantomo file
         if existsPlugin('emantomo'):
@@ -827,7 +850,7 @@ class TestImportTomoMasks(BaseTest):
                                                 binning=2)
 
         cls.launchProtocol(protTomoNormalization)
-        outputTomos = getattr(protTomoNormalization, 'outputSetOfTomograms', None)
+        outputTomos = getattr(protTomoNormalization, 'Tomograms', None)
         cls.assertIsNotNone(outputTomos, 'No tomograms were genetated in tomo normalization.')
 
         return outputTomos
@@ -835,7 +858,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksAllGood(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inTomoSetBinned)
 
         self.launchProtocol(protImportTomomasks)
@@ -851,7 +874,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksDiffSize(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inTomoSet)
 
         with self.assertRaises(Exception) as eType:
@@ -862,7 +885,7 @@ class TestImportTomoMasks(BaseTest):
     def testImportTomoMasksNoneMatch(self):
         print(magentaStr("\n==> Importing data - tomoMasks:"))
         protImportTomomasks = self.newProtocol(ProtImportTomomasks,
-                                               filesPath=self.ds.getFile('tomomaskAnnotated'),
+                                               filesPath=self.ds.getFile('tomoMaskAnnotated'),
                                                inputTomos=self.inNotMatchingTomoSet)
 
         with self.assertRaises(Exception) as eType:

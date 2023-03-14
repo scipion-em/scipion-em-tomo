@@ -53,17 +53,15 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ANGLE = 'Tilt angle'
     COL_TI_ENABLED = 'Included'
     COL_TI_ACQ_ORDER = 'Order'
-    COL_TI_DEFOCUS_U = 'Defocus U (A)'
     COL_TI_DOSE = "Accum. dose"
+    COL_TI_TRANSFORM = "T. Matrix"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_ENABLED: '_objEnabled',
-                  COL_TI_DEFOCUS_U: '_ctfModel._defocusU',
                   COL_TI_DOSE: '_acquisition._accumDose'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
         self.tiltseries = tiltSeries
-        self._hasCtf = tiltSeries.getFirstItem().getFirstItem().hasCTF()
         TreeProvider.__init__(self, sortingColumnName=self.COL_TS)
         self.selectedDict = {}
         self.mapper = protocol.mapper
@@ -107,9 +105,8 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
         ]
-
-        if self._hasCtf:
-            cols.insert(3, (self.COL_TI_DEFOCUS_U, 80))
+        if not isinstance(self.tiltseries, tomo.objects.SetOfTiltSeriesM):
+            cols.append((self.COL_TI_TRANSFORM, 300))
 
         return cols
 
@@ -121,14 +118,14 @@ class TiltSeriesTreeProvider(TreeProvider):
     def _getParentObject(pobj, default=None):
         return getattr(pobj, '_parentObject', default)
 
-    def getObjectInfo(self, obj):
+    def getObjectInfo(self, obj: tomo.objects.TiltImageBase):
         objId = obj.getObjId()
         tsId = obj.getTsId()
 
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = objId
             text = tsId
-            values = ['', '', '', str(obj)]
+            values = [str(obj)]
             opened = True
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
@@ -141,10 +138,13 @@ class TiltSeriesTreeProvider(TreeProvider):
                       str("%0.2f" % obj.getTiltAngle()),
                       str(obj.isEnabled()),
                       round(dose, 2) if dose is not None else "",
-                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1])]
+                      "%d@%s" % (obj.getIndex() or 1, obj.getFileName()),
+                      ]
 
-            if self._hasCtf:
-                values.insert(2, "%d" % obj.getCTF().getDefocusU())
+            if not isinstance(obj, tomo.objects.TiltImageM):
+                matrix = "" if not obj.hasTransform() else obj.getTransform().getMatrixAsList()
+                values.append(matrix)
+
             opened = False
 
         return {
@@ -285,7 +285,8 @@ class MeshesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.MeshPoint):
             meshName = 'Mesh %d' % obj.getObjId()
             tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
-            return {'key': tomoName + '-' + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
+            return {'key': tomoName + '-' + str(obj.getObjId()),
+                    'parent': self._parentDict.get(obj.getObjId(), None),
                     'text': meshName, 'values': ('')}
         elif isinstance(obj, tomo.objects.Tomogram):
             tomoName = pwutils.removeBaseExt(obj.getFileName())
@@ -936,13 +937,8 @@ class CtfEstimationListDialog(ListDialog):
 
     def _showHelp(self, event=None):
         showInfo('CTFTomoSeries viewer help',
-                 'This viewer calculates the standard deviation with respect '
-                 'to the mean of the defocusU and defocusV values. If the '
-                 'values of the images are not in the 20% range from the average '
-                 'they are marked as *Failed* and therefore the CTFTomoSerie is '
-                 'marked as *Failed* as well.\n\n'
-                 'On the other hand, the viewer allows you to create two '
-                 'subsets of CTFTomoSeries which are classified as good '
+                 'This viewer allows you to create two '
+                 'subsets of CTFTomoSeries which are called good '
                  'and bad respectively.\n\n'
                  'Note: The series that are checked are the ones that '
                  'represent the bad CTFTomoSeries', self.parent)

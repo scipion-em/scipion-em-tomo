@@ -362,16 +362,20 @@ class TiltSeriesBase(data.SetOfImages):
 
 
 def tiltSeriesToString(tiltSeries):
+    s = []
     # Matrix info
-    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+    if tiltSeries.hasAlignment():
+        s.append('+ali')
 
     # Interpolated
-    s += ', interp' if tiltSeries.interpolated() else ''
+    if tiltSeries.interpolated():
+        s.append('! interp')
 
     # CTF status
-    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+    if tiltSeries.ctfCorrected():
+        s.append('+ctf')
 
-    return s
+    return (", " + ", ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -746,7 +750,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         s = '%s x %s x %s' % (self._anglesCount,
                               self._firstDim[0],
                               self._firstDim[1])
-        s += ', ' + tiltSeriesToString(self)
+        s += tiltSeriesToString(self)
 
         return s
 
@@ -1056,7 +1060,7 @@ class Tomogram(data.Volume):
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
-    EXPOSE_ITEMS = True
+    EXPOSE_ITEMS = False
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
@@ -1285,12 +1289,6 @@ class Coordinate3D(data.EMObject):
             # which may have been previously stored is deleted when calling setVolume
             self.setTomoId(volume.getTsId())
 
-    def copyInfo(self, coord):
-        """ Copy information from other coordinate. """
-        self.setPosition(*coord.getPosition(const.CENTER_GRAVITY))
-        self.setObjId(coord.getObjId())
-        self.setBoxSize(coord.getBoxSize())
-
     def setBoxSize(self, boxSize):
         self._boxSize = boxSize
 
@@ -1343,6 +1341,12 @@ class Coordinate3D(data.EMObject):
     def setTomoId(self, tomoId):
         self._tomoId.set(tomoId)
 
+    def composeCoordId(self, sampligRate):
+        return "%s,%s,%s,%s" % (self.getTomoId(),
+                                int(sampligRate * self._x.get()),
+                                int(sampligRate * self._y.get()),
+                                int(sampligRate * self._z.get()))
+
 
 class SetOfCoordinates3D(data.EMSet):
     """ Encapsulate the logic of a set of volumes coordinates.
@@ -1386,7 +1390,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume=None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id'):
         """ Iterate over the coordinates associated with a tomogram.
         If volume=None, the iteration is performed over the whole
         set of coordinates.
@@ -1423,6 +1427,8 @@ class SetOfCoordinates3D(data.EMSet):
                             % type(volume))
 
 
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
             # Associate the tomogram
             self._associateVolume(coord)
@@ -1449,6 +1455,9 @@ class SetOfCoordinates3D(data.EMSet):
         """ Returns the SetOfTomograms associated with
                 this SetOfCoordinates"""
         return self._precedentsPointer.get()
+
+    def getPrecedent(self, tomoId):
+        return self.getPrecedentsInvolved()[tomoId]
 
     def setPrecedents(self, precedents):
         """ Set the tomograms  or Tilt Series associated with this set of coordinates.
@@ -1525,8 +1534,18 @@ class SetOfCoordinates3D(data.EMSet):
 
         return self._tomos
 
+    def append(self, item: Coordinate3D):
+        if self.getBoxSize() is None and item.getBoxSize() is not None:
+            self.setBoxSize(item.getBoxSize())
+        super().append(item)
+
 
 class SubTomogram(data.Volume):
+    """The coordinate associated to each subtomogram is not scaled. To do that, the coordinates and the subtomograms
+    sampling rates should be compared (because of how the extraction protocol works). But when shifts are applied to
+    the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
+    shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1620,9 +1639,12 @@ class SubTomogram(data.Volume):
         self._transform = newTransform
 
     def getTransform(self, convention=None):
-        matrix = self._transform.getMatrix()
-        return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
 
+        if convention is not None:
+            matrix = self._transform.getMatrix()
+            return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
+        else:
+            return self._transform
 
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
@@ -1894,7 +1916,7 @@ class LandmarkModel(data.EMObject):
             self.setCount(len(self._chains))
 
     def retrieveInfoTable(self):
-        """ This methods return a table containing the information of the landkmark model. One landmark pero line
+        """ This method returns a table containing the information of the landkmark model. One landmark pero line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -1914,7 +1936,7 @@ class LandmarkModel(data.EMObject):
         return outputInfo
 
     def __str__(self):
-        return "%s landmarks of %s pixels %s to %s" \
+        return "%s landmarks of %s Å %s to %s" \
                % (self.getCount(), self.getSize(),
                   "to apply" if self.applyTSTransformation() else "applied",
                   self.getTsId())
@@ -1968,13 +1990,12 @@ class SetOfLandmarkModels(data.EMSet):
             return self._setOfTiltSeriesPointer.get()
 
     def setSetOfTiltSeries(self, setOfTiltSeries):
-        """ Set the set of tilt-series from which this set of landmark models were calculted.
+        """ Set the set of tilt-series from which this set of landmark models were calculated.
         :param tiltSeries: Either a TiltSeries object or a pointer to it.
         """
 
         if setOfTiltSeries.isPointer():
-            self._setOfTiltSeriesPointer.copy(setOfTiltSeries)
-
+            self._setOfTiltSeriesPointer.copy(setOfTiltSeries, copyId=False)
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
 

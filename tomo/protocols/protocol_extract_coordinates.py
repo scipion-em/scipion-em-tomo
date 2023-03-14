@@ -24,17 +24,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import enum
 import numpy as np
-
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
-
 from .protocol_base import ProtTomoPicking
-
 import tomo.constants as const
 from ..objects import Coordinate3D, SetOfCoordinates3D, SetOfSubTomograms, SetOfTomograms, SubTomogram
+
+
+class Output3dCoordExtraction(enum.Enum):
+    coordinates3d = SetOfCoordinates3D
 
 
 class ProtTomoExtractCoords(ProtTomoPicking):
@@ -49,10 +50,12 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
     _label = 'extract 3D coordinates'
     _devStatus = BETA
+    _possibleOutputs = Output3dCoordExtraction
 
     def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
+        self.outputCoords = None
         self._tomoDict = None
         self._inputAreSubtomos = None
 
@@ -84,8 +87,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('extractCoordinatesStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.extractCoordinatesStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def getTomogramFromItem(self, item):
         """ Returns the tomogram associated with the item. Item could be either a subtomogram or a 3D coordinate."""
@@ -137,10 +140,8 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
         return self._tomoDict
 
-    def extractCoordFromItem(self, item, boxSize, scale):
-
+    def extractCoordFromItem(self, item, boxSize, scaleCoords, scaleShifts):
         coord = self.getCoordFromItem(item)
-
         tomo = self.getTomogramFromItem(item)
 
         if tomo is None:
@@ -153,13 +154,13 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             newCoord.copyObjId(coord)
             x, y, z = coord.getPosition(const.SCIPION)
             newCoord.setVolume(tomo)
-            newCoord.setPosition(x * scale, y * scale, z * scale, const.SCIPION)
+            newCoord.setPosition(x * scaleCoords, y * scaleCoords, z * scaleCoords, const.SCIPION)
 
             newCoord.setBoxSize(boxSize)
             transformation = self.checkMatrix(item)
-            transformation[0, 3] *= scale
-            transformation[1, 3] *= scale
-            transformation[2, 3] *= scale
+            transformation[0, 3] *= scaleShifts
+            transformation[1, 3] *= scaleShifts
+            transformation[2, 3] *= scaleShifts
             newCoord.setMatrix(transformation)
             if coord.hasGroupId():
                 newCoord.setGroupId(coord.getGroupId())
@@ -195,30 +196,40 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             return np.eye(transform.shape[0])
 
     def extractCoordinatesStep(self):
+        """What must be considered here:
+
+            1. If the input is a set of subtomograms:
+                1.1. The coordinates associated will be at the scale of the tomograms they were picked from.
+                1.2. The shifts of each subtomogram transformation matrix will be scaled properly.
+            2. If the input is a set of 3d coordinates: both the coordinates and the shifts will be at the scale
+               of the tomograms they were picked from.
+
+        Thus, two scale factors will be necessary to considerate all the possible cases: one for the shifts and
+        another for the coordinates. They will be equal in the case of introducing a set of 3d coordinates."""
         inTomos = self.getInputTomos()
         inSubTomos = self.getInputSubTomos()
-        # We're using the coordinates sampling rate instead of the one from the subtomograms because the coordinates
-        # are referred to the set of coordinates associated to the set of subtomograms
         inCoords = self.getCoordinates()
-        scale = inCoords.getSamplingRate() / inTomos.getSamplingRate()
-        self.info("Scaling coordinates by a factor *%0.2f*" % scale)
+
+        inTomosSRate = inTomos.getSamplingRate()
+        scaleCoords = inCoords.getSamplingRate() / inTomosSRate
+        scaleShifts = inSubTomos.getSamplingRate() / inTomosSRate
 
         # Create the output set of coordinates
         self.outputCoords = self._createSetOfCoordinates3D(inTomos)
-        self.outputCoords.setSamplingRate(inTomos.getSamplingRate())
+        self.outputCoords.setSamplingRate(inTomosSRate)
 
         if self.boxSize.get() is None:
 
             if self.areInputSubtomos():
-                boxSize = inSubTomos.getXDim() * scale
+                boxSize = inSubTomos.getXDim() * scaleCoords
             else:
-                boxSize = inSubTomos.getBoxSize() * scale
+                boxSize = inSubTomos.getBoxSize() * scaleCoords
         else:
             boxSize = self.boxSize.get()
 
         # For each item (Subtomo or coordinate) in the input
         for item in inSubTomos:
-            newCoord = self.extractCoordFromItem(item, boxSize, scale)
+            newCoord = self.extractCoordFromItem(item, boxSize, scaleCoords, scaleShifts)
             if newCoord:
                 self.outputCoords.append(newCoord)
 
@@ -226,7 +237,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
 
     def createOutputStep(self):
         if self.outputCoords.getSize() > 0:
-            self._defineOutputs(outputCoordinates3D=self.outputCoords)
+            self._defineOutputs(**{Output3dCoordExtraction.coordinates3d.name: self.outputCoords})
             self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
             self._defineSourceRelation(self.inputTomos, self.outputCoords)
         else:
@@ -258,11 +269,11 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
         summary = []
-        ps1 = self.getInputSubTomos().getSamplingRate()
-        ps2 = self.getInputTomos().getSamplingRate()
-        summary.append(u'Input subtomograms pixel size: *%0.3f* (Å/px)' % ps1)
-        summary.append(u'Input tomograms pixel size: *%0.3f* (Å/px)' % ps2)
-        summary.append('Scaling coordinates by a factor of *%0.3f*' % (ps1 / ps2))
+        # ps1 = self.getCoordinates().getSamplingRate()
+        # ps2 = self.getInputTomos().getSamplingRate()
+        # summary.append(u'Input subtomograms pixel size: *%0.3f* (Å/px)' % ps1)
+        # summary.append(u'Input tomograms pixel size: *%0.3f* (Å/px)' % ps2)
+        # summary.append('Scaling coordinates by a factor of *%0.3f*' % (ps1 / ps2))
 
         if hasattr(self, 'outputCoordinates3D'):
             summary.append('Output coordinates: *%d*'

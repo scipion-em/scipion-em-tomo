@@ -26,7 +26,7 @@
 
 import pwem
 
-__version__ = '3.0.15'
+__version__ = '3.1.4'
 _logo = "icon.png"
 _references = []
 
@@ -39,4 +39,3 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getEnviron(cls):
         return None
-
