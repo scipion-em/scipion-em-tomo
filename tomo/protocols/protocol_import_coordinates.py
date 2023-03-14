@@ -86,6 +86,21 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                             'want to import coordinates. The file names of the tomogram and '
                             'coordinate files must be the same.')
 
+        form.addParam('shiftX', params.IntParam,
+                      label="Shift x coord by this value",
+                      default=0,
+                      help="Set it to a positive or negative value to shift x")
+
+        form.addParam('shiftY', params.IntParam,
+                      label="Shift y coord by this value",
+                      default=0,
+                      help="Set it to a positive or negative value to shift y")
+
+        form.addParam('shiftZ', params.IntParam,
+                      label="Shift z coord by this value",
+                      default=0,
+                      help="Set it to a positive or negative value to shift z")
+
     def _insertAllSteps(self):
         self._insertFunctionStep('importCoordinatesStep',
                                  self.samplingRate.get())
@@ -110,6 +125,11 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                     if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]:
                         def addCoordinate(coord, x, y, z):
                             coord.setVolume(tomo.clone())
+
+                            x = x + self.shiftX.get()
+                            y = y + self.shiftY.get()
+                            z = z + self.shiftZ.get()
+
                             coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
                             coordsSet.append(coord)
                         ci.importCoordinates3D(coordFile, addCoordinate)
