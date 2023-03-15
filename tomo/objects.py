@@ -1112,6 +1112,7 @@ class Coordinate3D(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
+        self._boxSize = 0
         self._volumePointer = Pointer(objDoStore=False)
         self._x = Float()
         self._y = Float()
@@ -1293,9 +1294,11 @@ class Coordinate3D(data.EMObject):
         self._boxSize = boxSize
 
     def getBoxSize(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._boxSize
 
     def getVolId(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._volId.get()
 
     def setVolId(self, volId):
@@ -1517,8 +1520,8 @@ class SetOfCoordinates3D(data.EMSet):
         return self._tomos
 
     def append(self, item: Coordinate3D):
-        if self.getBoxSize() is None and item.getBoxSize() is not None:
-            self.setBoxSize(item.getBoxSize())
+        if self.getBoxSize() is None and item._boxSize:
+            self.setBoxSize(item._boxSize)
         super().append(item)
 
 
