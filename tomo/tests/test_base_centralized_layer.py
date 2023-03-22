@@ -27,7 +27,7 @@ from os.path import exists
 from flatbuffers.builder import np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
-from tomo.constants import TR_SCIPION
+from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms
 
 
@@ -123,6 +123,13 @@ class TestBaseCentralizedLayer(BaseTest):
         zc_max = extremes[5]
         self.assertTrue(xc_max < xt / 2 and yc_max < yt / 2 and zc_max < zt / 2)
 
+    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
+        # Check the set
+        self.assertSetSize(inSet, expectedSetSize)
+        self.assertEqual(inSet.getSamplingRate(), expectedSRate)
+        if expectedBoxSize:
+            self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
+
     def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
                                     expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
         """Checks the results of a coordinate extraction protocol.
@@ -138,18 +145,17 @@ class TestBaseCentralizedLayer(BaseTest):
         and eye matrix (False) or not (True)."""
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
+        # First, check the set size, sampling rate, and box size
+        self.checkSetGeneralProps(inSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  expectedBoxSize=expectedBoxSize)
+        # Check the coordinate extremes
         inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
         outCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outCoords)
         coordScaleFactor = inSet.getSamplingRate() / outCoords.getSamplingRate()
         shiftsScaleFactor = 1 / coordScaleFactor
-        # Check the coordinate extremes
         self.assertTrue(np.array_equal(outCoordsExtremes, coordScaleFactor * inCoordsExtremes))
-        # Check the sampling rate
-        self.assertEqual(outCoords.getSamplingRate(), expectedSRate)
-        # Check the set size
-        self.assertSetSize(outCoords, expectedSetSize)
-        # Check the box size
-        self.assertEqual(outCoords.getBoxSize(), expectedBoxSize)
         # Other checks per coordinate
         for inElement, outCoord in zip(inSet, outCoords):
             # Check the transformation matrices and shifts
@@ -159,47 +165,6 @@ class TestBaseCentralizedLayer(BaseTest):
             self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
             # Check the tomoId
             self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
-
-    def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                               convention=TR_SCIPION, orientedParticles=False):
-        """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
-
-        :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
-        :param outSubtomos: the resulting SetOfSubTomograms.
-        :param expectedSetSize: expected set site to check.
-        :param expectedBoxSize: expected box size, in pixels, to check.
-        :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be and eye matrix
-        (False) or not (True)."""
-        scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
-        # Check the critical properties of the set
-        self.assertSetSize(outSubtomos, expectedSetSize)
-        self.assertEqual(outSubtomos.getSamplingRate(), expectedSRate)
-        self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
-        self.assertTrue(outSubtomos.hasCoordinates3D())
-        # Check the subtomograms that compose the set
-        for incoord, outSubtomo in zip(inCoords, outSubtomos):
-            subtomoTr = outSubtomo.getTransform(convention=convention)
-            subtomoMatrix = subtomoTr.getMatrix()
-            coordinate = outSubtomo.getCoordinate3D()
-            coordTr = coordinate._eulerMatrix
-            coordMatrix = coordinate.getMatrix(convention=convention)
-            self.assertTrue(exists(outSubtomo.getFileName()))
-            self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
-            # The shifts in the subtomograms transformation matrix should have been scaled properly
-            self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
-            # Imported coordinates were picked using PySeg, so they must have an orientation
-            self.check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
-            # Check the tomoId
-            self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
-
-        # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
-        # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
-        # from the plugin scipion-em-tomo)
-        currentCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outSubtomos)
-        unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
-        self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
 
     def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
@@ -222,9 +187,8 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
             self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
 
-    def checkSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1, tomograms=None):
-        """Checks the main properties of set of a set subtomograms, which can be the result of a subtomogram
-        importing protocol, for example.
+    def checkImportedSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1, tomograms=None):
+        """Checks the main properties of an imported set subtomograms.
 
         :param subtomograms: the resulting SetOfSubTomograms.
         :param expectedSetSize: expected set site to check.
@@ -235,8 +199,7 @@ class TestBaseCentralizedLayer(BaseTest):
         are not referred to any tomograms (as in some subtomogram importing cases).
         """
         # Check the set
-        self.assertSetSize(subtomograms, expectedSetSize)
-        self.assertEqual(subtomograms.getSamplingRate(), expectedSRate)
+        self.checkSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         if tomograms:
             for tomo in tomograms:
                 tomoName = tomo.getFileName()
@@ -254,3 +217,70 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
                 self.assertFalse(subtomo.hasCoordinate3D())
 
+    def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
+                               convention=TR_SCIPION, orientedParticles=False):
+        """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
+
+        :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
+        :param outSubtomos: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be and eye matrix
+        (False) or not (True)."""
+        scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
+        # Check the critical properties of the set
+        # First, check the set size, sampling rate, and box size
+        self.checkSetGeneralProps(outSubtomos,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate)
+        self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
+        self.assertTrue(outSubtomos.hasCoordinates3D())
+        # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
+        # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
+        # from the plugin scipion-em-tomo)
+        currentCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outSubtomos)
+        unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
+        self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
+        # Check the subtomograms that compose the set
+        for incoord, outSubtomo in zip(inCoords, outSubtomos):
+            subtomoTr = outSubtomo.getTransform(convention=convention)
+            subtomoMatrix = subtomoTr.getMatrix()
+            coordinate = outSubtomo.getCoordinate3D()
+            coordTr = coordinate._eulerMatrix
+            coordMatrix = coordinate.getMatrix(convention=convention)
+            self.assertTrue(exists(outSubtomo.getFileName()))
+            self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
+            # The shifts in the subtomograms transformation matrix should have been scaled properly
+            self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
+            # Imported coordinates were picked using PySeg, so they must have an orientation
+            self.check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
+            # Check the tomoId
+            self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
+
+    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
+                                 convention=TR_SCIPION, orientedParticles=False, angTol=0.05, shiftTol=1):
+        angTolMat = np.ones([3, 3]) * angTol
+        shiftTolMat = np.ones(3) * shiftTol
+        # Check the set
+        self.checkSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        for inSubtomo, outSubtomo in zip(inSubtomos, outSubtomos):
+            # Check the subtomogram main properties
+            self.checkAverage(outSubtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
+            # Check the transformation matrix
+            inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
+            outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
+            self.check3dTransformMatrix(outSubtomoMat, orientedParticles=orientedParticles)
+            # The input and output matrices should be different
+            diffMatrix = np.absolute(outSubtomoMat - inSubtomoMat)
+            diffAngularPart = diffMatrix[:3, :3]
+            diffShiftPart = diffMatrix[3, :-1]
+            self.assertTrue(np.any(np.absolute(diffAngularPart - angTolMat) > 0))
+            self.assertTrue(np.any(np.absolute(diffShiftPart - shiftTolMat) > 0))
+            # Check that the input and output particles match (We're comparing tow sets, so the convention doesn't
+            # matter as long as the coordinates of both sets are retrieved using the same convention)
+            inCoord = inSubtomo.getCoordinate3D()
+            outCoord = outSubtomo.getCoordinate3D()
+            self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
+            self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
