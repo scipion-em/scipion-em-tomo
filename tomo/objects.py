@@ -1300,6 +1300,7 @@ class Coordinate3D(data.EMObject):
         return self._boxSize
 
     def getVolId(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._volId.get()
 
     def setVolId(self, volId):
