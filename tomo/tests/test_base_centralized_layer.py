@@ -146,7 +146,7 @@ class TestBaseCentralizedLayer(BaseTest):
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
         # First, check the set size, sampling rate, and box size
-        self.checkSetGeneralProps(inSet,
+        self.checkSetGeneralProps(outCoords,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
                                   expectedBoxSize=expectedBoxSize)
