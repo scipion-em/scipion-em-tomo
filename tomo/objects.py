@@ -141,7 +141,7 @@ class TiltImageBase:
         return self._oddEvenFileNames
 
     def setOddEven(self, listFileNames):
-        return self._oddEvenFileNames.set(listFileNames)
+        self._oddEvenFileNames.set(listFileNames)
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -170,7 +170,8 @@ class TiltImageBase:
             self.copyObjId(other)
         if copyTM and other.hasTransform():
             self.copyAttributes(other, '_transform')
-
+        if self.hasOddEven():
+            self.copyAttributes(other, '_oddEvenFileNames')
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
@@ -747,6 +748,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
+        self._hasOddEven.set(item.hasOddEven())
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
         self._hasOddEven.set(item.hasOddEven())
