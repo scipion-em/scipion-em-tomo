@@ -432,7 +432,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
             if someAdded:
                 self.debug('Updating output...')
-                outputSet.updateDim()
                 self._updateOutputSet(self._outputName, outputSet,
                                       state=outputSet.STREAM_OPEN)
                 self.debug('Update Done.')
@@ -771,7 +770,11 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         # the user the need to specify {TS}
         if len(filePaths) == 1 and not self.isInStreaming():
             f = filePaths[0]
+            self.info("Single match: %s" % f)
             ts = pwutils.removeBaseExt(f)  # Base name without extension
+            self.info("Raw tilt series id is %s." % ts)
+            ts = normalizeTSId(ts)
+            self.info("Normalized tilt series id is %s." % ts)
             matchingFiles[ts] = []
             _addMany(matchingFiles[ts], f, None)
         else:
