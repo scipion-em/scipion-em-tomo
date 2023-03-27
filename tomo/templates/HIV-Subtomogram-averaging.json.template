@@ -1,21 +1,22 @@
-Course 2022, day 3 :Subtomogram averaging of HIV (EMPIAR-10164).
-You'll need to download its dataset -> scipion3 testdata --download tomo-tutorial
+Subtomogram averaging: HIV (EMPIAR-10164).
+You'll need to download its dataset -> scipion3 testdata --download relion40_sta_tutorial_data
+[
 [
     {
         "object.className": "ProtImportTs",
         "object.id": "2",
         "object.label": "tomo - import tilt-series",
-        "object.comment": "Registers the tomograms to use in this project. Run scipion3 testdata --download tomo-tutorial",
+        "object.comment": "Registers the tiltseries TS_03 to use in this project. Run scipion3 testdata --download relion40_sta_tutorial_data to get the data.",
         "_useQueue": false,
         "_prerequisites": "",
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "~Path to HIV folder dataset|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/TS/|2|datasetpath~",
+        "filesPath": "~Path to HIV folder dataset|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/TS_03/|2|datasetpath~",
         "filesPattern": "{TS}*.mrc",
-        "exclusionWords": null,
+        "exclusionWords": "output",
         "mdocInfo": null,
-        "anglesFrom": 0,
+        "anglesFrom": 2,
         "minAngle": -60.0,
         "maxAngle": 60.0,
         "stepAngle": 3.0,
@@ -45,8 +46,8 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to folder with  .xf file|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/TS|2|xffolder~",
-        "filesPattern": "TS_43.xf",
+        "filesPath": "~Path to folder with  .xf file|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/|2|xffolder~",
+        "filesPattern": "TS*/*.xf",
         "copyFiles": false,
         "exclusionWords": null,
         "binningTM": 1,
@@ -54,21 +55,21 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "inputSetOfTiltSeries": "2.outputTiltSeries"
     },
     {
-        "object.className": "ProtImodImportSetOfCtfTomoSeries",
+        "object.className": "CistemProtTsImportCtf",
         "object.id": "113",
-        "object.label": "imod - Import tomo CTFs",
-        "object.comment": "Imports imod ctf information and creates CTF series",
+        "object.label": "cistem - import tomo CTFs (copy)",
+        "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to folder with  .defocus files|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/CTF|2|ctfsfolder~",
+        "filesPath": "~Path to folder with  .defocus files|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/TS_03/|2|ctffolder~",
         "filesPattern": "*.defocus",
         "copyFiles": false,
         "exclusionWords": null,
-        "inputSetOfTiltSeries": "3.TiltSeries"
+        "inputSetOfTiltSeries": "2.outputTiltSeries"
     },
     {
         "object.className": "ProtImportTomograms",
@@ -81,7 +82,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to tomograms|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/Tomograms/|2|tomopath~",
+        "filesPath": "~Path to tomograms|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/|2|tomopath~",
         "filesPattern": "*.mrc",
         "copyFiles": false,
         "samplingRate": 5.4,
@@ -107,7 +108,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "starFile": "~Path to coords.star file|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/coords.star|2|coordspath~",
+        "starFile": "~Path to coords.star file|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/input/coords_5tomos.star|2|coordspath~",
         "samplingRate": 1.35,
         "boxSize": 20,
         "inTomos": "156.outputTomograms"
@@ -211,7 +212,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "flipZ": true,
         "swapXY": false,
         "inputTS": "3.TiltSeries",
-        "inputCtfTs": "113.CTFTomoSeries",
+        "inputCtfTs": "113.outputCTFs",
         "inputCoords": "227.coordinates"
     },
     {
@@ -382,7 +383,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "~Path to Bin4 mask|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/Masks/mask_align_bin4.mrc|2|maskb4~",
+        "maskPath": "~Path to Bin4 mask|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/masks/mask_align_bin4.mrc|2|maskb4~",
         "samplingRate": 5.4
     },
     {
@@ -444,20 +445,8 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "maskPath": "~Path to bin2 mask|%(SCIPION_TESTS)s/tomo-tutorials/Day3-HIV/Masks/mask_align_bin2.mrc|2|maskb2~",
+        "maskPath": "~Path to bin2 mask|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/masks/mask_align_bin2.mrc|2|maskb2~",
         "samplingRate": 2.7
-    },
-    {
-        "object.className": "ProtExtractCoordsFromPSubtomos",
-        "object.id": "1076",
-        "object.label": "reliontomo - extract coordinates from pseudo-subtomograms",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "inReParticles": "924.relionParticles"
     },
     {
         "object.className": "ProtRelionReconstructParticle",
@@ -517,7 +506,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "doInvert": true,
         "doNormalize": true,
         "normproc": 0,
-        "inputCoordinates": "1076.coordinates"
+        "inputCoordinates": "1343.relionParticles"
     },
     {
         "object.className": "ProtRelion3DClassifySubtomograms",

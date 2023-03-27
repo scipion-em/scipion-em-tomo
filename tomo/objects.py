@@ -25,7 +25,6 @@
 # *
 # **************************************************************************
 import logging
-
 logger = logging.getLogger(__name__)
 
 import csv
@@ -1325,7 +1324,7 @@ class Coordinate3D(data.EMObject):
         return self._groupId is not None
 
     def getVolumeOrigin(self, angstrom=False):
-        """Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the vector that can be used to move the position of the Coordinate3D
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
@@ -1803,6 +1802,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
+    REP_SET_TYPE =SetOfAverageSubTomograms
 
 
 class LandmarkModel(data.EMObject):
