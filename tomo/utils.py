@@ -385,3 +385,20 @@ def getRotationAngleAndShiftFromTM(ti):
     shifts = [tm[0][2], tm[0][2]]
 
     return rotationAngle, shifts
+
+
+def scaleTrMatrixShifts(inTrMatrix, scaleFactor):
+    """In Scipion data model, the shifts are in pixels, so they must be scaled properly when the reference size
+    (normally the tomograms from which the coordinates were picked) changes, for example, extracting the particles
+    or the coordinates, to another set of tomograms.
+
+    :param inTrMatrix: transformation matrix from which the shifts will be read.
+    :param scaleFactor: scale factor that will be used to scale the shifts properly.
+    :return: a transformation matrix with the shifts properly scaled."""
+    if scaleFactor != 1:  # It can be lower (smaller source) or higher (bigger source) than one
+        shifts = np.array([inTrMatrix[0, 3], inTrMatrix[1, 3], inTrMatrix[2, 3]])
+        scaledShifts = scaleFactor * shifts
+        inTrMatrix[0, 3] = scaledShifts[0]
+        inTrMatrix[1, 3] = scaledShifts[1]
+        inTrMatrix[2, 3] = scaledShifts[2]
+    return inTrMatrix

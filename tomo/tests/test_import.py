@@ -37,11 +37,11 @@ from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 from tomo.protocols.protocol_ts_import import MDoc
 from . import DataSet
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
-    ERR_NON_MATCHING_TOMOS
+    ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
-from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
+from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
 from ..utils import existsPlugin
 
 from imod.protocols import ProtImodTomoNormalization
@@ -190,7 +190,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                                                       boxSize=boxSize)
 
         self.launchProtocol(protImportCoordsFromSqlite)
-        return getattr(protImportCoordsFromSqlite, 'outputCoordinates', None), \
+        return getattr(protImportCoordsFromSqlite, outputObjs.coordinates.name, None), \
                getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
 
     def testImport3dCoordsFromSqlite_FullMatch(self):
@@ -271,6 +271,27 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
         output = getattr(protCoordinates, 'outputCoordinates', None)
         self.assertCoordinates(output, 5, boxSize, samplingRate)
+
+        # From txt
+        protCoordinates = self._runTomoImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX')
+        output = getattr(protCoordinates, 'outputCoordinates', None)
+        self.assertCoordinates(output, 3, boxSize, samplingRate)
+
+        def checkCoordinates(expectedValues, coordSet):
+
+            for index, row in enumerate(expectedValues):
+                coord = coordSet[index + 1]
+                self.assertEqual(coord.getX(SCIPION), row[0], "X coordinate not converted properly")
+                self.assertEqual(coord.getY(SCIPION), row[1], "Y coordinate not converted properly")
+                self.assertEqual(coord.getZ(SCIPION), row[2], "Z coordinate not converted properly")
+
+        expectedCoords = [
+            [-512, -512, -256],
+            [0, 0, 0],
+            [512, 512, 256],
+        ]
+
+        checkCoordinates(expectedCoords, output)
 
         # From emantomo file
         if existsPlugin('emantomo'):

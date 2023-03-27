@@ -25,7 +25,6 @@
 # *
 # **************************************************************************
 import logging
-
 logger = logging.getLogger(__name__)
 
 import csv
@@ -396,19 +395,24 @@ class TiltSeriesBase(data.SetOfImages):
 
 
 def tiltSeriesToString(tiltSeries):
+    s = []
     # Matrix info
-    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+    if tiltSeries.hasAlignment():
+        s.append('+ali')
 
     # Interpolated
-    s += ', interp' if tiltSeries.interpolated() else ''
+    if tiltSeries.interpolated():
+        s.append('! interp')
 
     # CTF status
-    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+    if tiltSeries.ctfCorrected():
+        s.append('+ctf')
 
     # Odd even associated
-    s += ', oe' if tiltSeries.hasOddEven() else ''
+    if tiltSeries.hasOddEven():
+        s.append('+oe')
 
-    return s
+    return (", " + ", ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -792,7 +796,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         s = '%s x %s x %s' % (self._anglesCount,
                               self._firstDim[0],
                               self._firstDim[1])
-        s += ', ' + tiltSeriesToString(self)
+        s += tiltSeriesToString(self)
 
         return s
 
@@ -1161,6 +1165,7 @@ class Coordinate3D(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
+        self._boxSize = 0
         self._volumePointer = Pointer(objDoStore=False)
         self._x = Float()
         self._y = Float()
@@ -1338,19 +1343,15 @@ class Coordinate3D(data.EMObject):
             # which may have been previously stored is deleted when calling setVolume
             self.setTomoId(volume.getTsId())
 
-    def copyInfo(self, coord):
-        """ Copy information from other coordinate. """
-        self.setPosition(*coord.getPosition(const.CENTER_GRAVITY))
-        self.setObjId(coord.getObjId())
-        self.setBoxSize(coord.getBoxSize())
-
     def setBoxSize(self, boxSize):
         self._boxSize = boxSize
 
     def getBoxSize(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._boxSize
 
     def getVolId(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._volId.get()
 
     def setVolId(self, volId):
@@ -1376,7 +1377,7 @@ class Coordinate3D(data.EMObject):
         return self._groupId is not None
 
     def getVolumeOrigin(self, angstrom=False):
-        """Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the vector that can be used to move the position of the Coordinate3D
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
@@ -1570,6 +1571,11 @@ class SetOfCoordinates3D(data.EMSet):
                 self._tomos[tsId] = tomo
 
         return self._tomos
+
+    def append(self, item: Coordinate3D):
+        if self.getBoxSize() is None and item._boxSize:
+            self.setBoxSize(item._boxSize)
+        super().append(item)
 
 
 class SubTomogram(data.Volume):
@@ -1849,6 +1855,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
+    REP_SET_TYPE =SetOfAverageSubTomograms
 
 
 class LandmarkModel(data.EMObject):
