@@ -45,9 +45,10 @@ from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
 
 class MATRIX_CONVERSION:
-    RELION = "relion"
+    RELION = const.TR_RELION
     XMIPP = "xmipp"
-    EMAN = "eman"
+    EMAN = const.TR_EMAN
+    DYNAMO = const.TR_DYNAMO
 
 
 def convertMatrix(M, convention=None, direction=None):
@@ -108,7 +109,7 @@ def convertMatrix(M, convention=None, direction=None):
                         N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
             """
 
-    if convention is None or convention == MATRIX_CONVERSION.EMAN:
+    if convention is None or convention in [MATRIX_CONVERSION.EMAN, MATRIX_CONVERSION.DYNAMO]:
         return M
     elif direction == 'get' and convention in [MATRIX_CONVERSION.RELION, MATRIX_CONVERSION.XMIPP]:
         # Rotation matrix. Remove translation from the Scipion matrix
@@ -1290,6 +1291,7 @@ class Coordinate3D(data.EMObject):
             self.setTomoId(volume.getTsId())
 
     def setBoxSize(self, boxSize):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         self._boxSize = boxSize
 
     def getBoxSize(self):
@@ -1297,7 +1299,6 @@ class Coordinate3D(data.EMObject):
         return self._boxSize
 
     def getVolId(self):
-        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._volId.get()
 
     def setVolId(self, volId):
