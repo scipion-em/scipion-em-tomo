@@ -215,7 +215,7 @@ class TiltImage(data.Image, TiltImageBase):
         return fileName + suffix + fileExtension
 
 
-TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
+TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
 
 class TiltSeriesBase(data.SetOfImages):
@@ -413,6 +413,13 @@ def tiltSeriesToString(tiltSeries):
         s.append('+oe')
 
     return (", " + ", ".join(s)) if len(s) else ""
+
+
+def tomogramToString(tomogram):
+    s = []
+    if tomogram.hasHalfMaps():
+        s.append('+oe')
+    return (", ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -764,7 +771,6 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
-        self._hasOddEven.set(item.hasOddEven())
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
         self._hasOddEven.set(item.hasOddEven())
@@ -1122,6 +1128,24 @@ class SetOfTomograms(data.SetOfVolumes):
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
+
+    def __str__(self):
+        sampling = self.getSamplingRate()
+        tomoStr = tomogramToString(self.getFirstItem())
+
+        if not sampling:
+            logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
+                         % self.getName())
+            sampling = -999.0
+
+        s = "%s (%d items, %s, , %s, %0.2f Å/px%s)" % \
+            (self.getClassName(), self.getSize(),
+             self._dimStr(), tomoStr, sampling, self._appendStreamState())
+        return s
+
+    def update(self, item: Tomogram):
+        self._hasOddEven.set(item.hasHalfMaps())
+        super().update(item)
 
 
 class TomoMask(Tomogram):
