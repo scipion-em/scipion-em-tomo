@@ -1531,6 +1531,7 @@ class SubTomogram(data.Volume):
     the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
     shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
 
+    VOL_NAME_FIELD = "_volName"
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1671,7 +1672,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
         pointer to the associated Tomogram. This method overcomes this problem by retrieving and
-        relinking the Tomogram as if nothing would ever happened.
+        relinking the Tomogram as if nothing would ever happend.
 
         It is recommended to use this method when working with subtomograms, anytime you want to properly use
         its coordinate3D attached object.
