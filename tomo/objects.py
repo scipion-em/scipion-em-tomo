@@ -418,8 +418,8 @@ def tiltSeriesToString(tiltSeries):
 def tomogramToString(tomogram):
     s = []
     if tomogram.hasHalfMaps():
-        s.append('+oe')
-    return (", ".join(s)) if len(s) else ""
+        s.append('+oe,')
+    return (" ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -1138,7 +1138,7 @@ class SetOfTomograms(data.SetOfVolumes):
                          % self.getName())
             sampling = -999.0
 
-        s = "%s (%d items, %s, , %s, %0.2f Å/px%s)" % \
+        s = "%s (%d items, %s, %s %0.2f Å/px%s)" % \
             (self.getClassName(), self.getSize(),
              self._dimStr(), tomoStr, sampling, self._appendStreamState())
         return s
