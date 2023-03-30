@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import emtable
 import numpy as np
 from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
 import pyworkflow.utils as pwutils
@@ -53,6 +54,29 @@ class TomoImport:
 
         else:
             raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
+
+class EmTableCoordImport:
+
+    def __init__(self, block, xField, yField, zField):
+        self.block = block
+        self.xField = xField
+        self.yField = yField
+        self.zField = zField
+    def importCoordinates3D(self, fileName, addCoordinate):
+        from tomo.objects import Coordinate3D
+
+        # Read starfile
+        md = emtable.Table(fileName=fileName, tableName=self.block)
+
+        print([col.getName() for col in md.getColumns()])
+        for row in md:
+            print(row)
+            x = row.get(self.xField)
+            print(x)
+            y = row.get(self.yField)
+            z = row.get(self.zField)
+            coord = Coordinate3D()
+            addCoordinate(coord, x, y, z)
 
 
 def getMeshVolFileName(volId):

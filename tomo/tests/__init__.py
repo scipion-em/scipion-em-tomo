@@ -71,6 +71,12 @@ class DataSetEmd10439(Enum):
     scipionSqlite3dCoordsSomeBad = 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
     coords39Sqlite = 'coordinates/coordinates39.sqlite'
+    nParticles = 39
+    binFactor = 2
+    bin2BoxSize = 44
+    unbinnedBoxSize = 88
+    unbinnedSRate = 13.68
+    bin2SRate = 27.36
 
 
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})

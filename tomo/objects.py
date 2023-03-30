@@ -25,7 +25,6 @@
 # *
 # **************************************************************************
 import logging
-
 logger = logging.getLogger(__name__)
 
 import csv
@@ -46,9 +45,10 @@ from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
 
 class MATRIX_CONVERSION:
-    RELION = "relion"
+    RELION = const.TR_RELION
     XMIPP = "xmipp"
-    EMAN = "eman"
+    EMAN = const.TR_EMAN
+    DYNAMO = const.TR_DYNAMO
 
 
 def convertMatrix(M, convention=None, direction=None):
@@ -109,7 +109,7 @@ def convertMatrix(M, convention=None, direction=None):
                         N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
             """
 
-    if convention is None or convention == MATRIX_CONVERSION.EMAN:
+    if convention is None or convention in [MATRIX_CONVERSION.EMAN, MATRIX_CONVERSION.DYNAMO]:
         return M
     elif direction == 'get' and convention in [MATRIX_CONVERSION.RELION, MATRIX_CONVERSION.XMIPP]:
         # Rotation matrix. Remove translation from the Scipion matrix
@@ -362,16 +362,20 @@ class TiltSeriesBase(data.SetOfImages):
 
 
 def tiltSeriesToString(tiltSeries):
+    s = []
     # Matrix info
-    s = '∅' if not tiltSeries.hasAlignment() else '＊'
+    if tiltSeries.hasAlignment():
+        s.append('+ali')
 
     # Interpolated
-    s += ', interp' if tiltSeries.interpolated() else ''
+    if tiltSeries.interpolated():
+        s.append('! interp')
 
     # CTF status
-    s += ', ctf' if tiltSeries.ctfCorrected() else ''
+    if tiltSeries.ctfCorrected():
+        s.append('+ctf')
 
-    return s
+    return (", " + ", ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -746,7 +750,7 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         s = '%s x %s x %s' % (self._anglesCount,
                               self._firstDim[0],
                               self._firstDim[1])
-        s += ', ' + tiltSeriesToString(self)
+        s += tiltSeriesToString(self)
 
         return s
 
@@ -1108,6 +1112,7 @@ class Coordinate3D(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
+        self._boxSize = 0
         self._volumePointer = Pointer(objDoStore=False)
         self._x = Float()
         self._y = Float()
@@ -1285,16 +1290,12 @@ class Coordinate3D(data.EMObject):
             # which may have been previously stored is deleted when calling setVolume
             self.setTomoId(volume.getTsId())
 
-    def copyInfo(self, coord):
-        """ Copy information from other coordinate. """
-        self.setPosition(*coord.getPosition(const.CENTER_GRAVITY))
-        self.setObjId(coord.getObjId())
-        self.setBoxSize(coord.getBoxSize())
-
     def setBoxSize(self, boxSize):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         self._boxSize = boxSize
 
     def getBoxSize(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._boxSize
 
     def getVolId(self):
@@ -1323,7 +1324,7 @@ class Coordinate3D(data.EMObject):
         return self._groupId is not None
 
     def getVolumeOrigin(self, angstrom=False):
-        """Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the vector that can be used to move the position of the Coordinate3D
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
@@ -1518,6 +1519,11 @@ class SetOfCoordinates3D(data.EMSet):
 
         return self._tomos
 
+    def append(self, item: Coordinate3D):
+        if self.getBoxSize() is None and item._boxSize:
+            self.setBoxSize(item._boxSize)
+        super().append(item)
+
 
 class SubTomogram(data.Volume):
     """The coordinate associated to each subtomogram is not scaled. To do that, the coordinates and the subtomograms
@@ -1525,6 +1531,7 @@ class SubTomogram(data.Volume):
     the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
     shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
 
+    VOL_NAME_FIELD = "_volName"
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1665,7 +1672,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
         pointer to the associated Tomogram. This method overcomes this problem by retrieving and
-        relinking the Tomogram as if nothing would ever happened.
+        relinking the Tomogram as if nothing would ever happend.
 
         It is recommended to use this method when working with subtomograms, anytime you want to properly use
         its coordinate3D attached object.
@@ -1796,6 +1803,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
+    REP_SET_TYPE =SetOfAverageSubTomograms
 
 
 class LandmarkModel(data.EMObject):

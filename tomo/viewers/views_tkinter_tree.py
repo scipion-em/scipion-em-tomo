@@ -54,7 +54,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ENABLED = 'Included'
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DOSE = "Accum. dose"
-    COL_TI_TRANSFORM =  "T. Matrix"
+    COL_TI_TRANSFORM = "T. Matrix"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_ENABLED: '_objEnabled',
                   COL_TI_DOSE: '_acquisition._accumDose'}
@@ -104,8 +104,9 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TI_ENABLED, 100),
             (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
-            (self.COL_TI_TRANSFORM, 300),
         ]
+        if not isinstance(self.tiltseries, tomo.objects.SetOfTiltSeriesM):
+            cols.append((self.COL_TI_TRANSFORM, 300))
 
         return cols
 
@@ -124,7 +125,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = objId
             text = tsId
-            values = ['', '', '', str(obj)]
+            values = [str(obj)]
             opened = True
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
@@ -132,14 +133,17 @@ class TiltSeriesTreeProvider(TreeProvider):
 
             dose = obj.getAcquisition().getAccumDose() if hasattr(obj.getAcquisition(), '_accumDose') else None
             adqOrder = obj.getAcquisitionOrder() if hasattr(obj, '_acqOrder') else None
-            matrix = "" if not obj.hasTransform() else obj.getTransform().getMatrixAsList()
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
                       str(obj.isEnabled()),
                       round(dose, 2) if dose is not None else "",
-                      "%d@%s" % (obj.getLocation()[0] or 1, obj.getLocation()[1]),
-                      matrix,]
+                      "%d@%s" % (obj.getIndex() or 1, obj.getFileName()),
+                      ]
+
+            if not isinstance(obj, tomo.objects.TiltImageM):
+                matrix = "" if not obj.hasTransform() else obj.getTransform().getMatrixAsList()
+                values.append(matrix)
 
             opened = False
 
@@ -281,7 +285,8 @@ class MeshesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.MeshPoint):
             meshName = 'Mesh %d' % obj.getObjId()
             tomoName = pwutils.removeBaseExt(obj.getVolume().getFileName())
-            return {'key': tomoName + '-' + str(obj.getObjId()), 'parent': self._parentDict.get(obj.getObjId(), None),
+            return {'key': tomoName + '-' + str(obj.getObjId()),
+                    'parent': self._parentDict.get(obj.getObjId(), None),
                     'text': meshName, 'values': ('')}
         elif isinstance(obj, tomo.objects.Tomogram):
             tomoName = pwutils.removeBaseExt(obj.getFileName())
@@ -932,13 +937,8 @@ class CtfEstimationListDialog(ListDialog):
 
     def _showHelp(self, event=None):
         showInfo('CTFTomoSeries viewer help',
-                 'This viewer calculates the standard deviation with respect '
-                 'to the mean of the defocusU and defocusV values. If the '
-                 'values of the images are not in the 20% range from the average '
-                 'they are marked as *Failed* and therefore the CTFTomoSerie is '
-                 'marked as *Failed* as well.\n\n'
-                 'On the other hand, the viewer allows you to create two '
-                 'subsets of CTFTomoSeries which are classified as good '
+                 'This viewer allows you to create two '
+                 'subsets of CTFTomoSeries which are called good '
                  'and bad respectively.\n\n'
                  'Note: The series that are checked are the ones that '
                  'represent the bad CTFTomoSeries', self.parent)
