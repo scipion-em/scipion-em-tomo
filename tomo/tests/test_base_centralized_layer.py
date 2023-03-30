@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 from os.path import exists
-from flatbuffers.builder import np
+import numpy as np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
