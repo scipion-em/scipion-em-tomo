@@ -1,3 +1,5 @@
+v3.1.5:
+ developers: hot fix, invalid import in test centralized layer
 v3.1.4:
  users:
   - cbox format from cryolo implemented to import 3d coordinates
