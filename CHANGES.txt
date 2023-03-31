@@ -1,3 +1,6 @@
+v3.1.6:
+  - Fix: subtomograms with coordinates work in absence of volId
+  - HIV-HTA template: removes coords extraction and reconstruction since mapback can be done without them
 v3.1.5:
  developers: hot fix, invalid import in test centralized layer
 v3.1.4:
