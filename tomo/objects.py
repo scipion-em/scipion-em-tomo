@@ -1331,11 +1331,15 @@ class Coordinate3D(data.EMObject):
         vol = self.getVolume()
         if not vol:
             raise Exception("3D coordinate must be referred to a volume to get its origin.")
+
+        # Tomogram origin
+        origin = vol.getShiftsFromOrigin()
+
         if angstrom:
-            return vol.getShiftsFromOrigin()
+            return origin
         else:
             sr = vol.getSamplingRate()
-            origin = vol.getShiftsFromOrigin()
+
             return origin[0] / sr, origin[1] / sr, origin[2] / sr
 
     def getTomoId(self):
@@ -2366,7 +2370,7 @@ class CTFTomoSeries(data.EMSet):
         self._isDefocusVDeviationInRange = Boolean(True)
 
         # CtfModels will always be used inside a SetOfTiltSeries
-        # so, let's do no store the mapper path by default
+        # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
 
     def clone(self, ignoreAttrs=('_mapperPath', '_size')):
