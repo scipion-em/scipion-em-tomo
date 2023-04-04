@@ -174,40 +174,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         self._defineAcquisitionParams(form)
 
-        form.addSection('Streaming')
-
-        form.addParam('dataStreaming', params.BooleanParam, default=False,
-                      label="Process data in streaming?",
-                      help="Select this option if you want import data as it "
-                           "is generated and process on the fly by next "
-                           "protocols. In this case the protocol will "
-                           "keep running to check new files and will "
-                           "update the output Set, which can "
-                           "be used right away by next steps.")
-
-        form.addParam('timeout', params.IntParam, default=43200,
-                      condition='dataStreaming',
-                      label="Timeout (secs)",
-                      help="Interval of time (in seconds) after which, "
-                           "if no new file is detected, the protocol will "
-                           "end. When finished, the output Set will be "
-                           "closed and no more data will be "
-                           "added to it. \n"
-                           "Note 1:  The default value is  high (12 hours) to "
-                           "avoid the protocol finishes during the acq of the "
-                           "microscope. You can also stop it from right click "
-                           "and press STOP_STREAMING.\n"
-                           "Note 2: If you're using individual frames when "
-                           "importing movies, the timeout won't be refreshed"
-                           "until a whole movie is stacked.")
-
-        form.addParam('fileTimeout', params.IntParam, default=30,
-                      condition='dataStreaming',
-                      label="File timeout (secs)",
-                      help="Interval of time (in seconds) after which, if a "
-                           "file has not changed, we consider it as a new "
-                           "file.\n")
-
         self._defineBlacklistParams(form)
 
     def _defineAngleParam(self, form):
@@ -299,167 +265,115 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         tsClass = outputSet.ITEM_TYPE
         tiClass = tsClass.ITEM_TYPE
 
-        finished = False
-        lastDetectedChange = datetime.now()
+        if self._existingTs:
+            outputSet.enableAppend()
 
-        # Ignore the timeout variables if we are not really in streaming mode
-        if self.dataStreaming:
-            timeout = timedelta(seconds=self.timeout.get())
-            fileTimeout = timedelta(seconds=self.fileTimeout.get())
-        else:
-            timeout = timedelta(seconds=5)
-            fileTimeout = timedelta(seconds=5)
+        # Get files that matches the pattern via mdoc or not
+        matchingFiles = self.getMatchingFiles()
 
-        while not finished:
-            time.sleep(3)  # wait 3 seconds before check for new files
-            someNew = False  # Check if some new TS has been found
-            someAdded = False  # Check if some new were added
-            # incompleteTs = False  # Check if there are incomplete TS
+        # Go through all of them
+        for ts, tiltSeriesList in matchingFiles.items():
 
-            matchingFiles = self.getMatchingFiles(fileTimeOut=fileTimeout)
+            self.info("Tilt series found: %s" % ts)
+            someNew = True
+            tsObj = tsClass(tsId=ts)
+            # Form value has higher priority than the mdoc values
+            samplingRate = \
+                float(samplingRate if samplingRate else self.sRates[ts])
 
-            if self._existingTs:
-                outputSet.enableAppend()
+            origin = Transform()
+            tsObj.setOrigin(origin)
+            tsObj.setAnglesCount(len(tiltSeriesList))
+            self.setItemExtraAttributes(tsObj)
 
-            for ts, tiltSeriesList in matchingFiles.items():
-                someNew = True
-                tsObj = tsClass(tsId=ts)
-                # Form value has higher priority than the mdoc values
-                samplingRate = \
-                    float(samplingRate if samplingRate else self.sRates[ts])
+            # we need this to set mapper before adding any item
+            outputSet.append(tsObj)
 
-                origin = Transform()
-                tsObj.setOrigin(origin)
-                tsObj.setAnglesCount(len(tiltSeriesList))
-                self.setItemExtraAttributes(tsObj)
+            if self.MDOC_DATA_SOURCE:
+                accumDoseList = self.accumDoses[ts]
+                incomingDoseList = self.incomingDose[ts]
+                counter = 0
 
-                # we need this to set mapper before adding any item
-                outputSet.append(tsObj)
+            tiltSeriesObjList = []
 
-                if self.MDOC_DATA_SOURCE:
-                    accumDoseList = self.accumDoses[ts]
-                    # tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
-                    incomingDoseList = self.incomingDose[ts]
-                    counter = 0
+            # Add each tilt images to the tiltSeries
+            for f, to, ta, dose in tiltSeriesList:
+                try:
+                    # Link/move to extra
+                    imageFile = f[1] if type(f) == tuple else f
 
-                tiltSeriesObjList = []
-                toList = [ti[1] for ti in tiltSeriesList]
-                # Add tilt images to the tiltSeries
-                for f, to, ta in tiltSeriesList:
-                    try:
-                        # Link/move to extra
-                        if type(f) == tuple:
-                            imageFile = f[1]
-                        else:
-                            imageFile = f
+                    finalDestination = self._getExtraPath(os.path.basename(imageFile))
+                    self.copyOrLink(imageFile, finalDestination)
 
-                        finalDestination = \
-                            self._getExtraPath(os.path.basename(imageFile))
-                        self.copyOrLink(imageFile, finalDestination)
+                    f = (f[0], finalDestination) if type(f) == tuple else finalDestination
 
-                        if type(f) == tuple:
-                            f = f[0], finalDestination
-                        else:
-                            f = finalDestination
+                    ti = tiClass(location=f,
+                                 acquisitionOrder=to,
+                                 tiltAngle=ta)
 
-                        ti = tiClass(location=f,
-                                     acquisitionOrder=to,
-                                     tiltAngle=ta)
+                    ti.setAcquisition(tsObj.getAcquisition().clone())
 
-                        ti.setAcquisition(tsObj.getAcquisition().clone())
-                        if self.MDOC_DATA_SOURCE:
-                            dosePerFrame = incomingDoseList[counter]
-                            accumDose = accumDoseList[counter]
-                        else:
-                            # Check if there are doses as a second column in the tlt file
-                            dosePerFrame = self.dosePerFrame.get()
-                            doses = []
-                            anglesFrom = self.getEnumText('anglesFrom')
-                            if anglesFrom == self.ANGLES_FROM_TLT:
-                                _, doses = self.getFromTlt(imageFile)
-                            if doses:
-                                accumDose = doses[counter]
-                            else:
-                                accumDose = \
-                                    self.dosePerFrame.get() * \
-                                    int(to if min(toList) == 1 else (int(to) + 1))
+                    # Calculate the dose
+                    if self.MDOC_DATA_SOURCE:
+                        dosePerFrame = incomingDoseList[counter]
+                        dose = accumDoseList[counter]
+                    else:
+                        dosePerFrame = self.dosePerFrame.get()
 
-                        # Incoming dose in current ti
-                        ti.getAcquisition().setDosePerFrame(dosePerFrame)
-                        # Accumulated dose in current ti
-                        ti.getAcquisition().setAccumDose(accumDose)
-                        tiltSeriesObjList.append(ti)
-                        counter += 1
-                    except OperationalError:
-                        raise Exception("%s is an invalid {TS} tag. "
-                                        "It must be an alpha-numeric sequence "
-                                        "(avoid symbols like -) that can not "
-                                        "start with a number." % ts)
+                    # Incoming dose in current ti
+                    ti.getAcquisition().setDosePerFrame(dosePerFrame)
+                    # Accumulated dose in current ti
+                    ti.getAcquisition().setAccumDose(dose)
+                    tiltSeriesObjList.append(ti)
+                    counter += 1
 
-                # Sort tilt image metadata if importing tilt series
-                if not self._isImportingTsMovies():
-                    tiltSeriesObjList.sort(key=lambda x: x.getTiltAngle(),
-                                           reverse=False)
+                except OperationalError:
+                    raise Exception("%s is an invalid {TS} tag. "
+                                    "It must be an alpha-numeric sequence "
+                                    "(avoid symbols like -) that can not "
+                                    "start with a number." % ts)
 
-                for ti in tiltSeriesObjList:
-                    tsObj.append(ti)
+            # Sort tilt image metadata if importing tilt series
+            if not self._isImportingTsMovies():
+                tiltSeriesObjList.sort(key=lambda x: x.getTiltAngle(),
+                                       reverse=False)
 
-                tsObjFirstItem = tsObj.getFirstItem()
-                origin.setShifts(-tsObjFirstItem.getXDim() / 2 * samplingRate,
-                                 -tsObjFirstItem.getYDim() / 2 * samplingRate,
-                                 0)
+            for ti in tiltSeriesObjList:
+                tsObj.append(ti)
 
-                if self.MDOC_DATA_SOURCE:
-                    tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
-                    # Tilt series object dose per frame has been updated each
-                    # time the tilt image dose per frame has
-                    # been updated before, so the mean value is used to be the
-                    # reference in the acquisition of the
-                    # whole tilt series movie
-                    tsObj.getAcquisition().setDosePerFrame(
-                        mean(incomingDoseList))
-                else:
-                    tsObj.getAcquisition().setDosePerFrame(
-                        self.dosePerFrame.get())
-                    tsObj.getAcquisition().setAccumDose(
-                        self.dosePerFrame.get() * len(tiltSeriesList))
-                    tsObj.getAcquisition().setTiltAxisAngle(
-                        self.tiltAxisAngle.get())
+            tsObjFirstItem = tsObj.getFirstItem()
+            origin.setShifts(-tsObjFirstItem.getXDim() / 2 * samplingRate,
+                             -tsObjFirstItem.getYDim() / 2 * samplingRate,
+                             0)
 
-                outputSet.update(tsObj)  # update items and size info
-                self._existingTs.add(ts)
-                someAdded = True
-
-            if someAdded:
-                self.debug('Updating output...')
-                self._updateOutputSet(self._outputName, outputSet,
-                                      state=outputSet.STREAM_OPEN)
-                self.debug('Update Done.')
-
-            self.debug('Checking if finished...someNew: %s' % someNew)
-
-            now = datetime.now()
-
-            if not someNew:
-                # If there are no new detected files, we should check the
-                # inactivity time elapsed (from last event to now) and
-                # if it is greater than the defined timeout, we conclude
-                # the import and close the output set
-                # Another option is to check if the protocol have some
-                # special stop condition, this can be used to manually stop
-                # some protocols such as import movies
-                finished = (now - lastDetectedChange > timeout
-                            or self.streamingHasFinished())
-                self.debug("Checking if finished:")
-                self.debug("   Now - Last Change: %s"
-                           % pwutils.prettyDelta(now - lastDetectedChange))
+            if self.MDOC_DATA_SOURCE:
+                tsObj.getAcquisition().setAccumDose(accumDoseList[-1])
+                # Tilt series object dose per frame has been updated each
+                # time the tilt image dose per frame has
+                # been updated before, so the mean value is used to be the
+                # reference in the acquisition of the
+                # whole tilt series movie
+                tsObj.getAcquisition().setDosePerFrame(
+                    mean(incomingDoseList))
             else:
-                # If we have detected some files, we should update
-                # the timestamp of the last event
-                lastDetectedChange = now
-                finished = not self.isInStreaming()
+                tsObj.getAcquisition().setDosePerFrame(
+                    self.dosePerFrame.get())
+                tsObj.getAcquisition().setAccumDose(
+                    self.dosePerFrame.get() * len(tiltSeriesList))
+                tsObj.getAcquisition().setTiltAxisAngle(
+                    self.tiltAxisAngle.get())
 
-            self.debug("Finished: %s" % finished)
+            outputSet.update(tsObj)  # update items and size info
+            self._existingTs.add(ts)
+            someAdded = True
+
+        if someAdded:
+            self.debug('Updating output...')
+            self._updateOutputSet(self._outputName, outputSet,
+                                  state=outputSet.STREAM_OPEN)
+            self.debug('Update Done.')
+
+        self.debug('Checking if finished...someNew: %s' % someNew)
 
         # Close the output set
         self._updateOutputSet(self._outputName, outputSet,
@@ -649,6 +563,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     tiltMetadata.getAngleMovieFile(),             # Filename
                     '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition order
                     tiltMetadata.getTiltAngle(),                  # Tilt angle
+                    tiltMetadata.getAccumDose()                   # Accumulated dose
                 ))
                 accumulatedDoseList.append(tiltMetadata.getAccumDose())
                 incomingDoseList.append(tiltMetadata.getIncomingDose())
@@ -665,7 +580,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 if warningDetailedMsg:
                     self.skippedMdocs.set(skippedMdocs)
                     self._store(self.skippedMdocs)
-                    print(warningHeadMsg + ' '.join(warningDetailedMsg))
+                    self.info(warningHeadMsg + ' '.join(warningDetailedMsg))
                 return matchingFiles
             else:
                 raise Exception(warningHeadMsg + ' '.join(warningDetailedMsg))
@@ -709,23 +624,21 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         return allowedFiles
 
-    def getMatchingFiles(self, fileTimeOut=None, isValidation=False):
+    def getMatchingFiles(self, isValidation=False):
         """ Return an ordered dict with TiltSeries found in the files as key
         and a list of all tilt images of that series as value.
         """
         if self.MDOC_DATA_SOURCE:
             return self._getMatchingFilesFromMdoc(isValidation=isValidation)
         else:
-            return self._getMatchingFilesFromRegExPattern(
-                fileTimeOut=fileTimeOut)
+            return self._getMatchingFilesFromRegExPattern()
 
-    def _getMatchingFilesFromRegExPattern(self, fileTimeOut):
+    def _getMatchingFilesFromRegExPattern(self):
         filePaths = glob(self._globPattern)
 
         filePaths = self._excludeByWords(filePaths)
 
         filePaths.sort(key=lambda fn: os.path.getmtime(fn))
-        fileTimeOut = fileTimeOut or timedelta(seconds=5)
 
         matchingFiles = OrderedDict()
 
@@ -739,13 +652,17 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         def _addOne(fileList, file, match):
             """ Add one file matching to the list. """
-            fileList.append((file, int(match.group('TO')),
-                             float(match.group('TA'))))
+
+            order = int(match.group('TO'))
+            dose = int(self.dosePerFrame.get()) * order
+            angle = float(match.group('TA'))
+            fileList.append((file, order, angle, dose))
 
         def _addMany(fileList, file, match):
             """ Add many 'files' (when angles in header or mdoc)
                 to the list. """
             anglesFrom = self.getEnumText('anglesFrom')
+            doses = []
 
             if anglesFrom == self.ANGLES_FROM_HEADER:
                 angles = getAnglesFromHeader(file)
@@ -755,14 +672,16 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     raise Exception("Missing angles file: %s" % mdocFn)
                 angles = getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
-                angles, _ = self.getFromTlt(file)
+                angles, doses = self.getFromTlt(file)
             elif anglesFrom == self.ANGLES_FROM_RANGE:
                 angles = self._getTiltAngleRange()
             else:
                 raise Exception('Invalid angles option: %s' % anglesFrom)
 
             for i, a in enumerate(angles):
-                fileList.append(((i + 1, file), i + 1, a))
+                order = i+1
+                dose = doses[i] if doses else int(self.dosePerFrame.get()) * order
+                fileList.append(((i + 1, file), order, a, dose))
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
 
@@ -779,8 +698,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             _addMany(matchingFiles[ts], f, None)
         else:
             for f in filePaths:
-                if self.fileModified(f, fileTimeOut):
-                    continue
                 m = self._regex.match(f)
                 if m is not None:
                     ts = _getTsId(m)
@@ -838,12 +755,13 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             angles, doses = getAnglesAndDosesFromTlt(rawtltFn)
         else:
             raise Exception("Missing angles file: %s or %s" % (tltFn, rawtltFn))
+
         return angles, doses
 
     @classmethod
     def worksInStreaming(cls):
-        # Import protocols always work in streaming
-        return True
+        # Streaming is done through SPA + tilt series composer
+        return False
 
     def _fillAcquisitionInfo(self, inputTs):
         # TODO Acquisition is historically expected as
@@ -883,38 +801,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         return np.allclose(tiltAngleRange,
                            self._getSortedAngles(tiltSeriesList),
                            atol=0.1)
-
-    # --------------- Streaming special functions -----------------------
-    def _getStopStreamingFilename(self):
-        return self._getExtraPath("STOP_STREAMING.TXT")
-
-    def getActions(self):
-        """ This method will allow that the 'Stop import' action to appears
-        in the GUI when the user right-click in the protocol import box.
-        It will allow a user to manually stop the streaming.
-        """
-        # Only allow to stop if running and in streaming mode
-        if self.dataStreaming and self.isRunning():
-            return [('STOP STREAMING', self.stopImport)]
-        else:
-            return []
-
-    def stopImport(self):
-        """ Since the actual protocol that is running is in a different
-        process that the one that this method will be invoked from the GUI,
-        we will use a simple mechanism to place an special file to stop
-        the streaming.
-        """
-        # Just place an special file into the run folder
-        f = open(self._getStopStreamingFilename(), 'w')
-        f.close()
-
-    def streamingHasFinished(self):
-        return (not self.isInStreaming() or
-                os.path.exists(self._getStopStreamingFilename()))
-
-    def isInStreaming(self):
-        return self.dataStreaming.get()
 
     def setItemExtraAttributes(self, tsObj):
         """
