@@ -1,6 +1,10 @@
 v3.1.6:
   - Fix: subtomograms with coordinates work in absence of volId
   - HIV-HTA template: removes coords extraction and reconstruction since mapback can be done without them
+  - Import Tilt series or Import tilt series movies do not work in streaming anymore
+  Developers:
+    - __init__ uses logger now
+    - test_transformation fixed
 v3.1.5:
  developers: hot fix, invalid import in test centralized layer
 v3.1.4:

@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
+import logging
+logger = logging.getLogger(__name__)
 from pwem.emlib.image import ImageHandler
 from .convert import *
 
@@ -103,6 +105,8 @@ def getAnglesFromMdoc(mdocFn):
 
 def getAnglesAndDosesFromTlt(tltFn):
     """ Parse the tilt-angles from tlt file. """
+
+    logger.info("Reading %s file for angles and dose." % tltFn)
     angles = []
     doses = []
     with open(tltFn) as f:
@@ -112,4 +116,6 @@ def getAnglesAndDosesFromTlt(tltFn):
                 angles.append(float(line[0]))
                 if len(line) == 2:
                     doses.append(float(line[1]))
+    logger.info("%s angles found." % len(angles))
+    logger.info("%s doses found." % len(doses))
     return angles, doses
