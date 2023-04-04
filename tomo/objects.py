@@ -1728,10 +1728,8 @@ class SetOfSubTomograms(data.SetOfVolumes):
         self.initTomos()
 
         # If tsId is not cached, save both identifiers.
-        # NOTE: In streaming cases this may have to be different.
-        # We might not use volId at all and query precedents by tsId.
         if tsId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[volId]
+            tomo = self.getCoordinates3D().getPrecedents()[Tomogram.TS_ID_FIELD: tsId]
             self._tomos[volId] = tomo
             self._tomos[tsId] = tomo
             return tomo
