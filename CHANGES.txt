@@ -1,9 +1,22 @@
+v3.1.6:
+  - Fix: subtomograms with coordinates work in absence of volId
+  - HIV-HTA template: removes coords extraction and reconstruction since mapback can be done without them
+v3.1.5:
+ developers: hot fix, invalid import in test centralized layer
 v3.1.4:
+ users:
   - cbox format from cryolo implemented to import 3d coordinates
   - hide transform matrix column for TS movies
   - fix CTF viewer help (close #253)
   - change TS flags
   - Added an option to import the dose accumulation using a tlt file as second column
+  - Fix: uses subsets of representatives are more accurate and not always SetOfVolumes
+  - Fix: Single import of a numeric tilt series
+  - Template for HIV STA improved
+ developers:
+  - Subtomogram has a constant for its tomoid attribute name: Subtomogram.VOL_NAME_FIELD = "_volName"
+  - Add test centralization layer (not finished, but quite advanced and operative for coordinates and subtomograms)
+
 
 v3.1.3:
  users:

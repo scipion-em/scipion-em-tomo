@@ -25,7 +25,6 @@
 # *
 # **************************************************************************
 import logging
-
 logger = logging.getLogger(__name__)
 
 import csv
@@ -46,9 +45,10 @@ from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
 
 class MATRIX_CONVERSION:
-    RELION = "relion"
+    RELION = const.TR_RELION
     XMIPP = "xmipp"
-    EMAN = "eman"
+    EMAN = const.TR_EMAN
+    DYNAMO = const.TR_DYNAMO
 
 
 def convertMatrix(M, convention=None, direction=None):
@@ -109,7 +109,7 @@ def convertMatrix(M, convention=None, direction=None):
                         N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
             """
 
-    if convention is None or convention == MATRIX_CONVERSION.EMAN:
+    if convention is None or convention in [MATRIX_CONVERSION.EMAN, MATRIX_CONVERSION.DYNAMO]:
         return M
     elif direction == 'get' and convention in [MATRIX_CONVERSION.RELION, MATRIX_CONVERSION.XMIPP]:
         # Rotation matrix. Remove translation from the Scipion matrix
@@ -1112,6 +1112,7 @@ class Coordinate3D(data.EMObject):
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
+        self._boxSize = 0
         self._volumePointer = Pointer(objDoStore=False)
         self._x = Float()
         self._y = Float()
@@ -1290,9 +1291,11 @@ class Coordinate3D(data.EMObject):
             self.setTomoId(volume.getTsId())
 
     def setBoxSize(self, boxSize):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         self._boxSize = boxSize
 
     def getBoxSize(self):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._boxSize
 
     def getVolId(self):
@@ -1321,7 +1324,7 @@ class Coordinate3D(data.EMObject):
         return self._groupId is not None
 
     def getVolumeOrigin(self, angstrom=False):
-        """Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the vector that can be used to move the position of the Coordinate3D
         (referred to the center of the Tomogram or other origin specified by the user)
         to the bottom left corner of the Tomogram
         """
@@ -1535,8 +1538,8 @@ class SetOfCoordinates3D(data.EMSet):
         return self._tomos
 
     def append(self, item: Coordinate3D):
-        if self.getBoxSize() is None and item.getBoxSize() is not None:
-            self.setBoxSize(item.getBoxSize())
+        if self.getBoxSize() is None and item._boxSize:
+            self.setBoxSize(item._boxSize)
         super().append(item)
 
 
@@ -1546,6 +1549,7 @@ class SubTomogram(data.Volume):
     the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
     shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
 
+    VOL_NAME_FIELD = "_volName"
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1688,7 +1692,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
         pointer to the associated Tomogram. This method overcomes this problem by retrieving and
-        relinking the Tomogram as if nothing would ever happened.
+        relinking the Tomogram as if nothing would ever happend.
 
         It is recommended to use this method when working with subtomograms, anytime you want to properly use
         its coordinate3D attached object.
@@ -1740,10 +1744,8 @@ class SetOfSubTomograms(data.SetOfVolumes):
         self.initTomos()
 
         # If tsId is not cached, save both identifiers.
-        # NOTE: In streaming cases this may have to be different.
-        # We might not use volId at all and query precedents by tsId.
         if tsId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[volId]
+            tomo = self.getCoordinates3D().getPrecedents()[Tomogram.TS_ID_FIELD: tsId]
             self._tomos[volId] = tomo
             self._tomos[tsId] = tomo
             return tomo
@@ -1819,6 +1821,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
+    REP_SET_TYPE =SetOfAverageSubTomograms
 
 
 class LandmarkModel(data.EMObject):

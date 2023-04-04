@@ -60,6 +60,7 @@ ERR_NON_MATCHING_TOMOS = 'No matching tomograms were found with the input tomoma
 # available in the help of the function "convertMatrix" defined in the "objects.py" file
 TR_SCIPION = None
 TR_RELION = "relion"
+TR_DYNAMO = "dynamo"
 TR_EMAN = "eman"
 
 # Conversion direction constants
