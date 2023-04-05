@@ -1002,7 +1002,7 @@ class Tomogram(data.Volume):
     origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
     """
     TS_ID_FIELD = '_tsId'
-
+    ORIGIN_MATRIX_FIELD = '_origin._matrix'
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1557,9 +1557,9 @@ class SubTomogram(data.Volume):
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
-        # These coordinates aren't scaled. To do that, the coordinates and subtomograms sampling rates
-        # should be compared (because of how the extraction protocol works)
         self._volId = Integer()
+        # This coordinate is NOT SCALED. To do that, the coordinates and subtomograms sampling rates
+        # should be compared (because of how the extraction protocol works)
         self._coordinate = None
         self._volName = String()
 
