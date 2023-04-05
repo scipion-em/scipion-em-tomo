@@ -1749,7 +1749,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         # If tsId is not cached, save both identifiers.
         if tsId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[Tomogram.TS_ID_FIELD: tsId]
+            tomo = self.getCoordinates3D().getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
             self._tomos[volId] = tomo
             self._tomos[tsId] = tomo
             return tomo
