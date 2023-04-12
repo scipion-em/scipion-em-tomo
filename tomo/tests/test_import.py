@@ -29,6 +29,7 @@ from os.path import join, exists, abspath
 
 import numpy
 
+from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink
 from pyworkflow.object import Pointer
@@ -163,10 +164,10 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                                               samplingRate=samplingRate)
 
         self.launchProtocol(protImportTomogram)
-        outputTomos = getattr(protImportTomogram, 'outputTomograms', None)
-        self.assertIsNotNone(outputTomos, 'No tomograms were genetated.')
 
-        return outputTomos
+        self.assertSetSize(protImportTomogram.Tomograms, size=1, msg='No tomograms were generated.')
+
+        return protImportTomogram.Tomograms
 
     def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
         sRate = 5.5
@@ -322,8 +323,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         self.assertIsNotNone(coordSet.getPrecedents(), "Tomograms not associated in the output set")
 
         for coord in coordSet.iterCoordinates():
-            # Access the coordinate, this should work if tomograms are assocciated
-            Y = coord.getY(BOTTOM_LEFT_CORNER)
+            # Access the coordinate, this should work if tomograms are associated
+            X = coord.getY(BOTTOM_LEFT_CORNER)
             Y = coord.getY(TOP_LEFT_CORNER)
 
             break
@@ -338,7 +339,7 @@ class TestTomoImportTomograms(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('*.em')
 
-    def _runImportTomograms(self):
+    def _runImportTomograms(self)-> tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -349,7 +350,7 @@ class TestTomoImportTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _runImportTomograms2(self):
+    def _runImportTomograms2(self)->tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -360,11 +361,10 @@ class TestTomoImportTomograms(BaseTest):
 
     def test_importTomograms(self):
         protImport = self._runImportTomograms()
-        output = getattr(protImport, 'outputTomograms', None)
-        self.assertIsNotNone(output,
+        self.assertSetSize(protImport.Tomograms,
                              "There was a problem with Import Tomograms protocol")
 
-        for tomogram in protImport.outputTomograms.iterItems():
+        for tomogram in protImport.Tomograms.iterItems():
             self.assertTrue(tomogram.getXDim() == 1024,
                             "There was a problem with Import Tomograms protocol")
             self.assertIsNotNone(tomogram.getYDim() == 1024,
@@ -378,11 +378,10 @@ class TestTomoImportTomograms(BaseTest):
             break
 
         protImport2 = self._runImportTomograms2()
-        output2 = getattr(protImport2, 'outputTomograms', None)
-        self.assertIsNotNone(output2,
+        self.assertSetSize(protImport.Tomograms,
                              "There was a problem with Import Tomograms protocol")
 
-        for tomogram in protImport2.outputTomograms.iterItems():
+        for tomogram in protImport2.Tomograms.iterItems():
             self.assertTrue(tomogram.getXDim() == 1024,
                             "There was a problem with Import Tomograms protocol")
             self.assertIsNotNone(tomogram.getYDim() == 1024,
@@ -835,10 +834,9 @@ class TestImportTomoMasks(BaseTest):
                                              samplingRate=cls.samplingRate)
 
         cls.launchProtocol(protImportTomogram)
-        outputTomos = getattr(protImportTomogram, 'outputTomograms', None)
-        cls.assertIsNotNone(outputTomos, 'No tomograms were genetated.')
+        cls.assertSetSize(protImportTomogram.Tomograms, 'No tomograms were generated.')
 
-        return outputTomos
+        return protImportTomogram.Tomograms
 
     @classmethod
     def _normalizeTomo(cls):
@@ -849,7 +847,7 @@ class TestImportTomoMasks(BaseTest):
 
         cls.launchProtocol(protTomoNormalization)
         outputTomos = getattr(protTomoNormalization, 'Tomograms', None)
-        cls.assertIsNotNone(outputTomos, 'No tomograms were genetated in tomo normalization.')
+        cls.assertIsNotNone(outputTomos, 'No tomograms were generated in tomo normalization.')
 
         return outputTomos
 
@@ -862,7 +860,7 @@ class TestImportTomoMasks(BaseTest):
         self.launchProtocol(protImportTomomasks)
         tomoMaskSet = getattr(protImportTomomasks, 'outputTomoMasks', None)
 
-        self.assertIsNotNone(tomoMaskSet, 'No tomograms were genetated.')
+        self.assertIsNotNone(tomoMaskSet, 'No tomograms were generated.')
         self.assertSetSize(tomoMaskSet, 1)
         self.assertEqual(tomoMaskSet.getDimensions(), (464, 464, 250))
         self.assertEqual(tomoMaskSet.getSamplingRate(), 2 * self.samplingRate)
@@ -889,3 +887,23 @@ class TestImportTomoMasks(BaseTest):
         with self.assertRaises(Exception) as eType:
             self.launchProtocol(protImportTomomasks)
             self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)
+
+class TestConvert(BaseTest):
+
+    def test_list_order(self):
+
+        myList = [20,40,50,10,30]
+        orders = getOrderFromList(myList)
+        self.assertEqual(orders, [2,4,5,1,3])
+
+        myList = [20, 40, 50, 10, 30]
+        orders = getOrderFromList(myList)
+        self.assertEqual(orders, [2, 4, 5, 1, 3])
+
+        # Simulate dose list in symmetric dose scheme
+        myList = [24,21,12,9,3,6,15,18,27]
+        orders = getOrderFromList(myList)
+        self.assertEqual(orders, [8,7,4,3,1,2,5,6,9])
+
+
+

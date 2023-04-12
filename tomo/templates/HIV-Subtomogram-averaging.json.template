@@ -11,9 +11,9 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "~Path to HIV folder dataset|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/TS_03/|2|datasetpath~",
-        "filesPattern": "{TS}*.mrc",
-        "exclusionWords": "output",
+        "filesPath": "~Path to HIV folder dataset|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/|2|datasetpath~",
+        "filesPattern": "*/*.mrc",
+        "exclusionWords": "~Exlusion list|output 01 43 45 54|0|exclusion~",
         "mdocInfo": null,
         "anglesFrom": 2,
         "minAngle": -60.0,
@@ -56,7 +56,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
     {
         "object.className": "CistemProtTsImportCtf",
         "object.id": "113",
-        "object.label": "cistem - import tomo CTFs (copy)",
+        "object.label": "cistem - import tomo CTFs",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -64,8 +64,8 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "runName": null,
         "runMode": 0,
         "importFrom": 0,
-        "filesPath": "~Path to folder with  .defocus files|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/TS_03/|2|ctffolder~",
-        "filesPattern": "*.defocus",
+        "filesPath": "~Path to folder with  .defocus files|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/tomograms/|2|ctffolder~",
+        "filesPattern": "*/*.defocus",
         "copyFiles": false,
         "exclusionWords": null,
         "inputSetOfTiltSeries": "2.outputTiltSeries"
@@ -93,6 +93,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "angleAxis1": null,
         "angleAxis2": null,
         "setOrigCoord": false,
+        "fromMrcHeader": true,
         "x": null,
         "y": null,
         "z": null
@@ -109,7 +110,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "runMode": 0,
         "boxSize": 48,
         "deleteGenMFiles": true,
-        "inputTomograms": "156.outputTomograms"
+        "inputTomograms": "156.Tomograms"
     },
     {
         "object.className": "DynamoModelWorkflow",
@@ -141,7 +142,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "starFile": "~Path to coords.star file|%(SCIPION_TESTS)s/relion40_sta_tutorial_data/input/coords_5tomos.star|2|coordspath~",
         "samplingRate": 1.35,
         "boxSize": 20,
-        "inTomos": "156.outputTomograms"
+        "inTomos": "156.Tomograms"
     },
     {
         "object.className": "ProtSubSet",

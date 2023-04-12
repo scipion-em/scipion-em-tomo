@@ -1002,7 +1002,7 @@ class Tomogram(data.Volume):
     origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
     """
     TS_ID_FIELD = '_tsId'
-
+    ORIGIN_MATRIX_FIELD = '_origin._matrix'
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1419,22 +1419,44 @@ class SetOfCoordinates3D(data.EMSet):
             >>>     '/path/to/Tomo.file' retrieved correctly
 
         """
+
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         if volume is None:
             coordWhere = '1'
         elif isinstance(volume, int):
-            coordWhere = '_volId=%d' % int(volume)
-        elif isinstance(volume, data.Volume):
+            logger.warning("FOR DEVELOPERS: Do not use volId, use volName")
+            coordWhere = '_volId=%d' % volume
+        elif isinstance(volume, Tomogram):
             coordWhere = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
+
         # Iterate over all coordinates if tomoId is None,
         # otherwise use tomoId to filter the where selection
-        tomos = self.getPrecedentsInvolved()
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
-            coord.setVolume(tomos[coord.getTomoId()])
+            # Associate the tomogram
+            self._associateVolume(coord)
             yield coord
+
+    def _getTomogram(self, tsId):
+        """ Returns  the tomogram from a tsId"""
+        tomos = self._getTomograms()
+
+        if tsId not in tomos.keys():
+            tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+            self._tomos[tsId] = tomo
+            return tomo
+        else:
+            return self._tomos[tsId]
+
+    def _getTomograms(self):
+        if self._tomos is None:
+            self.initTomos()
+
+        return self._tomos
 
     def getPrecedents(self):
         """ Returns the SetOfTomograms associated with
@@ -1487,17 +1509,16 @@ class SetOfCoordinates3D(data.EMSet):
 
     def getFirstItem(self):
         coord = data.EMSet.getFirstItem(self)
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        self._associateVolume(coord)
         return coord
+
+    def _associateVolume(self, coord):
+        coord.setVolume(self._getTomogram(coord.getTomoId()))
 
     def __getitem__(self, itemId):
         """Add a pointer to a Tomogram before returning the Coordinate3D"""
         coord = data.EMSet.__getitem__(self, itemId)
-        # In case pointer is lost in a for loop
-        # clone = self.getPrecedents().getClass()()
-        # clone.copy(self)
-        # coord.setVolume(clone[coord.getVolId()])
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        self._associateVolume(coord)
         return coord
 
     def initTomos(self):
@@ -1510,16 +1531,13 @@ class SetOfCoordinates3D(data.EMSet):
         subsets are done."""
 
         tomoId_attr = Coordinate3D.TOMO_ID_ATTR
-        if self._tomos is None:
 
-            self.initTomos()
+        uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
 
-            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
-
-            for row in uniqueTomos:
-                tsId = row[tomoId_attr]
-                tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
-                self._tomos[tsId] = tomo
+        for row in uniqueTomos:
+            tsId = row[tomoId_attr]
+            # This should register the tomogram in the internal _tomos
+            self._getTomogram(tsId)
 
         return self._tomos
 
@@ -1540,6 +1558,8 @@ class SubTomogram(data.Volume):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._volId = Integer()
+        # This coordinate is NOT SCALED. To do that, the coordinates and subtomograms sampling rates
+        # should be compared (because of how the extraction protocol works)
         self._coordinate = None
         self._volName = String()
 
@@ -1627,7 +1647,7 @@ class SubTomogram(data.Volume):
         self._transform = newTransform
 
     def getTransform(self, convention=None):
-        
+
         if convention is not None:
             matrix = self._transform.getMatrix()
             return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))

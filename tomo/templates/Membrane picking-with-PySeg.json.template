@@ -76,7 +76,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "scaleSd": 1.0,
         "scaleMax": 255.0,
         "scaleMin": 0.0,
-        "inputSetOfTomograms": "3.outputTomograms"
+        "inputSetOfTomograms": "3.Tomograms"
     },
     {
         "object.className": "ProtJjsoftProtDenoiseTomogram",
@@ -156,7 +156,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inTomos": "3.outputTomograms",
+        "inTomos": "3.Tomograms",
         "inTomoMasks": "268.tomoMasks"
     },
     {
@@ -242,7 +242,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "hostName": "localhost",
         "numberOfThreads": 3,
         "numberOfMpi": 1,
-        "inTomoSet": "3.outputTomograms",
+        "inTomoSet": "3.Tomograms",
         "inFilsProt": "878."
     },
     {
@@ -268,7 +268,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inputTomos": "3.outputTomograms",
+        "inputTomos": "3.Tomograms",
         "input": "987.outputCoordinates"
     },
     {
