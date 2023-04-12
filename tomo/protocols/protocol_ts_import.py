@@ -663,6 +663,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 to the list. """
             anglesFrom = self.getEnumText('anglesFrom')
             doses = []
+            tiltorders = []
 
             if anglesFrom == self.ANGLES_FROM_HEADER:
                 angles = getAnglesFromHeader(file)
@@ -672,14 +673,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     raise Exception("Missing angles file: %s" % mdocFn)
                 angles = getAnglesFromMdoc(mdocFn)
             elif anglesFrom == self.ANGLES_FROM_TLT:
-                angles, doses = self.getFromTlt(file)
+                angles, doses, tiltorders = self.getFromTlt(file)
             elif anglesFrom == self.ANGLES_FROM_RANGE:
                 angles = self._getTiltAngleRange()
             else:
                 raise Exception('Invalid angles option: %s' % anglesFrom)
 
             for i, a in enumerate(angles):
-                order = i+1
+                order = i+1 if not tiltorders else tiltorders[i]
                 dose = doses[i] if doses else int(self.dosePerFrame.get()) * order
                 fileList.append(((i + 1, file), order, a, dose))
 
@@ -750,13 +751,13 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         tltFn = os.path.splitext(file)[0] + '.tlt'
         rawtltFn = tltFn.replace(".tlt", ".rawtlt")
         if os.path.exists(tltFn):
-            angles, doses = getAnglesAndDosesFromTlt(tltFn)
+            angles, doses, tiltorders = getAnglesAndDosesFromTlt(tltFn)
         elif os.path.exists(rawtltFn):
-            angles, doses = getAnglesAndDosesFromTlt(rawtltFn)
+            angles, doses, tiltorders = getAnglesAndDosesFromTlt(rawtltFn)
         else:
             raise Exception("Missing angles file: %s or %s" % (tltFn, rawtltFn))
 
-        return angles, doses
+        return angles, doses, tiltorders
 
     @classmethod
     def worksInStreaming(cls):
