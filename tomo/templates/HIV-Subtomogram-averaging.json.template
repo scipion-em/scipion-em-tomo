@@ -92,7 +92,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "step": null,
         "angleAxis1": null,
         "angleAxis2": null,
-        "setOrigCoord": false,
+        "setOrigCoord": true,
         "fromMrcHeader": true,
         "x": null,
         "y": null,

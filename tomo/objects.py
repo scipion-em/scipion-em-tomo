@@ -1397,7 +1397,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume: Tomogram = None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id') -> Coordinate3D:
         """ Iterate over the coordinates associated with a tomogram.
         If volume=None, the iteration is performed over the whole
         set of coordinates.
@@ -1554,6 +1554,7 @@ class SubTomogram(data.Volume):
     shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
 
     VOL_NAME_FIELD = "_volName"
+    COORD_VOL_NAME_FIELD = "_coordinate.%s" % Coordinate3D.TOMO_ID_ATTR
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1570,7 +1571,7 @@ class SubTomogram(data.Volume):
         self._coordinate = coordinate
         self.setVolId(coordinate.getVolId())
 
-    def getCoordinate3D(self):
+    def getCoordinate3D(self)->Coordinate3D:
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
         # We do not do this here but in the set iterator tha will "plug" the volume (tomogram) is exists
@@ -1689,7 +1690,17 @@ class SetOfSubTomograms(data.SetOfVolumes):
         else:
             self._coordsPointer.set(coordinates)
 
-    def iterSubtomos(self, volume=None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id') -> Coordinate3D:
+        """ Mimics SetOfCoordinates.iterCoordinates so can be passed to viewers or protocols transparently"""
+        if self.hasCoordinates3D():
+            for subtomo in self.iterSubtomos(volume, orderBy=orderBy):
+                coord = subtomo.getCoordinate3D()
+                coord.setObjId(subtomo.getObjId())
+                yield coord
+        else:
+            yield
+
+    def iterSubtomos(self, volume: Tomogram =None, orderBy='id')->SubTomogram:
         """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
         If volume=None, the iteration is performed over the whole
         set of subtomograms.
@@ -1711,19 +1722,18 @@ class SetOfSubTomograms(data.SetOfVolumes):
             >>>     330 retrieved correctly
 
         """
+        # Iterate over all Subtomograms if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         if volume is None:
-            volId = None
+            subtomoWhere = '1'
         elif isinstance(volume, int):
-            volId = volume
-        elif isinstance(volume, data.Volume):
-            volId = volume.getObjId()
+            logger.warning("FOR DEVELOPERS: Do not use volId, use volName or tsId")
+            subtomoWhere = '_volId=%d' % volume
+        elif isinstance(volume, Tomogram):
+            subtomoWhere = '%s="%s"' % (SubTomogram.VOL_NAME_FIELD, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
-
-        # Iterate over all coordinates if tomoId is None,
-        # otherwise use tomoId to filter the where selection
-        subtomoWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for subtomo in self.iterItems(where=subtomoWhere, orderBy=orderBy):
             if subtomo.hasCoordinate3D():
@@ -1765,7 +1775,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
         subsets are done."""
 
-        tomoId_attr = "_coordinate." + Coordinate3D.TOMO_ID_ATTR
+        tomoId_attr = SubTomogram.COORD_VOL_NAME_FIELD
         if self._tomos is None:
 
             self.initTomos()
