@@ -45,9 +45,10 @@ from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
 
 class MATRIX_CONVERSION:
-    RELION = "relion"
+    RELION = const.TR_RELION
     XMIPP = "xmipp"
-    EMAN = "eman"
+    EMAN = const.TR_EMAN
+    DYNAMO = const.TR_DYNAMO
 
 
 def convertMatrix(M, convention=None, direction=None):
@@ -108,7 +109,7 @@ def convertMatrix(M, convention=None, direction=None):
                         N = M'@R@R => M' = N@R'@R' => *** M = R@R@N' ***
             """
 
-    if convention is None or convention == MATRIX_CONVERSION.EMAN:
+    if convention is None or convention in [MATRIX_CONVERSION.EMAN, MATRIX_CONVERSION.DYNAMO]:
         return M
     elif direction == 'get' and convention in [MATRIX_CONVERSION.RELION, MATRIX_CONVERSION.XMIPP]:
         # Rotation matrix. Remove translation from the Scipion matrix
@@ -1054,7 +1055,7 @@ class Tomogram(data.Volume):
     origin using the methods implemented in the inherited class data.Image in scipion-em plugin.
     """
     TS_ID_FIELD = '_tsId'
-
+    ORIGIN_MATRIX_FIELD = '_origin._matrix'
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1368,6 +1369,7 @@ class Coordinate3D(data.EMObject):
             self.setTomoId(volume.getTsId())
 
     def setBoxSize(self, boxSize):
+        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         self._boxSize = boxSize
 
     def getBoxSize(self):
@@ -1375,7 +1377,6 @@ class Coordinate3D(data.EMObject):
         return self._boxSize
 
     def getVolId(self):
-        logger.info('Deprecated, use SetOfCoordinates3D box size instead.')
         return self._volId.get()
 
     def setVolId(self, volId):
@@ -1408,11 +1409,15 @@ class Coordinate3D(data.EMObject):
         vol = self.getVolume()
         if not vol:
             raise Exception("3D coordinate must be referred to a volume to get its origin.")
+
+        # Tomogram origin
+        origin = vol.getShiftsFromOrigin()
+
         if angstrom:
-            return vol.getShiftsFromOrigin()
+            return origin
         else:
             sr = vol.getSamplingRate()
-            origin = vol.getShiftsFromOrigin()
+
             return origin[0] / sr, origin[1] / sr, origin[2] / sr
 
     def getTomoId(self):
@@ -1426,6 +1431,9 @@ class Coordinate3D(data.EMObject):
                                 int(sampligRate * self._x.get()),
                                 int(sampligRate * self._y.get()),
                                 int(sampligRate * self._z.get()))
+
+    def __str__(self):
+        return "%s, G%s" % (self.composeCoordId(1), self.getGroupId())
 
 
 class SetOfCoordinates3D(data.EMSet):
@@ -1470,7 +1478,7 @@ class SetOfCoordinates3D(data.EMSet):
         """
         pass
 
-    def iterCoordinates(self, volume: Tomogram = None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id') -> Coordinate3D:
         """ Iterate over the coordinates associated with a tomogram.
         If volume=None, the iteration is performed over the whole
         set of coordinates.
@@ -1492,22 +1500,44 @@ class SetOfCoordinates3D(data.EMSet):
             >>>     '/path/to/Tomo.file' retrieved correctly
 
         """
+
+        # Iterate over all coordinates if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         if volume is None:
             coordWhere = '1'
         elif isinstance(volume, int):
-            coordWhere = '_volId=%d' % int(volume)
-        elif isinstance(volume, data.Volume):
+            logger.warning("FOR DEVELOPERS: Do not use volId, use volName")
+            coordWhere = '_volId=%d' % volume
+        elif isinstance(volume, Tomogram):
             coordWhere = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
+
         # Iterate over all coordinates if tomoId is None,
         # otherwise use tomoId to filter the where selection
-        tomos = self.getPrecedentsInvolved()
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
-            coord.setVolume(tomos[coord.getTomoId()])
+            # Associate the tomogram
+            self._associateVolume(coord)
             yield coord
+
+    def _getTomogram(self, tsId):
+        """ Returns  the tomogram from a tsId"""
+        tomos = self._getTomograms()
+
+        if tsId not in tomos.keys():
+            tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
+            self._tomos[tsId] = tomo
+            return tomo
+        else:
+            return self._tomos[tsId]
+
+    def _getTomograms(self):
+        if self._tomos is None:
+            self.initTomos()
+
+        return self._tomos
 
     def getPrecedents(self):
         """ Returns the SetOfTomograms associated with
@@ -1560,17 +1590,16 @@ class SetOfCoordinates3D(data.EMSet):
 
     def getFirstItem(self):
         coord = data.EMSet.getFirstItem(self)
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        self._associateVolume(coord)
         return coord
+
+    def _associateVolume(self, coord):
+        coord.setVolume(self._getTomogram(coord.getTomoId()))
 
     def __getitem__(self, itemId):
         """Add a pointer to a Tomogram before returning the Coordinate3D"""
         coord = data.EMSet.__getitem__(self, itemId)
-        # In case pointer is lost in a for loop
-        # clone = self.getPrecedents().getClass()()
-        # clone.copy(self)
-        # coord.setVolume(clone[coord.getVolId()])
-        coord.setVolume(self.getPrecedents()[coord.getVolId()])
+        self._associateVolume(coord)
         return coord
 
     def initTomos(self):
@@ -1583,16 +1612,13 @@ class SetOfCoordinates3D(data.EMSet):
         subsets are done."""
 
         tomoId_attr = Coordinate3D.TOMO_ID_ATTR
-        if self._tomos is None:
 
-            self.initTomos()
+        uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
 
-            uniqueTomos = self.aggregate(['count'], tomoId_attr, [tomoId_attr])
-
-            for row in uniqueTomos:
-                tsId = row[tomoId_attr]
-                tomo = self.getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
-                self._tomos[tsId] = tomo
+        for row in uniqueTomos:
+            tsId = row[tomoId_attr]
+            # This should register the tomogram in the internal _tomos
+            self._getTomogram(tsId)
 
         return self._tomos
 
@@ -1608,10 +1634,14 @@ class SubTomogram(data.Volume):
     the coordinates, it has to be considered that if we're operating with coordinates coming from subtomogrmas, those
     shifts will be scaled, but if the coordinates come from coordinates, they won't be."""
 
+    VOL_NAME_FIELD = "_volName"
+    COORD_VOL_NAME_FIELD = "_coordinate.%s" % Coordinate3D.TOMO_ID_ATTR
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._volId = Integer()
+        # This coordinate is NOT SCALED. To do that, the coordinates and subtomograms sampling rates
+        # should be compared (because of how the extraction protocol works)
         self._coordinate = None
         self._volName = String()
 
@@ -1622,7 +1652,7 @@ class SubTomogram(data.Volume):
         self._coordinate = coordinate
         self.setVolId(coordinate.getVolId())
 
-    def getCoordinate3D(self):
+    def getCoordinate3D(self)->Coordinate3D:
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
         # We do not do this here but in the set iterator tha will "plug" the volume (tomogram) is exists
@@ -1699,7 +1729,7 @@ class SubTomogram(data.Volume):
         self._transform = newTransform
 
     def getTransform(self, convention=None):
-        
+
         if convention is not None:
             matrix = self._transform.getMatrix()
             return Transform(convertMatrix(matrix, direction=const.GET, convention=convention))
@@ -1741,14 +1771,24 @@ class SetOfSubTomograms(data.SetOfVolumes):
         else:
             self._coordsPointer.set(coordinates)
 
-    def iterSubtomos(self, volume=None, orderBy='id'):
+    def iterCoordinates(self, volume: Tomogram = None, orderBy='id') -> Coordinate3D:
+        """ Mimics SetOfCoordinates.iterCoordinates so can be passed to viewers or protocols transparently"""
+        if self.hasCoordinates3D():
+            for subtomo in self.iterSubtomos(volume, orderBy=orderBy):
+                coord = subtomo.getCoordinate3D()
+                coord.setObjId(subtomo.getObjId())
+                yield coord
+        else:
+            yield
+
+    def iterSubtomos(self, volume: Tomogram =None, orderBy='id')->SubTomogram:
         """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
         If volume=None, the iteration is performed over the whole
         set of subtomograms.
 
         IMPORTANT NOTE: During the storing process in the database, Coordinates3D will lose their
         pointer to the associated Tomogram. This method overcomes this problem by retrieving and
-        relinking the Tomogram as if nothing would ever happened.
+        relinking the Tomogram as if nothing would ever happend.
 
         It is recommended to use this method when working with subtomograms, anytime you want to properly use
         its coordinate3D attached object.
@@ -1763,19 +1803,18 @@ class SetOfSubTomograms(data.SetOfVolumes):
             >>>     330 retrieved correctly
 
         """
+        # Iterate over all Subtomograms if tomoId is None,
+        # otherwise use tomoId to filter the where selection
         if volume is None:
-            volId = None
+            subtomoWhere = '1'
         elif isinstance(volume, int):
-            volId = volume
-        elif isinstance(volume, data.Volume):
-            volId = volume.getObjId()
+            logger.warning("FOR DEVELOPERS: Do not use volId, use volName or tsId")
+            subtomoWhere = '_volId=%d' % volume
+        elif isinstance(volume, Tomogram):
+            subtomoWhere = '%s="%s"' % (SubTomogram.VOL_NAME_FIELD, volume.getTsId())
         else:
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
-
-        # Iterate over all coordinates if tomoId is None,
-        # otherwise use tomoId to filter the where selection
-        subtomoWhere = '1' if volId is None else '_volId=%d' % int(volId)
 
         for subtomo in self.iterItems(where=subtomoWhere, orderBy=orderBy):
             if subtomo.hasCoordinate3D():
@@ -1800,10 +1839,8 @@ class SetOfSubTomograms(data.SetOfVolumes):
         self.initTomos()
 
         # If tsId is not cached, save both identifiers.
-        # NOTE: In streaming cases this may have to be different.
-        # We might not use volId at all and query precedents by tsId.
         if tsId not in self._tomos:
-            tomo = self.getCoordinates3D().getPrecedents()[volId]
+            tomo = self.getCoordinates3D().getPrecedents()[{Tomogram.TS_ID_FIELD: tsId}]
             self._tomos[volId] = tomo
             self._tomos[tsId] = tomo
             return tomo
@@ -1819,7 +1856,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
         subsets are done."""
 
-        tomoId_attr = "_coordinate." + Coordinate3D.TOMO_ID_ATTR
+        tomoId_attr = SubTomogram.COORD_VOL_NAME_FIELD
         if self._tomos is None:
 
             self.initTomos()
@@ -2064,7 +2101,7 @@ class SetOfLandmarkModels(data.EMSet):
 class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
     the triangulation of a volume.
-    A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
+    A Mesh object can be considered as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
 
     def __init__(self, **kwargs):
@@ -2073,7 +2110,7 @@ class MeshPoint(Coordinate3D):
         self._description = None  # Algebraic description of fitted mesh
 
     def getVolumeName(self):
-        return self._volumeName
+        return self._volumeName.get()
 
     def setVolumeName(self, volName):
         self._volumeName.set(volName)
@@ -2444,7 +2481,7 @@ class CTFTomoSeries(data.EMSet):
         self._isDefocusVDeviationInRange = Boolean(True)
 
         # CtfModels will always be used inside a SetOfTiltSeries
-        # so, let's do no store the mapper path by default
+        # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
 
     def clone(self, ignoreAttrs=('_mapperPath', '_size')):

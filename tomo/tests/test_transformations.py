@@ -188,7 +188,7 @@ with weakImport("xmipptomo"):
                 self.launchProtocol(stExtraction)
 
                 # Add the averagers
-                addAveragers(self, stExtraction, EmanProtTomoExtraction._possibleOutputs.subtomograms.name)
+                addAveragers(self, stExtraction, EmanProtTomoExtraction._possibleOutputs.subtomograms.name, label=label)
 
 
     # Define the class inside so only the test is available if xmipptomo is.
