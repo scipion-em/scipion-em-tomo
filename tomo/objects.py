@@ -1354,6 +1354,9 @@ class Coordinate3D(data.EMObject):
                                 int(sampligRate * self._y.get()),
                                 int(sampligRate * self._z.get()))
 
+    def __str__(self):
+        return "%s, G%s" % (self.composeCoordId(1), self.getGroupId())
+
 
 class SetOfCoordinates3D(data.EMSet):
     """ Encapsulate the logic of a set of volumes coordinates.
@@ -2020,7 +2023,7 @@ class SetOfLandmarkModels(data.EMSet):
 class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
     the triangulation of a volume.
-    A Mesh object can be consider as a point cloud in 3D containing the coordinates needed to divide a given region of
+    A Mesh object can be considered as a point cloud in 3D containing the coordinates needed to divide a given region of
     space into planar triangles interconnected that will result in a closed surface."""
 
     def __init__(self, **kwargs):
@@ -2029,7 +2032,7 @@ class MeshPoint(Coordinate3D):
         self._description = None  # Algebraic description of fitted mesh
 
     def getVolumeName(self):
-        return self._volumeName
+        return self._volumeName.get()
 
     def setVolumeName(self, volName):
         self._volumeName.set(volName)
