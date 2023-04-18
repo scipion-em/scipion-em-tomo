@@ -77,30 +77,16 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
             vesicleIdList = []
             tomoName = basename(tomo.getTsId())
             tomoDim = [float(d) for d in tomo.getDim()]
-            firstItem = input.getFirstItem()
-            if self._getInputisSubtomo(firstItem):
-                for item in input.iterSubtomos(tomo):
-                    vesicleId = self._getVesicleId(item)
-                    if vesicleId not in vesicleIdList:
-                        self.info("Vesicle id %s found." % vesicleId)
-                        vesicleIdList.append(vesicleId)
-                        vesicle = input.create(self.getPath(), suffix='_%s_vesicle_%s' % (tomoName,str(vesicleId)))
-                        vesicle.copyInfo(input)
 
-                        vesicleList.append(vesicle)
-                    idx = vesicleIdList.index(vesicleId)
-                    vesicleList[idx].append(item)
-
-            else:
-                for item in input.iterCoordinates(volume=tomo):
-                    vesicleId = self._getVesicleId(item)
-                    if vesicleId not in vesicleIdList:
-                        vesicleIdList.append(vesicleId)
-                        vesicle = self._createSetOfCoordinates3D(inputTomos, '_' + pwutlis.removeBaseExt(tomoName)
-                                                                 + '_vesicle_' + str(vesicleId))
-                        vesicleList.append(vesicle)
-                    idx = vesicleIdList.index(vesicleId)
-                    vesicleList[idx].append(item)
+            for item in input.iterCoordinates(volume=tomo):
+                vesicleId = self._getVesicleId(item)
+                if vesicleId not in vesicleIdList:
+                    vesicleIdList.append(vesicleId)
+                    vesicle = self._createSetOfCoordinates3D(inputTomos, '_' + pwutlis.removeBaseExt(tomoName)
+                                                             + '_vesicle_' + str(vesicleId))
+                    vesicleList.append(vesicle)
+                idx = vesicleIdList.index(vesicleId)
+                vesicleList[idx].append(item)
 
             totalMeshes += len(vesicleList)
 
@@ -109,18 +95,11 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
                 y = []
                 z = []
 
-                if self._getInputisSubtomo(input.getFirstItem()):
-                    for item in vesicle.iterSubtomos():
-                        coord = self._getCoor(item)
-                        x.append(float(coord.getX(const.BOTTOM_LEFT_CORNER)) / tomoDim[0])
-                        y.append(float(coord.getY(const.BOTTOM_LEFT_CORNER)) / tomoDim[1])
-                        z.append(float(coord.getZ(const.BOTTOM_LEFT_CORNER)) / tomoDim[2])
-                else:
-                    for item in vesicle.iterCoordinates(volume=tomo):
-                        coord = self._getCoor(item)
-                        x.append(float(coord.getX(const.BOTTOM_LEFT_CORNER)) / tomoDim[0])
-                        y.append(float(coord.getY(const.BOTTOM_LEFT_CORNER)) / tomoDim[1])
-                        z.append(float(coord.getZ(const.BOTTOM_LEFT_CORNER)) / tomoDim[2])
+                for item in vesicle.iterCoordinates(volume=tomo):
+                    coord = self._getCoor(item)
+                    x.append(float(coord.getX(const.BOTTOM_LEFT_CORNER)) / tomoDim[0])
+                    y.append(float(coord.getY(const.BOTTOM_LEFT_CORNER)) / tomoDim[1])
+                    z.append(float(coord.getZ(const.BOTTOM_LEFT_CORNER)) / tomoDim[2])
 
                 [center, radii, v, _, chi2] = fit_ellipsoid(np.array(x), np.array(y), np.array(z))
                 algDesc = '%f*x*x + %f*y*y + %f*z*z + 2*%f*x*y + 2*%f*x*z + 2*%f*y*z + 2*%f*x + 2*%f*y + 2*%f*z + %f ' \
