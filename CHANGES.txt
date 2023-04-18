@@ -6,6 +6,7 @@ v3.1.6:
   - Import tomograms outputs "Tomograms" and defines possible outputs. Templates and tests adapted
   - Pyseg workflow template fixed (extra graphs removed)
   - HIV Reconstruction workflow template fixed (tomograms origin taken from mrc)
+  - Protocols "fit vesicles" brought here from xmipptomo. Test added with filter by normals.
   Developers:
     - __init__ uses logger now
     - test_transformation fixed

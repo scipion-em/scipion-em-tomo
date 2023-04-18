@@ -361,8 +361,7 @@ class TestTomoImportTomograms(BaseTest):
 
     def test_importTomograms(self):
         protImport = self._runImportTomograms()
-        self.assertSetSize(protImport.Tomograms,
-                             "There was a problem with Import Tomograms protocol")
+        self.assertSetSize(protImport.Tomograms, size=2, msg="There was a problem with Import Tomograms protocol")
 
         for tomogram in protImport.Tomograms.iterItems():
             self.assertTrue(tomogram.getXDim() == 1024,
@@ -378,7 +377,7 @@ class TestTomoImportTomograms(BaseTest):
             break
 
         protImport2 = self._runImportTomograms2()
-        self.assertSetSize(protImport.Tomograms,
+        self.assertSetSize(protImport.Tomograms, size=2, msg=
                              "There was a problem with Import Tomograms protocol")
 
         for tomogram in protImport2.Tomograms.iterItems():
@@ -422,7 +421,7 @@ class TestTomoBaseProtocols(BaseTest):
 
     def test_importTiltSeriesM(self):
         protImport = self._runImportTiltSeriesM()
-        self.assertSetSize(protImport.outputTiltSeriesM, 2)
+        self.assertSetSize(protImport.outputTiltSeriesM, size=2, msg="Importing tilt series movies is failing")
 
         return protImport
 
@@ -834,7 +833,7 @@ class TestImportTomoMasks(BaseTest):
                                              samplingRate=cls.samplingRate)
 
         cls.launchProtocol(protImportTomogram)
-        cls.assertSetSize(protImportTomogram.Tomograms, 'No tomograms were generated.')
+        cls.assertIsNotNone(protImportTomogram.Tomograms, 'No tomograms were generated importing %s.' % filesPath)
 
         return protImportTomogram.Tomograms
 
@@ -860,8 +859,7 @@ class TestImportTomoMasks(BaseTest):
         self.launchProtocol(protImportTomomasks)
         tomoMaskSet = getattr(protImportTomomasks, 'outputTomoMasks', None)
 
-        self.assertIsNotNone(tomoMaskSet, 'No tomograms were generated.')
-        self.assertSetSize(tomoMaskSet, 1)
+        self.assertSetSize(tomoMaskSet, size=1, msg="Importing tomoMasks failed.")
         self.assertEqual(tomoMaskSet.getDimensions(), (464, 464, 250))
         self.assertEqual(tomoMaskSet.getSamplingRate(), 2 * self.samplingRate)
         self.assertFalse(protImportTomomasks.warnMsg)
