@@ -123,7 +123,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
             form.addParam('splitEvenOdd', params.BooleanParam,
                           default=False,
                           label='Split & sum odd/even frames?',
-                          expertLevel=params.LEVEL_ADVANCED,
                           help='(Used for denoising data preparation). If set to Yes, 2 additional movies/tilt '
                                'series will be generated, one generated from the even frames and the other from the '
                                'odd ones using the same alignment for the whole stack of frames.')
@@ -225,10 +224,11 @@ class ProtTsCorrectMotion(ProtTsProcess):
         # Merge all micrographs from the same tilt images in a single "mrcs" stack file
         for i, ti in enumerate(tiList):
             tiFn, tiFnDW = self._getOutputTiltImagePaths(ti)
-            newLocation = (i+1, tsFn)
-            ih.convert(tiFn, newLocation)
-            ti.setLocation(newLocation)
-            pw.utils.cleanPath(tiFn)
+            if os.path.exists(tiFn):
+                newLocation = (i+1, tsFn)
+                ih.convert(tiFn, newLocation)
+                ti.setLocation(newLocation)
+                pw.utils.cleanPath(tiFn)
             if os.path.exists(tiFnDW):
                 ih.convert(tiFnDW, (i+1, tsFnDW))
                 pw.utils.cleanPath(tiFnDW)
@@ -300,7 +300,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOut.copyInfo(ti, copyId=True)
                 tiOut.setAcquisition(ti.getAcquisition())
                 tiOut.setSamplingRate(self._getOutputSampling())
-                tiOut.setIndex(i+1)
                 tiOut.setObjId(ti.getIndex())
                 tsObjDW.append(tiOut)
 
@@ -424,7 +423,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 tiOut.copyInfo(ti, copyId=True)
                 tiOut.setAcquisition(ti.getAcquisition())
                 tiOut.setSamplingRate(self._getOutputSampling())
-                tiOut.setIndex(counter)
                 tiOut.setObjId(ti.getIndex())
                 ts.append(tiOut)
                 counter += 1
