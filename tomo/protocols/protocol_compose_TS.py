@@ -51,7 +51,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         ProtImport.__init__(self, **args)
         self.stepsExecutionMode = STEPS_PARALLEL  # Defining that the protocol contain parallel steps
         self.newSteps = []
+        self.listMdocsRead = []
         self.TiltSeries = None
+        self.waitingMdoc = True
         self.time4NextTS_current = time.time()
 
     # -------------------------- DEFINES AND STEPS -----------------------
@@ -111,10 +113,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         form.addParallelSection(threads=3, mpi=1)
 
     def _initialize(self):
-        self.listMdocsRead = []
+
         self.time4NextTS_current = time.time()
         self.ih = ImageHandler()
-        self.waitingMdoc = True
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
@@ -272,7 +273,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.listOfMics = list_mics_matched
 
         if len(self.listOfMics) != len(mdoc_order_angle_list):
-            self.error('Micrographs doesnt match with mdoc read')
+            self.error('Micrographs doesnt match with mdoc read.\n'
+                      'number of mics: {}, number of mics on mdoc: {}'.format(
+                len(self.listOfMics), len(mdoc_order_angle_list)))
             return False
         else:
             self.info('Micrographs matched for the mdoc file: {}'.format(
@@ -332,6 +335,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         acq = ts_obj.getAcquisition()
         acq.setVoltage(mdoc_obj.getVoltage())
         acq.setMagnification(mdoc_obj.getMagnification())
+        acq.setSphericalAberration(self.listOfMics[0].getAcquisition().getSphericalAberration())
+        acq.setAmplitudeContrast(self.listOfMics[0].getAcquisition().getAmplitudeContrast())
         ts_obj.getAcquisition().setTiltAxisAngle(mdoc_obj.getTiltAxisAngle())
         origin = Transform()
         ts_obj.setOrigin(origin)
@@ -362,6 +367,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         ts_fn = self._getOutputTiltSeriesPath(ts_obj)
         ts_fn_dw = self._getOutputTiltSeriesPath(ts_obj, '_DW')
         counter_ti = 0
+
+        TSAngleFile = self._getPath("{}.rawtlt".format(ts_obj.getTsId()))
+        TSAngleFile = open(TSAngleFile, "a")
+        for n in file_ordered_angle_list:
+            TSAngleFile.write('{}\n'.format(str(n[2])))
+        TSAngleFile.close()
+
         for f, to, ta in file_ordered_angle_list:
             try:
                 for mic in self.listOfMics:

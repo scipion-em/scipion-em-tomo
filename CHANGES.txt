@@ -1,3 +1,18 @@
+v3.1.6:
+  - Tilt order inferred from dose when tlt file has dose
+  - Fix: subtomograms with coordinates work in absence of volId
+  - HIV-HTA template: removes coords extraction and reconstruction since mapback can be done without them
+  - Import Tilt series or Import tilt series movies do not work in streaming anymore
+  - Import tomograms outputs "Tomograms" and defines possible outputs. Templates and tests adapted
+  - Pyseg workflow template fixed (extra graphs removed)
+  - HIV Reconstruction workflow template fixed (tomograms origin taken from mrc)
+  - Protocols "fit vesicles" brought here from xmipptomo. Test added with filter by normals.
+  Developers:
+    - __init__ uses logger now
+    - test_transformation fixed
+    - SetOfCoordinates refactored internally to deal better with tomograms.
+    - SetOfSubtomograms.iterCoordinates --> Mimics SetOfCoordinates behavior
+
 v3.1.5:
  developers: hot fix, invalid import in test centralized layer
 v3.1.4:

@@ -74,7 +74,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "doInvert": false,
         "doNormalize": false,
         "normproc": 0,
-        "inputTomograms": "2.outputTomograms",
+        "inputTomograms": "2.Tomograms",
         "inputCoordinates": "1287.output3DCoordinates"
     },
     {
@@ -110,7 +110,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "TimeStep": 0.1,
         "hostName": "localhost",
         "numberOfThreads": 12,
-        "inputSetTomograms": "2.outputTomograms"
+        "inputSetTomograms": "2.Tomograms"
     },
     {
         "object.className": "DynamoModelWorkflow",
