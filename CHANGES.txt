@@ -1,3 +1,5 @@
+v3.1.7:
+  - Templates tweaked: title and some mpi values
 v3.1.6:
   - Tilt order inferred from dose when tlt file has dose
   - Fix: subtomograms with coordinates work in absence of volId
