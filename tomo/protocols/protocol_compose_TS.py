@@ -261,7 +261,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             len_mics_input_1 = self._loadInputList()
 
         self.info('Tilts in the mdoc file: {}\n'
-                  'Micrographs abailables: {}'.format(
+                  'Micrographs availables: {}'.format(
             len(mdoc_order_angle_list), len(self.listOfMics)))
 
         # MATCH

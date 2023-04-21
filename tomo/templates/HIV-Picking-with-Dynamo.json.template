@@ -1,4 +1,4 @@
-Course 2022, day 2: Non vectorial picking with Dynamo and Eman on HIV (EMPIAR-10164) tomogram
+Non vectorial picking with Dynamo and Eman on HIV (EMPIAR-10164) tomogram
 You'll need to download its dataset -> scipion3 testdata --download tomo-tutorial
 [
     {
