@@ -249,7 +249,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 filename, acquisitionOrder, Angle
         """
         len_mics_input_1, streamOpen = self._loadInputList()
-        self.info('streamOpen: {}'.format(streamOpen))
         # STREAMING CHECKPOINT
         while len(mdoc_order_angle_list) > len_mics_input_1 and streamOpen == True:
             self.info('Tilts in the mdoc file: {} Micrographs abailables: {}'.format(
