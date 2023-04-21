@@ -185,6 +185,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         launch the create of SetOfTiltSeries and each TiltSerie
         :param file2read: mdoc file in the path
         """
+        print('File to read: {}'.format(file2read))
+        self.error('File to read: {}'.format(file2read))
+
         statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
         # STREAMING CHECKPOINT
         while time.time() - self.readDateFile(file2read) < \
@@ -228,8 +231,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 filepath, tiltA = self.fixingMdocBug(filepath, tiltA)
 
             mdoc_order_angle_list.append((filepath,
-                                          '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
+                '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
         return True, mdoc_order_angle_list
+
 
     def fixingMdocBug(self, filepath, tiltA):
         idx = filepath.find(']_')
@@ -264,11 +268,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                   'Micrographs abailables: {}'.format(
             len(mdoc_order_angle_list), len(self.listOfMics)))
 
-        # MATCH
-        list_mdoc_files = [os.path.basename(fp[0]) for fp in mdoc_order_angle_list]
+        #MATCH
+        list_mdoc_files = [os.path.splitext(os.path.basename(fp[0]))[0] for fp in mdoc_order_angle_list] #quitar la extension que no tiene por k ser mrc!!
         list_mics_matched = []
+        self.error(list_mdoc_files)
         for x, mic in enumerate(self.listOfMics):
-            if mic.getMicName() in list_mdoc_files:
+            self.error(mic.getMicName())
+            if os.path.splitext(mic.getMicName())[0] in list_mdoc_files:
                 list_mics_matched.append(mic)
         self.listOfMics = list_mics_matched
 
@@ -362,6 +368,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param file_ordered_angle_list: list of files sorted by angle
         :param incoming_dose_list: list of dose
         :param accumulated_dose_list: list of accumulated dose
+        :param origin: transform matrix
         :return:
         """
         ts_fn = self._getOutputTiltSeriesPath(ts_obj)
