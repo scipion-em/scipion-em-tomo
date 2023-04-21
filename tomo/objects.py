@@ -1692,13 +1692,14 @@ class SetOfSubTomograms(data.SetOfVolumes):
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
 
-    def getCoordinates3D(self):
+    def getCoordinates3D(self, asPointer = False):
         """ Returns the SetOfCoordinates associated with
         this SetOfSubTomograms"""
-        return self._coordsPointer.get()
+
+        return self._coordsPointer if asPointer else self._coordsPointer.get()
 
     def setCoordinates3D(self, coordinates):
-        """ Set the SetOfCoordinates associates with
+        """ Set the SetOfCoordinates associated with
         this set of particles.
          """
         if isinstance(coordinates, Pointer):
@@ -1853,6 +1854,32 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     REP_TYPE = AverageSubTomogram
     REP_SET_TYPE =SetOfAverageSubTomograms
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._coordsPointer = Pointer()
+
+    def copyInfo(self, other):
+        """ Copy properties from other set of images to current one"""
+        super().copyInfo(other)
+        if other._coordsPointer.hasValue():
+            self.copyAttributes(other, '_coordsPointer')
+        else:
+            logger.warning("The source %s seems an old execution and does not have coordinates associated."
+                           " This may set may fail with some protocols treating contained classes "
+                           "as SetOfSubtomograms with coordinates.")
+    def setCoordinates3D(self, coordinates):
+        """ Set the SetOfCoordinates associated with
+        this set.
+         """
+        if isinstance(coordinates, Pointer):
+            self._coordsPointer = coordinates
+        else:
+            self._coordsPointer.set(coordinates)
+
+    def _setItemMapperPath(self, item:ClassSubTomogram):
+        """ This will happen when retrieving any item from this set. We take this chance to 'inject' the coordinates."""
+        super()._setItemMapperPath(item)
+        item.setCoordinates3D(self._coordsPointer)
 
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
