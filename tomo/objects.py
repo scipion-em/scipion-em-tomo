@@ -196,7 +196,7 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
 
 
 class TiltSeriesBase(data.SetOfImages):
-
+    TS_ID_FIELD = '_tsId'
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -739,6 +739,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def getTiltSeriesFromTsId(self, tsId):
         return self[{"_tsId": tsId}]
+
+    def getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        tsIds = self.aggregate(["MAX"], TiltSeries.TS_ID_FIELD, [TiltSeries.TS_ID_FIELD])
+        tsIds = [d[TiltSeries.TS_ID_FIELD] for d in tsIds]
+        return tsIds
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -1548,6 +1554,13 @@ class SetOfCoordinates3D(data.EMSet):
         if self.getBoxSize() is None and item._boxSize:
             self.setBoxSize(item._boxSize)
         super().append(item)
+
+    def getTSIds(self):
+        """ Returns all the TS ID (tomoId) present in this set"""
+        volIds = self.aggregate(["MAX"], Coordinate3D.TOMO_ID_ATTR, [Coordinate3D.TOMO_ID_ATTR])
+        volIds = [d[Coordinate3D.TOMO_ID_ATTR] for d in volIds]
+        return volIds
+
 
 
 class SubTomogram(data.Volume):

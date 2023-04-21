@@ -1,3 +1,9 @@
+v3.1.7:
+  - Templates tweaked: title and some mpi values
+
+  Developers:
+  - SetOfCoordinates and SetOfTiltSeries have a getTSIds method to return TS is contained (+ test)
+
 v3.1.6:
   - Tilt order inferred from dose when tlt file has dose
   - Fix: subtomograms with coordinates work in absence of volId
