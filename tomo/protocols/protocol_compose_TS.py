@@ -54,6 +54,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.listMdocsRead = []
         self.TiltSeries = None
         self.waitingMdoc = True
+        self.time4NextMic = 10
         self.time4NextTS_current = time.time()
 
     # -------------------------- DEFINES AND STEPS -----------------------
@@ -95,11 +96,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                            "timeout,\n if there is no new tilt, the tilt serie"
                            "is considered as completed.\n"
                            "Minimum time 20 segs")
-        form.addParam('time4NextMic', params.IntParam, default=12,
-                      condition='dataStreaming',
-                      label="Time for next micograph processed (secs)",
-                      help="Delay (in seconds) until the next micograph is "
-                           "processed by the previous protocol")
         form.addParam('time4NextTS', params.IntParam, default=1800,
                       condition='dataStreaming',
                       label="Time for next TiltSerie (secs)",
@@ -185,7 +181,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         launch the create of SetOfTiltSeries and each TiltSerie
         :param file2read: mdoc file in the path
         """
-        print('File to read: {}'.format(file2read))
+        self.info('File to read: {}'.format(file2read))
         self.error('File to read: {}'.format(file2read))
 
         statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
@@ -252,17 +248,15 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :param mdoc_order_angle_list: for each tilt:
                 filename, acquisitionOrder, Angle
         """
-        len_mics_input_1 = self._loadInputList()
+        len_mics_input_1, streamOpen = self._loadInputList()
+        self.info('streamOpen: {}'.format(streamOpen))
         # STREAMING CHECKPOINT
-        while len(mdoc_order_angle_list) > len_mics_input_1:
-            self.info('Tilts in the mdoc file: {} Micrographs  abailables: {}'.format(
+        while len(mdoc_order_angle_list) > len_mics_input_1 and streamOpen == True:
+            self.info('Tilts in the mdoc file: {} Micrographs abailables: {}'.format(
                 len(mdoc_order_angle_list), len(self.listOfMics)))
             self.info('Waiting next micrograph...')
-            time.sleep(self.time4NextMic.get())
-            len_mics_input_2 = self._loadInputList()
-            if len_mics_input_2 == len_mics_input_1:
-                return False
-            len_mics_input_1 = self._loadInputList()
+            time.sleep(self.time4NextMic)
+            len_mics_input_1, streamOpen = self._loadInputList()
 
         self.info('Tilts in the mdoc file: {}\n'
                   'Micrographs abailables: {}'.format(
@@ -271,9 +265,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         #MATCH
         list_mdoc_files = [os.path.splitext(os.path.basename(fp[0]))[0] for fp in mdoc_order_angle_list] #quitar la extension que no tiene por k ser mrc!!
         list_mics_matched = []
-        self.error(list_mdoc_files)
         for x, mic in enumerate(self.listOfMics):
-            self.error(mic.getMicName())
             if os.path.splitext(mic.getMicName())[0] in list_mdoc_files:
                 list_mics_matched.append(mic)
         self.listOfMics = list_mics_matched
@@ -296,7 +288,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         mic_set.loadAllProperties()
         self.listOfMics = [m.clone() for m in mic_set]
         mic_set.close()
-        return len(self.listOfMics)
+        return len(self.listOfMics), mic_set.isStreamOpen()
 
     def createTS(self, mdoc_obj):
         """
