@@ -1,3 +1,5 @@
+v3.1.8:
+  - SetOfSubtomoClasses improved: sampling rate set, coordinates injected
 v3.1.7:
   - Templates tweaked: title and some mpi values
 
