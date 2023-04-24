@@ -135,9 +135,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.list_current = self.findMdoc()
         self.list_remain = [x for x in self.list_current if x not in self.listMdocsRead
                        and x not in self.list_reading]
-        self.debug('List mdoc file in path: {}'.format(self.list_current))
-        self.debug('List mdoc file remain: {}'.format(self.list_remain))
-        self.debug('List mdoc file reading: {}'.format(self.list_reading))
 
         # STREAMING CHECKPOINT
         if delay > int(self.time4NextTS.get()):
@@ -211,9 +208,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.info('mdoc file {} is considered closed'.format(os.path.basename(file2read)))
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
-                self.error('Mdoc error. Less than 3 tilts in the serie')
+                self.info('Mdoc error. Less than 3 tilts in the serie')
+                self.listMdocsRead.append(file2read)
+
             elif self.matchTS(mdoc_order_angle_list, file2read):
                 self.createTS(self.mdoc_obj)
+                self.listMdocsRead.append(file2read)
                 self.listMdocsRead.append(file2read)
 
                 self.info("Tilt Serie ({} tilts) composed from mdoc file: {}\n".
@@ -225,6 +225,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                     "Tilt Serie ({} tilts) composed from mdoc file: {}\n".
                     format(len(mdoc_order_angle_list), file2read))
                 summaryF.close()
+
+
         self.list_reading.remove(file2read)
 
     def readingMdocTiltInfo(self, file2read):
@@ -295,6 +297,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                        'The set of micrographs is closed but has not all'
                        ' the micrographs the mdoc refer'.format(file2read,
                 len(self.listOfMics), len(mdoc_order_angle_list)))
+                self.listMdocsRead.append(file2read)
                 return False
             else:
                 self.info('The micrographs read does not belong the mdoc {}. '
