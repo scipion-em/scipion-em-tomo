@@ -1,3 +1,5 @@
+v3.1.9:
+  - HIV template tweaked: one 3d classification removed. Mapback uses the 3d class.
 v3.1.8:
   - SetOfSubtomoClasses improved: sampling rate set, coordinates injected
 v3.1.7:

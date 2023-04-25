@@ -431,55 +431,6 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "samplingRate": 5.4
     },
     {
-        "object.className": "ProtRelion3DClassifySubtomograms",
-        "object.id": "924",
-        "object.label": "reliontomo - 3D Classification of subtomograms (copy)",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "isMapAbsoluteGreyScale": true,
-        "initialLowPassFilterA": 40.0,
-        "symmetry": "C6",
-        "doCTF": true,
-        "ignoreCTFUntilFirstPeak": false,
-        "numberOfClasses": 1,
-        "regularisation": 4.0,
-        "nIterations": 3,
-        "useFastSubsets": false,
-        "maskDiameter": 230,
-        "zeroMask": true,
-        "limitResolutionEStepTo": -1.0,
-        "doImageAlignment": true,
-        "angularSamplingDeg": 2,
-        "offsetSearchRangePix": 5,
-        "offsetSearchStepPix": 1.0,
-        "doLocalAngleSearch": false,
-        "localAngularSearchRange": 5.0,
-        "relaxSym": null,
-        "allowCoarser": false,
-        "parallelDiscIO": true,
-        "pooledSubtomos": 16,
-        "skipGridding": true,
-        "allParticlesRam": false,
-        "combineItersDisc": false,
-        "scratchDir": null,
-        "skipPadding": false,
-        "doGpu": true,
-        "gpusToUse": "0",
-        "keepOnlyLastIterFiles": false,
-        "oversampling": 1,
-        "extraParams": "--sigma_tilt 3.667 --sigma_psi 3.667",
-        "hostName": "localhost",
-        "numberOfThreads": 1,
-        "numberOfMpi": 3,
-        "inReParticles": "717.relionParticles",
-        "referenceVolume": "802.average",
-        "solventMask": "841.outputMask"
-    },
-    {
         "object.className": "ProtImportMask",
         "object.id": "994",
         "object.label": "pwem - Bin2_import mask",
@@ -510,7 +461,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "binningFactor": 2.0,
         "symmetry": "C6",
         "snrWiener": 0.0,
-        "inReParticles": "924.relionParticles"
+        "inReParticles": "717.relionParticles"
     },
     {
         "object.className": "ProtRelionMakePseudoSubtomograms",
@@ -532,7 +483,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "coneAngle": 10.0,
         "applyOffsets": false,
         "outputInFloat16": false,
-        "inReParticles": "924.relionParticles"
+        "inReParticles": "717.relionParticles"
     },
     {
         "object.className": "ProtRelion3DClassifySubtomograms",
@@ -585,7 +536,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
     },
     {
         "object.className": "XmippProtSubtomoMapBack",
-        "object.id": "1461",
+        "object.id": "9071",
         "object.label": "xmipptomo - map back subtomos",
         "object.comment": "",
         "_useQueue": false,
@@ -593,7 +544,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "selection": 1,
+        "selection": 0,
         "invertContrast": false,
         "paintingType": 2,
         "removeBackground": true,
@@ -601,8 +552,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "constant": 100000.0,
         "hostName": "localhost",
         "numberOfThreads": 1,
-        "numberOfMpi": 1,
-        "inputSubtomos": "227.coordinates",
-        "inputRef": "1116.average"
+        "numberOfMpi": 3,
+        "inputClasses": "1343.classes"
     }
 ]
