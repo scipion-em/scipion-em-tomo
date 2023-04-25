@@ -66,14 +66,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     def _defineParams(self, form):
         form.addSection(label='Import')
 
-        form.addParam('inputMicrographs', params.PointerParam,
+        form.addParam('inputMicrographs', params.PointerParam, allowNull=False,
                       pointerClass='SetOfMicrographs',
                       important=True,
                       label="Input micrographs",
                       help='Select the SetOfMicrographs to import')
 
         form.addParam('filesPath', params.PathParam,
-                      label="Files directory ot the tiltSerie files",
+                      label="Path with the *.mdoc files for each TiltSerie",
                       help="Root directory of the tilt-series. "
                            "Will be search the *.mdoc file for each Tilt Serie")
 
@@ -454,9 +454,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         return '%s_%02d' % (tim.getTsId(), tim.getObjId())
 
     def _validate(self):
-        errors = [] if len(self.inputMicrographs.get()) > 1 else \
-            ["More than one Input micrographs is needed to run."]
-        return errors
+        pass
 
 
     def _summary(self):
