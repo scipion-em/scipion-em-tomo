@@ -33,10 +33,13 @@ import pyworkflow.protocol.constants as cons
 from tomo.convert.mdoc import MDoc
 import pwem.objects as emobj
 import tomo.objects as tomoObj
+from tomo.objects import SetOfTiltSeries
 from pwem.objects.data import Transform
 from pyworkflow.object import Integer
 from tomo.protocols import ProtTomoBase
 from pwem.emlib.image import ImageHandler
+
+OUT_STS = "SetOfTiltSeries"
 
 
 class ProtComposeTS(ProtImport, ProtTomoBase):
@@ -46,6 +49,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     """
     _devStatus = pw.BETA
     _label = 'Compose Tilt Serie'
+    _possibleOutputs = {OUT_STS: SetOfTiltSeries}
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
