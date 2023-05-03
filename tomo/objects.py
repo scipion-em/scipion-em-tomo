@@ -241,9 +241,6 @@ class TiltSeriesBase(data.SetOfImages):
     def hasOddEven(self):
         return self._hasOddEven.get()
 
-    def setHasOddEven(self, booleanValue):
-        self._hasOddEven.set(booleanValue)
-
     def setAnglesCount(self, value):
 
         if isinstance(value, int):
@@ -414,13 +411,6 @@ def tiltSeriesToString(tiltSeries):
         s.append('+oe')
 
     return (", " + ", ".join(s)) if len(s) else ""
-
-
-def tomogramToString(tomogram):
-    s = []
-    if tomogram.hasHalfMaps():
-        s.append('+oe,')
-    return (" ".join(s)) if len(s) else ""
 
 
 class TiltSeries(TiltSeriesBase):
@@ -667,9 +657,6 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def hasOddEven(self):
         return self._hasOddEven.get()
-
-    def setHasOddEven(self, booleanValue):
-        self._hasOddEven.set(booleanValue)
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -1123,16 +1110,13 @@ class SetOfTomograms(data.SetOfVolumes):
     def hasOddEven(self):
         return self._hasOddEven.get()
 
-    def setHasOddEven(self, booleanValue):
-        self._hasOddEven.set(booleanValue)
-
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
 
     def __str__(self):
         sampling = self.getSamplingRate()
-        tomoStr = tomogramToString(self.getFirstItem())
+        tomoStr = "+oe," if self.hasOddEven() else ''
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"

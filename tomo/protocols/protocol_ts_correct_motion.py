@@ -230,7 +230,6 @@ class ProtTsCorrectMotion(ProtTsProcess):
             counter += 1
 
         # update items and size info
-        tsObj.setHasOddEven(False)
         output.update(tsObj)
 
     def processTiltSeriesStep(self, tsId):
