@@ -220,7 +220,7 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
 
 class TiltSeriesBase(data.SetOfImages):
-
+    TS_ID_FIELD = '_tsId'
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -779,6 +779,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def getTiltSeriesFromTsId(self, tsId):
         return self[{"_tsId": tsId}]
+
+    def getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        tsIds = self.aggregate(["MAX"], TiltSeries.TS_ID_FIELD, [TiltSeries.TS_ID_FIELD])
+        tsIds = [d[TiltSeries.TS_ID_FIELD] for d in tsIds]
+        return tsIds
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -1611,6 +1617,13 @@ class SetOfCoordinates3D(data.EMSet):
             self.setBoxSize(item._boxSize)
         super().append(item)
 
+    def getTSIds(self):
+        """ Returns all the TS ID (tomoId) present in this set"""
+        volIds = self.aggregate(["MAX"], Coordinate3D.TOMO_ID_ATTR, [Coordinate3D.TOMO_ID_ATTR])
+        volIds = [d[Coordinate3D.TOMO_ID_ATTR] for d in volIds]
+        return volIds
+
+
 
 class SubTomogram(data.Volume):
     """The coordinate associated to each subtomogram is not scaled. To do that, the coordinates and the subtomograms
@@ -1741,13 +1754,14 @@ class SetOfSubTomograms(data.SetOfVolumes):
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
 
-    def getCoordinates3D(self):
+    def getCoordinates3D(self, asPointer = False):
         """ Returns the SetOfCoordinates associated with
         this SetOfSubTomograms"""
-        return self._coordsPointer.get()
+
+        return self._coordsPointer if asPointer else self._coordsPointer.get()
 
     def setCoordinates3D(self, coordinates):
-        """ Set the SetOfCoordinates associates with
+        """ Set the SetOfCoordinates associated with
         this set of particles.
          """
         if isinstance(coordinates, Pointer):
@@ -1902,6 +1916,32 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     REP_TYPE = AverageSubTomogram
     REP_SET_TYPE =SetOfAverageSubTomograms
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._coordsPointer = Pointer()
+
+    def copyInfo(self, other):
+        """ Copy properties from other set of images to current one"""
+        super().copyInfo(other)
+        if other._coordsPointer.hasValue():
+            self.copyAttributes(other, '_coordsPointer')
+        else:
+            logger.warning("The source %s seems an old execution and does not have coordinates associated."
+                           " This may set may fail with some protocols treating contained classes "
+                           "as SetOfSubtomograms with coordinates.")
+    def setCoordinates3D(self, coordinates):
+        """ Set the SetOfCoordinates associated with
+        this set.
+         """
+        if isinstance(coordinates, Pointer):
+            self._coordsPointer = coordinates
+        else:
+            self._coordsPointer.set(coordinates)
+
+    def _setItemMapperPath(self, item:ClassSubTomogram):
+        """ This will happen when retrieving any item from this set. We take this chance to 'inject' the coordinates."""
+        super()._setItemMapperPath(item)
+        item.setCoordinates3D(self._coordsPointer)
 
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
