@@ -178,23 +178,22 @@ class ProtTsCorrectMotion(ProtTsProcess):
             pw.utils.cleanPath(workingFolder)
 
     def createOddEvenTs(self, ts, odd=True):
-        def addTiltImage(tiLocation, tsObject, mainti, tsIde, samplingRate, index):
+        def addTiltImage(tiLocation, tsObject, mainti, tsIde, samplingRate):
             """
             :param tiLocation: Location of the aligned tilt image in the stack
             :param tsObject: Tilt Series to which the new Ti Image will be added
             :param mainti: Tilt Series Movies object
             :param tsIde: Tilt series identifier
             :param samplingRate: current Tilt Series sampling rate
-            :param index: position of the slice in the generated slack
             """
             ta = mainti.getTiltAngle()
             to = mainti.getAcquisitionOrder()
             acq = mainti.getAcquisition()
             ti = TiltImage(tiltAngle=ta, tsId=tsIde, acquisitionOrder=to)
             ti.setSamplingRate(samplingRate)
-            ti.setIndex(index)
             ti.setAcquisition(acq)
-            ti.setLocation(tiLocation)
+            index, fname = tiLocation.split("@")
+            ti.setLocation(int(index), fname)
             tsObject.append(ti)
             pw.utils.cleanPath(tiLocation)
 
@@ -222,12 +221,10 @@ class ProtTsCorrectMotion(ProtTsProcess):
         tsObj.copyInfo(ts, copyId=True)
         output.append(tsObj)
 
-        counter = 1
         tsId = ts.getTsId()
         for ti in ts:
             fnImg = ti.getOddEven()[oddEvenIndex]
-            addTiltImage(fnImg, tsObj, ti, tsId, sRate, counter)
-            counter += 1
+            addTiltImage(fnImg, tsObj, ti, tsId, sRate)
 
         # update items and size info
         output.update(tsObj)
