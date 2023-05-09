@@ -40,7 +40,7 @@ from pyworkflow.object import Integer
 from tomo.protocols import ProtTomoBase
 from pwem.emlib.image import ImageHandler
 
-OUT_STS = "SetOfTiltSeries"
+OUT_STS = "TiltSeries"
 
 
 class ProtComposeTS(ProtImport, ProtTomoBase):
