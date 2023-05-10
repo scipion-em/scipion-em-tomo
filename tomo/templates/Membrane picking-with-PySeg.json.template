@@ -1,4 +1,4 @@
-Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_10439) tomogram.
+Vectorial picking with PySeg on Mice Intact P19 cells (emd_10439) tomogram.
 [
     {
         "object.className": "ProtImportVolumes",
@@ -76,7 +76,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "scaleSd": 1.0,
         "scaleMax": 255.0,
         "scaleMin": 0.0,
-        "inputSetOfTomograms": "3.outputTomograms"
+        "inputSetOfTomograms": "3.Tomograms"
     },
     {
         "object.className": "ProtJjsoftProtDenoiseTomogram",
@@ -126,7 +126,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "sigmaS": 0.5,
         "sigmaP": 0.0,
         "keepAllFiles": true,
-        "inTomograms": "142.outputTomograms"
+        "inTomograms": "142.tomograms"
     },
     {
         "object.className": "ProtPySegPreSegParticles",
@@ -156,7 +156,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inTomos": "3.outputTomograms",
+        "inTomos": "3.Tomograms",
         "inTomoMasks": "268.tomoMasks"
     },
     {
@@ -242,7 +242,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "hostName": "localhost",
         "numberOfThreads": 3,
         "numberOfMpi": 1,
-        "inTomoSet": "3.outputTomograms",
+        "inTomoSet": "3.Tomograms",
         "inFilsProt": "878."
     },
     {
@@ -268,7 +268,7 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inputTomos": "3.outputTomograms",
+        "inputTomos": "3.Tomograms",
         "input": "987.outputCoordinates"
     },
     {
@@ -378,26 +378,6 @@ Course 2022, day 2: Vectorial picking with PySeg on Mice Intact P19 cells (emd_1
         "doInvert": false,
         "doSmooth": true,
         "sigmaConvolution": 2.0
-    },
-    {
-        "object.className": "ProtPySegGraphs",
-        "object.id": "1623",
-        "object.label": "pyseg - graphs (copy)",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "vesiclePkgSize": 3,
-        "keepOnlyReqFiles": true,
-        "sSig": 3.0,
-        "vDen": 0.0035,
-        "vRatio": 4.0,
-        "maxLen": 330.0,
-        "hostName": "localhost",
-        "numberOfThreads": 3,
-        "inSegProt": "687."
     }
 ]
 

@@ -83,10 +83,9 @@ class TestTomoComposeTS(BaseTest):
                                            voltage=300)
         self.launchProtocol(protMovieImport)
         self.assertIsNotNone(protMovieImport.outputMovies, 'Movies not imported')
-
         # Align movies and create a set of micrographs
         xmipp3 = Domain.importFromPlugin('xmipp3.protocols', doRaise=True)
-        protAlign = self.newProtocol(xmipp3.XmippProtMovieCorr,
+        protAlign = self.newProtocol(xmipp3.XmippProtFlexAlign,
                                      objLabel='Movie Alignment (SPA)',
                                      alignFrame0=1, alignFrameN=0,
                                      useAlignToSum=True,
@@ -101,14 +100,13 @@ class TestTomoComposeTS(BaseTest):
                                        inputMicrographs=protAlign.outputMicrographs,
                                        filesPath=self.partFolderPath,
                                        time4NextTilt=20,
-                                       time4NextMic=12,
                                        time4NextTS=30)
         # self.proj.scheduleProtocol(protCompose)
         # checkOutputs(protCompose, 20)#timeout
         self.launchProtocol(protCompose)
-        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries dont composed')
+        self.assertIsNotNone(protCompose.TiltSeries, 'TiltSeries not composed')
 
-        # xcor prealigment
+        # xcor prealignment
         imod = Domain.importFromPlugin('imod.protocols', doRaise=True)
         prealigment = self.newProtocol(imod.ProtImodXcorrPrealignment,
                                        objLabel='Xcor preAlignment',

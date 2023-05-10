@@ -26,6 +26,7 @@
 # **************************************************************************
 from os.path import abspath, basename
 
+from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
@@ -33,18 +34,20 @@ from pyworkflow.utils.path import createAbsLink, removeExt
 import pyworkflow.protocol.params as params
 
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
-from ..objects import Tomogram
+from ..objects import Tomogram, SetOfTomograms
 from ..utils import _getUniqueFileName
 
 
+OUTPUT_NAME = 'Tomograms'
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfTomograms'
     _label = 'import tomograms'
     _devStatus = BETA
-
+    _possibleOutputs = {OUTPUT_NAME: SetOfTomograms}
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
+        self.Tomograms = None
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
@@ -79,7 +82,12 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                            "This is particularly relevant for loading "
                            "fragments/subunits of the whole volume.\n",
                       default=False)
-        line = form.addLine('Offset',
+
+        form.addBooleanParam('fromMrcHeader', label='From mrc header',
+                        help='Use origin information in mrc headers of the tomograms.',
+                        default=False, condition='setOrigCoord', )
+
+        line = form.addLine('Manual offset',
                             help="A wizard will suggest you possible "
                                  "coordinates for the ORIGIN. In MRC volume "
                                  "files, the ORIGIN coordinates will be "
@@ -88,15 +96,15 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                                  "coordinates, write them here. You have to "
                                  "provide the map center coordinates in "
                                  "Angstroms (pixels x sampling).\n",
-                            condition='setOrigCoord')
+                            condition='setOrigCoord and not fromMrcHeader')
         # line.addParam would produce a nicer looking form
         # but them the wizard icon is drawn outside the visible
         # window. Until this bug is fixed form is a better option
-        form.addParam('x', params.FloatParam, condition='setOrigCoord',
+        form.addParam('x', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
                       label="x", help="offset along x axis (Angstroms)")
-        form.addParam('y', params.FloatParam, condition='setOrigCoord',
+        form.addParam('y', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
                       label="y", help="offset along y axis (Angstroms)")
-        form.addParam('z', params.FloatParam, condition='setOrigCoord',
+        form.addParam('z', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
                       label="z", help="offset along z axis (Angstroms)")
 
     def _getImportChoices(self):
@@ -129,19 +137,34 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         self._parseAcquisitionData()
         fileNameList = []
+
         for fileName, fileId in self.iterFiles():
-            x, y, z, n = imgh.getDimensions(fileName)
 
             origin = Transform()
 
-            if self.setOrigCoord.get():
-                origin.setShiftsTuple(self._getOrigCoord())
-            else:
+            def setDefaultOrigin():
+                x, y, z, n = imgh.getDimensions(fileName)
+
                 origin.setShifts(x / -2. * samplingRate,
                                  y / -2. * samplingRate,
                                  z / -2. * samplingRate)
 
-            tomo.setOrigin(origin)  # read origin from form
+            if self.setOrigCoord.get():
+
+                if self.fromMrcHeader.get():
+
+                    if Ccp4Header.isCompatible(fileName):
+                        ccp4Header = Ccp4Header(fileName, readHeader=True)
+                        origin.setShiftsTuple(ccp4Header.getOrigin())
+                    else:
+                        self.info("File %s not compatible with mrc format. Setting default origin: geometrical center of it." % fileName)
+                        setDefaultOrigin()
+                else:
+                    origin.setShiftsTuple(self._getOrigCoord())
+            else:
+                setDefaultOrigin()
+
+            tomo.setOrigin(origin)
 
             newFileName = basename(fileName).split(':')[0]
             if newFileName in fileNameList:
@@ -158,17 +181,11 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             createAbsLink(abspath(fileName), abspath(self._getExtraPath(newFileName)))
             tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
 
-            if n == 1:  # One volume per file
-                tomo.cleanObjId()
-                tomo.setFileName(self._getExtraPath(newFileName))
-                tomoSet.append(tomo)
-            else:  # A stack of volumes per file (not common)
-                for index in range(1, n+1):
-                    tomo.cleanObjId()
-                    tomo.setLocation(index, self._getExtraPath(newFileName))
-                    tomoSet.append(tomo)
+            tomo.cleanObjId()
+            tomo.setFileName(self._getExtraPath(newFileName))
+            tomoSet.append(tomo)
 
-        self._defineOutputs(outputTomograms=tomoSet)
+        self._defineOutputs(**{OUTPUT_NAME:tomoSet})
 
     # --------------------------- UTILS functions ------------------------------
     def _getOrigCoord(self):
@@ -176,10 +193,10 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return self.hasAttribute('outputTomograms')
+        return self.Tomograms is not None
 
     def _getTomMessage(self):
-        return "Tomograms %s" % self.getObjectTag('outputTomograms')
+        return "Tomograms %s" % self.getObjectTag(OUTPUT_NAME)
 
     def _summary(self):
 
@@ -192,11 +209,9 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 if self.samplingRate.get():
                     summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
 
-                outputTomograms = getattr(self, 'outputTomograms')
+                ProtTomoImportAcquisition._summary(self, summary, self.Tomograms)
 
-                ProtTomoImportAcquisition._summary(self, summary, outputTomograms)
-
-                x, y, z = self.outputTomograms.getFirstItem().getShiftsFromOrigin()
+                x, y, z = self.Tomograms.getFirstItem().getShiftsFromOrigin()
                 summary.append(u"Tomograms Origin (x,y,z):\n"
                                u"    x: *%0.2f* (Å/px)\n"
                                u"    y: *%0.2f* (Å/px)\n"

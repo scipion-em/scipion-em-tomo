@@ -49,3 +49,4 @@ from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
 from .protocol_compose_TS import ProtComposeTS
 from .protocol_misalignTS import ProtTomoMisalignTiltSeries
 from .protocol_ctf_consensus import ProtCTFTomoSeriesConsensus
+from .protocol_fit_ellipsoid import TomoProtFitEllipsoid, XmippProtFitEllipsoid

@@ -1,3 +1,31 @@
+v3.1.9:
+  - OddEven functionality reviewed: Tilt Series set and Tomograms set have oddeven attributes/flags and
+    there is no need for separate sets anymore. odd and even are internally referenced.
+v3.1.8:
+  - SetOfSubtomoClasses improved: sampling rate set, coordinates injected
+v3.1.7:
+  - Templates tweaked: title and some mpi values
+
+  Developers:
+  - SetOfCoordinates and SetOfTiltSeries have a getTSIds method to return TS is contained (+ test)
+
+v3.1.6:
+  - Tilt order inferred from dose when tlt file has dose
+  - Fix: subtomograms with coordinates work in absence of volId
+  - HIV-HTA template: removes coords extraction and reconstruction since mapback can be done without them
+  - Import Tilt series or Import tilt series movies do not work in streaming anymore
+  - Import tomograms outputs "Tomograms" and defines possible outputs. Templates and tests adapted
+  - Pyseg workflow template fixed (extra graphs removed)
+  - HIV Reconstruction workflow template fixed (tomograms origin taken from mrc)
+  - Protocols "fit vesicles" brought here from xmipptomo. Test added with filter by normals.
+  Developers:
+    - __init__ uses logger now
+    - test_transformation fixed
+    - SetOfCoordinates refactored internally to deal better with tomograms.
+    - SetOfSubtomograms.iterCoordinates --> Mimics SetOfCoordinates behavior
+
+v3.1.5:
+ developers: hot fix, invalid import in test centralized layer
 v3.1.4:
  users:
   - cbox format from cryolo implemented to import 3d coordinates
@@ -10,6 +38,8 @@ v3.1.4:
   - Template for HIV STA improved
  developers:
   - Subtomogram has a constant for its tomoid attribute name: Subtomogram.VOL_NAME_FIELD = "_volName"
+  - Add test centralization layer (not finished, but quite advanced and operative for coordinates and subtomograms)
+
 
 v3.1.3:
  users:

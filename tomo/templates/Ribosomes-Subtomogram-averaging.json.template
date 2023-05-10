@@ -1,4 +1,4 @@
-Course 2022, day 3 :Subtomogram averaging on ribosomes (EMPIAR-10045)
+Subtomogram averaging on ribosomes (EMPIAR-10045)
 You'll need to download its dataset -> scipion3 testdata --download tomo-tutorial
 [
     {
@@ -52,7 +52,7 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "hostName": "localhost",
         "numberOfThreads": 10,
         "numberOfMpi": 1,
-        "inputTomograms": "2.outputTomograms"
+        "inputTomograms": "2.Tomograms"
     },
     {
         "object.className": "EmanProtTomoExtraction",

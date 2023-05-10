@@ -24,6 +24,10 @@
 # *
 # **************************************************************************
 
+import logging
+logger = logging.getLogger(__name__)
+
+import numpy
 from pwem.emlib.image import ImageHandler
 from .convert import *
 
@@ -103,13 +107,53 @@ def getAnglesFromMdoc(mdocFn):
 
 def getAnglesAndDosesFromTlt(tltFn):
     """ Parse the tilt-angles from tlt file. """
+
+    logger.info("Reading %s file for angles and dose." % tltFn)
     angles = []
     doses = []
+    orders = []
     with open(tltFn) as f:
         for line in f:
             line = line.strip().split(" ")
             if line:
                 angles.append(float(line[0]))
-                if len(line) == 2:
+                # If there is a second column, we take it as dose
+                if len(line) > 1:
                     doses.append(float(line[1]))
-    return angles, doses
+                #If there is a third column, we take it as tilt order
+                if len(line) > 2:
+                    orders.append(int(line[2]))
+
+    logger.info("Angles found: %s" % angles)
+
+    if doses:
+        logger.info("Doses found: %s" % doses)
+
+    if orders:
+        logger.info("Tilt order found: %s" % orders)
+    elif doses:
+        # Calculate tilt order base on dose
+        orders = getOrderFromList(doses)
+        logger.info("Tilt orders inferred from dose list. %s" % orders)
+
+
+    return angles, doses, orders
+
+def getOrderFromList(unsortedList):
+    """ Return a list with the position of each items in the sorted list
+     Example: [ 8, 5, 1 ] --> [3,2,1]
+
+     :param unsortedList: list to be sorted with ideally unique values
+
+    """
+
+    # First we sort items in the unsortedList getting the indices in the original unsortedList
+    # Ex: [ 2, 1, 0 ] --> where [1, 5, 8] were in the original unsortedList
+    sortedList = numpy.argsort(unsortedList)
+
+    orderList = [0] * len(unsortedList)
+    for i in range(len(unsortedList)):
+        finalIndex = sortedList[i]
+        orderList[finalIndex] = i+1
+
+    return orderList

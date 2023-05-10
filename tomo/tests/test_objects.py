@@ -126,6 +126,8 @@ class TestTomoModel(BaseTest):
         # Test precedents involved
         self.assertEqual(len(coords.getPrecedentsInvolved()), 1, "getPrecedentsInvolved does not seem to work")
 
+        self.assertEqual(coords.getTSIds(), [TS_1], "SetOfCoordinates.getTSIds not working.")
+
         subtomos = SetOfSubTomograms.create(self.outputPath)
         subtomos.setCoordinates3D(coords)
 
@@ -147,7 +149,7 @@ class TestTomoModel(BaseTest):
         tiltseries = SetOfTiltSeries.create(self.outputPath)
         tiltseries.setAnglesCount(3)
         ts = TiltSeries()
-        ts.setTsId("TS1")
+        ts.setTsId(TS_1)
 
         # We need to append the tilt series before adding tilt images
         tiltseries.append(ts)
@@ -168,6 +170,8 @@ class TestTomoModel(BaseTest):
 
         tiltSerieFromFile = SetOfTiltSeries(filename=tiltseries.getFileName())
         tiltSerieFromFile.loadAllProperties()
+
+        self.assertEqual(tiltSerieFromFile.getTSIds(), [TS_1], "SetOfTiltSeries.getTSIds not working.")
 
     def test_landmarks(self):
         """ Test the Landmark model"""
