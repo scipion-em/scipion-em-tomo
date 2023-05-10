@@ -118,7 +118,8 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
         form.addParam('defocusTolerance', params.FloatParam,
                       label='Tolerance value defocus',
                       condition='defocusCriteria==0', default=0.1,
-                      help="Defocus tolerance value")
+                      help="Defocus tolerance value calculates as: \n"
+                           "asb(error)/mean_defocus")
 
         form.addParam('astigmatismCriteria', params.EnumParam,
                       display=params.EnumParam.DISPLAY_HLIST,
@@ -129,7 +130,8 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
         form.addParam('astigmatismTolerance', params.FloatParam,
                       label='Tolerance value astigmatism',
                       condition='astigmatismCriteria==0', default=0.1,
-                      help="Astigmatism tolerance value")
+                      help="Astigmatism tolerance value calculated as: \n"
+                           "asb(error)/mean_astigmatism")
 
         form.addParam('resolutionCriteria', params.EnumParam,
                       display=params.EnumParam.DISPLAY_HLIST,
@@ -253,15 +255,13 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
                         failedResolutionCriteria += 1
 
                 if self.averageDefocus.get():
-                    ctf = self._fillCTFDefocus(ctf1, ctf2)
-                else:
-                    ctf = ctf1
+                    ctf1 = self._fillCTFDefocus(ctf1, ctf2)
 
                 if self.includeSecondary.get():
                     for attr in self.secondaryAttributes:
-                        copyAttribute(ctf2, ctf, attr)
+                        copyAttribute(ctf2, ctf1, attr)
 
-                ctfEstItems.append(ctf)
+                ctfEstItems.append(ctf1)
 
             restDict = {}
             if self.defocusCriteria.get() == 0:
@@ -315,7 +315,7 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
             self._ctfToMd(ctf2, md2)
             res = emlib.errorMaxFreqCTFs2D(md1, md2)
         except TypeError as exc:
-            print("Error reading ctf for id:%s. %s" % (ctf1.getObjId(), exc))
+            self.info("Error reading ctf for id:%s. %s" % (ctf1.getObjId(), exc))
             res = 0  # more coherent number
         return res
 
@@ -377,10 +377,9 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
                 angles.append(freq_angle[1])
             fig, ax = plt.subplots()
             ax.plot(angles, consfreqs)
-            ax.set(xlabel='angles (degrees)', ylabel='consensus frequency (A)',
-                   title=tsId + " Frequency")
+            ax.set(xlabel='angles (degrees)', ylabel='consensus resolution (A)',
+                   title=tsId + " Resolution")
             ax.grid()
-            # plt.show()
             plt.savefig(self._getExtraPath(tsId+"_resolution.png"))
 
     def plotDefocusError(self):
@@ -392,10 +391,9 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
                 angles.append(df_angle[1])
             fig, ax = plt.subplots()
             ax.plot(angles, consdfs)
-            ax.set(xlabel='angles (degrees)', ylabel='consensus defocus tolerance',
+            ax.set(xlabel='Angles (degrees)', ylabel='Relative error',
                    title=tsId + " Defocus")
             ax.grid()
-            # plt.show()
             plt.savefig(self._getExtraPath(tsId+"_defocus.png"))
 
     def plotAstigError(self):
@@ -407,11 +405,19 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
                 angles.append(astig_angle[1])
             fig, ax = plt.subplots()
             ax.plot(angles, consAstig)
-            ax.set(xlabel='angles (degrees)', ylabel='consensus astigmatism tolerance',
+            ax.set(xlabel='Angles (degrees)', ylabel='Relative error',
                    title=tsId + " Astigmatism")
             ax.grid()
-            # plt.show()
             plt.savefig(self._getExtraPath(tsId+"_astigmatism.png"))
+
+    def getAstigErrorPlot(self, tsId):
+        return self._getExtraPath(tsId+'_astigmatism.png')
+
+    def getDefocusErrorPlot(self, tsId):
+        return self._getExtraPath(tsId + '_defocus.png')
+
+    def getResolutionErrorPlot(self, tsId):
+        return self._getExtraPath(tsId + '_resolution.png')
 
 # -------------------------------- UTILS -----------------------------------------
 def _calculateDiff(value1, value2):

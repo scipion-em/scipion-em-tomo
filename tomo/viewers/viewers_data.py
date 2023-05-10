@@ -189,6 +189,10 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         """ To be implemented in the viewers. """
         return None
 
+    def plotExtra(self, ctfSet, ctfId):
+        """ To be implemented in the viewers. """
+        return None
+
     def visualize(self, obj, windows=None, protocol=None):
         if not isinstance(obj, EMProtocol):
             self.visualizeSet(obj)
@@ -209,7 +213,8 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         CtfEstimationListDialog(self._tkParent, self._title, self._provider,
                                 self._protocol, self._inputSetOfTiltSeries,
                                 plot1Dfunc=self.getPlot1DCallback(),
-                                plot2Dfunc=self.getPlot2DCallback())
+                                plot2Dfunc=self.getPlot2DCallback(),
+                                plotExtrafunc=self.getPlotExtraCallback())
 
     def getPlot1DCallback(self):
         if not pwutils.isSameFunction(self.plot1D,
@@ -221,6 +226,12 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
         if not pwutils.isSameFunction(self.plot2D,
                                       CtfEstimationTomoViewer.plot2D):
             return self.plot2D
+        return None
+
+    def getPlotExtraCallback(self):
+        if not pwutils.isSameFunction(self.plotExtra,
+                                      CtfEstimationTomoViewer.plotExtra):
+            return self.plotExtra
         return None
 
 
