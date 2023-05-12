@@ -47,4 +47,5 @@ from .protocol_rotate_astigmatism import ProtRotateAstigmatism
 from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
 from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
 from .protocol_compose_TS import ProtComposeTS
-from .protocol_misalignTS import XmippProtMisalignTiltSeries
+from .protocol_misalignTS import ProtTomoMisalignTiltSeries
+from .protocol_fit_ellipsoid import TomoProtFitEllipsoid, XmippProtFitEllipsoid

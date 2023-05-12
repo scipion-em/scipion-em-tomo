@@ -294,7 +294,7 @@ class TestTomoSubSetsTomograms(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('*.em')
 
-    def _runImportTomograms(self):
+    def _runImportTomograms(self)->tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -325,7 +325,7 @@ class TestTomoSubSetsTomograms(BaseTest):
         protImport = self._runImportTomograms()
 
         # Check importing
-        for tomo in protImport.outputTomograms.iterItems():
+        for tomo in protImport.Tomograms.iterItems():
             self.assertTrue(tomo.getXDim() == 1024,
                             "There was a problem with Import Tomograms protocol")
             self.assertIsNotNone(tomo.getYDim() == 1024,
@@ -344,7 +344,7 @@ class TestTomoSubSetsTomograms(BaseTest):
                                        chooseAtRandom=True,
                                        nElements=1)
 
-        tomoSubset1.inputFullSet.set(protImport.outputTomograms)
+        tomoSubset1.inputFullSet.set(protImport.Tomograms)
         self.launchProtocol(tomoSubset1)
 
         # Create a subset with 2 tomograms
@@ -356,7 +356,7 @@ class TestTomoSubSetsTomograms(BaseTest):
                                        setOperation=1,
                                        nElements=1)
 
-        tomoSubset2.inputFullSet.set(protImport.outputTomograms)
+        tomoSubset2.inputFullSet.set(protImport.Tomograms)
         self.launchProtocol(tomoSubset2)
 
         # Create a subset with 3 tomograms
@@ -366,7 +366,7 @@ class TestTomoSubSetsTomograms(BaseTest):
                                        chooseAtRandom=True,
                                        nElements=2)
 
-        tomoSubset3.inputFullSet.set(protImport.outputTomograms)
+        tomoSubset3.inputFullSet.set(protImport.Tomograms)
         self.launchProtocol(tomoSubset3)
 
         # create merge protocol
@@ -434,17 +434,17 @@ class TestTomoSubSetsSubTomograms(BaseTest):
 
     def _runImportSubTomograms(self):
 
-        protImportSubTomogram = self.newProtocol(
+        protImportTomogram = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
             samplingRate=5)
-        self.launchProtocol(protImportSubTomogram)
+        self.launchProtocol(protImportTomogram)
 
         protImportCoordinates3d = self.newProtocol(
             tomo.protocols.ProtImportCoordinates3D,
             auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_FILES,
             filesPath=self.coords3D,
-            importTomograms=protImportSubTomogram.outputTomograms,
+            importTomograms=protImportTomogram.Tomograms,
             filesPattern='', boxSize=32,
             samplingRate=5)
         self.launchProtocol(protImportCoordinates3d)
@@ -705,7 +705,7 @@ class TestTomoAssignTomo2Subtomo(BaseTest):
         protImportTomo, protImportSubtomo = self._runPreviousProtocols()
         tomo2subtomo = self.newProtocol(tomo.protocols.ProtAssignTomo2Subtomo,
                                         inputSubtomos=protImportSubtomo.outputSubTomograms,
-                                        inputTomos=protImportTomo.outputTomograms)
+                                        inputTomos=protImportTomo.Tomograms)
         self.launchProtocol(tomo2subtomo)
         self.assertIsNotNone(tomo2subtomo.outputSubtomograms,
                              "There was a problem with subtomograms output")
@@ -830,7 +830,7 @@ class TestTomoSplitEvenOdd(BaseTest):
                                           samplingRate=1.35)
         self.launchProtocol(protImportTomo)
         split = self.newProtocol(tomo.protocols.ProtSplitEvenOddTomoSet,
-                                 inputSet=protImportTomo.outputTomograms)
+                                 inputSet=protImportTomo.Tomograms)
         self.launchProtocol(split)
         self.assertIsNotNone(split.outputset_even,
                              "There was a problem with even tomograms output")

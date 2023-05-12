@@ -238,3 +238,9 @@ DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
 DataViewer.registerConfig(tomo.objects.SetOfMeshes)
 DataViewer.registerConfig(tomo.objects.SetOfLandmarkModels)
 DataViewer.registerConfig(tomo.objects.SetOfCTFTomoSeries)
+DataViewer.registerConfig(tomo.objects.SetOfTomograms,
+                          config={MODE:MODE_MD,
+                                  VISIBLE:'id _filename %s %s' %
+                                          (tomo.objects.Tomogram.TS_ID_FIELD,
+                                           tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD)})
+
