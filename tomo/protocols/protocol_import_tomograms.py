@@ -26,7 +26,7 @@
 # **************************************************************************
 from os.path import abspath, basename
 
-from pwem import Ccp4Header
+from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
