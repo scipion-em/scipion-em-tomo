@@ -121,7 +121,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
-        self.CloseStep_ID = self._insertFunctionStep('closeSet',
+        self.CloseStep_ID = self._insertFunctionStep(self.closeSet,
                                                      prerequisites=[],
                                                      wait=True)
         self.newSteps.append(self.CloseStep_ID)
@@ -168,9 +168,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             self.updateSteps()
 
 
-
     def closeSet(self):
-        pass
+        self.info('closeSet')
+        for _, outputset in self.iterOutputAttributes():
+            outputset.setStreamState(Set.STREAM_CLOSED)
+
+        self._store()
 
     def _getFirstJoinStep(self):
         for s in self._steps:
@@ -378,7 +381,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.setingTS(SOTS, ts_obj, file_ordered_angle_list,
                       incoming_dose_list, accumulated_dose_list)
 
-        #SOTS.setStreamState(SOTS.STREAM_CLOSED)
+        SOTS.setStreamState(SOTS.STREAM_CLOSED)
         ts_obj.write(properties=False)
         SOTS.update(ts_obj)
         SOTS.updateDim()
