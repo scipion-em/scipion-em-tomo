@@ -55,7 +55,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.stepsExecutionMode = STEPS_PARALLEL  # Defining that the protocol contain parallel steps
-        self.newSteps = []
         self.listMdocsRead = []
         self.list_reading = []
         self.TiltSeries = None
@@ -124,7 +123,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.CloseStep_ID = self._insertFunctionStep(self.closeSet,
                                                      prerequisites=[],
                                                      wait=True)
-        self.newSteps.append(self.CloseStep_ID)
 
     def _stepsCheck(self):
         """
@@ -162,10 +160,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             #self.listMdocsRead.append(list_remain[0])
             self.time4NextTS_current = time.time()
             self.list_reading.append(self.list_remain[0])
-            new_step_id = self._insertFunctionStep('readMdoc', self.list_remain[0],
+            self._insertFunctionStep('readMdoc', self.list_remain[0],
                                                    prerequisites=[], wait=False)
-            self.newSteps.append(new_step_id)
             self.updateSteps()
+
+
 
 
     def closeSet(self):
@@ -381,7 +380,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.setingTS(SOTS, ts_obj, file_ordered_angle_list,
                       incoming_dose_list, accumulated_dose_list)
 
-        SOTS.setStreamState(SOTS.STREAM_CLOSED)
+        #SOTS.setStreamState(SOTS.STREAM_CLOSED)
         ts_obj.write(properties=False)
         SOTS.update(ts_obj)
         SOTS.updateDim()
