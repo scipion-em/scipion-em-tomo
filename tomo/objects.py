@@ -1695,9 +1695,9 @@ class SubTomogram(data.Volume):
         """
         if self._volName.hasValue():
             return self._volName.get()
-        # getVolume does not exists!
-        # if self.getVolume():
-        #     return self.getVolume().getFileName()
+
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolName()
 
         return "Missing"
 
@@ -1705,7 +1705,7 @@ class SubTomogram(data.Volume):
         self._volName.set(volName)
 
     def getVolumeOrigin(self, angstrom=False):
-        """Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the vector that can be used to move the position of the Coordinate3D
         associated to the SubTomogram (referred to the center of the Tomogram or other
         origin specified by the user) to the bottom left corner of the Tomogram
         """
