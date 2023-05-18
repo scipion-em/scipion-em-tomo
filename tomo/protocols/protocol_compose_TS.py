@@ -30,22 +30,27 @@ from pwem.protocols.protocol_import.base import ProtImport
 import pyworkflow as pw
 from pyworkflow.protocol import params, STEPS_PARALLEL
 import pyworkflow.protocol.constants as cons
+from pyworkflow.object import Set
 from tomo.convert.mdoc import MDoc
 import pwem.objects as emobj
 import tomo.objects as tomoObj
+from tomo.objects import SetOfTiltSeries
 from pwem.objects.data import Transform
 from pyworkflow.object import Integer
 from tomo.protocols import ProtTomoBase
 from pwem.emlib.image import ImageHandler
 
+OUT_STS = "TiltSeries"
+
 
 class ProtComposeTS(ProtImport, ProtTomoBase):
-    """ Compose in streaming a set of tilt series based on a sets of micrographs and mdoc files.
+    """ Compose in streaming a set of tilt series based on a set of micrographs and mdoc files.
     Two time parameters are abailable for the streaming behaviour:
-    Time for next tilt and Time for next Tilt Serie
+    Time to next tilt and time to next tilt serie
     """
     _devStatus = pw.BETA
     _label = 'Compose Tilt Serie'
+    _possibleOutputs = {OUT_STS: SetOfTiltSeries}
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
@@ -62,14 +67,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     def _defineParams(self, form):
         form.addSection(label='Import')
 
-        form.addParam('inputMicrographs', params.PointerParam,
+        form.addParam('inputMicrographs', params.PointerParam, allowsNull=False,
                       pointerClass='SetOfMicrographs',
                       important=True,
                       label="Input micrographs",
                       help='Select the SetOfMicrographs to import')
 
         form.addParam('filesPath', params.PathParam,
-                      label="Files directory ot the tiltSerie files",
+                      label="Path with the *.mdoc files for each TiltSerie",
                       help="Root directory of the tilt-series. "
                            "Will be search the *.mdoc file for each Tilt Serie")
 
@@ -123,7 +128,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _stepsCheck(self):
         """
-        Read all the mdoc files abailable, sort by date and run 'readMdoc'
+        Read all available mdoc files, sort them by date and runs 'readMdoc'
 
         """
         current_time = time.time()
@@ -141,12 +146,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             self.info('Time waiting next Tilt Serie has expired. ({}s)'.format(
                 str(self.time4NextTS.get())))
             output_step = self._getFirstJoinStep()
+            self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
             if output_step and output_step.isWaiting():
                 output_step.setStatus(cons.STATUS_NEW)
 
         elif self.list_remain == [] and self._loadInputList()[1] == False:
             self.info('There is no more mdoc file to read and the set of micrographs is closed')
             output_step = self._getFirstJoinStep()
+            self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
             if output_step and output_step.isWaiting():
                 output_step.setStatus(cons.STATUS_NEW)
 
@@ -208,7 +215,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.info('mdoc file {} is considered closed'.format(os.path.basename(file2read)))
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
-                self.info('Mdoc error. Less than 3 tilts in the serie')
+                self.info('Mdoc error. Less than 3 tilts on the serie')
                 self.listMdocsRead.append(file2read)
 
             elif self.matchTS(mdoc_order_angle_list, file2read):
@@ -273,13 +280,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         len_mics_input_1, streamOpen = self._loadInputList()
         # STREAMING CHECKPOINT
         while len(mdoc_order_angle_list) > len_mics_input_1 and streamOpen == True:
-            self.info('Tilts in the mdoc {}: {} Micrographs abailables: {}'.format(
+            self.info('Tilts on the mdoc {}: {} Micrographs abailables: {}'.format(
                 os.path.basename(file2read), len(mdoc_order_angle_list), len(self.listOfMics)))
             self.info('Waiting next micrograph...')
             time.sleep(self.time4NextMic)
             len_mics_input_1, streamOpen = self._loadInputList()
 
-        self.info('Tilts in the mdoc file: {}\n'
+        self.info('Tilts on the mdoc file: {}\n'
                   'Micrographs availables: {}'.format(
             len(mdoc_order_angle_list), len(self.listOfMics)))
 
@@ -315,7 +322,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         mic_set.loadAllProperties()
         self.listOfMics = [m.clone() for m in mic_set]
         mic_set.close()
-        return len(self.listOfMics), mic_set.isStreamOpen()
+        return len(self.listOfMics), self.inputMicrographs.get().isStreamOpen()
 
     def createTS(self, mdoc_obj):
         """
@@ -371,7 +378,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         self.setingTS(SOTS, ts_obj, file_ordered_angle_list,
                       incoming_dose_list, accumulated_dose_list)
 
-        SOTS.setStreamState(SOTS.STREAM_CLOSED)
+        #SOTS.setStreamState(SOTS.STREAM_CLOSED)
         ts_obj.write(properties=False)
         SOTS.update(ts_obj)
         SOTS.updateDim()
@@ -450,9 +457,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         return '%s_%02d' % (tim.getTsId(), tim.getObjId())
 
     def _validate(self):
-        errors = [] if len(self.inputMicrographs.get()) > 1 else \
-            ["More than one Input micrographs is needed to run."]
-        return errors
+        pass
 
 
     def _summary(self):
