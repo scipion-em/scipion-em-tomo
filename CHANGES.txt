@@ -4,6 +4,9 @@ v3.1.9:
   - Added a new ctf tomo viewer (CtfConsensusTomoViewer)
   - ComposeTS: allowNull control added, removed validation and added _possibleOutputs
 
+  Developers:
+  - SubTomogram.getVolName() uses Coordinate3D.getTomoId()
+
 v3.1.8:
   - SetOfSubtomoClasses improved: sampling rate set, coordinates injected
 v3.1.7:
