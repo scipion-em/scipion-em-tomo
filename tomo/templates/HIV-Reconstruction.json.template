@@ -4,7 +4,7 @@ Reconstruction of HIV EMPIAR10164. INSTRUCTIONS: Download tilt series 01, 03 and
         "object.className": "ProtImportTsMovies",
         "object.id": "8340",
         "object.label": "tomo - import tilt-series movies",
-        "object.comment": "HOW TH GET THE DATA: Download the movies for 01, 03 and 54 tilt series. Place its mdoc files in the same folder where the movies are."
+        "object.comment": "HOW TO GET THE DATA: Download the movies for 01, 03 and 54 tilt series. Place its mdoc files in the same folder where the movies are.",
         "_useQueue": false,
         "_prerequisites": "",
         "_queueParams": null,
