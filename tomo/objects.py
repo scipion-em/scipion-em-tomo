@@ -132,6 +132,28 @@ class TiltImageBase:
         self._tiltAngle = Float(tiltAngle)
         self._tsId = String(tsId)
         self._acqOrder = Integer(acquisitionOrder)
+        self._oddEvenFileNames = CsvList(pType=str) #IMPORTANT: The odd is the first one and the even the second one
+
+    def hasOddEven(self):
+        return not self._oddEvenFileNames.isEmpty()
+
+    def getOddEven(self):
+        return self._oddEvenFileNames
+
+    def getOdd(self):
+        return self._oddEvenFileNames[0]
+
+    def getEven(self):
+        return self._oddEvenFileNames[1]
+
+    def setOdd(self, fnOdd):
+        self._oddEvenFileNames[0] = fnOdd
+
+    def setEven(self, fnEven):
+        self._oddEvenFileNames[1] = fnEven
+
+    def setOddEven(self, listFileNames):
+        self._oddEvenFileNames.set(listFileNames)
 
     def getTsId(self):
         """ Get unique TiltSerie ID, usually retrieved from the
@@ -160,7 +182,8 @@ class TiltImageBase:
             self.copyObjId(other)
         if copyTM and other.hasTransform():
             self.copyAttributes(other, '_transform')
-
+        if other.hasOddEven():
+            self.copyAttributes(other, '_oddEvenFileNames')
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
@@ -168,6 +191,7 @@ class TiltImage(data.Image, TiltImageBase):
     def __init__(self, location=None, **kwargs):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
+
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
@@ -192,7 +216,7 @@ class TiltImage(data.Image, TiltImageBase):
         return fileName + suffix + fileExtension
 
 
-TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment']
+TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
 
 class TiltSeriesBase(data.SetOfImages):
@@ -207,11 +231,15 @@ class TiltSeriesBase(data.SetOfImages):
         self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
+        self._hasOddEven = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
 
     def getAnglesCount(self):
         return self._anglesCount
+
+    def hasOddEven(self):
+        return self._hasOddEven.get()
 
     def setAnglesCount(self, value):
 
@@ -267,6 +295,9 @@ class TiltSeriesBase(data.SetOfImages):
 
         if tiltImage.hasTransform():
             self._hasAlignment.set(True)
+
+        if tiltImage.hasOddEven():
+            self._hasOddEven.set(True)
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
@@ -374,6 +405,10 @@ def tiltSeriesToString(tiltSeries):
     # CTF status
     if tiltSeries.ctfCorrected():
         s.append('+ctf')
+
+    # Odd even associated
+    if tiltSeries.hasOddEven():
+        s.append('+oe')
 
     return (", " + ", ".join(s)) if len(s) else ""
 
@@ -616,8 +651,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._anglesCount = Integer()
         self._acquisition = TomoAcquisition()
         self._hasAlignment = Boolean(False)
+        self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
+
+    def hasOddEven(self):
+        return self._hasOddEven.get()
 
     def getAnglesCount(self):
         return self._anglesCount.get()
@@ -722,6 +761,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
+        self._hasOddEven.set(item.hasOddEven())
 
         super().update(item)
 
@@ -1071,10 +1111,32 @@ class SetOfTomograms(data.SetOfVolumes):
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
+        self._hasOddEven = Boolean(False)
+
+    def hasOddEven(self):
+        return self._hasOddEven.get()
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
+
+    def __str__(self):
+        sampling = self.getSamplingRate()
+        tomoStr = "+oe," if self.hasOddEven() else ''
+
+        if not sampling:
+            logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
+                         % self.getName())
+            sampling = -999.0
+
+        s = "%s (%d items, %s, %s %0.2f Å/px%s)" % \
+            (self.getClassName(), self.getSize(),
+             self._dimStr(), tomoStr, sampling, self._appendStreamState())
+        return s
+
+    def update(self, item: Tomogram):
+        self._hasOddEven.set(item.hasHalfMaps())
+        super().update(item)
 
 
 class TomoMask(Tomogram):
@@ -1633,9 +1695,9 @@ class SubTomogram(data.Volume):
         """
         if self._volName.hasValue():
             return self._volName.get()
-        # getVolume does not exists!
-        # if self.getVolume():
-        #     return self.getVolume().getFileName()
+
+        if self.hasCoordinate3D():
+            return self.getCoordinate3D().getVolName()
 
         return "Missing"
 
@@ -1643,7 +1705,7 @@ class SubTomogram(data.Volume):
         self._volName.set(volName)
 
     def getVolumeOrigin(self, angstrom=False):
-        """Return the a vector that can be used to move the position of the Coordinate3D
+        """Return the vector that can be used to move the position of the Coordinate3D
         associated to the SubTomogram (referred to the center of the Tomogram or other
         origin specified by the user) to the bottom left corner of the Tomogram
         """

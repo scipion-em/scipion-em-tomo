@@ -821,6 +821,7 @@ class CtfEstimationListDialog(ListDialog):
         # the funcs below should be implemented in viewers
         self._show1DPLot = kwargs.pop('plot1Dfunc', None)
         self._show2DPLot = kwargs.pop('plot2Dfunc', None)
+        self._showExtraPlot = kwargs.pop('plotExtrafunc', None)
         ListDialog.__init__(self, parent, title, provider, allowSelect=False,
                             cancelButton=True, **kwargs)
 
@@ -856,6 +857,8 @@ class CtfEstimationListDialog(ListDialog):
         self._createSubsetButton(topRigthPanel)
         if self._show1DPLot is not None:
             self._createShowFit(topRigthPanel)
+        if self._showExtraPlot is not None:
+            self._createShowExtra(topRigthPanel)
         self._createViewerHelp(topRigthPanel)
 
     def _createSubsetButton(self, topRigthPanel):
@@ -891,6 +894,26 @@ class CtfEstimationListDialog(ListDialog):
                         plot = self._show1DPLot(ctfSerie, ctfId)
                         plot.show()
                         break
+
+    def _createShowExtra(self, topRigthPanel):
+        self.createShowFitButton = self._addButton(topRigthPanel, 'Extra plots',
+                                                   pwutils.Icon.ACTION_RESULTS, self._showExtra,
+                                                   state=tk.DISABLED,
+                                                   sticky='ne')
+
+    def _showExtra(self, event=None):
+        itemSelected = self.tree.getSelectedItem()
+        obj = self.tree.getSelectedObj()
+        if self.tree.parent(itemSelected):  # child item
+            if obj is not None:
+                for ctfSerie in self.provider.getCTFSeries():
+                    if ctfSerie.getTsId() in itemSelected:
+                        # TODO: sort ctfSerie by id
+                        ctfId = int(itemSelected.split('.')[-1])
+                        plot = self._showExtraPlot(ctfSerie, ctfId)
+                        plot.show()
+                        break
+
 
     def _actionCreateSets(self, event=None):
         if self.generateSubsetButton['state'] == tk.NORMAL:
@@ -1087,9 +1110,14 @@ class CtfEstimationListDialog(ListDialog):
             if self.tree.parent(itemSelected):  # child item
                 if self._show1DPLot is not None:
                     self.createShowFitButton['state'] = tk.NORMAL
+                if self._showExtraPlot is not None:
+                    self.createShowFitButton['state'] = tk.NORMAL
                 self.plotterChildItem(itemSelected)
 
             else:  # parent item
                 if self._show1DPLot is not None:
                     self.createShowFitButton['state'] = tk.DISABLED
+                if self._showExtraPlot is not None:
+                    self.createShowFitButton['state'] = tk.DISABLED
+
                 self.plotterParentItem(itemSelected)
