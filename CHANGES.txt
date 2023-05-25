@@ -1,3 +1,6 @@
+v3.1.10:
+  - Reconstruction template fixed.
+  - Relion 4 /dynamo  template tweaked. Specifically dynamo alignment
 v3.1.9:
   - OddEven functionality reviewed: Tilt Series set and Tomograms set have oddeven attributes/flags and
     there is no need for separate sets anymore. odd and even are internally referenced.
