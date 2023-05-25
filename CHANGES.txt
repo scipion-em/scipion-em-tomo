@@ -2,6 +2,7 @@ v3.1.10:
   - Reconstruction template fixed.
   - Relion 4 /dynamo  template tweaked. Specifically dynamo alignment
 v3.1.9:
+  - HIV template tweaked: one 3d classification removed. Mapback uses the 3d class.
   - OddEven functionality reviewed: Tilt Series set and Tomograms set have oddeven attributes/flags and
     there is no need for separate sets anymore. odd and even are internally referenced.
   - Added a new ctf tomo viewer (CtfConsensusTomoViewer)
@@ -12,6 +13,7 @@ v3.1.9:
 
 v3.1.8:
   - SetOfSubtomoClasses improved: sampling rate set, coordinates injected
+
 v3.1.7:
   - Templates tweaked: title and some mpi values
 
