@@ -55,7 +55,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.stepsExecutionMode = STEPS_PARALLEL  # Defining that the protocol contain parallel steps
-        self.newSteps = []
         self.listMdocsRead = []
         self.list_reading = []
         self.TiltSeries = None
@@ -121,10 +120,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self._initialize)
-        self.CloseStep_ID = self._insertFunctionStep('closeSet',
+        self.CloseStep_ID = self._insertFunctionStep(self.closeSet,
                                                      prerequisites=[],
                                                      wait=True)
-        self.newSteps.append(self.CloseStep_ID)
 
     def _stepsCheck(self):
         """
@@ -162,15 +160,19 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             #self.listMdocsRead.append(list_remain[0])
             self.time4NextTS_current = time.time()
             self.list_reading.append(self.list_remain[0])
-            new_step_id = self._insertFunctionStep('readMdoc', self.list_remain[0],
+            self._insertFunctionStep('readMdoc', self.list_remain[0],
                                                    prerequisites=[], wait=False)
-            self.newSteps.append(new_step_id)
             self.updateSteps()
 
 
 
+
     def closeSet(self):
-        pass
+        self.info('closeSet')
+        for _, outputset in self.iterOutputAttributes():
+            outputset.setStreamState(Set.STREAM_CLOSED)
+
+        self._store()
 
     def _getFirstJoinStep(self):
         for s in self._steps:
