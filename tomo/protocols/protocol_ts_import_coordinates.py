@@ -32,9 +32,10 @@ from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
+from pyworkflow.object import Set
 from pyworkflow.plugin import Domain
 
-from ..objects import SetOfCoordinates3D
+from ..objects import SetOfCoordinates3D, SetOfTiltSeriesCoordinates
 from .protocol_base import ProtTomoImportFiles
 from ..convert import TomoImport, EmTableCoordImport
 from ..utils import existsPlugin
@@ -43,6 +44,7 @@ import tomo.constants as const
 
 IMPORT_FROM_TXT = 'txt'
 IMPORT_FROM_IMOD = 'imod'
+OUTPUT_TS_COORDINATES_NAME = "TiltSeriesCoordinates"
 
 
 class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
@@ -91,6 +93,8 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
         print(self.fileList_noExt)
         print(tsId)
 
+        output = self.getOutputSetOfTiltSeriesCoordinates(self.inputSetOfTiltSeries.get())
+
         for file in self.fileList_noExt:
             if tsId in file:
                 print("ole ole")
@@ -100,6 +104,24 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
         importFrom = self._getImportChoices()[self.importFrom.get()]
 
         return importFrom
+
+    def getOutputSetOfTiltSeriesCoordinates(self, setOfTiltSeries=None):
+
+        if self.TiltSeriesCoordinates:
+            self.TiltSeriesCoordinates.enableAppend()
+
+        else:
+            outputSetOfCoordinates3D = SetOfTiltSeriesCoordinates.create(self._getPath(),
+                                                                         suffix='tsCoords')
+
+            outputSetOfCoordinates3D.setSetOfTiltSeries(setOfTiltSeries)
+            outputSetOfCoordinates3D.setStreamState(Set.STREAM_OPEN)
+
+            self._defineOutputs(**{OUTPUT_TS_COORDINATES_NAME: outputSetOfCoordinates3D})
+            self._defineSourceRelation(setOfTiltSeries, outputSetOfCoordinates3D)
+
+        return self.TiltSeriesCoordinates
+
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
