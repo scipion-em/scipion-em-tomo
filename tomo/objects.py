@@ -718,7 +718,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, **kwargs):
+    def iterItems(self, **kwargs)->TiltSeriesBase:
         for item in data.EMSet.iterItems(self, **kwargs):
             self._setItemMapperPath(item)
             yield item
@@ -2038,7 +2038,7 @@ class LandmarkModel(data.EMObject):
             self.setCount(len(self._chains))
 
     def retrieveInfoTable(self):
-        """ This method returns a table containing the information of the landkmark model. One landmark pero line
+        """ This method returns a table containing the information of the landkmark model. One landmark per line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -2083,7 +2083,7 @@ class SetOfLandmarkModels(data.EMSet):
         """This method completes a landmark model object setting in execution time the tilt-series associated to it,
         since it is not possible to save pointers in the item classes of the set.
 
-        IMPORTANT: this method must be implement every time it is necesary to retrive information from the tilt-series
+        IMPORTANT: this method must be used every time is necessary to retrieve information from the tilt-series
         associated to the landmark models that compose the set."""
 
         tsId = lm.getTsId()
@@ -2102,7 +2102,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer=False):
+    def getSetOfTiltSeries(self, pointer=False)->SetOfTiltSeries:
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:
