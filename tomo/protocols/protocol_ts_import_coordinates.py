@@ -25,23 +25,15 @@
 # *
 # **************************************************************************
 
-import os
-from os.path import basename
-
 from imod import utils
 from pyworkflow import BETA
-import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
-from pyworkflow.plugin import Domain
 
-from ..objects import SetOfCoordinates3D, SetOfTiltSeriesCoordinates, TiltSeriesCoordinate
+from ..objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate
 from .protocol_base import ProtTomoImportFiles
-from ..convert import TomoImport, EmTableCoordImport
 from ..utils import existsPlugin
-
-import tomo.constants as const
 
 IMPORT_FROM_TXT = 'txt'
 IMPORT_FROM_IMOD = 'imod'
@@ -85,8 +77,10 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
         self.fileList = [file for file, _ in self.iterFiles()]
 
         for ts in self.inputSetOfTiltSeries.get():
-            self._insertFunctionStep('importCoordinatesStep',
+            self._insertFunctionStep(self.importCoordinatesStep,
                                      ts.getObjId())
+
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
 
@@ -112,6 +106,12 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
 
             self.TiltSeriesCoordinates.append(newCoord3D)
         self.TiltSeriesCoordinates.write()
+        self._store()
+
+    def createOutputStep(self):
+        if self.TiltSeriesCoordinates:
+            self.TiltSeriesCoordinates.setStreamState(Set.STREAM_CLOSED)
+
         self._store()
 
     # ------------------ UTILS functions --------------------------------------
