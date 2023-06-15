@@ -28,6 +28,7 @@
 import os
 from os.path import basename
 
+from imod import utils
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 
@@ -35,7 +36,7 @@ import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
 from pyworkflow.plugin import Domain
 
-from ..objects import SetOfCoordinates3D, SetOfTiltSeriesCoordinates
+from ..objects import SetOfCoordinates3D, SetOfTiltSeriesCoordinates, TiltSeriesCoordinate
 from .protocol_base import ProtTomoImportFiles
 from ..convert import TomoImport, EmTableCoordImport
 from ..utils import existsPlugin
@@ -66,7 +67,10 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
 
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
+
         self.OUTPUT_PREFIX = "outputCoordinates"
+
+        self.TiltSeriesCoordinates = None
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
@@ -78,7 +82,7 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
                       label='Input set of tilt-series')
 
     def _insertAllSteps(self):
-        self.fileList_noExt = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+        self.fileList = [file for file, _ in self.iterFiles()]
 
         for ts in self.inputSetOfTiltSeries.get():
             self._insertFunctionStep('importCoordinatesStep',
@@ -90,14 +94,25 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
         ts = self.inputSetOfTiltSeries.get()[tsObjId]
         tsId = ts.getTsId()
 
-        print(self.fileList_noExt)
-        print(tsId)
+        self.getOutputSetOfTiltSeriesCoordinates(self.inputSetOfTiltSeries.get())
 
-        output = self.getOutputSetOfTiltSeriesCoordinates(self.inputSetOfTiltSeries.get())
+        for coordFilePath in self.fileList:
+            if tsId in coordFilePath:
+                break
 
-        for file in self.fileList_noExt:
-            if tsId in file:
-                print("ole ole")
+        coordList, xDim, yDim = utils.format3DCoordinatesList(coordFilePath)
+
+        for element in coordList:
+            newCoord3D = TiltSeriesCoordinate()
+            newCoord3D.setTsId(ts.getTsId())
+            newCoord3D.setPosition(element[0] - (xDim / 2),
+                                   element[1] - (yDim / 2),
+                                   element[2],
+                                   sampling_rate=ts.getSamplingRate())
+
+            self.TiltSeriesCoordinates.append(newCoord3D)
+        self.TiltSeriesCoordinates.write()
+        self._store()
 
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):
