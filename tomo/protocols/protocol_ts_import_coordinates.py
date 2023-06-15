@@ -59,7 +59,7 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
             importChoices.append(IMPORT_FROM_IMOD)
         return importChoices
 
-    def  _defineAcquisitionParams(self, form):
+    def _defineAcquisitionParams(self, form):
         pass
 
     def __init__(self, **args):
@@ -69,13 +69,31 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
 
+        form.addParam('inputSetOfTiltSeries',
+                      params.PointerParam,
+                      pointerClass='SetOfTiltSeries',
+                      important=True,
+                      label='Input set of tilt-series')
+
     def _insertAllSteps(self):
-        self._insertFunctionStep('importCoordinatesStep')
+        self.fileList_noExt = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
+
+        for ts in self.inputSetOfTiltSeries.get():
+            self._insertFunctionStep('importCoordinatesStep',
+                                     ts.getObjId())
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importCoordinatesStep(self, samplingRate):
-        pass
+    def importCoordinatesStep(self, tsObjId):
+        ts = self.inputSetOfTiltSeries.get()[tsObjId]
+        tsId = ts.getTsId()
+
+        print(self.fileList_noExt)
+        print(tsId)
+
+        for file in self.fileList_noExt:
+            if tsId in file:
+                print("ole ole")
 
     # ------------------ UTILS functions --------------------------------------
     def getImportFrom(self):
@@ -95,38 +113,34 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
         return methods
 
     def _validate(self):
-        errors = []
+        validateMsgs = []
 
-        return errors
+        match = False
+
+        for ts in self.inputSetOfTiltSeries.get():
+            tsId = ts.getTsId()
+
+            for coordsFilePath, _ in self.iterFiles():
+                if tsId in coordsFilePath:
+                    match = True
+                    break
+
+            if not match:
+                validateMsgs.append("No coordinates file found for tilt-series %s: image file is %s and have not "
+                                    "found its exact match." % (tsId, ts.getFileName()))
+
+            match = False
+
+        return validateMsgs
 
     def _warnings(self):
+        pass
         warnings = []
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
+
         if not existsPlugin('imod'):
             warnings.append('Plugin *scipion-em-imod* has not being installed. Please, install the Plugin to '
                             'import IMOD related formats (currently supported formats: ".txt"). Otherwise, the '
                             'protocol may have unexpected outputs if Eman files are attempted to be imported.\n')
-        if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
-                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
-                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
-                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                            "- '.txt', '.tbl', '.json').\n")
-            # mismatches_coords = set(coordFiles).difference(tomoFiles)
-            # if mismatches_coords:
-            #     warnings.append("The following coordinate files will not be associated to any Tomogram "
-            #                     "(name without extension):")
-            #     for file in mismatches_coords:
-            #         warnings.append("\t%s" % file)
-            #     warnings.append("\n")
-            # mismatches_tomos = set(tomoFiles).difference(coordFiles)
-            # if mismatches_tomos:
-            #     warnings.append("The following Tomogram files will not be associated to any coordinates "
-            #                     "(name without extension):")
-            #     for file in mismatches_tomos:
-            #         warnings.append("\t%s" % file)
-            #     warnings.append("\n")
+
         return warnings
 
