@@ -25,13 +25,13 @@
 # *
 # **************************************************************************
 
-from imod import utils
+from imod import utils as imodUtils
 from pyworkflow import BETA
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
 
-from ..objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate
+from ..objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, logger
 from .protocol_base import ProtTomoImportFiles
 from ..utils import existsPlugin
 
@@ -76,15 +76,21 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     def _insertAllSteps(self):
         self.fileList = [file for file, _ in self.iterFiles()]
 
-        for ts in self.inputSetOfTiltSeries.get():
-            self._insertFunctionStep(self.importCoordinatesStep,
-                                     ts.getObjId())
+        if self.getImportFrom() == IMPORT_FROM_IMOD:
+            for ts in self.inputSetOfTiltSeries.get():
+                self._insertFunctionStep(self.importCoordinatesFromImodStep,
+                                         ts.getObjId())
+
+        elif self.getImportFrom() == IMPORT_FROM_TXT:
+            for ts in self.inputSetOfTiltSeries.get():
+                self._insertFunctionStep(self.importCoordinatesStep,
+                                         ts.getObjId())
 
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
 
-    def importCoordinatesStep(self, tsObjId):
+    def importCoordinatesFromImodStep(self, tsObjId):
         ts = self.inputSetOfTiltSeries.get()[tsObjId]
         tsId = ts.getTsId()
 
@@ -94,13 +100,37 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
             if tsId in coordFilePath:
                 break
 
-        coordList, xDim, yDim = utils.format3DCoordinatesList(coordFilePath)
+        coordList, xDim, yDim = imodUtils.format3DCoordinatesList(coordFilePath)
 
         for element in coordList:
             newCoord3D = TiltSeriesCoordinate()
             newCoord3D.setTsId(ts.getTsId())
             newCoord3D.setPosition(element[0] - (xDim / 2),
                                    element[1] - (yDim / 2),
+                                   element[2],
+                                   sampling_rate=ts.getSamplingRate())
+
+            self.TiltSeriesCoordinates.append(newCoord3D)
+        self.TiltSeriesCoordinates.write()
+        self._store()
+
+    def importCoordinatesFromTxtStep(self, tsObjId):
+        ts = self.inputSetOfTiltSeries.get()[tsObjId]
+        tsId = ts.getTsId()
+
+        self.getOutputSetOfTiltSeriesCoordinates(self.inputSetOfTiltSeries.get())
+
+        for coordFilePath in self.fileList:
+            if tsId in coordFilePath:
+                break
+
+        coordList = self.format3DCoordinatesList(coordFilePath)
+
+        for element in coordList:
+            newCoord3D = TiltSeriesCoordinate()
+            newCoord3D.setTsId(ts.getTsId())
+            newCoord3D.setPosition(element[0],
+                                   element[1],
                                    element[2],
                                    sampling_rate=ts.getSamplingRate())
 
@@ -119,6 +149,23 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
         importFrom = self._getImportChoices()[self.importFrom.get()]
 
         return importFrom
+
+    def format3DCoordinatesList(self, coordFilePath):
+        """ This method takes a txt fiducial coordinates file path and returns a list containing each coordinate
+        information. This assumes that coordinates origin is top left corner, centered at the 0º tilt-image."""
+
+        coorList = []
+
+        with open(coordFilePath) as f:
+            coorText = f.read().splitlines()
+
+            for i, line in enumerate(coorText):
+                if line != '':
+                    vector = line.replace('-', ' -').split()
+
+                    coorList.append([int(vector[1]), int(vector[2]), int(vector[3])])
+
+        return coorList
 
     def getOutputSetOfTiltSeriesCoordinates(self, setOfTiltSeries=None):
 
