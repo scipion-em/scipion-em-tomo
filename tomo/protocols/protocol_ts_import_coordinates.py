@@ -150,7 +150,8 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
 
         return importFrom
 
-    def format3DCoordinatesList(self, coordFilePath):
+    @staticmethod
+    def format3DCoordinatesList(coordFilePath):
         """ This method takes a txt fiducial coordinates file path and returns a list containing each coordinate
         information. This assumes that coordinates origin is top left corner, centered at the 0º tilt-image."""
 
