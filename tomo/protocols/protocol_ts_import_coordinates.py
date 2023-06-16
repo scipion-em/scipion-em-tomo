@@ -44,6 +44,7 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     """Protocol to import a set of tilt-series coordinates 3D"""
     _outputClassName = 'SetOfCoordinates3D'
     _label = 'import tilt-series coordinates'
+    _possibleOutputs = SetOfTiltSeriesCoordinates
 
     def _getImportChoices(self):
         """ Return a list of possible choices from which the import can be done.
@@ -182,7 +183,6 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
 
         return self.TiltSeriesCoordinates
 
-
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
         summary = []
@@ -225,4 +225,3 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
                             'protocol may have unexpected outputs if Eman files are attempted to be imported.\n')
 
         return warnings
-
