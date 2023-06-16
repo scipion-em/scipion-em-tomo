@@ -26,12 +26,11 @@
 # **************************************************************************
 
 from imod import utils as imodUtils
-from pyworkflow import BETA
 
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
 
-from ..objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate, logger
+from ..objects import SetOfTiltSeriesCoordinates, TiltSeriesCoordinate
 from .protocol_base import ProtTomoImportFiles
 from ..utils import existsPlugin
 
