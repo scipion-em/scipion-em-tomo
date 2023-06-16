@@ -59,8 +59,6 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     def __init__(self, **args):
         ProtTomoImportFiles.__init__(self, **args)
 
-        self.OUTPUT_PREFIX = "outputCoordinates"
-
         self.TiltSeriesCoordinates = None
 
     def _defineParams(self, form):
