@@ -44,7 +44,6 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     """Protocol to import a set of tilt-series coordinates 3D"""
     _outputClassName = 'SetOfCoordinates3D'
     _label = 'import tilt-series coordinates'
-    _devStatus = BETA
 
     def _getImportChoices(self):
         """ Return a list of possible choices from which the import can be done.
