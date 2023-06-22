@@ -212,7 +212,7 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
 
             match = False
 
-        if not existsPlugin('imod'):
+        if self.getImportFrom() == IMPORT_FROM_IMOD and not existsPlugin('imod'):
             validateMsgs.append('Plugin *scipion-em-imod* has not being installed. Please, install the Plugin to '
                                 'import IMOD related formats (currently supported formats: ".txt"). Otherwise, the '
                                 'protocol may have unexpected outputs if Eman files are attempted to be imported.\n')
