@@ -122,9 +122,16 @@ class ProtTomoLandmarksTo2D(EMProtocol):
         return "%s_A%s" % (ti.getTsId(), ti.getTiltAngle())
 
     @lru_cache
-    def getTiltImageFromLandmark(self, ts:tomoObjs.TiltSeries, slice):
+    def getTiltImageFromLandmark(self, ts:tomoObjs.TiltSeries, slice, tsId ):
+        """
 
-        self.info("Retrieving tilt image %s@%s" % (slice, ts.getTsId()))
+        :param ts: TiltSeries
+        :param slice:
+        :param tsId: TsId (Only use for cache)
+        :return:
+        """
+
+        self.info("Retrieving tilt image %s@%s" % (slice, tsId))
         return ts[slice].clone()
 
     @lru_cache
@@ -169,7 +176,7 @@ class ProtTomoLandmarksTo2D(EMProtocol):
                 newCoord =  Coordinate()
                 newCoord.setX(landmark_line[0])
                 newCoord.setY(landmark_line[1])
-                ti = self.getTiltImageFromLandmark(ts,landmark_line[2])
+                ti = self.getTiltImageFromLandmark(ts,landmark_line[2], ts.getTsId())
                 mic = self.getMicFromLandmark(ti)
                 newCoord.setMicrograph(mic)
                 newCoord._chainId = Integer(landmark_line[3])
