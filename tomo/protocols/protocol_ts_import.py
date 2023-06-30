@@ -23,12 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import logging
+logger = logging.getLogger(__name__)
 import os
 import re
 from glob import glob
-import time
-from datetime import timedelta, datetime
+from datetime import datetime
 from collections import OrderedDict
 from os.path import join
 from statistics import mean
@@ -617,7 +617,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         for file in files:
             if any(bannedWord in file for bannedWord in exclusionWordList):
-                print("%s excluded. Contains any of %s" %
+                logger.info("%s excluded. Contains any of %s" %
                       (file, exclusionWords))
                 continue
             allowedFiles.append(file)
