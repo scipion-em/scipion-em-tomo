@@ -1,5 +1,6 @@
 v3.2:
   - New protocol: "Landmarks to 2D coordinates". To jump to SPA from 3d info.
+  - Tolerate empty lines in tlt files
 v3.1.9:
   - Reconstruction template fixed.
   - Relion 4 /dynamo  template tweaked. Specifically dynamo alignment
