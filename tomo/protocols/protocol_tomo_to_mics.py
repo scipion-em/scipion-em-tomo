@@ -57,7 +57,7 @@ class ProtTomoToMics(EMProtocol):
         form.addParam('slicesGap', IntParam, label="Slices gap", default=10,
                       help='Number of slices to skip when turning tomogram slices into micrographs.')
         form.addParam('noSlicesToAvg', IntParam,
-                      label='Np. slices to average',
+                      label='No. slices to average',
                       default=1,
                       help='For each slice corresponding to the slices gap introduced, the introduced number of '
                            'adjacent slices will be considered to average. For example, if the number is 5, the slices '
