@@ -26,6 +26,8 @@
 import enum
 from os.path import basename
 
+import numpy as np
+
 from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfMicrographs, Micrograph, Acquisition
 from pyworkflow import BETA
@@ -54,10 +56,17 @@ class ProtTomoToMics(EMProtocol):
                       help='Select the tomograms to be turned into micrographs')
         form.addParam('slicesGap', IntParam, label="Slices gap", default=10,
                       help='Number of slices to skip when turning tomogram slices into micrographs.')
+        form.addParam('noSlicesToAvg', IntParam,
+                      label='Np. slices to average',
+                      default=1,
+                      help='For each slice corresponding to the slices gap introduced, the introduced number of '
+                           'adjacent slices will be considered to average. For example, if the number is 5, the slices '
+                           'considered for each average will be the corresponding to the slice gap indices plus 2 '
+                           'slices above and 2 slices below. If set to 1, no average will be performed.')
 
     # --------------------------- INSERT steps functions --------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions --------------------------------------------
     def getInputTomograms(self) -> SetOfTomograms:
@@ -97,16 +106,18 @@ class ProtTomoToMics(EMProtocol):
         ih = ImageHandler()
         img = ih.read(tomo.getFileName())
         data = img.getData()
+        nSlicesAvg = self.noSlicesToAvg.get()
 
         # For each slice
-        for index in range(0, len(data), self.slicesGap.get()):
-            self.debug("Creating micrograph for slice %s" % index)
-            micName = tomoSliceToMicName(tomo, index)
+        for indexLims in self.genCenterList(len(data), self.slicesGap.get(), nSlicesAvg):
+            downLim, center, upLim = indexLims[:]
+            self.debug("Creating micrograph for slice %s averaging %i slices" % (center, nSlicesAvg))
+            micName = tomoSliceToMicName(tomo, center)
             outputMicName = self._getExtraPath(micName)
             outputMicName = replaceExt(outputMicName, "mrc")
-            slice = data[index]
+            iSlice = np.sum(data[downLim:upLim], axis=0)
             micImg = ImageHandler()
-            micImg._img.setData(slice)
+            micImg._img.setData(iSlice)
             micImg.write(micImg._img, outputMicName)
 
             # Create the micrograph metadata object
@@ -118,9 +129,31 @@ class ProtTomoToMics(EMProtocol):
             # Append it
             output.append(newMic)
 
+    @staticmethod
+    def genCenterList(dataLen, gap, nSlicesAvg):
+        """Generate a list of lists in which each element is composed by the lower limit, the center and the upper
+        limit of the intervals of indices with a given step (gap) betwwen them and calculating the adjacent indices
+        given the total number of slices that will include the interval (nSlicesAvg)."""
+        center = dataLen // 2
+        slicesUp = (nSlicesAvg - 1) // 2  # Minus the gap index
+        slicesDown = nSlicesAvg - 1 - slicesUp  # The remaining ones, to cover even and odd cases of nSlicesAvg
+        indexListOfLists = [[center - slicesDown, center, center + slicesUp + 1]]
+        for i in range(gap, center + 1, gap):
+            if center - i - slicesDown >= 0:
+                index = center - i
+                indexListOfLists.append([index - slicesDown, index, index + slicesUp + 1])
+            if center + i + slicesUp <= dataLen:
+                index = center + i
+                indexListOfLists.append([index - slicesDown, index,  index + slicesUp + 1])
+        # Sort the list of lists based on the center element of each subList
+        return sorted(indexListOfLists, key=lambda l: l[1])
+
     # --------------------------- INFO functions --------------------------------------------
     def _summary(self):
         summary = []
+        if self.isFinished():
+            summary.append('Slices gap = *%i*\nSlices for averaging = *%i*' %
+                           (self.slicesGap.get(), self.noSlicesToAvg.get()))
         return summary
 
     def _methods(self):
