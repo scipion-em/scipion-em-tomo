@@ -131,8 +131,8 @@ class ProtTomoToMics(EMProtocol):
 
     @staticmethod
     def genCenterList(dataLen, gap, nSlicesAvg):
-        """Generate a list of lists in which each element is composed by the lower limit, the center and the upper
-        limit of the intervals of indices with a given step (gap) betwwen them and calculating the adjacent indices
+        """Generates a list of lists in which each element is composed by the lower limit, the center and the upper
+        limit of the intervals of indices with a given step (gap) between them and calculating the adjacent indices
         given the total number of slices that will include the interval (nSlicesAvg)."""
         center = dataLen // 2
         slicesUp = (nSlicesAvg - 1) // 2  # Minus the gap index
