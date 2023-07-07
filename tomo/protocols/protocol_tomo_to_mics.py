@@ -57,12 +57,12 @@ class ProtTomoToMics(EMProtocol):
         form.addParam('slicesGap', IntParam, label="Slices gap", default=10,
                       help='Number of slices to skip when turning tomogram slices into micrographs.')
         form.addParam('noSlicesToAvg', IntParam,
-                      label='No. slices to average',
+                      label='No. slices to sum',
                       default=1,
                       help='For each slice corresponding to the slices gap introduced, the introduced number of '
-                           'adjacent slices will be considered to average. For example, if the number is 5, the slices '
-                           'considered for each average will be the corresponding to the slice gap indices plus 2 '
-                           'slices above and 2 slices below. If set to 1, no average will be performed.')
+                           'adjacent slices will be considered to sum. For example, if the number is 5, the slices '
+                           'considered for each sum will be the corresponding to the slice gap indices plus 2 '
+                           'slices above and 2 slices below. If set to 1, no sum will be performed.')
 
     # --------------------------- INSERT steps functions --------------------------
     def _insertAllSteps(self):
