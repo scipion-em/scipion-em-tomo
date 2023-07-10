@@ -112,7 +112,7 @@ class ProtTomoToMics(EMProtocol):
         for indexLims in self.genCenterList(len(data), self.slicesGap.get(), nSlicesAvg):
             downLim, center, upLim = indexLims[:]
             micName = tomoSliceToMicName(tomo, center)
-            self.info("Creating micrograph (%s) from %s to %s slices of %s" % (micName, downLim, upLim,tomo.getFileName()))
+            self.info("Creating micrograph (%s) from %s to %s slices of %s" % (micName, downLim, upLim-1,tomo.getFileName()))
             outputMicName = self._getExtraPath(micName)
             outputMicName = replaceExt(outputMicName, "mrc")
             iSlice = np.sum(data[downLim:upLim], axis=0)
