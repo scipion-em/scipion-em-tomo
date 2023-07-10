@@ -101,18 +101,20 @@ class ProtTomoToMics(EMProtocol):
     # --------------------------- UTILS functions --------------------------------------------
     def appendMicsFromTomogram(self, output, tomo):
 
-        self.info("Creating micrographs from %s slices." % tomo.getFileName())
+        nSlicesAvg = self.noSlicesToAvg.get()
+        gap = self.slicesGap.get()
+        self.info("Creating micrographs for %s with a %s gap and adding %s contiguous slices." % (tomo.getTsId(), gap, nSlicesAvg))
+
         # Load the tomogram
         ih = ImageHandler()
         img = ih.read(tomo.getFileName())
         data = img.getData()
-        nSlicesAvg = self.noSlicesToAvg.get()
 
         # For each slice
-        for indexLims in self.genCenterList(len(data), self.slicesGap.get(), nSlicesAvg):
+        for indexLims in self.genCenterList(len(data), gap, nSlicesAvg):
             downLim, center, upLim = indexLims[:]
             micName = tomoSliceToMicName(tomo, center)
-            self.info("Creating micrograph (%s) from %s to %s slices of %s" % (micName, downLim, upLim-1,tomo.getFileName()))
+            self.info("Creating micrograph (%s) from %s to %s slices of %s" % (micName, downLim, upLim-1,tomo.getTsId()))
             outputMicName = self._getExtraPath(micName)
             outputMicName = replaceExt(outputMicName, "mrc")
             iSlice = np.sum(data[downLim:upLim], axis=0)
