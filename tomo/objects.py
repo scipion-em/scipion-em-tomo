@@ -1074,7 +1074,7 @@ class Tomogram(data.Volume):
         return (self._acquisition is not None
                 and self._acquisition.getAngleMin() is not None
                 and self._acquisition.getAngleMax() is not None)
-
+        
     def getDim(self):
         """Return image dimensions as tuple: (Xdim, Ydim, Zdim)"""
         if self._dim is None:
@@ -1112,9 +1112,14 @@ class SetOfTomograms(data.SetOfVolumes):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
+        self._ctfCorrected = Boolean(kwargs.get('ctfCorrected', False))
 
     def hasOddEven(self):
         return self._hasOddEven.get()
+    
+    def hasCtfCorrected(self):
+        """ Returns true if ctf has been corrected. """
+        return self._ctfCorrected.get()
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
@@ -1123,6 +1128,7 @@ class SetOfTomograms(data.SetOfVolumes):
     def __str__(self):
         sampling = self.getSamplingRate()
         tomoStr = "+oe," if self.hasOddEven() else ''
+        tomoStr += "+ctf," if self.hasCtfCorrected() else ''
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
