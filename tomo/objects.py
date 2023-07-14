@@ -1120,6 +1120,9 @@ class SetOfTomograms(data.SetOfVolumes):
     def hasCtfCorrected(self):
         """ Returns true if ctf has been corrected. """
         return self._ctfCorrected.get()
+    
+    def setCtfCorrected(self, value):
+        self._ctfCorrected.set(Boolean(value))
 
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
