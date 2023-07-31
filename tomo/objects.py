@@ -2020,6 +2020,9 @@ class LandmarkModel(data.EMObject):
     def hasResidualInfo(self):
         return self._hasResidualInfo
 
+    def setHasResidualInfo(self, hasResidualInfo):
+        self._hasResidualInfo.set(hasResidualInfo)
+
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
 
@@ -2137,7 +2140,7 @@ class SetOfLandmarkModels(data.EMSet):
         return self._hasResidualInfo
 
     def setHasResidualInfo(self, hasResidualInfo):
-        self._hasResidualInfo = hasResidualInfo
+        self._hasResidualInfo.set(hasResidualInfo)
 
 
 class MeshPoint(Coordinate3D):
