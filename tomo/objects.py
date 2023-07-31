@@ -2082,7 +2082,7 @@ class SetOfLandmarkModels(data.EMSet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._setOfTiltSeriesPointer = Pointer()
-        self._hasAlignment = Boolean(False)
+        self._hasResidualInfo = Boolean(False)
 
     def __getitem__(self, itemId):
         """Add a pointer to a tilt-series before returning the landmark model"""
@@ -2132,6 +2132,12 @@ class SetOfLandmarkModels(data.EMSet):
             self._setOfTiltSeriesPointer.copy(setOfTiltSeries, copyId=False)
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
+
+    def hasResidualInfo(self):
+        return self._hasResidualInfo
+
+    def setHasResidualInfo(self, hasResidualInfo):
+        self._hasResidualInfo = hasResidualInfo
 
 
 class MeshPoint(Coordinate3D):
