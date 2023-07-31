@@ -1946,7 +1946,14 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True, **kwargs):
+    def __init__(self,
+                 tsId=None,
+                 fileName=None,
+                 modelName=None,
+                 size=5,
+                 applyTSTransformation=True,
+                 hasResidualInfo=False,
+                 **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
@@ -1956,6 +1963,7 @@ class LandmarkModel(data.EMObject):
         self._tiltSeries = Pointer(objDoStore=False)
         self._count = Integer(0)
         self._chains = None
+        self._hasResidualInfo = Boolean(hasResidualInfo)
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -2008,6 +2016,9 @@ class LandmarkModel(data.EMObject):
 
     def setModelName(self, modelName):
         self._modelName.set(modelName)
+
+    def hasResidualInfo(self):
+        return self._hasResidualInfo
 
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
