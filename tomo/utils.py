@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries
 
 
 def existsPlugin(plugin):
@@ -337,7 +337,13 @@ def isMatchingByTsId(set1, set2):
 def _getTsIdLabel(setObject):
     """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
     corresponding coordinate)"""
-    return '_tomoId' if type(setObject) in [SetOfCoordinates3D, SetOfSubTomograms] else '_tsId'
+    setType = type(setObject)
+    if setType == SetOfCoordinates3D:
+        return Coordinate3D.TOMO_ID_ATTR
+    elif setType == SetOfSubTomograms:
+        return SubTomogram.VOL_NAME_FIELD
+    else:
+        return TiltSeries.TS_ID_FIELD
 
 
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
