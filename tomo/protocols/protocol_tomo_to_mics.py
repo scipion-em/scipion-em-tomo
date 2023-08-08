@@ -31,7 +31,7 @@ import numpy as np
 from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfMicrographs, Micrograph, Acquisition
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam, IntParam
+from pyworkflow.protocol.params import PointerParam, IntParam, GT
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import replaceExt, removeExt
 
@@ -55,10 +55,12 @@ class ProtTomoToMics(EMProtocol):
                       label='Tomograms',
                       help='Select the tomograms to be turned into micrographs')
         form.addParam('slicesGap', IntParam, label="Slices gap", default=10,
+                      validators=[GT(0)],
                       help='Number of slices to skip when turning tomogram slices into micrographs.')
         form.addParam('noSlicesToAvg', IntParam,
                       label='No. slices to sum',
                       default=1,
+                      validators=[GT(0)],
                       help='For each slice corresponding to the slices gap introduced, the introduced number of '
                            'adjacent slices will be considered to sum. For example, if the number is 5, the slices '
                            'considered for each sum will be the corresponding to the slice gap indices plus 2 '
