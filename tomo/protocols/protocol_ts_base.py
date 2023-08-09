@@ -146,10 +146,8 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
             self._coStep.setStatus(STATUS_NEW)
 
     def createOutputStep(self):
-        outputSet = self._getOutputSet()
-        outputSet.setStreamState(outputSet.STREAM_CLOSED)
-        outputSet.write()
-        self._store(outputSet)
+
+        self._closeOutputSet()
 
     # --------------------------- INFO functions ------------------------------
     def _validate(self):

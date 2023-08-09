@@ -254,4 +254,5 @@ DataViewer.registerConfig(tomo.objects.SetOfTomograms,
                                   VISIBLE:'id _filename %s %s' %
                                           (tomo.objects.Tomogram.TS_ID_FIELD,
                                            tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD)})
+DataViewer.registerConfig(tomo.objects.SetOfTiltSeries)
 

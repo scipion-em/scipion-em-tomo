@@ -21,8 +21,6 @@ You'll need to download its dataset -> scipion3 testdata --download tomo-tutoria
         "acquisitionAngleMax": 60.0,
         "acquisitionAngleMin": -60.0,
         "step": null,
-        "angleAxis1": null,
-        "angleAxis2": null,
         "setOrigCoord": false,
         "x": null,
         "y": null,

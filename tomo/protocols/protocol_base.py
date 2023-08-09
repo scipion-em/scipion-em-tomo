@@ -258,17 +258,6 @@ class ProtTomoImportAcquisition:
                       label='Step',
                       help='Enter the step size for the import')
 
-        form.addParam('angleAxis1', FloatParam,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Angle axis 1',
-                      help='Enter the angle axis 1')
-
-        form.addParam('angleAxis2', FloatParam,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Angle Axis 2',
-                      help='Enter the angle axis 2')
 
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
@@ -276,8 +265,7 @@ class ProtTomoImportAcquisition:
                         'angleMin': self.acquisitionAngleMin.get(),
                         'angleMax': self.acquisitionAngleMax.get(),
                         'step': self.step.get(),
-                        'angleAxis1': self.angleAxis1.get(),
-                        'angleAxis2': self.angleAxis2.get()
+                        'tiltAxisAngle': self.titlAxisAngle.get(),
                     }
         else:
             params = open(self.acquisitionData.get(), "r")
@@ -289,8 +277,7 @@ class ProtTomoImportAcquisition:
                         'angleMin': float(param[1]),
                         'angleMax': float(param[2]),
                         'step': int(param[3]),
-                        'angleAxis1': float(param[4]),
-                        'angleAxis2': float(param[5])
+                        'tiltAxisAngle': float(param[4]),
                     }})
                 except Exception as e:
                     print('Wrong acquisition data file format', e)

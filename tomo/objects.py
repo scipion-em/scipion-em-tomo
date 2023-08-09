@@ -655,6 +655,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
 
+    def getAcquisition(self):
+        return self._acquisition
+
     def hasOddEven(self):
         return self._hasOddEven.get()
 
@@ -988,14 +991,13 @@ class TiltSeriesDict:
 
 
 class TomoAcquisition(data.Acquisition):
-    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None,
-                 angleAxis2=None, accumDose=None, tiltAxisAngle=None, **kwargs):
+    """ Tomography acquisition metadata object"""
+    def __init__(self, angleMin=None, angleMax=None, step=None,
+                 accumDose=None, tiltAxisAngle=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = Float(angleMin)
         self._angleMax = Float(angleMax)
         self._step = Float(step)
-        self._angleAxis1 = Float(angleAxis1)
-        self._angleAxis2 = Float(angleAxis2)
         self._accumDose = Float(accumDose)
         self._tiltAxisAngle = Float(tiltAxisAngle)
 
@@ -1022,18 +1024,6 @@ class TomoAcquisition(data.Acquisition):
 
     def setStep(self, value):
         return self._step.set(value)
-
-    def getAngleAxis1(self):
-        return self._angleAxis1.get()
-
-    def setAngleAxis1(self, value):
-        self._angleAxis1.set(value)
-
-    def getAngleAxis2(self):
-        return self._angleAxis2.get()
-
-    def setAngleAxis2(self, value):
-        self._angleAxis2.set(value)
 
     def getAccumDose(self):
         return self._accumDose.get()
