@@ -90,8 +90,6 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "acquisitionAngleMax": 60.0,
         "acquisitionAngleMin": -60.0,
         "step": null,
-        "angleAxis1": null,
-        "angleAxis2": null,
         "setOrigCoord": true,
         "fromMrcHeader": true,
         "x": null,

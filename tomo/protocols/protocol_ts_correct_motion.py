@@ -30,7 +30,7 @@ import numpy as np
 
 import pyworkflow as pw
 import pyworkflow.protocol.params as params
-from pyworkflow.object import String, CsvList
+from pyworkflow.object import String, CsvList, Set
 from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
@@ -38,11 +38,11 @@ from pwem.emlib.image import ImageHandler
 from ..objects import TiltSeries, TiltImage, SetOfTiltSeries
 from .protocol_ts_base import ProtTsProcess
 
-OUTPUT_TILT_SERIES_ODD = 'outputTiltSeriesOdd'
-OUTPUT_TILT_SERIES_EVEN = 'outputTiltSeriesEven'
+OUTPUT_TILT_SERIES_ODD = 'TiltSeriesOdd'
+OUTPUT_TILT_SERIES_EVEN = 'TiltSeriesEven'
 EVEN = 'even'
 ODD = 'odd'
-OUTPUT_TILT_SERIES_DW = 'outputTiltSeriesDW'
+OUTPUT_TILT_SERIES_DW = 'TiltSeriesDW'
 
 
 class ProtTsCorrectMotion(ProtTsProcess):
@@ -61,9 +61,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     # Even / odd functionality
     evenOddCapable = False
-    outputSetEven = None
-    outputSetOdd = None
-
+    TiltSeriesOdd = None
+    TiltSeriesEven = None
+    TiltSeriesDW = None
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form, addEvenOddParam = True):
         form.addSection(label=Message.LABEL_INPUT)
@@ -177,6 +177,32 @@ class ProtTsCorrectMotion(ProtTsProcess):
         if not pw.utils.envVarOn('SCIPION_DEBUG_NOCLEAN'):
             pw.utils.cleanPath(workingFolder)
 
+    def createDWTs(self, ts):
+        """ Dose weighting creation"""
+
+        if self._createOutputWeightedTS():
+            if self.TiltSeriesDW is None:
+                self.TiltSeriesDW = self._createOutputSet(suffix='_dose-weighted')
+                self.TiltSeriesDW.setSamplingRate(self._getOutputSampling())
+            else:
+                self.TiltSeriesDW.enableAppend()
+
+            tsObjDW = TiltSeries()
+            tsObjDW.copyInfo(ts, copyId=True)
+            self.TiltSeriesDW.append(tsObjDW)
+
+            tsFnDW = self._getDWTiltSeriesPath(ts)
+
+            for i, ti in enumerate(ts):
+                tiOut = TiltImage(location=(i+1, tsFnDW))
+                tiOut.copyInfo(ti, copyId=True)
+                tiOut.setAcquisition(ti.getAcquisition())
+                tiOut.setSamplingRate(self._getOutputSampling())
+                tiOut.setObjId(ti.getIndex())
+                tsObjDW.append(tiOut)
+
+            self.TiltSeriesDW.update(tsObjDW)
+
     def createOddEvenTs(self, ts, odd=True):
         def addTiltImage(tiLocation, tsObject, mainti, tsIde, samplingRate):
             """
@@ -199,17 +225,17 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         if odd:
             suffix = ODD
-            outputAttr = 'outputSetOdd'
+            outputAttr = OUTPUT_TILT_SERIES_ODD
             oddEvenIndex = 0
         else:
             suffix = EVEN
-            outputAttr = 'outputSetEven'
+            outputAttr = OUTPUT_TILT_SERIES_EVEN
             oddEvenIndex = 1
 
         template = 'tiltseries%s.sqlite'
         sRate = self._getOutputSampling()
 
-        output = getattr(self, outputAttr)
+        output = getattr(self, outputAttr, None)
         if output:
             output.enableAppend()
         else:
@@ -254,12 +280,14 @@ class ProtTsCorrectMotion(ProtTsProcess):
         ih = ImageHandler()
 
         tsFn = self._getOutputTiltSeriesPath(ts)
-        tsFnDW = self._getOutputTiltSeriesPath(ts, '_DW')
 
         # Merge all micrographs from the same tilt images in a single "mrcs" stack file
         createStack(tiList, tsFn, self._getOutputTiltImagePath, locationSetter=lambda newloc, ti: ti.setLocation(newloc))
+
+        # Dose weighted
         if self._createOutputWeightedTS():
-            createStack(tiList, tsFnDW, self._getOutputTiltImageDWPath)
+
+            createStack(tiList, self._getDWTiltSeriesPath(ts), self._getOutputTiltImageDWPath)
 
         if self._doSplitEvenOdd():
             tsFnOdd = self._getOutputTiltSeriesPath(ts, '_odd')
@@ -271,27 +299,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
         self._tsDict.setFinished(tsId)
 
-        # Dose weighting
-        if self._createOutputWeightedTS():
-            if getattr(self, 'outputSetDW', None) is None:
-                self.outputSetDW = self._createOutputSet(suffix='_dose-weighted')
-                self.outputSetDW.setSamplingRate(self._getOutputSampling())
-            else:
-                self.outputSetDW.enableAppend()
+    def _getDWTiltSeriesPath(self, ts:TiltSeries):
 
-            tsObjDW = TiltSeries()
-            tsObjDW.copyInfo(ts, copyId=True)
-            self.outputSetDW.append(tsObjDW)
-
-            for i, ti in enumerate(tiList):
-                tiOut = TiltImage(location=(i+1, tsFnDW))
-                tiOut.copyInfo(ti, copyId=True)
-                tiOut.setAcquisition(ti.getAcquisition())
-                tiOut.setSamplingRate(self._getOutputSampling())
-                tiOut.setObjId(ti.getIndex())
-                tsObjDW.append(tiOut)
-
-            self.outputSetDW.update(tsObjDW)
+        return self._getOutputTiltSeriesPath(ts, '_DW')
 
     def _updateOutput(self, tsIdList):
         """ Update the output set with the finished Tilt-series.
@@ -321,54 +331,54 @@ class ProtTsCorrectMotion(ProtTsProcess):
         # Call the sub-class method to update the output
         outputSet.setSamplingRate(self._getOutputSampling())
         self._updateOutputSet(outputSet, tsIdList)
-        outputSet.setStreamState(outputSet.STREAM_OPEN)
+        outputSet.setStreamState(Set.STREAM_OPEN)
 
         if self._doSplitEvenOdd():
-            self.outputSetEven.setStreamState(self.outputSetEven.STREAM_OPEN)
-            self.outputSetOdd.setStreamState(self.outputSetOdd.STREAM_OPEN)
+            self.TiltSeriesEven.setStreamState(Set.STREAM_OPEN)
+            self.TiltSeriesOdd.setStreamState(Set.STREAM_OPEN)
 
         if self._createOutputWeightedTS():
-            self.outputSetDW.setStreamState(self.outputSetDW.STREAM_OPEN)
+            self.TiltSeriesDW.setStreamState(Set.STREAM_OPEN)
 
         if self._createOutput:
             outputSet.updateDim()
             outputs = {self._getOutputName(): outputSet}
             if self._createOutputWeightedTS():
-                self.outputSetDW.updateDim()
-                outputs.update({OUTPUT_TILT_SERIES_DW: self.outputSetDW})
+                self.TiltSeriesDW.updateDim()
+                outputs.update({OUTPUT_TILT_SERIES_DW: self.TiltSeriesDW})
 
             if self._doSplitEvenOdd():
-                self.outputSetEven.updateDim()
-                self.outputSetOdd.updateDim()
-                outputs.update({OUTPUT_TILT_SERIES_EVEN: self.outputSetEven,
-                                OUTPUT_TILT_SERIES_ODD: self.outputSetOdd
+                self.TiltSeriesEven.updateDim()
+                self.TiltSeriesOdd.updateDim()
+                outputs.update({OUTPUT_TILT_SERIES_EVEN: self.TiltSeriesEven,
+                                OUTPUT_TILT_SERIES_ODD: self.TiltSeriesOdd
                                 })
                 self._defineOutputs(**outputs)
-                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetEven)
-                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetOdd)
+                self._defineSourceRelation(self._getInputTsPointer(), self.TiltSeriesEven)
+                self._defineSourceRelation(self._getInputTsPointer(), self.TiltSeriesOdd)
             else:
                 self._defineOutputs(**outputs)
 
             if self._createOutputWeightedTS():
-                self._defineSourceRelation(self._getInputTsPointer(), self.outputSetDW)
+                self._defineSourceRelation(self._getInputTsPointer(), self.TiltSeriesDW)
 
             self._defineSourceRelation(self._getInputTsPointer(), outputSet)
             self._createOutput = False
         else:
             writeAndStore(outputSet)
             if self._doSplitEvenOdd():
-                writeAndStore(self.outputSetEven)
-                writeAndStore(self.outputSetOdd)
+                writeAndStore(self.TiltSeriesEven)
+                writeAndStore(self.TiltSeriesOdd)
             if self._createOutputWeightedTS():
-                writeAndStore(self.outputSetDW)
+                writeAndStore(self.TiltSeriesDW)
 
         outputSet.close()
         if self._doSplitEvenOdd():
-            self.outputSetEven.close()
-            self.outputSetOdd.close()
+            self.TiltSeriesEven.close()
+            self.TiltSeriesOdd.close()
 
         if self._createOutputWeightedTS():
-            self.outputSetDW.close()
+            self.TiltSeriesDW.close()
 
         if self._tsDict.allDone():
             self._coStep.setStatus(params.STATUS_NEW)
@@ -398,6 +408,9 @@ class ProtTsCorrectMotion(ProtTsProcess):
                 counter += 1
 
             outputSet.update(ts)
+
+            # Create dose weighted set
+            self.createDWTs(ts)
 
             # Even and odd stuff
             if self._doSplitEvenOdd():

@@ -79,8 +79,12 @@ class ProtTomoLandmarksTo2D(EMProtocol):
         # remove extra properties the micrograph set does not define
         acquisition = tsSet.getAcquisition()
         del acquisition._accumDose
-        del acquisition._angleAxis1
-        del acquisition._angleAxis2
+
+        # Previous version of TomoAcquisition had _angleAxis1 and _angleAxis2
+        if hasattr(acquisition, "_angleAxis1"):
+            del acquisition._angleAxis1
+            del acquisition._angleAxis2
+
         del acquisition._angleMax
         del acquisition._angleMin
         del acquisition._step
