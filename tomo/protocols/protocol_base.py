@@ -111,7 +111,6 @@ class ProtTomoBase:
 
 
 class ProtTomoPicking(ProtImport, ProtTomoBase):
-
     OUTPUT_PREFIX = 'output3DCoordinates'
 
     """ Base class for Tomogram boxing protocols. """
@@ -258,15 +257,22 @@ class ProtTomoImportAcquisition:
                       label='Step',
                       help='Enter the step size for the import')
 
+        form.addParam('tiltAxisAngle', FloatParam,
+                      label='Tilt axis angle (deg.)',
+                      allowsNull=True,
+                      help="The rotation angle is the angle from the vertical "
+                           "to the axis of tilting, where counterclockwise is "
+                           "positive.\n See "
+                           "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
 
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
             self.acquisitionParameters = {
-                        'angleMin': self.acquisitionAngleMin.get(),
-                        'angleMax': self.acquisitionAngleMax.get(),
-                        'step': self.step.get(),
-                        'tiltAxisAngle': self.titlAxisAngle.get(),
-                    }
+                'angleMin': self.acquisitionAngleMin.get(),
+                'angleMax': self.acquisitionAngleMax.get(),
+                'step': self.step.get(),
+                'tiltAxisAngle': self.tiltAxisAngle.get(),
+            }
         else:
             params = open(self.acquisitionData.get(), "r")
             self.acquisitionParameters = {}
@@ -300,7 +306,5 @@ class ProtTomoImportAcquisition:
                 summary.append(u"Acquisition angle min: *%0.2f*" % obj.getAcquisition().getAngleMin())
                 if obj.getAcquisition().getStep():
                     summary.append(u"Step: *%d*" % obj.getAcquisition().getStep())
-                if obj.getAcquisition().getAngleAxis1():
-                    summary.append(u"Angle axis 1: *%0.2f*" % obj.getAcquisition().getAngleAxis1())
-                if obj.getAcquisition().getAngleAxis2():
-                    summary.append(u"Angle axis 2: *%0.2f*" % obj.getAcquisition().getAngleAxis2())
+                if obj.getAcquisition().getTiltAxisAngle():
+                    summary.append(u"Tilt axis angle: *%0.2f*" % obj.getAcquisition().getTiltAxisAngle())
