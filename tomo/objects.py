@@ -711,10 +711,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         item.write(properties=False)  # Set.write(self)
 
     def __getitem__(self, itemId):
-        """ Setup the mapper classes before returning the item. """
-        classItem = data.SetOfImages.__getitem__(self, itemId)
-        self._setItemMapperPath(classItem)
-        return classItem
+        """ Set the mapper of the TiltSerie (item) to point to the right table. The one with its own tilt images. """
+        tiltSerie = data.SetOfImages.__getitem__(self, itemId)
+        self._setItemMapperPath(tiltSerie)
+        return tiltSerie
 
     def getFirstItem(self) -> TiltSeriesBase:
         classItem = data.EMSet.getFirstItem(self)
