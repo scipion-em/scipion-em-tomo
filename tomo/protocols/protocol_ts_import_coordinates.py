@@ -25,8 +25,6 @@
 # *
 # **************************************************************************
 
-from imod import utils as imodUtils
-
 import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
 
@@ -88,6 +86,7 @@ class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     # --------------------------- STEPS functions -----------------------------
 
     def importCoordinatesFromImodStep(self, tsObjId):
+        from imod import utils as imodUtils
         ts = self.inputSetOfTiltSeries.get()[tsObjId]
         tsId = ts.getTsId()
 
