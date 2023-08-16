@@ -5,6 +5,7 @@ v3.2:
   - Tilt series can be sent to Xmipp metadata viewer for subsetting/inspection
   - TomoMetadataViewer shows the preview of the slice and some metadata (tiltAxisAngle)
   - Fix: Imod not needed for importing coordinates, unless imod mode is selected
+  - Compose tilt series: Added "exclusion words" to filter out mdocs
 
   Developers:
   - angleAxis1 and angleAxis2 removed from the TomoAcquisition class

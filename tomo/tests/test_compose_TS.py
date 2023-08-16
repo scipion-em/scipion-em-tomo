@@ -100,7 +100,8 @@ class TestTomoComposeTS(BaseTest):
                                        inputMicrographs=protAlign.outputMicrographs,
                                        filesPath=self.partFolderPath,
                                        time4NextTilt=20,
-                                       time4NextTS=30)
+                                       time4NextTS=30,
+                                       excludedWords="_tgt_ lolo")
         # self.proj.scheduleProtocol(protCompose)
         # checkOutputs(protCompose, 20)#timeout
         self.launchProtocol(protCompose)
