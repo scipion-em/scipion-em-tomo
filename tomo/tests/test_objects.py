@@ -33,6 +33,7 @@ from tomo.objects import (SetOfTiltSeriesCoordinates, TiltSeriesCoordinate,
                           SetOfTiltSeries, TiltSeries, TiltImage, LandmarkModel)
 
 TS_1 = "TS_1"
+TS_2 = "TS_2"
 
 MYTSID = "MYTSID"
 
@@ -148,22 +149,29 @@ class TestTomoModel(BaseTest):
         # Create the set
         tiltseries = SetOfTiltSeries.create(self.outputPath)
         tiltseries.setAnglesCount(3)
-        ts = TiltSeries()
-        ts.setTsId(TS_1)
 
-        # We need to append the tilt series before adding tilt images
-        tiltseries.append(ts)
+        def addTiltSerie(tsId):
+            ts = TiltSeries()
+            ts.setTsId(tsId)
 
-        # Add tilt images
-        ti = TiltImage()
-        ti.setTiltAngle(-3)
-        ts.append(ti)
+            # We need to append the tilt series before adding tilt images
+            tiltseries.append(ts)
 
-        # Update properties
-        ts.setAnglesCount(1)
-        tiltseries.update(ts)
-        # This should not persist properties at all
-        ts.write(properties=True)
+            # Add tilt images
+            ti = TiltImage()
+            ti.setTiltAngle(-3)
+            ti.setTsId(tsId)
+            ts.append(ti)
+
+            # Update properties
+            tiltseries.update(ts)
+
+            # This should not persist properties at all
+            ts.write(properties=True)
+
+        # Add tilt series
+        addTiltSerie(TS_1)
+        addTiltSerie(TS_2)
 
         # Persist the whole set, this should persist properties of the set
         tiltseries.write()
@@ -171,7 +179,18 @@ class TestTomoModel(BaseTest):
         tiltSerieFromFile = SetOfTiltSeries(filename=tiltseries.getFileName())
         tiltSerieFromFile.loadAllProperties()
 
-        self.assertEqual(tiltSerieFromFile.getTSIds(), [TS_1], "SetOfTiltSeries.getTSIds not working.")
+        self.assertEqual(tiltSerieFromFile.getAnglesCount(), 1, "SetOfTiltSeries.getAnglesCount is wrong.")
+        self.assertEqual(tiltSerieFromFile.getTSIds(), [TS_1, TS_2], "SetOfTiltSeries.getTSIds not working.")
+
+        # Accessing through [] and mapper sync
+
+        ts1 = tiltseries[1]
+        ti1 = ts1.getFirstItem()
+        self.assertEqual(ti1.getTsId(), TS_1, "Tilt image wrong for the tilt series 1")
+
+        ts2 = tiltseries[2]
+        ti2 = ts2.getFirstItem()
+        self.assertEqual(ti2.getTsId(), TS_2, "Tilt image wrong for the tilt series 2")
 
     def test_landmarks(self):
         """ Test the Landmark model"""

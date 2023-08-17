@@ -195,11 +195,34 @@ class TiltSeriesDialogView(pwviewer.View):
         self._tkParent = parent
         self._protocol = protocol
         self._provider = TiltSeriesTreeProvider(protocol, tiltSeries)
+        self._preview = None # To store preview widget
 
     def show(self):
         ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
-                   allowSelect=False, cancelButton=True)
+                   previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True)
 
+
+    def getPreviewWidget(self, frame):
+
+        if not self._preview:
+            from pyworkflow.gui.matplotlib_image import ImagePreview
+            self._preview = ImagePreview(frame, dim=500, label="Tilt series")
+            self._preview.grid(row=0, column=0)
+
+        return self._preview
+
+    def previewTiltSeries(self, obj: tomo.objects.SetOfTiltSeries, frame):
+
+        preview = self.getPreviewWidget(frame)
+        if isinstance(obj, tomo.objects.TiltImage):
+            image = obj.getImage()
+            preview._update(image.getData())
+            text = "Tilt image at %sº" % obj.getTiltAngle()
+        else:
+            preview.clear()
+            text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
+
+        preview.setLabel(text)
 
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """

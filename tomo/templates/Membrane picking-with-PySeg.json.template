@@ -47,8 +47,6 @@ Vectorial picking with PySeg on Mice Intact P19 cells (emd_10439) tomogram.
         "acquisitionAngleMax": 60.0,
         "acquisitionAngleMin": -60.0,
         "step": null,
-        "angleAxis1": null,
-        "angleAxis2": null,
         "setOrigCoord": false,
         "x": null,
         "y": null,

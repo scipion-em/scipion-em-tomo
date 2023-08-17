@@ -1,3 +1,15 @@
+v3.2:
+  - New protocol: "Landmarks to 2D coordinates". To jump to SPA from 3d info.
+  - Tolerate empty lines in tlt files
+  - Motion correction outputs renamed and fixed for odd/even and dose weighted
+  - Tilt series can be sent to Xmipp metadata viewer for subsetting/inspection
+  - TomoMetadataViewer shows the preview of the slice and some metadata (tiltAxisAngle)
+  - Fix: Imod not needed for importing coordinates, unless imod mode is selected
+  - Compose tilt series: Added "exclusion words" to filter out mdocs
+
+  Developers:
+  - angleAxis1 and angleAxis2 removed from the TomoAcquisition class
+
 v3.1.9:
   - Reconstruction template fixed.
   - Relion 4 /dynamo  template tweaked. Specifically dynamo alignment

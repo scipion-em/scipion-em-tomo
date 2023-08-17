@@ -655,6 +655,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
 
+    def getAcquisition(self):
+        return self._acquisition
+
     def hasOddEven(self):
         return self._hasOddEven.get()
 
@@ -708,17 +711,17 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         item.write(properties=False)  # Set.write(self)
 
     def __getitem__(self, itemId):
-        """ Setup the mapper classes before returning the item. """
-        classItem = data.SetOfImages.__getitem__(self, itemId)
-        self._setItemMapperPath(classItem)
-        return classItem
+        """ Set the mapper of the TiltSerie (item) to point to the right table. The one with its own tilt images. """
+        tiltSerie = data.SetOfImages.__getitem__(self, itemId)
+        self._setItemMapperPath(tiltSerie)
+        return tiltSerie
 
     def getFirstItem(self) -> TiltSeriesBase:
         classItem = data.EMSet.getFirstItem(self)
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, **kwargs):
+    def iterItems(self, **kwargs)->TiltSeriesBase:
         for item in data.EMSet.iterItems(self, **kwargs):
             self._setItemMapperPath(item)
             yield item
@@ -988,14 +991,13 @@ class TiltSeriesDict:
 
 
 class TomoAcquisition(data.Acquisition):
-    def __init__(self, angleMin=None, angleMax=None, step=None, angleAxis1=None,
-                 angleAxis2=None, accumDose=None, tiltAxisAngle=None, **kwargs):
+    """ Tomography acquisition metadata object"""
+    def __init__(self, angleMin=None, angleMax=None, step=None,
+                 accumDose=None, tiltAxisAngle=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
         self._angleMin = Float(angleMin)
         self._angleMax = Float(angleMax)
         self._step = Float(step)
-        self._angleAxis1 = Float(angleAxis1)
-        self._angleAxis2 = Float(angleAxis2)
         self._accumDose = Float(accumDose)
         self._tiltAxisAngle = Float(tiltAxisAngle)
 
@@ -1022,18 +1024,6 @@ class TomoAcquisition(data.Acquisition):
 
     def setStep(self, value):
         return self._step.set(value)
-
-    def getAngleAxis1(self):
-        return self._angleAxis1.get()
-
-    def setAngleAxis1(self, value):
-        self._angleAxis1.set(value)
-
-    def getAngleAxis2(self):
-        return self._angleAxis2.get()
-
-    def setAngleAxis2(self, value):
-        self._angleAxis2.set(value)
 
     def getAccumDose(self):
         return self._accumDose.get()
@@ -2038,7 +2028,7 @@ class LandmarkModel(data.EMObject):
             self.setCount(len(self._chains))
 
     def retrieveInfoTable(self):
-        """ This method returns a table containing the information of the landkmark model. One landmark pero line
+        """ This method returns a table containing the information of the landkmark model. One landmark per line
         specifying in order: xCoor, YCoor, tiltIm, chainId, xResid, yResid"""
 
         fileName = self.getFileName()
@@ -2083,7 +2073,7 @@ class SetOfLandmarkModels(data.EMSet):
         """This method completes a landmark model object setting in execution time the tilt-series associated to it,
         since it is not possible to save pointers in the item classes of the set.
 
-        IMPORTANT: this method must be implement every time it is necesary to retrive information from the tilt-series
+        IMPORTANT: this method must be used every time is necessary to retrieve information from the tilt-series
         associated to the landmark models that compose the set."""
 
         tsId = lm.getTsId()
@@ -2102,7 +2092,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer=False):
+    def getSetOfTiltSeries(self, pointer=False)->SetOfTiltSeries:
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:

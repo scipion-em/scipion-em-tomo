@@ -114,7 +114,11 @@ def getAnglesAndDosesFromTlt(tltFn):
     orders = []
     with open(tltFn) as f:
         for line in f:
-            line = line.strip().split(" ")
+            strippedLine = line.strip()
+            if not strippedLine:
+                logger.info("Empty line found in %s. Ignoring it." % tltFn)
+                continue
+            line = strippedLine.split(" ")
             if line:
                 angles.append(float(line[0]))
                 # If there is a second column, we take it as dose
