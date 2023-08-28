@@ -206,6 +206,8 @@ class MDoc:
                                               self._samplingRate))
 
     def _getSlicesData(self, zSlices, tsFile):
+
+        print("Getting slices data...")
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
@@ -360,6 +362,8 @@ class MDoc:
         return errMsg
 
     def _validateMdocInfoRead(self, ignoreFilesValidation=False):
+
+        print("Validating mdoc content")
         validateMdocContentsErrorMsgList = []
         msg = [f'\n{self._mdocFileName} is missing:\n']
         missingFiles = []
