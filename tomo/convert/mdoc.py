@@ -235,6 +235,7 @@ class MDoc:
             logger.debug("Dose not found or almost 0 (%s) in %s" %
                          (accumulatedDose, self._mdocFileName))
 
+        print("END getSlices")
     def _sortByTimestamp(self, zSlices):
         """ MDOC file is not necessarily sorted by acquisition order,
             use TimeStamp key to sort Z-slices.
