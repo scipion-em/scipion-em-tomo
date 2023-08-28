@@ -123,8 +123,10 @@ class MDoc:
                     tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
 
             return exceptionMsg
-        except FileExistsError as e:
+        except Exception as e:
 
+            import traceback
+            traceback.print_exc()
             return "\n*CRITICAL mdoc parsing error: %s can't be parsed.*\n %s\n" % (mdoc, str(e))
 
     def _parseMdoc(self):
