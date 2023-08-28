@@ -218,6 +218,8 @@ class MDoc:
             else:
                 incomingDose = \
                     self._getDoseFromMdoc(zSlice, self.getSamplingRate())
+
+            print("Dose for slice %s: %s" % (counter, incomingDose))
             accumulatedDose += incomingDose
 
             print("Adding TiltMetaData ... ")
