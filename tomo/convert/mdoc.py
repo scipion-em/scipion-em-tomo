@@ -217,6 +217,8 @@ class MDoc:
                 incomingDose = \
                     self._getDoseFromMdoc(zSlice, self.getSamplingRate())
             accumulatedDose += incomingDose
+
+            print("Adding TiltMetaData ... ")
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(
