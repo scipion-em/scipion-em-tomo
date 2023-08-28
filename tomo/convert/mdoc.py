@@ -135,7 +135,7 @@ class MDoc:
         :return: dictionary (header), list of dictionaries (Z slices)
         """
 
-        logger.info("Parsing %s" % self._mdocFileName)
+        print("Parsing %s" % self._mdocFileName)
         headerDict = {}
         headerParsed = False
         zvalueList = []  # list of dictionaries with
