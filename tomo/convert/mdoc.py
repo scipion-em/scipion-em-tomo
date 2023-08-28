@@ -123,7 +123,7 @@ class MDoc:
                     tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
 
             return exceptionMsg
-        except Exception as e:
+        except FileExistsError as e:
 
             return "\n*CRITICAL mdoc parsing error: %s can't be parsed.*\n %s\n" % (mdoc, str(e))
 
