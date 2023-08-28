@@ -1,4 +1,6 @@
 import logging
+import math
+
 logger = logging.getLogger(__name__)
 import os
 from datetime import datetime as dt
@@ -83,7 +85,7 @@ class MDoc:
             headerDict, zSlices = self._parseMdoc()
             zSlices = self._sortByTimestamp(zSlices)
 
-            print("Gathering info")
+            logger.info("Gathering info")
             # Get acquisition general info
             self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
             self._tsId = normalizeTSId(mdoc)
@@ -125,8 +127,6 @@ class MDoc:
             return exceptionMsg
         except Exception as e:
 
-            import traceback
-            traceback.print_exc()
             return "\n*CRITICAL mdoc parsing error: %s can't be parsed.*\n %s\n" % (mdoc, str(e))
 
     def _parseMdoc(self):
@@ -138,7 +138,7 @@ class MDoc:
         :return: dictionary (header), list of dictionaries (Z slices)
         """
 
-        print("Parsing %s" % self._mdocFileName)
+        logger.info("Parsing %s" % self._mdocFileName)
         headerDict = {}
         headerParsed = False
         zvalueList = []  # list of dictionaries with
@@ -209,20 +209,22 @@ class MDoc:
 
     def _getSlicesData(self, zSlices, tsFile):
 
-        print("Getting slices data...")
+        logger.info("Getting slices metadata...")
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
-            if self.doseProvidedByUser:
-                incomingDose = self.doseProvidedByUser
-            else:
-                incomingDose = \
-                    self._getDoseFromMdoc(zSlice, self.getSamplingRate())
+            try:
+                if self.doseProvidedByUser:
+                    incomingDose = self.doseProvidedByUser
+                else:
+                        incomingDose = self._getDoseFromMdoc(counter, zSlice, self.getSamplingRate())
+                accumulatedDose += incomingDose
 
-            print("Dose for slice %s: %s" % (counter, incomingDose))
-            accumulatedDose += incomingDose
+            except Exception as e:
+                msg = "Can't read the dose from %s slice: %s." % (counter, e)
+                logger.error(msg, exc_info=e)
+                raise Exception(msg)
 
-            print("Adding TiltMetaData ... ")
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(
@@ -239,7 +241,6 @@ class MDoc:
             logger.debug("Dose not found or almost 0 (%s) in %s" %
                          (accumulatedDose, self._mdocFileName))
 
-        print("END getSlices")
     def _sortByTimestamp(self, zSlices):
         """ MDOC file is not necessarily sorted by acquisition order,
             use TimeStamp key to sort Z-slices.
@@ -272,11 +273,10 @@ class MDoc:
                 raise ValueError("Slice section does not have %s field." % SUB_FRAME_PATH)
 
     @staticmethod
-    def _getDoseFromMdoc(zSlice, pixelSize):
+    def _getDoseFromMdoc(index, zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by
         zSlice, and add it to the previous accumulated dose"""
 
-        print("Getting dose from mdoc...")
         # Dose on specimen during camera exposure in electrons/sq. Angstrom
         EXPOSURE_DOSE = 'ExposureDose'
         # Dose per frame in electrons per square Angstrom followed
@@ -294,6 +294,14 @@ class MDoc:
         def _keysInDict(listOfKeys):
             return all([key in zSlice.keys() for key in listOfKeys])
 
+        def _toFloat(value):
+            """ Returns a float different from Nan. If NaN is present 0 es returned
+            :param value: value to validate
+            :return: the value or 0 if value is NaN
+            """
+            value = float(value)
+            return 0 if math.isnan(value) else value
+
         # Different ways of calculating the dose, ordered by priority
         # considering the possible variability between different mdoc files
         newDose = 0
@@ -310,7 +318,14 @@ class MDoc:
         if EXPOSURE_DOSE in zSlice:
             expDoseVal = zSlice[EXPOSURE_DOSE]
             if expDoseVal:
-                newDose = float(expDoseVal)
+                newDose = _toFloat(expDoseVal)
+                if newDose:
+                    logger.info("Dose for slice %s found in %s: %s" % (index, EXPOSURE_DOSE, newDose))
+                else:
+                    newDose = 0
+
+            if not newDose:
+                logger.info("Dose for slice %s not found in %s: %s" % (index, EXPOSURE_DOSE, expDoseVal))
 
         # Directly from field FrameDosesAndNumbers
         if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
@@ -320,14 +335,20 @@ class MDoc:
                 data = frameDoseAndNums.split()
                 dosePerFrame = data[0]
                 nFrames = data[1]
-                newDose = float(dosePerFrame) * float(nFrames)
+                newDose = _toFloat(dosePerFrame) * _toFloat(nFrames)
+                logger.info("Dose for slice %s found in %s: %s" % (index, FRAME_DOSES_AND_NUMBERS, newDose))
+            else:
+                logger.info("Dose for slice %s not found in %s: %s" % (index, FRAME_DOSES_AND_NUMBERS, frameDoseAndNums))
 
         # Calculated from fields DoseRate and ExposureTime
         if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
             doseRate = zSlice[DOSE_RATE]
             expTime = zSlice[EXPOSURE_TIME]
             if doseRate and expTime:
-                newDose = float(doseRate) * float(expTime) / pixelSize ** 2
+                newDose = _toFloat(doseRate) * _toFloat(expTime) / pixelSize ** 2
+                logger.info("Dose for slice %s found in %s and %s: %s" % (index, DOSE_RATE, EXPOSURE_DOSE, newDose))
+            else:
+                logger.info("Dose for slice %s not found in %s and %s: %s, %s" % (index, DOSE_RATE, EXPOSURE_TIME, doseRate, expTime))
 
         # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
         if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON]):
@@ -336,7 +357,10 @@ class MDoc:
             if all([minMaxMean, pixelSize, counts]):
                 # Get the mean from a string like '-42 2441 51.7968'
                 meanVal = minMaxMean.split()[-1]
-                newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
+                newDose = (_toFloat(meanVal) / _toFloat(counts)) / pixelSize ** 2
+                logger.info("Dose for slice %s found in %s, %s: %s" % (index, MIN_MAX_MEAN, COUNTS_PER_ELECTRON, newDose))
+            else:
+                logger.info("Dose for slice %s not found in %s, %s: %s, %s" % (index,  MIN_MAX_MEAN, COUNTS_PER_ELECTRON, minMaxMean, counts))
 
         # # Calculated as in Grigorieff paper -->
         #  https://dx.doi.org/10.7554/eLife.06980.001
@@ -358,7 +382,11 @@ class MDoc:
             divByTwo = int(zSlice[DIVIDED_BY_TWO])
         divByTwoFactor = 2 if divByTwo else 1
 
-        return newDose * divByTwoFactor
+        newDose = newDose * divByTwoFactor
+
+        if newDose == 0:
+            logger.warning("Dose found for slice %s is 0 after trying 4 different calculations. This look like an error.")
+        return newDose
 
     @staticmethod
     def _validateTSFromMdoc(mdoc, tsFile):
@@ -371,7 +399,7 @@ class MDoc:
 
     def _validateMdocInfoRead(self, ignoreFilesValidation=False):
 
-        print("Validating mdoc content")
+        logger.info("Validating mdoc content")
         validateMdocContentsErrorMsgList = []
         msg = [f'\n{self._mdocFileName} is missing:\n']
         missingFiles = []
