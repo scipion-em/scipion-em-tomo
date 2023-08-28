@@ -83,6 +83,7 @@ class MDoc:
             headerDict, zSlices = self._parseMdoc()
             zSlices = self._sortByTimestamp(zSlices)
 
+            print("Gathering info")
             # Get acquisition general info
             self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
             self._tsId = normalizeTSId(mdoc)
