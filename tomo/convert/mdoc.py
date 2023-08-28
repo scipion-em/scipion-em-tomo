@@ -269,6 +269,7 @@ class MDoc:
         """It calculates the accumulated dose on the frames represented by
         zSlice, and add it to the previous accumulated dose"""
 
+        print("Getting dose from mdoc...")
         # Dose on specimen during camera exposure in electrons/sq. Angstrom
         EXPOSURE_DOSE = 'ExposureDose'
         # Dose per frame in electrons per square Angstrom followed
