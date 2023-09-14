@@ -470,4 +470,4 @@ def normalizeTSId(rawTSId):
     if normTSID[0].isdigit():
         normTSID = "TS_" + normTSID
 
-    return normTSID.replace('-', '_').replace('.', '')
+    return normTSID.replace('-', '_').replace('.', '').replace('[', '').replace(']', '')

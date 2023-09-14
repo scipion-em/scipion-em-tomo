@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import logging
+
 logger = logging.getLogger(__name__)
 import os
 import re
@@ -471,7 +472,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 p = p.replace('{TA}', ta)
                 return p
 
-            self._regexPattern = _replace(self._pattern.replace('*', '(.*)'),
+            self._regexPattern = _replace(self._pattern.replace('*', '(.*)').replace('[', '\\[').replace(']', '\\]'),  # Escape the brackets so they are compiled in the regexp
                                           r'(?P<TS>.*)',
                                           r'(?P<TO>\d+)',
                                           r'(?P<TA>[+-]?\d+(\.\d+)?)')
@@ -560,10 +561,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             incomingDoseList = []
             for tiltMetadata in mdocObj.getTiltsMetadata():
                 fileOrderAngleList.append((
-                    tiltMetadata.getAngleMovieFile(),             # Filename
+                    tiltMetadata.getAngleMovieFile(),  # Filename
                     '{:03d}'.format(tiltMetadata.getAcqOrder()),  # Acquisition order
-                    tiltMetadata.getTiltAngle(),                  # Tilt angle
-                    tiltMetadata.getAccumDose()                   # Accumulated dose
+                    tiltMetadata.getTiltAngle(),  # Tilt angle
+                    tiltMetadata.getAccumDose()  # Accumulated dose
                 ))
                 accumulatedDoseList.append(tiltMetadata.getAccumDose())
                 incomingDoseList.append(tiltMetadata.getIncomingDose())
@@ -618,7 +619,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         for file in files:
             if any(bannedWord in file for bannedWord in exclusionWordList):
                 logger.info("%s excluded. Contains any of %s" %
-                      (file, exclusionWords))
+                            (file, exclusionWords))
                 continue
             allowedFiles.append(file)
 
@@ -634,7 +635,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             return self._getMatchingFilesFromRegExPattern()
 
     def _getMatchingFilesFromRegExPattern(self):
-        filePaths = glob(self._globPattern)
+        filePaths = glob(self._globPattern.replace('[', '*').replace(']', '*'))  # Glob module does not handle well the brackets
 
         filePaths = self._excludeByWords(filePaths)
 
@@ -680,7 +681,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 raise Exception('Invalid angles option: %s' % anglesFrom)
 
             for i, a in enumerate(angles):
-                order = i+1 if not tiltorders else tiltorders[i]
+                order = i + 1 if not tiltorders else tiltorders[i]
                 dose = doses[i] if doses else int(self.dosePerFrame.get()) * order
                 fileList.append(((i + 1, file), order, a, dose))
 
@@ -888,7 +889,7 @@ class ProtImportTs(ProtImportTsBase):
             if nAngles != nImages:
                 return 'Tilt-series %s stack has different number of images ' \
                        '(%d) than the expected number of tilt angles (%d). ' \
-                       % (fileName, nImages, nAngles)
+                    % (fileName, nImages, nAngles)
         else:
             return None
 
@@ -911,7 +912,7 @@ class ProtImportTsMovies(ProtImportTsBase):
                         help='Angles will be parsed from the filename pattern.'
                              'The special token {TA} should be specified as '
                              ' part of the pattern.'
-                       )
+                        )
 
     def _defineAcquisitionParams(self, form):
         """ Add movie specific options to the acquisition section. """
@@ -949,6 +950,6 @@ class ProtImportTsMovies(ProtImportTsBase):
                 self.getEnumText('anglesFrom') == self.ANGLES_FROM_FILENAME:
             if not self._anglesInPattern():
                 return 'When importing movies, {TS}, {TA} and {TO} ' \
-                        'should be present in the pattern.'
+                       'should be present in the pattern.'
         else:
             return None
