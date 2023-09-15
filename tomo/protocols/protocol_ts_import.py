@@ -472,14 +472,26 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 p = p.replace('{TA}', ta)
                 return p
 
-            self._regexPattern = _replace(self._pattern.replace('*', '(.*)').replace('[', '\\[').replace(']', '\\]'),  # Escape the brackets so they are compiled in the regexp
-                                          r'(?P<TS>.*)',
-                                          r'(?P<TO>\d+)',
-                                          r'(?P<TA>[+-]?\d+(\.\d+)?)')
+            # Handle the special characters from the pattern before compiling the regexp that will be used
+            # later for the file matching with the results obtained from the glob module file search
+            specialCharDict = {
+                '*': '(.*)',
+                '[': '\\[',  # Escape the brackets to make the regex compilation identify them as bracket characters
+                ']': '\\]'
+            }
+            inStr = self._pattern
+            for specChar, newVal in specialCharDict.items():
+                inStr = inStr.replace(specChar, newVal)
+            self._regexPattern = _replace(inStr,
+                                          r'(?P<TS>.*)',  # regex pattern for TS
+                                          r'(?P<TO>\d+)',  # regex pattern for TO
+                                          r'(?P<TA>[+-]?\d+(\.\d+)?)')  # regex pattern for TA
             self._regex = re.compile(self._regexPattern)
             self._globPattern = _replace(self._pattern, '*', '*', '*')
+            # Glob module does not handle well the brackets (it does not list them)
+            self._globPattern = self._globPattern.replace('[', '*').replace(']', '*')
 
-        # Set output names depending on the import type
+            # Set output names depending on the import type
         # (either movies or images)
         self._outputName = 'outputTiltSeries'
         self._createOutputName = '_createSetOfTiltSeries'
@@ -635,8 +647,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             return self._getMatchingFilesFromRegExPattern()
 
     def _getMatchingFilesFromRegExPattern(self):
-        filePaths = glob(self._globPattern.replace('[', '*').replace(']', '*'))  # Glob module does not handle well the brackets
-
+        filePaths = glob(self._globPattern)
         filePaths = self._excludeByWords(filePaths)
 
         filePaths.sort(key=lambda fn: os.path.getmtime(fn))

@@ -1,4 +1,12 @@
 v3.2:
+  - Import tilt series movies using a pattern instead of from mdoc files was improved and admits brackets in the
+    basename of the files.
+
+  Developers:
+  - Coordinates 3D object have a new attribute _score to store the coordinates score, when necessary.
+
+
+v3.2:
   - New protocol: "Landmarks to 2D coordinates". To jump to SPA from 3d info.
   - Tolerate empty lines in tlt files
   - Motion correction outputs renamed and fixed for odd/even and dose weighted
