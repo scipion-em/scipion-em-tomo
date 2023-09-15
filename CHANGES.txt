@@ -1,4 +1,4 @@
-v3.2:
+v3.2.1:
   - Import tilt series movies using a pattern instead of from mdoc files was improved and admits brackets in the
     basename of the files.
 
