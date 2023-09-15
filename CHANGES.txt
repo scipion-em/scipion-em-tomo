@@ -1,3 +1,5 @@
+v3.3:
+  - Tomo metadata viewer increase contrast when left clicking on the preview image.
 v3.2:
   - New protocol: "Landmarks to 2D coordinates". To jump to SPA from 3d info.
   - Tolerate empty lines in tlt files
