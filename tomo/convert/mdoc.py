@@ -384,7 +384,8 @@ class MDoc:
                        'ExposureDose or FrameDosesAndNumber or '
                        '(DoseRate and ExposureTime) or '
                        '(MinMaxMean and CountsPerElectron)\n')
-        if not self.getTiltAxisAngle():
+        tAx = self.getTiltAxisAngle()
+        if tAx is not None and tAx != '':  # 0.0 value must be allowed
             msg.append(' - RotationAngle (tilt axis angle)\n')
         if missingAnglesIndices:
             msg.append(' - TiltAngle for Z values: %s\n' % ', '.join(missingAnglesIndices))
@@ -470,4 +471,16 @@ def normalizeTSId(rawTSId):
     if normTSID[0].isdigit():
         normTSID = "TS_" + normTSID
 
-    return normTSID.replace('-', '_').replace('.', '')
+    # Replace/remove from the TsId the special characters that may be problematic when registering the data in
+    # the sqlite
+    specialCharDict = {
+        '-': '_',
+        '.': '',
+        '[': '',
+        ']': '',
+    }
+
+    for specChar, okChar in specialCharDict.items():
+        normTSID = normTSID.replace(specChar, okChar)
+
+    return normTSID

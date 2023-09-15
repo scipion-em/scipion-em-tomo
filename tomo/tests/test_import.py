@@ -25,13 +25,16 @@
 # **************************************************************************
 import glob
 import os
-from os.path import join, exists, abspath
+import random
+import string
+import tempfile
+from os.path import join, exists, abspath, basename
 
 import numpy
 
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
-from pyworkflow.utils import magentaStr, createLink
+from pyworkflow.utils import magentaStr, createLink, makePath, copyFile
 from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 
@@ -447,10 +450,10 @@ class TestTomoImportTsFromPattern(BaseTest):
         cls.getFileM = cls.dataset.getFile('empiar')
         cls.tiltAxisAngle = 84.1
 
-    def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
+    def _runImportTiltSeriesM(self, filesPath, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
-            filesPath=self.getFileM,
+            filesPath=filesPath,
             filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
@@ -484,8 +487,35 @@ class TestTomoImportTsFromPattern(BaseTest):
         return protImport
 
     def test_importTiltSeriesM(self):
-        protImport = self._runImportTiltSeriesM()
+        protImport = self._runImportTiltSeriesM(filesPath=self.getFileM)
         self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
+
+        return protImport
+
+    def test_importTiltSeriesM_withBrackets(self):
+        # Make a tmp dir with the angular stacks renamed, so they contain bracket characters in their base names
+        tmpBaseName = ''.join(random.choices(string.ascii_letters, k=5))
+        tmpDir = join(tempfile.gettempdir(), tmpBaseName)
+        makePath(tmpDir)
+        tsMDirKeys = ['tsM10Dir', 'tsM31Dir']
+        str2replace = 'Pertuzumab_'
+        newStr = str2replace + '015[16]_'
+        for tsMDirKey in tsMDirKeys:
+            dirName = self.dataset.getFile(tsMDirKey)
+            newPath = join(tmpDir, basename(dirName))
+            makePath(dirName, newPath)
+            origFiles = glob.glob(join(dirName, '*.mrc'))
+            [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, newStr))) for origFile in origFiles]
+
+        # 1: Brackets in out of the {} labels
+        filesPattern = '*/SKvesicles_Pertuzumab_015[16]_{TS}_{TO}_{TA}.mrc'
+        protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
+        self.checkTSSet(protImport.outputTiltSeriesM, 2, 5)
+
+        # 2: Brackets in the {TS} label
+        filesPattern = '*/SKvesicles_Pertuzumab_{TS}_{TO}_{TA}.mrc'
+        protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
+        self.checkTSSet(protImport.outputTiltSeriesM, 2, 5)
 
         return protImport
 

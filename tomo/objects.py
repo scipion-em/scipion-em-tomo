@@ -182,6 +182,9 @@ class TiltImageBase:
             self.copyObjId(other)
         if copyTM and other.hasTransform():
             self.copyAttributes(other, '_transform')
+        else:
+            self.setTransform(None)
+
         if other.hasOddEven():
             self.copyAttributes(other, '_oddEvenFileNames')
 
@@ -293,11 +296,10 @@ class TiltSeriesBase(data.SetOfImages):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-        if tiltImage.hasTransform():
-            self._hasAlignment.set(True)
+        # TODO: Do it only once? Size =1?
+        self._hasAlignment.set(tiltImage.hasTransform())
+        self._hasOddEven.set(tiltImage.hasOddEven())
 
-        if tiltImage.hasOddEven():
-            self._hasOddEven.set(True)
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
@@ -1167,6 +1169,8 @@ class Coordinate3D(data.EMObject):
     associated with a coordinate"""
 
     TOMO_ID_ATTR = "_tomoId"
+    GROUP_ID_ATTR = "_groupId"
+    SCORE_ATTR = "_score"
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
@@ -1179,6 +1183,7 @@ class Coordinate3D(data.EMObject):
         self._eulerMatrix = data.Transform()
         self._groupId = Integer(0)  # This may refer to a mesh, ROI, vesicle or any group of coordinates
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
+        self._score = Float(0)
         # coord (it's the tsId)
 
     def _getOffset(self, dim, originFunction=const.SCIPION):
@@ -1405,6 +1410,12 @@ class Coordinate3D(data.EMObject):
 
     def setTomoId(self, tomoId):
         self._tomoId.set(tomoId)
+
+    def getScore(self):
+        return self._score.get()
+
+    def setScore(self, val):
+        self._score.set(val)
 
     def composeCoordId(self, sampligRate):
         return "%s,%s,%s,%s" % (self.getTomoId(),

@@ -206,17 +206,40 @@ class TiltSeriesDialogView(pwviewer.View):
 
         if not self._preview:
             from pyworkflow.gui.matplotlib_image import ImagePreview
-            self._preview = ImagePreview(frame, dim=500, label="Tilt series")
+            self._preview = ImagePreview(frame, dim=500, label="Tilt series", listenersDict={"<Button-1>": self.gaussianFilter})
             self._preview.grid(row=0, column=0)
 
         return self._preview
+
+    def gaussianFilter(self, event):
+
+        # Try to increase the contrast. TODO: Move this to somewhere more resusable
+        try:
+            import skimage as ski
+
+
+            data = self._preview.figureimg.get_array()
+
+            data = ski.filters.gaussian(data, sigma=(2, 2))
+
+            self._preview._update(data)
+        except Exception as e:
+            print(e)
 
     def previewTiltSeries(self, obj: tomo.objects.SetOfTiltSeries, frame):
 
         preview = self.getPreviewWidget(frame)
         if isinstance(obj, tomo.objects.TiltImage):
             image = obj.getImage()
-            preview._update(image.getData())
+            data =image.getData()
+
+            # # Try to increase the contrast. TODO: Move this to somewhere more resusable
+            # try:
+            #     import skimage as ski
+            #     data = ski.filters.gaussian(data, sigma=(4, 4))
+            # except:
+            #     pass
+            preview._update(data)
             text = "Tilt image at %sº" % obj.getTiltAngle()
         else:
             preview.clear()
