@@ -182,6 +182,9 @@ class TiltImageBase:
             self.copyObjId(other)
         if copyTM and other.hasTransform():
             self.copyAttributes(other, '_transform')
+        else:
+            self.setTransform(None)
+
         if other.hasOddEven():
             self.copyAttributes(other, '_oddEvenFileNames')
 
@@ -293,11 +296,10 @@ class TiltSeriesBase(data.SetOfImages):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-        if tiltImage.hasTransform():
-            self._hasAlignment.set(True)
+        # TODO: Do it only once? Size =1?
+        self._hasAlignment.set(tiltImage.hasTransform())
+        self._hasOddEven.set(tiltImage.hasOddEven())
 
-        if tiltImage.hasOddEven():
-            self._hasOddEven.set(True)
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
