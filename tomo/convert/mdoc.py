@@ -384,8 +384,7 @@ class MDoc:
                        'ExposureDose or FrameDosesAndNumber or '
                        '(DoseRate and ExposureTime) or '
                        '(MinMaxMean and CountsPerElectron)\n')
-        tAx = self.getTiltAxisAngle()
-        if tAx is not None and tAx != '':  # 0.0 value must be allowed
+        if not self.getTiltAxisAngle():
             msg.append(' - RotationAngle (tilt axis angle)\n')
         if missingAnglesIndices:
             msg.append(' - TiltAngle for Z values: %s\n' % ', '.join(missingAnglesIndices))
