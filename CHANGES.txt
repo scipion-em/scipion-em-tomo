@@ -5,6 +5,7 @@ v3.3:
 
   Developers:
   - Coordinates 3D object have a new attribute _score to store the coordinates score, when necessary.
+  - SetOfSubTomograms append method now manages the align attribute of the set.
 
 v3.2:
   - New protocol: "Landmarks to 2D coordinates". To jump to SPA from 3d info.

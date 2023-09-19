@@ -1752,6 +1752,15 @@ class SetOfSubTomograms(data.SetOfVolumes):
         if hasattr(other, '_coordsPointer'):  # Like the vesicles in pyseg
             self.copyAttributes(other, '_coordsPointer')
 
+    def append(self, subtomo):
+        # Set the alignment attribute value when adding the first element to the set
+        if self.isEmpty():
+            trMatrix = subtomo.getTransform().getMatrix()
+            hasNonEyeTransform = not np.allclose(trMatrix, np.eye(4))
+            if hasNonEyeTransform:
+                self.setAlignment3D()
+        super().append(subtomo)
+
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
 
