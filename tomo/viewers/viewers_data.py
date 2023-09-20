@@ -160,7 +160,7 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
             'displayOddTiltSeries': self._displayOddTiltSeries,
         }
 
-    def _visualize(self, setOfTiltSeries):
+    def _visualize(self, setOfTiltSeries, **kwargs):
         from .views_tkinter_tree import TiltSeriesDialogView
         setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
 

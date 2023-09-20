@@ -27,7 +27,6 @@
 import glob
 import threading
 from tkinter import *
-import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -959,7 +958,6 @@ class CtfEstimationListDialog(ListDialog):
                         plot = self._showExtraPlot(ctfSerie, ctfId)
                         plot.show()
                         break
-
 
     def _actionCreateSets(self, event=None):
         if self.generateSubsetButton['state'] == tk.NORMAL:
