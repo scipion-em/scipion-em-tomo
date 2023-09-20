@@ -67,6 +67,13 @@ Install the plugin in developer mode.
     scipion installp -p local/path/to/scipion-em-tomo --devel
 
 
+**Configuration variables**
+===========================
+
+**NAPARI_ENV_ACTIVATION** (default = conda activate napari-0.4.4):
+Command to activate napari environment (used by other tomo plugins).
+
+
 Buildbot status
 ---------------
 
