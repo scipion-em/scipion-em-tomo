@@ -670,11 +670,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         return testData
 
-    def _runImportTiltSeries(self, isTsMovie=False, exclusionWords=None):
+    def _runImportTiltSeries(self, filesPath, pattern, isTsMovie=False, exclusionWords=None):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
         attribDict = {
-            'filesPath': self.parentDir,
-            'filesPattern': self.pattern,
+            'filesPath': filesPath,
+            'filesPattern': pattern,
         }
         if exclusionWords:
             attribDict['exclusionWords'] = exclusionWords
@@ -684,7 +684,45 @@ class TestTomoImportTsFromMdoc(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _checkResults(self, outputSet, isTsMovie, dimensions, prot, size=None):
+    def test_importTiltSeries_numeric_basename(self):
+        # Make a tmp dir with the TS, renamed to have a numeric base name, and also edit the corresponding mdoc files
+        # for consistency
+        tmpBaseName = ''.join(random.choices(string.ascii_letters, k=5))
+        tmpDir = join(tempfile.gettempdir(), tmpBaseName)
+        makePath(tmpDir)
+        tsMDirKeys = ['tsM10Dir', 'tsM31Dir']
+        fileExt2Copy = ['*.mrcs', '*.mdoc']
+        str2replace = 'stack'
+        origFiles = []
+        labelImageFileLineNum = 2
+        for tsMDirKey in tsMDirKeys:
+            dirName = self.dataset.getFile(tsMDirKey)
+            newPath = join(tmpDir, basename(dirName))
+            makePath(dirName, newPath)
+            # Copy the mrcs and mdoc files to a temp location, removing the 'stack' word from the name, so they become
+            # numerical names: stack10.mdoc --> 10.mdoc
+            for ext in fileExt2Copy:
+                origFiles += glob.glob(join(dirName, ext))
+            [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, ''))) for origFile in origFiles]
+            copiedMdoc = glob.glob(join(newPath, '*.mdoc'))[0]
+            # Update the Image File label in the mdoc to point to the numerical renamed TS
+            with open(copiedMdoc, "r") as f:
+                lines = f.readlines()
+            lines[labelImageFileLineNum] = lines[labelImageFileLineNum].replace(str2replace, '')
+            with open(copiedMdoc, "w") as f:
+                f.writelines(lines)
+
+        isTsMovie = False
+        label = 'Import TS numeric base name'
+        # Run protocol
+        protImport = self._runImportTiltSeries(tmpDir, '*/*.mdoc', isTsMovie=isTsMovie)
+        protImport.setObjLabel(label)
+        # Check results
+        outputSet = getattr(protImport, 'outputTiltSeries', None)
+        self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport, size=2, numericBaseName=True)
+        return protImport
+
+    def _checkResults(self, outputSet, isTsMovie, dimensions, prot, size=None, numericBaseName=False):
         # Generate the test data
         testDict = self._genTestData(isTsMovie)
         # Check set properties
@@ -694,7 +732,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         # Check tilt series movies
         for tsM in outputSet:
-            testDataDict = testDict[tsM.getTsId()]
+            # If numeric base name, the expected results need to be adapted as new files are generated in execution
+            # time to simulate the scenario for that test without having to add more files to the test dataset
+            tsId = tsM.getTsId().replace('TS_', 'stack') if numericBaseName else tsM.getTsId()
+            testDataDict = testDict[tsId]
             # Check set acquisition
             acq = tsM.getAcquisition()
             self.assertAlmostEqual(tsM.getSamplingRate(), testDataDict[self.PIXEL_SIZE], delta=0.001)
@@ -705,6 +746,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
             self.assertAlmostEqual(acq.getAccumDose(), testDataDict[self.ACCUM_DOSE], delta=0.0001)
             # Check angles and accumulated dose per angular acquisition (tilt series image)
             filesList = testDataDict[self.FILENAME_LIST]
+            if numericBaseName:
+                # If numeric base name, the expected results need to be adapted as new files are generated in execution
+                # time to simulate the scenario for that test without having to add more files to the test dataset
+                filesList = [file.replace('stack', '') for file in filesList]
             incDoseList = testDataDict[self.INCOMING_DOSE_LIST]
             accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
             angleList = testDataDict[self.ANGLE_LIST]
@@ -734,7 +779,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
         isTsMovie = True
         label = 'Import TsM'
         # Run protocol
-        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie, exclusionWords=exclusionWords)
+        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, isTsMovie=isTsMovie, exclusionWords=exclusionWords)
         if exclusionWords:
             label += ' excluding words'
         protImport.setObjLabel(label)
@@ -757,7 +802,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
     def test_importTiltSeries(self):
         isTsMovie = False
         # Run protocol
-        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
+        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, isTsMovie=isTsMovie)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeries', None)
         self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport, size=2)  # ts and tsM have different dims
