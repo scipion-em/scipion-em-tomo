@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 import os
 from datetime import datetime as dt
@@ -7,6 +8,7 @@ from pyworkflow.utils import getParentFolder, removeBaseExt
 from pathlib import PureWindowsPath
 
 SUB_FRAME_PATH = 'SubFramePath'
+TS_PREFIX = "TS_"
 
 
 class MDoc:
@@ -51,6 +53,7 @@ class MDoc:
     TiltAngle = -10.00
     ...
     """
+
     def __init__(self, fileName, voltage=None, magnification=None,
                  samplingRate=None, doseProvidedByUser=None,
                  tiltAngleProvidedByUser=None):
@@ -71,6 +74,13 @@ class MDoc:
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
+    @staticmethod
+    def normalizeTSId(mdocFileName):
+        mdocBaseName = removeBaseExt(mdocFileName)
+        tsPrefixAdded = True if mdocBaseName[0].isdigit() else False
+        normTsId = normalizeTSId(mdocFileName)
+        return normTsId, tsPrefixAdded
+
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
         """ Parse mdoc file. There is a collection of getters that may be
         used to access this information:
@@ -85,18 +95,19 @@ class MDoc:
 
             # Get acquisition general info
             self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
-            self._tsId = normalizeTSId(mdoc)
+            self._tsId, tsPrefixAdded = self.normalizeTSId(mdoc)
             parentFolder = getParentFolder(mdoc)
             if not isImportingTsMovies:
                 # Some mdoc files point to an .st file stored in the ImageFile
                 # header line
                 tsFile = join(parentFolder, headerDict.get("ImageFile", None))
+                expectedBaseName = self._tsId.replace(TS_PREFIX, '') if tsPrefixAdded else self._tsId
                 if not os.path.exists(tsFile):
-                    tsFile = join(parentFolder, self._tsId + '.mrcs')
+                    tsFile = join(parentFolder, expectedBaseName + '.mrcs')
                 if not os.path.exists(tsFile):
-                    tsFile = join(parentFolder, self._tsId + '.mrc')
+                    tsFile = join(parentFolder, expectedBaseName + '.mrc')
                 if not os.path.exists(tsFile):
-                    tsFile = join(parentFolder, self._tsId + '.st')
+                    tsFile = join(parentFolder, expectedBaseName + '.st')
                 validateTSFromMdocErrMsg = self._validateTSFromMdoc(mdoc, tsFile)
 
             # Get acquisition specific (per angle) info
@@ -119,7 +130,7 @@ class MDoc:
                 self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
                                          reverse=False)
                 for index, tiMd in enumerate(self._tiltsMetadata):
-                    tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
+                    tiMd.setAngleMovieFile((index + 1, tiMd.getAngleMovieFile()))
 
             return exceptionMsg
         except Exception as e:
@@ -153,8 +164,8 @@ class MDoc:
                         # it manually
                         continue
                     else:
-                        strLine = line.strip().replace(' ', '').\
-                                               replace(',', '').lower()
+                        strLine = line.strip().replace(' ', ''). \
+                            replace(',', '').lower()
                         pattern = 'tiltaxisangle='
                         if pattern in strLine:
                             # Example of the most common syntax
@@ -163,11 +174,11 @@ class MDoc:
                             # [T =     TiltAxisAngle = -91.81  Binning = 1
                             #                                   SpotSize = 7]
                             tiltAxisAngle = \
-                                    strLine.split('=')[2].split('binning')[0]
+                                strLine.split('=')[2].split('binning')[0]
                             # Check if it's a string which
                             # represents a float or not
-                            if tiltAxisAngle.lstrip('-+').\
-                               replace('.', '', 1).isdigit():
+                            if tiltAxisAngle.lstrip('-+'). \
+                                    replace('.', '', 1).isdigit():
                                 self._tiltAxisAngle = float(tiltAxisAngle)
                 elif line.strip():  # global variables no in [T sections]
                     key, value = line.split('=')
@@ -216,7 +227,7 @@ class MDoc:
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(
                     parentFolder, zSlice, tsFile),
-                acqOrder=counter+1,
+                acqOrder=counter + 1,
                 accumDose=accumulatedDose,
                 incomingDose=incomingDose
             ))
@@ -351,8 +362,8 @@ class MDoc:
     def _validateTSFromMdoc(mdoc, tsFile):
         errMsg = ''
         if not exists(tsFile):
-            errMsg = '\nMdoc --> %s\nExpected tilt series file not found \n%s'\
-                 % (mdoc, tsFile)
+            errMsg = '\nMdoc --> %s\nExpected tilt series file not found \n%s' \
+                     % (mdoc, tsFile)
 
         return errMsg
 
@@ -468,7 +479,7 @@ def normalizeTSId(rawTSId):
     normTSID = normTSID.split(".")[0]
 
     if normTSID[0].isdigit():
-        normTSID = "TS_" + normTSID
+        normTSID = TS_PREFIX + normTSID
 
     # Replace/remove from the TsId the special characters that may be problematic when registering the data in
     # the sqlite
