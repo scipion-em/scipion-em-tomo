@@ -68,29 +68,30 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions ----------------------------
     def assignTransformationMatricesStep(self):
-        self.getOutputAssignedTransformSetOfTiltSeries()
+        for getTS in self.getTMSetOfTiltSeries.get():
+            tsId = getTS.getTsId()
 
-        getTMTSdict = self.getTSDict(self.getTMSetOfTiltSeries.get())
-        setTMTSdict = self.getTSDict(self.setTMSetOfTiltSeries.get())
+            try:
+                setTS = self.setTMSetOfTiltSeries.get()[{'_tsId': tsId}]
 
-        for key in getTMTSdict:
-            if key in setTMTSdict.keys():
-                print(key)
-                print(getTMTSdict[key])
-                print(setTMTSdict[key])
-                print(getTMTSdict[key].getSize())
-                print(setTMTSdict[key].getSize())
+                self.getOutputAssignedTransformSetOfTiltSeries()
 
-                if getTMTSdict[key].getSize() != setTMTSdict[key].getSize():
-                    self.info("Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
-                              "(will not appear in output set)." % key)
+                if getTS.getSize() != setTS.getSize():
+                    self.info(
+                        "Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
+                        "(will not appear in output set)." % tsId)
 
                 else:
-                    newTs = tomoObj.TiltSeries(tsId=key)
-                    newTs.copyInfo(setTMTSdict[key])
+                    newTs = tomoObj.TiltSeries(tsId=tsId)
+                    newTs.copyInfo(setTS)
                     self.outputAssignedTransformSetOfTiltSeries.append(newTs)
 
-                    for tiltImageGetTM, tiltImageSetTM in zip(getTMTSdict[key], setTMTSdict[key]):
+                    counter = 0
+                    for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
+                        print(counter)
+                        counter += 1
+                        print(tiltImageGetTM)
+                        print(tiltImageSetTM)
                         newTi = tomoObj.TiltImage()
                         newTi.copyInfo(tiltImageSetTM, copyId=True)
                         newTi.setLocation(tiltImageSetTM.getLocation())
@@ -98,28 +99,17 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                         newTi.setTransform(newTransform)
                         newTs.append(newTi)
 
-                    newTs.setDim(setTMTSdict[key].getDim())
+                    newTs.setDim(setTS.getDim())
                     newTs.write()
 
                     self.outputAssignedTransformSetOfTiltSeries.update(newTs)
                     self.outputAssignedTransformSetOfTiltSeries.write()
                     self._store()
 
-            else:
-                self.info("No matching tilt-series in target set for tilt-series %s. Ignoring ts (will not appear in "
-                          "output set)." % key)
+            except:
+                self.info("Tilt-series %s not found in target set. Ignoring ts (will not appear in output set)." % tsId)
 
     # --------------------------- UTILS functions ----------------------------
-    @staticmethod
-    def getTSDict(tsSet):
-        tsDict = {}
-
-        for ts in tsSet:
-            tsId = ts.getTsId()
-            tsDict[tsId] = ts
-
-        return tsDict
-
     def getOutputAssignedTransformSetOfTiltSeries(self):
         if self.outputAssignedTransformSetOfTiltSeries:
             self.outputAssignedTransformSetOfTiltSeries.enableAppend()
@@ -139,8 +129,10 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         """ Scale the transform matrix shifts. """
         matrix = transform.getMatrix()
 
-        matrix[0][2] /= self.getSamplingRatio()
-        matrix[1][2] /= self.getSamplingRatio()
+        sr = self.getSamplingRatio()
+
+        matrix[0][2] /= sr
+        matrix[1][2] /= sr
 
         transform.setMatrix(matrix)
 
