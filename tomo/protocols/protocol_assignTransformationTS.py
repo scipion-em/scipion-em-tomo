@@ -120,16 +120,9 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
         for tsGetTM, tsSetTM in zip(self.getTMSetOfTiltSeries.get(), self.setTMSetOfTiltSeries.get()):
             if not tsGetTM.getFirstItem().hasTransform():
-                validateMsgs.append("Some tilt-series from the input set do not have a "
-                                    "transformation matrix assigned.")
-
-            if tsGetTM.getSize() != tsSetTM.getSize():
-                validateMsgs.append("Every input tilt-series and its target "
-                                    "must have the same number of elements.")
-
-        if self.getTMSetOfTiltSeries.get().getSize() != self.setTMSetOfTiltSeries.get().getSize():
-            validateMsgs.append("Both input sets must have the same "
-                                "number of tilt-series.")
+                validateMsgs.append("Tilt-series %s from the input set do not have a "
+                                    "transformation matrix assigned." % tsGetTM.getTsId())
+                break
 
         return validateMsgs
 
