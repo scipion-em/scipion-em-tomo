@@ -86,12 +86,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                     newTs.copyInfo(setTS)
                     self.outputAssignedTransformSetOfTiltSeries.append(newTs)
 
-                    counter = 0
                     for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
-                        print(counter)
-                        counter += 1
-                        print(tiltImageGetTM)
-                        print(tiltImageSetTM)
                         newTi = tomoObj.TiltImage()
                         newTi.copyInfo(tiltImageSetTM, copyId=True)
                         newTi.setLocation(tiltImageSetTM.getLocation())
