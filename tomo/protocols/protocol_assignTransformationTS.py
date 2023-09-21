@@ -39,6 +39,11 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     _label = 'Tilt-series assign alignment'
     _devStatus = BETA
+    _possibleOutputs = {"assignedTransformSetOfTiltSeries": tomoObj.SetOfTiltSeries, }
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.outputAssignedTransformSetOfTiltSeries = None
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -63,21 +68,27 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions ----------------------------
     def assignTransformationMatricesStep(self):
-        outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
+        self.getOutputAssignedTransformSetOfTiltSeries()
 
         getTMTSdict = self.getTSDict(self.getTMSetOfTiltSeries.get())
         setTMTSdict = self.getTSDict(self.setTMSetOfTiltSeries.get())
 
         for key in getTMTSdict:
             if key in setTMTSdict.keys():
+                print(key)
+                print(getTMTSdict[key])
+                print(setTMTSdict[key])
+                print(getTMTSdict[key].getSize())
+                print(setTMTSdict[key].getSize())
+
                 if getTMTSdict[key].getSize() != setTMTSdict[key].getSize():
-                    self.info("number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
-                              "(will not appear in output set." % key)
+                    self.info("Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
+                              "(will not appear in output set)." % key)
 
                 else:
-                    newTs = tomoObj.TiltSeries(tsId=str(key))
+                    newTs = tomoObj.TiltSeries(tsId=key)
                     newTs.copyInfo(setTMTSdict[key])
-                    outputAssignedTransformSetOfTiltSeries.append(newTs)
+                    self.outputAssignedTransformSetOfTiltSeries.append(newTs)
 
                     for tiltImageGetTM, tiltImageSetTM in zip(getTMTSdict[key], setTMTSdict[key]):
                         newTi = tomoObj.TiltImage()
@@ -96,7 +107,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
             else:
                 self.info("No matching tilt-series in target set for tilt-series %s. Ignoring ts (will not appear in "
-                          "output set." % key)
+                          "output set)." % key)
 
     # --------------------------- UTILS functions ----------------------------
     @staticmethod
