@@ -295,7 +295,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             ])
             # The TXT case is coded with an origin of type BOTTOM_LEFT_CORNER
             for i in range(len(tomoDim)):
-                expCoords[:, i] = expCoords[:, i] * scaleFactor - tomoDim[i]
+                expCoords[:, i] = expCoords[:, i] * scaleFactor - tomoDim[i] / 2
             return expCoords
 
         def runImportTxtCoords(sRate, boxSize, extraText):
@@ -310,25 +310,29 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         scaleFactor = 1
         output = runImportTxtCoords(self.sRate, self.boxSize, 'sRate equal')
         self.assertCoordinates(output, nCoords, self.boxSize, self.sRate)
-        checkCoordinates(getExpectedCoords(), output)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
 
         # 2) Coordinates' sampling rate not provided --> assume it's the same as the tomograms' sampling rate
         scaleFactor = 1
         output = runImportTxtCoords(self.sRate, self.boxSize, 'sRate not provided')
         self.assertCoordinates(output, nCoords, self.boxSize, self.sRate)
-        checkCoordinates(getExpectedCoords(), output)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
 
         # 3) Coordinates' sampling rate is half of the tomograms' sampling rate
         scaleFactor = 0.5
         output = runImportTxtCoords(scaleFactor * self.sRate, self.boxSize, 'sRate half')
         self.assertCoordinates(output, nCoords, scaleFactor * self.boxSize, self.sRate)
-        checkCoordinates(getExpectedCoords() * scaleFactor, output)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
 
         # 4) Coordinates' sampling rate is double of the tomograms' sampling rate
         scaleFactor = 2
         output = runImportTxtCoords(scaleFactor * self.sRate, self.boxSize, 'sRate double')
         self.assertCoordinates(output, nCoords, scaleFactor * self.boxSize, self.sRate)
-        checkCoordinates(getExpectedCoords() * scaleFactor, output)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
 
         # From cbox ----------------------------------------------------------------------------------------------------
         expectedCoords = [
