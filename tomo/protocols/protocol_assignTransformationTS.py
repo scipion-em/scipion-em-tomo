@@ -75,7 +75,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                               "(will not appear in output set." % key)
 
                 else:
-                    newTs = tomoObj.TiltSeries(tsId=key)
+                    newTs = tomoObj.TiltSeries(tsId=str(key))
                     newTs.copyInfo(setTMTSdict[key])
                     outputAssignedTransformSetOfTiltSeries.append(newTs)
 
