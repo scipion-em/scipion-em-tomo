@@ -121,7 +121,9 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         return tsDict
 
     def getOutputAssignedTransformSetOfTiltSeries(self):
-        if not hasattr(self, "outputAssignedTransformSetOfTiltSeries"):
+        if self.outputAssignedTransformSetOfTiltSeries:
+            self.outputAssignedTransformSetOfTiltSeries.enableAppend()
+        else:
             outputAssignedTransformSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AssignedTransform')
             outputAssignedTransformSetOfTiltSeries.copyInfo(self.setTMSetOfTiltSeries.get())
             outputAssignedTransformSetOfTiltSeries.setDim(self.setTMSetOfTiltSeries.get().getDim())
