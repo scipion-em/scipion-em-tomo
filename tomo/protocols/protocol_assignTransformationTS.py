@@ -137,7 +137,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def _validate(self):
         validateMsgs = []
 
-        for tsGetTM, tsSetTM in zip(self.getTMSetOfTiltSeries.get(), self.setTMSetOfTiltSeries.get()):
+        for tsGetTM in self.getTMSetOfTiltSeries.get():
             if not tsGetTM.getFirstItem().hasTransform():
                 validateMsgs.append("Tilt-series %s from the input set do not have a "
                                     "transformation matrix assigned." % tsGetTM.getTsId())
