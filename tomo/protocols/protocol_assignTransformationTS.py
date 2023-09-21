@@ -59,37 +59,56 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        for ts in self.getTMSetOfTiltSeries.get():
-            self._insertFunctionStep('assignTransformationMatricesStep', ts.getObjId())
+        self._insertFunctionStep('assignTransformationMatricesStep')
 
     # --------------------------- STEPS functions ----------------------------
-    def assignTransformationMatricesStep(self, tsObjId):
+    def assignTransformationMatricesStep(self):
         outputAssignedTransformSetOfTiltSeries = self.getOutputAssignedTransformSetOfTiltSeries()
 
-        setTMTS = self.setTMSetOfTiltSeries.get()[tsObjId]
-        getTMTS = self.getTMSetOfTiltSeries.get()[tsObjId]
-        tsId = getTMTS.getTsId()
+        getTMTSdict = self.getTSDict(self.getTMSetOfTiltSeries.get())
+        setTMTSdict = self.getTSDict(self.setTMSetOfTiltSeries.get())
 
-        newTs = tomoObj.TiltSeries(tsId=tsId)
-        newTs.copyInfo(setTMTS)
-        outputAssignedTransformSetOfTiltSeries.append(newTs)
+        for key in getTMTSdict:
+            if key in setTMTSdict.keys():
+                if getTMTSdict[key].getSize() != setTMTSdict[key].getSize():
+                    self.info("number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
+                              "(will not appear in output set." % key)
 
-        for tiltImageGetTM, tiltImageSetTM in zip(getTMTS, setTMTS):
-            newTi = tomoObj.TiltImage()
-            newTi.copyInfo(tiltImageSetTM, copyId=True)
-            newTi.setLocation(tiltImageSetTM.getLocation())
-            newTransform = self.updateTM(tiltImageGetTM.getTransform())
-            newTi.setTransform(newTransform)
-            newTs.append(newTi)
+                else:
+                    newTs = tomoObj.TiltSeries(tsId=key)
+                    newTs.copyInfo(setTMTSdict[key])
+                    outputAssignedTransformSetOfTiltSeries.append(newTs)
 
-        newTs.setDim(setTMTS.getDim())
-        newTs.write()
+                    for tiltImageGetTM, tiltImageSetTM in zip(getTMTSdict[key], setTMTSdict[key]):
+                        newTi = tomoObj.TiltImage()
+                        newTi.copyInfo(tiltImageSetTM, copyId=True)
+                        newTi.setLocation(tiltImageSetTM.getLocation())
+                        newTransform = self.updateTM(tiltImageGetTM.getTransform())
+                        newTi.setTransform(newTransform)
+                        newTs.append(newTi)
 
-        outputAssignedTransformSetOfTiltSeries.update(newTs)
-        outputAssignedTransformSetOfTiltSeries.write()
-        self._store()
+                    newTs.setDim(setTMTSdict[key].getDim())
+                    newTs.write()
+
+                    outputAssignedTransformSetOfTiltSeries.update(newTs)
+                    outputAssignedTransformSetOfTiltSeries.write()
+                    self._store()
+
+            else:
+                self.info("No matching tilt-series in target set for tilt-series %s. Ignoring ts (will not appear in "
+                          "output set." % key)
 
     # --------------------------- UTILS functions ----------------------------
+    @staticmethod
+    def getTSDict(tsSet):
+        tsDict = {}
+
+        for ts in tsSet:
+            tsId = ts.getTsId()
+            tsDict[tsId] = ts
+
+        return tsDict
+
     def getOutputAssignedTransformSetOfTiltSeries(self):
         if not hasattr(self, "outputAssignedTransformSetOfTiltSeries"):
             outputAssignedTransformSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AssignedTransform')
