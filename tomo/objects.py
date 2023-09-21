@@ -25,6 +25,9 @@
 # *
 # **************************************************************************
 import logging
+
+from pwem import ALIGN_NONE
+
 logger = logging.getLogger(__name__)
 
 import csv
@@ -1752,13 +1755,17 @@ class SetOfSubTomograms(data.SetOfVolumes):
         if hasattr(other, '_coordsPointer'):  # Like the vesicles in pyseg
             self.copyAttributes(other, '_coordsPointer')
 
-    def append(self, subtomo):
+    def append(self, subtomo:SubTomogram):
         # Set the alignment attribute value when adding the first element to the set
         if self.isEmpty():
-            trMatrix = subtomo.getTransform().getMatrix()
-            hasNonEyeTransform = not np.allclose(trMatrix, np.eye(4))
-            if hasNonEyeTransform:
-                self.setAlignment3D()
+            if subtomo.hasTransform():
+                trMatrix = subtomo.getTransform().getMatrix()
+                hasNonEyeTransform = not np.allclose(trMatrix, np.eye(4))
+                if hasNonEyeTransform:
+                    self.setAlignment3D()
+            else:
+                self.setAlignment(ALIGN_NONE)
+
         super().append(subtomo)
 
     def hasCoordinates3D(self):
