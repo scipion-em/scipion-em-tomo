@@ -39,7 +39,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     _label = 'Tilt-series assign alignment'
     _devStatus = BETA
-    _possibleOutputs = {"assignedTransformSetOfTiltSeries": tomoObj.SetOfTiltSeries, }
+    _possibleOutputs = {"assignedTransformSetOfTiltSeries": tomoObj.SetOfTiltSeries}
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
