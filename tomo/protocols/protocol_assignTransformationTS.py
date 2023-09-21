@@ -101,8 +101,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                     newTs.setDim(setTMTSdict[key].getDim())
                     newTs.write()
 
-                    outputAssignedTransformSetOfTiltSeries.update(newTs)
-                    outputAssignedTransformSetOfTiltSeries.write()
+                    self.outputAssignedTransformSetOfTiltSeries.update(newTs)
+                    self.outputAssignedTransformSetOfTiltSeries.write()
                     self._store()
 
             else:
