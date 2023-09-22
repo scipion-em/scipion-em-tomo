@@ -88,55 +88,50 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         for getTS in self.getTMSetOfTiltSeries.get():
             tsId = getTS.getTsId()
 
-            print(tsId)
-
             try:
                 setTS = self.setTMSetOfTiltSeries.get()[{'_tsId': tsId}]
+
+                self.getOutputAssignedTransformSetOfTiltSeries()
+
+                if getTS.getSize() != setTS.getSize():
+                    self.info(
+                        "Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
+                        "(will not appear in output set)." % tsId)
+
+                else:
+                    newTs = tomoObj.TiltSeries(tsId=tsId)
+                    newTs.copyInfo(setTS)
+                    self.outputAssignedTransformSetOfTiltSeries.append(newTs)
+
+                    for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
+                        newTi = tomoObj.TiltImage()
+                        newTi.copyInfo(tiltImageSetTM, copyId=True)
+                        newTi.setLocation(tiltImageSetTM.getLocation())
+
+                        if tiltImageSetTM.hasTransform():
+                            previousTransform = tiltImageSetTM.getTransform().getMatrix()
+                            newTransform = self.updateTM(tiltImageGetTM.getTransform())
+                            previousTransformArray = np.array(previousTransform)
+                            newTransformArray = np.array(newTransform.getMatrix())
+
+                            outputTransformMatrix = np.matmul(newTransformArray, previousTransformArray)
+                            newTransform.setMatrix(outputTransformMatrix)
+
+                        else:
+                            newTransform = self.updateTM(tiltImageGetTM.getTransform())
+
+                        newTi.setTransform(newTransform)
+                        newTs.append(newTi)
+
+                    newTs.setDim(setTS.getDim())
+                    newTs.write()
+
+                    self.outputAssignedTransformSetOfTiltSeries.update(newTs)
+                    self.outputAssignedTransformSetOfTiltSeries.write()
+                    self._store()
+
             except:
                 self.info("Tilt-series %s not found in target set. Ignoring ts (will not appear in output set)." % tsId)
-
-            self.getOutputAssignedTransformSetOfTiltSeries()
-
-            if getTS.getSize() != setTS.getSize():
-                self.info(
-                    "Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
-                    "(will not appear in output set)." % tsId)
-
-            else:
-                newTs = tomoObj.TiltSeries(tsId=tsId)
-                newTs.copyInfo(setTS)
-                self.outputAssignedTransformSetOfTiltSeries.append(newTs)
-
-                for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
-                    newTi = tomoObj.TiltImage()
-                    newTi.copyInfo(tiltImageSetTM, copyId=True)
-                    newTi.setLocation(tiltImageSetTM.getLocation())
-
-                    if tiltImageSetTM.hasTransform():
-                        previousTransform = tiltImageSetTM.getTransform().getMatrix()
-                        newTransform = self.updateTM(tiltImageGetTM.getTransform())
-                        previousTransformArray = np.array(previousTransform)
-                        newTransformArray = np.array(newTransform.getMatrix())
-
-                        print(newTransformArray)
-                        print(previousTransformArray)
-                        print(newTransformArray.shape)
-                        print(previousTransformArray.shape)
-
-                        outputTransformMatrix = np.matmul(newTransformArray, previousTransformArray)
-                        newTransform.setMatrix(outputTransformMatrix)
-                    else:
-                        newTransform = self.updateTM(tiltImageGetTM.getTransform())
-
-                    newTi.setTransform(newTransform)
-                    newTs.append(newTi)
-
-                newTs.setDim(setTS.getDim())
-                newTs.write()
-
-                self.outputAssignedTransformSetOfTiltSeries.update(newTs)
-                self.outputAssignedTransformSetOfTiltSeries.write()
-                self._store()
 
     def assignTransformationMatricesStep(self):
         self.info("Assigning alignments mode started...")
