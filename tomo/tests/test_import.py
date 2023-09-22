@@ -292,7 +292,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                 [413, 346, 255],
                 [46, 189, 255],
                 [167, 224, 255]
-            ])
+            ], dtype=float)
             # The TXT case is coded with an origin of type BOTTOM_LEFT_CORNER
             for i in range(len(tomoDim)):
                 expCoords[:, i] = expCoords[:, i] * scaleFactor - tomoDim[i] / 2
