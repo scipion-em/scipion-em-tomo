@@ -670,11 +670,12 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         return testData
 
-    def _runImportTiltSeries(self, filesPath, pattern, isTsMovie=False, exclusionWords=None):
+    def _runImportTiltSeries(self, filesPath, pattern, isTsMovie=False, exclusionWords=None, label="import tilt series"):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
         attribDict = {
             'filesPath': filesPath,
             'filesPattern': pattern,
+            'objLabel': label
         }
         if exclusionWords:
             attribDict['exclusionWords'] = exclusionWords
@@ -779,10 +780,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
         isTsMovie = True
         label = 'Import TsM'
         # Run protocol
-        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, isTsMovie=isTsMovie, exclusionWords=exclusionWords)
         if exclusionWords:
             label += ' excluding words'
-        protImport.setObjLabel(label)
+
+        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, label=label, isTsMovie=isTsMovie, exclusionWords=exclusionWords)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeriesM', None)
         self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport, size=outputSize)  # ts and tsM have
