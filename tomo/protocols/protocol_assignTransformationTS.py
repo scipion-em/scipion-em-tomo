@@ -23,7 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import numpy as np
 
+from pwem.objects import Transform
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
@@ -53,21 +55,92 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series from which transformation matrices will be obtained.',
-                      label='Tilt-series WITH alignment')
+                      label='Tilt-series from which to take the alignment')
 
         form.addParam('setTMSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series on which transformation matrices will be assigned.',
-                      label='Tilt-series WITHOUT alignment')
+                      label='Tilt-series to assign the alignment to')
+
+        form.addParam('combineAlignment',
+                      params.EnumParam,
+                      choices=['Yes', 'No'],
+                      default=0,
+                      label='Combine alignments',
+                      important=True,
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      help='If the tilt-series to assign the alignment has a previous alignment'
+                           'this will be combined with the ')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('assignTransformationMatricesStep')
+        if self.combineAlignment.get() == 0:
+            self._insertFunctionStep(self.combineTransformationMatricesStep)
+        else:
+            self._insertFunctionStep(self.assignTransformationMatricesStep)
 
     # --------------------------- STEPS functions ----------------------------
+    def combineTransformationMatricesStep(self):
+        self.info("Combining alignments mode started...")
+
+        for getTS in self.getTMSetOfTiltSeries.get():
+            tsId = getTS.getTsId()
+
+            print(tsId)
+
+            try:
+                setTS = self.setTMSetOfTiltSeries.get()[{'_tsId': tsId}]
+            except:
+                self.info("Tilt-series %s not found in target set. Ignoring ts (will not appear in output set)." % tsId)
+
+            self.getOutputAssignedTransformSetOfTiltSeries()
+
+            if getTS.getSize() != setTS.getSize():
+                self.info(
+                    "Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
+                    "(will not appear in output set)." % tsId)
+
+            else:
+                newTs = tomoObj.TiltSeries(tsId=tsId)
+                newTs.copyInfo(setTS)
+                self.outputAssignedTransformSetOfTiltSeries.append(newTs)
+
+                for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
+                    newTi = tomoObj.TiltImage()
+                    newTi.copyInfo(tiltImageSetTM, copyId=True)
+                    newTi.setLocation(tiltImageSetTM.getLocation())
+
+                    if tiltImageSetTM.hasTransform():
+                        previousTransform = tiltImageSetTM.getTransform().getMatrix()
+                        newTransform = self.updateTM(tiltImageGetTM.getTransform())
+                        previousTransformArray = np.array(previousTransform)
+                        newTransformArray = np.array(newTransform.getMatrix())
+
+                        print(newTransformArray)
+                        print(previousTransformArray)
+                        print(newTransformArray.shape)
+                        print(previousTransformArray.shape)
+
+                        outputTransformMatrix = np.matmul(newTransformArray, previousTransformArray)
+                        newTransform.setMatrix(outputTransformMatrix)
+                    else:
+                        newTransform = self.updateTM(tiltImageGetTM.getTransform())
+
+                    newTi.setTransform(newTransform)
+                    newTs.append(newTi)
+
+                newTs.setDim(setTS.getDim())
+                newTs.write()
+
+                self.outputAssignedTransformSetOfTiltSeries.update(newTs)
+                self.outputAssignedTransformSetOfTiltSeries.write()
+                self._store()
+
     def assignTransformationMatricesStep(self):
+        self.info("Assigning alignments mode started...")
+
         for getTS in self.getTMSetOfTiltSeries.get():
             tsId = getTS.getTsId()
 
@@ -90,8 +163,10 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                         newTi = tomoObj.TiltImage()
                         newTi.copyInfo(tiltImageSetTM, copyId=True)
                         newTi.setLocation(tiltImageSetTM.getLocation())
+
                         newTransform = self.updateTM(tiltImageGetTM.getTransform())
                         newTi.setTransform(newTransform)
+
                         newTs.append(newTi)
 
                     newTs.setDim(setTS.getDim())
@@ -124,12 +199,15 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         """ Scale the transform matrix shifts. """
         matrix = transform.getMatrix()
 
+        print(matrix)
         sr = self.getSamplingRatio()
 
         matrix[0][2] /= sr
         matrix[1][2] /= sr
 
         transform.setMatrix(matrix)
+
+        print(matrix)
 
         return transform
 
