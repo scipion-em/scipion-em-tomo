@@ -31,6 +31,7 @@ import tempfile
 from os.path import join, exists, abspath, basename
 
 import numpy
+import numpy as np
 
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
@@ -159,6 +160,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         cls.emdDs = DataSet.getDataSet('emd_10439')
         cls.sqBoxSize = 20
         cls.sqSamplingRate = 13.68
+        cls.sRate = 5.5
+        cls.boxSize = 32
 
     def _importTomograms(self, filesPath, samplingRate, pattern=None):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
@@ -172,17 +175,16 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         return protImportTomogram.Tomograms
 
-    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
-        sRate = 5.5
+    def _runImportSetOfCoordinates(self, pattern, program, ext, importTomograms=None, coordsSRate=None,
+                                   boxSize=None, extraText=''):
         protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
-                                                   objLabel='Import from %s - %s' % (program, ext),
+                                                   objLabel='Import from %s - %s ' % (program, ext) + extraText,
                                                    auto=IMPORT_FROM_AUTO,
                                                    filesPath=self.tomoDs.getPath(),
-                                                   importTomograms=self._importTomograms(self.tomoDs.getFile('tomo1'),
-                                                                                         sRate),
+                                                   importTomograms=importTomograms,
                                                    filesPattern=pattern,
-                                                   boxSize=32,
-                                                   samplingRate=sRate)
+                                                   boxSize=boxSize,
+                                                   samplingRate=coordsSRate)
         self.launchProtocol(protImportCoordinates3d)
         return protImportCoordinates3d
 
@@ -195,7 +197,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         self.launchProtocol(protImportCoordsFromSqlite)
         return getattr(protImportCoordsFromSqlite, outputObjs.coordinates.name, None), \
-               getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
+            getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
 
     def testImport3dCoordsFromSqlite_FullMatch(self):
         setSize = 2339
@@ -268,18 +270,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(str(eType.exception), ERR_COORDS_FROM_SQLITE_NO_MATCH)
 
     def test_import_set_of_coordinates_3D(self):
-        boxSize = 32
-        samplingRate = 5.5
-
-        # From txt
-        protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
-        output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 5, boxSize, samplingRate)
-
-        # From txt
-        protCoordinates = self._runTomoImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX')
-        output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 3, boxSize, samplingRate)
+        OUT_COORDS = 'outputCoordinates'
+        importedTomos = self._importTomograms(self.tomoDs.getFile('tomo1'), self.sRate)
 
         def checkCoordinates(expectedValues, coordSet):
 
@@ -289,19 +281,81 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                 self.assertEqual(coord.getY(SCIPION), row[1], "Y coordinate not converted properly")
                 self.assertEqual(coord.getZ(SCIPION), row[2], "Z coordinate not converted properly")
 
+        # From txt -----------------------------------------------------------------------------------------------------
+        nCoords = 5
+        tomoDim = [1024, 1024, 512]
+
+        def getExpectedCoords():
+            expCoords = np.array([
+                [314, 350, 256],
+                [174, 172, 256],
+                [413, 346, 255],
+                [46, 189, 255],
+                [167, 224, 255]
+            ], dtype=float)
+            # The TXT case is coded with an origin of type BOTTOM_LEFT_CORNER
+            for i in range(len(tomoDim)):
+                expCoords[:, i] = expCoords[:, i] * scaleFactor - tomoDim[i] / 2
+            return expCoords
+
+        def runImportTxtCoords(sRate, boxSize, extraText):
+            protImportCoordinates = self._runImportSetOfCoordinates('*.txt', 'TOMO', 'TXT',
+                                                                    importTomograms=importedTomos,
+                                                                    coordsSRate=sRate,
+                                                                    boxSize=boxSize,
+                                                                    extraText=extraText)
+            return getattr(protImportCoordinates, OUT_COORDS, None)
+
+        # 1) Coordinates with a sampling rate equal to the tomograms' sampling rate
+        scaleFactor = 1
+        output = runImportTxtCoords(self.sRate, self.boxSize, 'sRate equal')
+        self.assertCoordinates(output, nCoords, self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # 2) Coordinates' sampling rate not provided --> assume it's the same as the tomograms' sampling rate
+        scaleFactor = 1
+        output = runImportTxtCoords(self.sRate, self.boxSize, 'sRate not provided')
+        self.assertCoordinates(output, nCoords, self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # 3) Coordinates' sampling rate is half of the tomograms' sampling rate
+        scaleFactor = 0.5
+        output = runImportTxtCoords(scaleFactor * self.sRate, self.boxSize, 'sRate half')
+        self.assertCoordinates(output, nCoords, scaleFactor * self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # 4) Coordinates' sampling rate is double of the tomograms' sampling rate
+        scaleFactor = 2
+        output = runImportTxtCoords(scaleFactor * self.sRate, self.boxSize, 'sRate double')
+        self.assertCoordinates(output, nCoords, scaleFactor * self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # From cbox ----------------------------------------------------------------------------------------------------
         expectedCoords = [
             [-512, -512, -256],
             [0, 0, 0],
             [512, 512, 256],
         ]
-
+        protCoordinates = self._runImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX',
+                                                          importTomograms=importedTomos,
+                                                          coordsSRate=self.sRate,
+                                                          boxSize=self.boxSize)
+        output = getattr(protCoordinates, OUT_COORDS, None)
+        self.assertCoordinates(output, 3, self.boxSize, self.sRate)
         checkCoordinates(expectedCoords, output)
 
-        # From emantomo file
+        # From emantomo file -------------------------------------------------------------------------------------------
         if existsPlugin('emantomo'):
-            protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
-            output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 19, boxSize, samplingRate)
+            protCoordinates = self._runImportSetOfCoordinates('*.json', 'EMAN', 'JSON',
+                                                              importTomograms=importedTomos,
+                                                              coordsSRate=self.sRate,
+                                                              boxSize=self.boxSize)
+            output = getattr(protCoordinates, OUT_COORDS, None)
+            self.assertCoordinates(output, 19, self.boxSize, self.sRate)
 
             # Check se are not loosing precision
             firstCoord = output.getFirstItem()
@@ -311,11 +365,14 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
             self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
 
-        # From dynamo file
+        # From dynamo file ---------------------------------------------------------------------------------------------
         if existsPlugin('dynamo'):
-            protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
-            output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 5, boxSize, samplingRate)
+            protCoordinates = self._runImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL',
+                                                              importTomograms=importedTomos,
+                                                              coordsSRate=self.sRate,
+                                                              boxSize=self.boxSize)
+            output = getattr(protCoordinates, OUT_COORDS, None)
+            self.assertCoordinates(output, 5, self.boxSize, self.sRate)
 
     def assertCoordinates(self, coordSet, size, boxSize, samplingRate):
         self.assertTrue(coordSet, 'No 3d coordinates were generated.')
@@ -342,7 +399,7 @@ class TestTomoImportTomograms(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('*.em')
 
-    def _runImportTomograms(self)-> tomo.protocols.ProtImportTomograms:
+    def _runImportTomograms(self) -> tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -353,7 +410,7 @@ class TestTomoImportTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _runImportTomograms2(self)->tomo.protocols.ProtImportTomograms:
+    def _runImportTomograms2(self) -> tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -381,7 +438,7 @@ class TestTomoImportTomograms(BaseTest):
 
         protImport2 = self._runImportTomograms2()
         self.assertSetSize(protImport.Tomograms, size=2, msg=
-                             "There was a problem with Import Tomograms protocol")
+        "There was a problem with Import Tomograms protocol")
 
         for tomogram in protImport2.Tomograms.iterItems():
             self.assertTrue(tomogram.getXDim() == 1024,
@@ -505,7 +562,8 @@ class TestTomoImportTsFromPattern(BaseTest):
             newPath = join(tmpDir, basename(dirName))
             makePath(dirName, newPath)
             origFiles = glob.glob(join(dirName, '*.mrc'))
-            [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, newStr))) for origFile in origFiles]
+            [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, newStr))) for origFile in
+             origFiles]
 
         # 1: Brackets in out of the {} labels
         filesPattern = '*/SKvesicles_Pertuzumab_015[16]_{TS}_{TO}_{TA}.mrc'
@@ -962,22 +1020,19 @@ class TestImportTomoMasks(BaseTest):
             self.launchProtocol(protImportTomomasks)
             self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)
 
+
 class TestConvert(BaseTest):
 
     def test_list_order(self):
-
-        myList = [20,40,50,10,30]
+        myList = [20, 40, 50, 10, 30]
         orders = getOrderFromList(myList)
-        self.assertEqual(orders, [2,4,5,1,3])
+        self.assertEqual(orders, [2, 4, 5, 1, 3])
 
         myList = [20, 40, 50, 10, 30]
         orders = getOrderFromList(myList)
         self.assertEqual(orders, [2, 4, 5, 1, 3])
 
         # Simulate dose list in symmetric dose scheme
-        myList = [24,21,12,9,3,6,15,18,27]
+        myList = [24, 21, 12, 9, 3, 6, 15, 18, 27]
         orders = getOrderFromList(myList)
-        self.assertEqual(orders, [8,7,4,3,1,2,5,6,9])
-
-
-
+        self.assertEqual(orders, [8, 7, 4, 3, 1, 2, 5, 6, 9])
