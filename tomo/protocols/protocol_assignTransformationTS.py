@@ -23,9 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import numpy as np
 
-from pwem.objects import Transform
+import numpy as np
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
