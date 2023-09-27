@@ -206,7 +206,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         validateMsgs = []
 
         for tsGetTM in self.getTMSetOfTiltSeries.get():
-            if not tsGetTM.getFirstItem().hasTransform():
+            if not tsGetTM.hasAlignment():
                 validateMsgs.append("Tilt-series %s from the input set do not have a "
                                     "transformation matrix assigned." % tsGetTM.getTsId())
                 break
