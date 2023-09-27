@@ -38,8 +38,7 @@ class TestBaseCentralizedLayer(BaseTest):
 
         :param outMatrix: transformation matrix of a subtomogram or coordinate.
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
-        eye matrix
-        (False) or not (True).
+        eye matrix (False) or not (True).
         """
         transfMatrixShape = (4, 4)
         self.assertIsNotNone(outMatrix)
@@ -166,6 +165,28 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the tomoId
             self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
 
+    def checkCoordinates(self, outCoords, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
+                         orientedParticles=False):
+        """Checks the general properties of a SetOfCoordinates3D.
+
+        :param outCoords: SetOf3DCoordinates.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
+        and eye matrix (False) or not (True).
+        """
+
+        # First, check the set size, sampling rate, and box size
+        self.checkSetGeneralProps(outCoords,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  expectedBoxSize=expectedBoxSize)
+        for tomo in outCoords.getPrecedents():
+            for coord in outCoords.iterCoordinates(volume=tomo):
+                self.check3dTransformMatrix(coord.getMatrix(), orientedParticles=orientedParticles)
+                self.assertEqual(coord.getTomoId(), tomo.getTsId())
+
     def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
         an initial model or refinement of subtomograms.
@@ -187,7 +208,8 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
             self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
 
-    def checkImportedSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1, tomograms=None):
+    def checkImportedSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
+                                  tomograms=None):
         """Checks the main properties of an imported set subtomograms.
 
         :param subtomograms: the resulting SetOfSubTomograms.
@@ -207,14 +229,16 @@ class TestBaseCentralizedLayer(BaseTest):
                 tomoOrigin = tomo.getOrigin().getMatrix()
                 tomoId = tomo.getTsId()
                 for subtomo in subtomograms.iterSubtomos(volume=tomo):
-                    self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
+                    self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize,
+                                      hasHalves=False)
                     self.assertEqual(subtomo.getVolName(), tomoName)
                     self.assertEqual(subtomo.getVolId(), tomoObjId)
                     self.assertTrue(np.array_equal(subtomo.getOrigin().getMatrix(), tomoOrigin))
                     self.assertEqual(subtomo.getCoordinate3D().getTomoId(), tomoId)
         else:
             for subtomo in subtomograms:
-                self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
+                self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize,
+                                  hasHalves=False)
                 self.assertFalse(subtomo.hasCoordinate3D())
 
     def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
@@ -259,8 +283,25 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the tomoId
             self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
-    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
-                                 convention=TR_SCIPION, orientedParticles=False, angTol=0.05, shiftTol=1):
+    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1,
+                                 expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False, angTol=0.05,
+                                 shiftTol=1):
+        """Checks exhaustively the subtomograms generated after having carried out a subtomogram refinement
+
+        :param inSubtomos: SetOfSubTomograms introduced for the subtomo refinement.
+        :param outSubtomos: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
+        and eye matrix
+        (False) or not (True).
+        :param angTol: angular tolerance, in degrees. Used to compare the input and output subtomograms transformation
+        matrices.
+        :param shiftTol: shift tolerance, in pixels. Used to compare the input and output subtomograms transformation
+        matrices.
+        """
         angTolMat = np.ones([3, 3]) * angTol
         shiftTolMat = np.ones(3) * shiftTol
         # Check the set
