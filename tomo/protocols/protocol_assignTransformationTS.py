@@ -192,15 +192,12 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         """ Scale the transform matrix shifts. """
         matrix = transform.getMatrix()
 
-        print(matrix)
         sr = self.getSamplingRatio()
 
         matrix[0][2] /= sr
         matrix[1][2] /= sr
 
         transform.setMatrix(matrix)
-
-        print(matrix)
 
         return transform
 
