@@ -69,8 +69,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       label='Combine alignments',
                       important=True,
                       display=params.EnumParam.DISPLAY_HLIST,
-                      help='If the tilt-series to assign the alignment has a previous alignment'
-                           'this will be combined with the ')
+                      help='If this option is selected and the the tilt-series to assign the alignment has a previous '
+                           'alignment, both precious and new alignment are combined.')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
