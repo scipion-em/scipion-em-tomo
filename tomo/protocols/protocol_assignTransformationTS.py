@@ -64,8 +64,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       label='Tilt-series to assign the alignment to')
 
         form.addParam('combineAlignment',
-                      params.EnumParam,
-                      choices=['Yes', 'No'],
+                      params.BooleanParam,
                       default=0,
                       label='Combine alignments',
                       important=True,
@@ -75,7 +74,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        if self.combineAlignment.get() == 0:
+        if self.combineAlignment.get():
             self._insertFunctionStep(self.combineTransformationMatricesStep)
         else:
             self._insertFunctionStep(self.assignTransformationMatricesStep)
