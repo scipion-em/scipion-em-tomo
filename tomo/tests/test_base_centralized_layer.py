@@ -33,6 +33,17 @@ from tomo.objects import SetOfSubTomograms
 
 class TestBaseCentralizedLayer(BaseTest):
 
+    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1):
+        self.assertSetSize(inSet, expectedSetSize)
+        self.assertEqual(inSet.getSamplingRate(), expectedSRate)
+
+    # COORDINATES AND PARTICLES ########################################################################################
+    def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
+        # Check the set
+        self.checkSetGeneralProps(expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if expectedBoxSize:
+            self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
+
     def check3dTransformMatrix(self, outMatrix, orientedParticles=False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
 
@@ -122,13 +133,6 @@ class TestBaseCentralizedLayer(BaseTest):
         zc_max = extremes[5]
         self.assertTrue(xc_max < xt / 2 and yc_max < yt / 2 and zc_max < zt / 2)
 
-    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
-        # Check the set
-        self.assertSetSize(inSet, expectedSetSize)
-        self.assertEqual(inSet.getSamplingRate(), expectedSRate)
-        if expectedBoxSize:
-            self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
-
     def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
                                     expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
         """Checks the results of a coordinate extraction protocol.
@@ -145,10 +149,10 @@ class TestBaseCentralizedLayer(BaseTest):
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
         # First, check the set size, sampling rate, and box size
-        self.checkSetGeneralProps(outCoords,
-                                  expectedSetSize=expectedSetSize,
-                                  expectedSRate=expectedSRate,
-                                  expectedBoxSize=expectedBoxSize)
+        self.checkCoordsOrPartsSetGeneralProps(outCoords,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate,
+                                               expectedBoxSize=expectedBoxSize)
         # Check the coordinate extremes
         inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
         outCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outCoords)
@@ -178,10 +182,10 @@ class TestBaseCentralizedLayer(BaseTest):
         """
 
         # First, check the set size, sampling rate, and box size
-        self.checkSetGeneralProps(outCoords,
-                                  expectedSetSize=expectedSetSize,
-                                  expectedSRate=expectedSRate,
-                                  expectedBoxSize=expectedBoxSize)
+        self.checkCoordsOrPartsSetGeneralProps(outCoords,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate,
+                                               expectedBoxSize=expectedBoxSize)
         for tomo in outCoords.getPrecedents():
             for coord in outCoords.iterCoordinates(volume=tomo):
                 self.check3dTransformMatrix(coord.getMatrix(), orientedParticles=orientedParticles)
@@ -221,7 +225,7 @@ class TestBaseCentralizedLayer(BaseTest):
         are not referred to any tomograms (as in some subtomogram importing cases).
         """
         # Check the set
-        self.checkSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkCoordsOrPartsSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         if tomograms:
             for tomo in tomograms:
                 tomoName = tomo.getFileName()
@@ -256,9 +260,9 @@ class TestBaseCentralizedLayer(BaseTest):
         scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
         # Check the critical properties of the set
         # First, check the set size, sampling rate, and box size
-        self.checkSetGeneralProps(outSubtomos,
-                                  expectedSetSize=expectedSetSize,
-                                  expectedSRate=expectedSRate)
+        self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate)
         self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
         self.assertTrue(outSubtomos.hasCoordinates3D())
         # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
@@ -305,7 +309,7 @@ class TestBaseCentralizedLayer(BaseTest):
         angTolMat = np.ones([3, 3]) * angTol
         shiftTolMat = np.ones(3) * shiftTol
         # Check the set
-        self.checkSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkCoordsOrPartsSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         for inSubtomo, outSubtomo in zip(inSubtomos, outSubtomos):
             # Check the subtomogram main properties
             self.checkAverage(outSubtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
@@ -319,9 +323,15 @@ class TestBaseCentralizedLayer(BaseTest):
             diffShiftPart = diffMatrix[3, :-1]
             self.assertTrue(np.any(np.absolute(diffAngularPart - angTolMat) > 0))
             self.assertTrue(np.any(np.absolute(diffShiftPart - shiftTolMat) > 0))
-            # Check that the input and output particles match (We're comparing tow sets, so the convention doesn't
+            # Check that the input and output particles match (We're comparing two sets, so the convention doesn't
             # matter as long as the coordinates of both sets are retrieved using the same convention)
             inCoord = inSubtomo.getCoordinate3D()
             outCoord = outSubtomo.getCoordinate3D()
             self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
+
+    # TILT SERIES ######################################################################################################
+    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, hasCtf=False):
+        self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.assertTrue(inTsSet.hasCtf()) if hasCtf else self.assertFalse(inTsSet.hasCtf())
+
