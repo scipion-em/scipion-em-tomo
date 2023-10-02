@@ -338,5 +338,28 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertTrue(inTsSet.hasCtf()) if hasCtf else self.assertFalse(inTsSet.hasCtf())
 
     # TOMOGRAMS ########################################################################################################
-    def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1):
+    def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
+                       hasOddEven=False, expectedOriginShifts=None):
+        checkMsgPattern = 'Expected and resulting %s are different.'
+        checkSizeMsg = checkMsgPattern % 'dimensions'
+        checkSRateMsg = checkMsgPattern % 'sampling rate'
+        checkOriginMsg = checkMsgPattern % 'origin shifts'
+
+        # Check the set
         self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if hasOddEven:
+            self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
+        # Check the set elements main attributes
+        for tomo in inTomoSet:
+            # Check if the filename exists
+            self.assertTrue(exists(tomo.getFileName()))
+            # Check the sampling rate
+            self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # Check the dimensions
+            if expectedDimensions:
+                x, y, z = tomo.getDimensions()
+                self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            if expectedOriginShifts:
+                x, y, z = tomo.getOrigin().getShifts()
+                for i, j in zip([x, y, z], expectedOriginShifts):
+                    self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
