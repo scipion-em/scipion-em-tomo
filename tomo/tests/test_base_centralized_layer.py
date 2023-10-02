@@ -225,7 +225,8 @@ class TestBaseCentralizedLayer(BaseTest):
         are not referred to any tomograms (as in some subtomogram importing cases).
         """
         # Check the set
-        self.checkCoordsOrPartsSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkCoordsOrPartsSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate)
         if tomograms:
             for tomo in tomograms:
                 tomoName = tomo.getFileName()
@@ -309,7 +310,8 @@ class TestBaseCentralizedLayer(BaseTest):
         angTolMat = np.ones([3, 3]) * angTol
         shiftTolMat = np.ones(3) * shiftTol
         # Check the set
-        self.checkCoordsOrPartsSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkCoordsOrPartsSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate)
         for inSubtomo, outSubtomo in zip(inSubtomos, outSubtomos):
             # Check the subtomogram main properties
             self.checkAverage(outSubtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
@@ -335,3 +337,6 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         self.assertTrue(inTsSet.hasCtf()) if hasCtf else self.assertFalse(inTsSet.hasCtf())
 
+    # TOMOGRAMS ########################################################################################################
+    def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1):
+        self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
