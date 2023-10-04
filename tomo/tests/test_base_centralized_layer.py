@@ -339,7 +339,20 @@ class TestBaseCentralizedLayer(BaseTest):
 
     # TOMOGRAMS ########################################################################################################
     def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
-                       hasOddEven=False, expectedOriginShifts=None):
+                       hasOddEven=False, expectedOriginShifts=None, hasCtf=False, hasHalves=False):
+        """
+        :param inTomoSet: SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check.
+        :param hasOddEven: False by default. Used to indicate if the set of tomograms is expected to have even/odd
+        halves.
+        :param expectedOriginShifts: list containing the expected shifts of the tomogram center in the X, Y, and Z
+        directions.
+        :param hasCtf: False by default: Used to indicate if the tomograms have the CTF corrected or not.
+        :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
+        compose the set. If True, it will be checked if the corresponding halves files exist.
+        """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
         checkSRateMsg = checkMsgPattern % 'sampling rate'
@@ -349,6 +362,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         if hasOddEven:
             self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
+        if hasCtf:
+            self.assertEqual(inTomoSet.hasCtf(), hasCtf)
         # Check the set elements main attributes
         for tomo in inTomoSet:
             # Check if the filename exists
@@ -359,7 +374,17 @@ class TestBaseCentralizedLayer(BaseTest):
             if expectedDimensions:
                 x, y, z = tomo.getDimensions()
                 self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            # Check the origin
             if expectedOriginShifts:
                 x, y, z = tomo.getOrigin().getShifts()
                 for i, j in zip([x, y, z], expectedOriginShifts):
                     self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
+            # Check the halves
+            if hasHalves:
+                tsId = tomo.getTsId()
+                self.assertTrue(tomo.hasHalfMaps(), "Halves not registered.")
+                half1, half2 = tomo.getHalfMaps().split(',')
+                self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
+                self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+
+
