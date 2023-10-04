@@ -33,9 +33,10 @@ from tomo.objects import SetOfSubTomograms
 
 class TestBaseCentralizedLayer(BaseTest):
 
-    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1):
+    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, streamState=2):
         self.assertSetSize(inSet, expectedSetSize)
         self.assertEqual(inSet.getSamplingRate(), expectedSRate)
+        self.assertEqual(inSet.getStreamState(), streamState)
 
     # COORDINATES AND PARTICLES ########################################################################################
     def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
@@ -333,9 +334,42 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
 
     # TILT SERIES ######################################################################################################
-    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, hasCtf=False):
+    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, hasCtf=False, alignment=None,
+                        isPhaseFlipped=False, isAmplitudeCorrected=False, magnification=None, voltage=None,
+                        sphericalAb=None, doseInitial=None, dosePerFrame=None, accumDose=None, tiltAxisAngle=None,
+                        hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
+                        isInterpolated=False):
+        acq = inTsSet.getAcquisition()
+        # Check the set attributes
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         self.assertTrue(inTsSet.hasCtf()) if hasCtf else self.assertFalse(inTsSet.hasCtf())
+        if alignment:
+            self.assertTrue(inTsSet.getAlignment(), alignment)
+        self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
+        self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
+        if magnification:
+            self.assertAlmostEqual(acq.getMagnification(), magnification, delta=1)
+        if voltage:
+            self.assertAlmostEqual(acq.getVoltage(), voltage, delta=1)
+        if sphericalAb:
+            self.assertAlmostEqual(acq.getSphericalAberration(), sphericalAb, delta=0.01)
+        if doseInitial:
+            self.assertAlmostEqual(acq.getDoseInitial(), doseInitial, delta=0.01)
+        if dosePerFrame:
+            self.assertAlmostEqual(acq.getDosePerFrame(), dosePerFrame, delta=0.01)
+        if accumDose:
+            self.assertAlmostEqual(acq.getAccumDose(), accumDose, delta=0.01)
+        if tiltAxisAngle:
+            self.assertAlmostEqual(acq.getTiltAxisAngle(), tiltAxisAngle, delta=0.01)
+        self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
+        self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
+        if anglesCount:
+            self.assertEqual(inTsSet.getAnglesCount(), anglesCount)
+        self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
+        self.assertEqual(inTsSet.interpolated(), isInterpolated)
+        # TODO: add cehcking for the set items main props
+
+
 
     # TOMOGRAMS ########################################################################################################
     def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
