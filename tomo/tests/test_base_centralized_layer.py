@@ -35,7 +35,7 @@ class TestBaseCentralizedLayer(BaseTest):
 
     def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, streamState=2):
         self.assertSetSize(inSet, expectedSetSize)
-        self.assertEqual(inSet.getSamplingRate(), expectedSRate)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
         self.assertEqual(inSet.getStreamState(), streamState)
 
     # COORDINATES AND PARTICLES ########################################################################################
@@ -45,23 +45,27 @@ class TestBaseCentralizedLayer(BaseTest):
         if expectedBoxSize:
             self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
 
-    def check3dTransformMatrix(self, outMatrix, orientedParticles=False):
+    def checkTransformMatrix(self, outMatrix, alignment=False, is2d=False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
 
         :param outMatrix: transformation matrix of a subtomogram or coordinate.
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
+        :param alignment: False by default. Used to specify if the expected transformation matrix should be an
         eye matrix (False) or not (True).
+        :param is2d: False by default. Used to indicate if the expected transformation matrix should be of size 3 x 3
+        (True) or 4 x 4 (False).
         """
-        transfMatrixShape = (4, 4)
+        size = 3 if is2d else 4
+        transfMatrixShape = (size, size)
+        identityMatrix = np.eye(size)
         self.assertIsNotNone(outMatrix)
         if type(outMatrix) != np.ndarray:
             outMatrix = np.array(outMatrix)
         self.assertIsNotNone(outMatrix)
         self.assertTrue(outMatrix.shape, transfMatrixShape)
-        if orientedParticles:
-            self.assertFalse(np.array_equal(outMatrix, np.eye(4)))
+        if alignment:
+            self.assertFalse(np.array_equal(outMatrix, identityMatrix))
         else:
-            self.assertTrue(np.array_equal(outMatrix, np.eye(4)))
+            self.assertTrue(np.array_equal(outMatrix, identityMatrix))
 
     def checkShiftsScaling(self, inTransform, outTransform, scaleFactor):
         """Check if the shifts were scaled properly in the case of subtomogram extraction from a different
@@ -165,7 +169,7 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the transformation matrices and shifts
             inSetTrMatrix = inElement.getMatrix(convention=convention)
             outCoordTrMatrix = outCoord.getMatrix(convention=convention)
-            self.check3dTransformMatrix(outCoordTrMatrix, orientedParticles=orientedParticles)
+            self.checkTransformMatrix(outCoordTrMatrix, alignment=orientedParticles)
             self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
             # Check the tomoId
             self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
@@ -189,7 +193,7 @@ class TestBaseCentralizedLayer(BaseTest):
                                                expectedBoxSize=expectedBoxSize)
         for tomo in outCoords.getPrecedents():
             for coord in outCoords.iterCoordinates(volume=tomo):
-                self.check3dTransformMatrix(coord.getMatrix(), orientedParticles=orientedParticles)
+                self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
                 self.assertEqual(coord.getTomoId(), tomo.getTsId())
 
     def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
@@ -279,13 +283,12 @@ class TestBaseCentralizedLayer(BaseTest):
             subtomoMatrix = subtomoTr.getMatrix()
             coordinate = outSubtomo.getCoordinate3D()
             coordTr = coordinate._eulerMatrix
-            coordMatrix = coordinate.getMatrix(convention=convention)
             self.assertTrue(exists(outSubtomo.getFileName()))
             self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
             # The shifts in the subtomograms transformation matrix should have been scaled properly
             self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
             # Imported coordinates were picked using PySeg, so they must have an orientation
-            self.check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
+            self.checkTransformMatrix(subtomoMatrix, alignment=orientedParticles)
             # Check the tomoId
             self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
@@ -319,7 +322,7 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the transformation matrix
             inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
             outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
-            self.check3dTransformMatrix(outSubtomoMat, orientedParticles=orientedParticles)
+            self.checkTransformMatrix(outSubtomoMat, alignment=orientedParticles)
             # The input and output matrices should be different
             diffMatrix = np.absolute(outSubtomoMat - inSubtomoMat)
             diffAngularPart = diffMatrix[:3, :3]
@@ -334,42 +337,73 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
 
     # TILT SERIES ######################################################################################################
-    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, hasCtf=False, alignment=None,
-                        isPhaseFlipped=False, isAmplitudeCorrected=False, magnification=None, voltage=None,
-                        sphericalAb=None, doseInitial=None, dosePerFrame=None, accumDose=None, tiltAxisAngle=None,
-                        hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
-                        isInterpolated=False):
-        acq = inTsSet.getAcquisition()
+    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, testAcqObj=None, hasCtf=False,
+                        alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False, hasAlignment=False,
+                        hasOddEven=False, anglesCount=None, hasCtfCorrected=False, isInterpolated=False):
+        """
+        :param inTsSet: SetOfTiltSeries.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the inTsSet.
+        :param hasCtf: False by default: Used to indicate if the tomograms have the CTF corrected or not.
+        :param alignment: Alignment type expected (see scipion-em > pwem > constants.py).
+        :param isPhaseFlipped: False by default. Used to check if the tilt series were phase flipped.
+        :param isAmplitudeCorrected: False by default. The same as before, but for the amplitude correction.
+        :param hasAlignment: False by default. Used to indicated if the tilt series are expected to have been aligned
+        (thus, the transformation matrix is not the identity).
+        :param hasOddEven: False by default. Used to indicate if the set of tilt series are expected to have even/odd
+        tilt series associated (generated with the even/odd angles or frames).
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set.
+        :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
+        :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
+        or not (False).
+        """
+        # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # Check the set attributes
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if testAcqObj:
+            self.checkTomoAcquisition(testAcqObj, inTsSet.getAcquisition())
         self.assertTrue(inTsSet.hasCtf()) if hasCtf else self.assertFalse(inTsSet.hasCtf())
         if alignment:
             self.assertTrue(inTsSet.getAlignment(), alignment)
         self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
         self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
-        if magnification:
-            self.assertAlmostEqual(acq.getMagnification(), magnification, delta=1)
-        if voltage:
-            self.assertAlmostEqual(acq.getVoltage(), voltage, delta=1)
-        if sphericalAb:
-            self.assertAlmostEqual(acq.getSphericalAberration(), sphericalAb, delta=0.01)
-        if doseInitial:
-            self.assertAlmostEqual(acq.getDoseInitial(), doseInitial, delta=0.01)
-        if dosePerFrame:
-            self.assertAlmostEqual(acq.getDosePerFrame(), dosePerFrame, delta=0.01)
-        if accumDose:
-            self.assertAlmostEqual(acq.getAccumDose(), accumDose, delta=0.01)
-        if tiltAxisAngle:
-            self.assertAlmostEqual(acq.getTiltAxisAngle(), tiltAxisAngle, delta=0.01)
         self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
         self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
         if anglesCount:
             self.assertEqual(inTsSet.getAnglesCount(), anglesCount)
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
         self.assertEqual(inTsSet.interpolated(), isInterpolated)
-        # TODO: add cehcking for the set items main props
+        # Check the main properties of the set items
+        for ts in inTsSet:
+            # Sampling rate
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+            for ti in ts:
+                # Alignment matrix
+                self.checkTransformMatrix(ti.getTransform().getMatrix(), alignment=hasAlignment)
+                # Filename
+                self.assertTrue(exists(ti.getFirstItem().getFileName()))
+                # Sampling rate
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=0.001)
 
-
+    # TOMO ACQUISITION #################################################################################################
+    def checkTomoAcquisition(self, testAcq, currentAcq):
+        """It compares two TomoAcquisition objects, considering the following attributes:
+        * Magnification.
+        * Voltage.
+        * Spherical aberration.
+        * Initial dose.
+        * Dose per frame.
+        * Accumulated dose.
+        * Tilt axis angle.
+        """
+        self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
+        self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
+        self.assertAlmostEqual(testAcq.getSphericalAberration(), currentAcq.getSphericalAberration(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
 
     # TOMOGRAMS ########################################################################################################
     def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
@@ -420,5 +454,3 @@ class TestBaseCentralizedLayer(BaseTest):
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
-
-
