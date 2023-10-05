@@ -82,13 +82,19 @@ class DataSetEmd10439(Enum):
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
 
 
-class DataSetRelionTomoSTATuto(Enum):
+class DataSetRe4STATuto(Enum):
     voltage = 300
+    sphericalAb = 2.7
+    amplitudeContrast = 0.07,
+    magnification = 105000
     unbinnedPixSize = 1.35
     croppedBoxSizeBin4 = 96
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = 85.3
+    initialDose = 0
     dosePerTiltImg = 3.05
+    accumDose = 122
+    exclusionWords = 'output 01 43 45 54'
     # Tilt series
     tsPath = 'tomograms'
     tsPattern = '*/*.mrc'
@@ -104,4 +110,4 @@ class DataSetRelionTomoSTATuto(Enum):
 
 
 RE4_STA_TUTO = 'relion4_sta_tutorial'
-DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRelionTomoSTATuto})
+DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})

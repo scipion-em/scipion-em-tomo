@@ -41,7 +41,7 @@ class TestBaseCentralizedLayer(BaseTest):
     # COORDINATES AND PARTICLES ########################################################################################
     def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
         # Check the set
-        self.checkSetGeneralProps(expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkSetGeneralProps(inSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         if expectedBoxSize:
             self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
 
