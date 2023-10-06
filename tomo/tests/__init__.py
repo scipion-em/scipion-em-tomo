@@ -85,7 +85,7 @@ DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in Dat
 class DataSetRe4STATuto(Enum):
     voltage = 300
     sphericalAb = 2.7
-    amplitudeContrast = 0.07,
+    amplitudeContrast = 0.07
     magnification = 105000
     unbinnedPixSize = 1.35
     croppedBoxSizeBin4 = 96
@@ -95,6 +95,7 @@ class DataSetRe4STATuto(Enum):
     dosePerTiltImg = 3.05
     accumDose = 122
     exclusionWords = 'output 01 43 45 54'
+    correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
     # Tilt series
     tsPath = 'tomograms'
     tsPattern = '*/*.mrc'
@@ -109,5 +110,5 @@ class DataSetRe4STATuto(Enum):
     maskBin2 = 'masks/mask_align_bin2.mrc'
 
 
-RE4_STA_TUTO = 'relion4_sta_tutorial'
+RE4_STA_TUTO = 'relion40_sta_tutorial_data'
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})

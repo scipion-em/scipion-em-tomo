@@ -337,15 +337,16 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
 
     # TILT SERIES ######################################################################################################
-    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, testAcqObj=None, hasCtf=False,
-                        alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False, hasAlignment=False,
-                        hasOddEven=False, anglesCount=None, hasCtfCorrected=False, isInterpolated=False):
+    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
+                        testAcqObj=None, alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False,
+                        hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
+                        isInterpolated=False):
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check.
         :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the inTsSet.
-        :param hasCtf: False by default: Used to indicate if the tomograms have the CTF corrected or not.
         :param alignment: Alignment type expected (see scipion-em > pwem > constants.py).
         :param isPhaseFlipped: False by default. Used to check if the tilt series were phase flipped.
         :param isAmplitudeCorrected: False by default. The same as before, but for the amplitude correction.
@@ -361,9 +362,12 @@ class TestBaseCentralizedLayer(BaseTest):
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # Check the set attributes
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        # Check the dimensions
+        if expectedDimensions:
+            x, y, z = inTsSet.getDimensions()
+            self.assertEqual([x, y, z], expectedDimensions)
         if testAcqObj:
             self.checkTomoAcquisition(testAcqObj, inTsSet.getAcquisition())
-        self.assertTrue(inTsSet.hasCtf()) if hasCtf else self.assertFalse(inTsSet.hasCtf())
         if alignment:
             self.assertTrue(inTsSet.getAlignment(), alignment)
         self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
@@ -378,11 +382,15 @@ class TestBaseCentralizedLayer(BaseTest):
         for ts in inTsSet:
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+            # Check the dimensions
+            if expectedDimensions:
+                x, y, z = ts.getDimensions()
+                self.assertEqual([x, y, z], expectedDimensions)
             for ti in ts:
                 # Alignment matrix
                 self.checkTransformMatrix(ti.getTransform().getMatrix(), alignment=hasAlignment)
                 # Filename
-                self.assertTrue(exists(ti.getFirstItem().getFileName()))
+                self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
                 self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=0.001)
 
@@ -404,6 +412,11 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
         self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
         self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
+
+    # CTF ##############################################################################################################
+    def checkCTFs(self, inCtfSet, expectedSetSize=-1):
+        self.assertSetSize(inCtfSet, expectedSetSize)
+        # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
     def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
