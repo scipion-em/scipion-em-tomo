@@ -414,8 +414,9 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
 
     # CTF ##############################################################################################################
-    def checkCTFs(self, inCtfSet, expectedSetSize=-1):
+    def checkCTFs(self, inCtfSet, expectedSetSize=-1, streamState=2):
         self.assertSetSize(inCtfSet, expectedSetSize)
+        self.assertEqual(inCtfSet.getStreamState(), streamState)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
