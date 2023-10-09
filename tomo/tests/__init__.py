@@ -94,21 +94,24 @@ class DataSetRe4STATuto(Enum):
     initialDose = 0
     dosePerTiltImg = 3.05
     accumDose = 122
-    exclusionWords = 'output 01 43 45 54'
+    exclusionWordsTs03 = 'output 01 43 45 54'
+    exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
     # Tilt series
     tsPath = 'tomograms'
-    tsPattern = '*/*.mrc'
+    tsPattern = '*/{TS}.mrc'
     transformPattern = 'TS*/*.xf'
     ctfPattern = '*/*.defocus'
     # Tomograms
     tomosPath = 'tomograms'
     tomosPattern = '*.mrc'
     tomosSRate = 5.4
+    # Coordinates
+    coordsStar = 'input/coords_subset_ts03_ts54.star'
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
 
 
-RE4_STA_TUTO = 'relion40_sta_tutorial_data'
+RE4_STA_TUTO = 'relion40_sta_tutorial_data_jjEdited'  #'relion40_sta_tutorial_data'
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
