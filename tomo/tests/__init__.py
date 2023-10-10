@@ -105,9 +105,11 @@ class DataSetRe4STATuto(Enum):
     # Tomograms
     tomosPath = 'tomograms'
     tomosPattern = '*.mrc'
-    tomosSRate = 5.4
+    sRateBin4 = 5.4
     # Coordinates
-    coordsStar = 'input/coords_subset_ts03_ts54.star'
+    coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
+    nCoordsFromTs03 = 99
+    nCoordsFromTs54 = 111
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'

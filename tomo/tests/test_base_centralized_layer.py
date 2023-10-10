@@ -28,7 +28,7 @@ import numpy as np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -100,7 +100,7 @@ class TestBaseCentralizedLayer(BaseTest):
          the tomogram (Scipion-like)
 
          :param inSet: it can be a SetOf3DCoordinates or a SetOfSubTomograms."""
-        if type(inSet) == SetOfSubTomograms:
+        if type(inSet) is not SetOfCoordinates3D:
             inSet = inSet.getCoordinates3D()
 
         dataDict = inSet.aggregate(['MAX'], '_tomoId', ['_x', '_y', '_z'])
@@ -261,8 +261,8 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedBoxSize: expected box size, in pixels, to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be and eye matrix
-        (False) or not (True)."""
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
+        eye matrix (False) or not (True)."""
         scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
         # Check the critical properties of the set
         # First, check the set size, sampling rate, and box size
@@ -278,19 +278,22 @@ class TestBaseCentralizedLayer(BaseTest):
         unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
         self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
         # Check the subtomograms that compose the set
-        for incoord, outSubtomo in zip(inCoords, outSubtomos):
-            subtomoTr = outSubtomo.getTransform(convention=convention)
-            subtomoMatrix = subtomoTr.getMatrix()
-            coordinate = outSubtomo.getCoordinate3D()
-            coordTr = coordinate._eulerMatrix
-            self.assertTrue(exists(outSubtomo.getFileName()))
-            self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
-            # The shifts in the subtomograms transformation matrix should have been scaled properly
-            self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
-            # Imported coordinates were picked using PySeg, so they must have an orientation
-            self.checkTransformMatrix(subtomoMatrix, alignment=orientedParticles)
-            # Check the tomoId
-            self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
+        presentTsIds = inCoords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
+        presentPrecedents = [tomo.clone() for tomo in inCoords.getPrecedents() if tomo.getTsId() in presentTsIds]
+        for tomo in presentPrecedents:
+            for incoord, outSubtomo in zip(inCoords.iterCoordinates(volume=tomo), outSubtomos.iterSubtomos(volume=tomo)):
+                subtomoTr = outSubtomo.getTransform(convention=convention)
+                subtomoMatrix = subtomoTr.getMatrix()
+                coordinate = outSubtomo.getCoordinate3D()
+                coordTr = coordinate._eulerMatrix
+                self.assertTrue(exists(outSubtomo.getFileName()))
+                self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
+                # The shifts in the subtomograms transformation matrix should have been scaled properly
+                self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
+                # Imported coordinates were picked using PySeg, so they must have an orientation
+                self.checkTransformMatrix(subtomoMatrix, alignment=orientedParticles)
+                # Check the tomoId
+                self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
     def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1,
                                  expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False, angTol=0.05,
