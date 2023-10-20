@@ -113,7 +113,8 @@ class DataSetRe4STATuto(Enum):
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
-
+    # For EMAN testing
+    initVolByEman = 'testEman/initialModel0ByEman.mrc'
 
 RE4_STA_TUTO = 'relion40_sta_tutorial_data_jjEdited'  #'relion40_sta_tutorial_data'
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
