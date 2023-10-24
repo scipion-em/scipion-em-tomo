@@ -257,13 +257,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
                 self.info("Tilt serie ({} tilts) composed from mdoc file: {}\n".
                     format(len(mdoc_order_angle_list), os.path.basename(file2read)))
-                # SUMMARY INFO
-                summaryF = self._getExtraPath("summary.txt")
-                summaryF = open(summaryF, "a")
-                summaryF.write(
-                    "Tilt serie ({} tilts) composed from mdoc file: {}\n".
-                    format(len(mdoc_order_angle_list), os.path.basename(file2read)))
-                summaryF.close()
 
 
         self.list_reading.remove(file2read)
@@ -502,14 +495,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
-
-        summaryF = self._getExtraPath("summary.txt")
-        if not os.path.exists(summaryF):
-            summary.append("No summary file yet.")
+        summary.append('Path with the *.mdoc files for each tilt serie:{}\n'.format(self.filesPath.get()))
+        if not hasattr(self, 'TiltSeries'):
+            summary.append("Output SetOfTiltSeries not ready yet.")
         else:
-            summaryF = open(summaryF, "r")
-            for line in summaryF.readlines():
-                summary.append(line.rstrip())
-            summaryF.close()
-
+            try:
+                summary.append("{} tilt series added".format(self.TiltSeries.getSize()))
+            except Exception as e:
+                print(e)
         return summary
+
+
