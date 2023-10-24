@@ -255,14 +255,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 self.listMdocsRead.append(file2read)
                 self.listMdocsRead.append(file2read)
 
-                self.info("Tilt series ({} tilts) composed from mdoc file: {}\n".
-                    format(len(mdoc_order_angle_list), file2read))
+                self.info("Tilt serie ({} tilts) composed from mdoc file: {}\n".
+                    format(len(mdoc_order_angle_list), os.path.basename(file2read)))
                 # SUMMARY INFO
                 summaryF = self._getExtraPath("summary.txt")
                 summaryF = open(summaryF, "a")
                 summaryF.write(
-                    "Tilt series ({} tilts) composed from mdoc file: {}\n".
-                    format(len(mdoc_order_angle_list), file2read))
+                    "Tilt serie ({} tilts) composed from mdoc file: {}\n".
+                    format(len(mdoc_order_angle_list), os.path.basename(file2read)))
                 summaryF.close()
 
 
