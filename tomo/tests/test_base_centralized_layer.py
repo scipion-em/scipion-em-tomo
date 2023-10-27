@@ -376,6 +376,29 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
             self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
 
+    # SUBTOMOGRAM CLASSES ##############################################################################################
+    def checkClasses(self, classesSet, expectedSRate=-1, expectedSetSize=-1, hasRepresentatives=True):
+        """Checks exhaustively the classes generated after having carried out a subtomogram classification
+        :param classesSet: SetOfClassesSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param hasRepresentatives: flag used to indicate if the set of classes is expected to have representatives or
+        not.
+        """
+        self.checkSetGeneralProps(classesSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.assertEqual(classesSet.hasRepresentatives(), hasRepresentatives)
+        representativeFileList = []
+        for subtomoClass in classesSet:
+            if hasRepresentatives:
+                repFileName = subtomoClass.getRepresentative().getFileName()
+                representativeFileList.append(repFileName)
+                self.assertTrue(exists(repFileName))
+            self.assertEqual(subtomoClass.getSamplingRate(), expectedSRate)
+
+        if hasRepresentatives:
+            msg = 'At least one of the representative filenames is repeated, which should not be possible.'
+            self.assertEqual(len(set(representativeFileList)), expectedSetSize, msg=msg)
+
     # COORDINATES AND PARTICLES TEST UTILS #############################################################################
     def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
         # Check the set
