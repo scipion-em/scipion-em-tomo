@@ -72,6 +72,8 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
                         *self._getArgs(), prerequisites=[self._ciStepId])
                     tsSteps.append(tiStep)
 
+            if not tsSteps:  # no Ti steps used
+                tsSteps.append(self._ciStepId)
             tsStepId = self._insertFunctionStep('processTiltSeriesStep', tsId,
                                                 prerequisites=tsSteps)
             self._coStep.addPrerequisites(tsStepId)

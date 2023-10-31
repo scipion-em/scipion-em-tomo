@@ -25,13 +25,17 @@
 # **************************************************************************
 import glob
 import os
-from os.path import join, exists, abspath
+import random
+import string
+import tempfile
+from os.path import join, exists, abspath, basename
 
 import numpy
+import numpy as np
 
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
-from pyworkflow.utils import magentaStr, createLink
+from pyworkflow.utils import magentaStr, createLink, makePath, copyFile
 from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 
@@ -156,6 +160,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         cls.emdDs = DataSet.getDataSet('emd_10439')
         cls.sqBoxSize = 20
         cls.sqSamplingRate = 13.68
+        cls.sRate = 5.5
+        cls.boxSize = 32
 
     def _importTomograms(self, filesPath, samplingRate, pattern=None):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
@@ -169,17 +175,16 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         return protImportTomogram.Tomograms
 
-    def _runTomoImportSetOfCoordinates(self, pattern, program, ext):
-        sRate = 5.5
+    def _runImportSetOfCoordinates(self, pattern, program, ext, importTomograms=None, coordsSRate=None,
+                                   boxSize=None, extraText=''):
         protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
-                                                   objLabel='Import from %s - %s' % (program, ext),
+                                                   objLabel='Import from %s - %s ' % (program, ext) + extraText,
                                                    auto=IMPORT_FROM_AUTO,
                                                    filesPath=self.tomoDs.getPath(),
-                                                   importTomograms=self._importTomograms(self.tomoDs.getFile('tomo1'),
-                                                                                         sRate),
+                                                   importTomograms=importTomograms,
                                                    filesPattern=pattern,
-                                                   boxSize=32,
-                                                   samplingRate=sRate)
+                                                   boxSize=boxSize,
+                                                   samplingRate=coordsSRate)
         self.launchProtocol(protImportCoordinates3d)
         return protImportCoordinates3d
 
@@ -192,7 +197,7 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
 
         self.launchProtocol(protImportCoordsFromSqlite)
         return getattr(protImportCoordsFromSqlite, outputObjs.coordinates.name, None), \
-               getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
+            getattr(protImportCoordsFromSqlite, 'outputTomograms', None)
 
     def testImport3dCoordsFromSqlite_FullMatch(self):
         setSize = 2339
@@ -265,18 +270,8 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(str(eType.exception), ERR_COORDS_FROM_SQLITE_NO_MATCH)
 
     def test_import_set_of_coordinates_3D(self):
-        boxSize = 32
-        samplingRate = 5.5
-
-        # From txt
-        protCoordinates = self._runTomoImportSetOfCoordinates('*.txt', 'TOMO', 'TXT')
-        output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 5, boxSize, samplingRate)
-
-        # From txt
-        protCoordinates = self._runTomoImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX')
-        output = getattr(protCoordinates, 'outputCoordinates', None)
-        self.assertCoordinates(output, 3, boxSize, samplingRate)
+        OUT_COORDS = 'outputCoordinates'
+        importedTomos = self._importTomograms(self.tomoDs.getFile('tomo1'), self.sRate)
 
         def checkCoordinates(expectedValues, coordSet):
 
@@ -286,19 +281,81 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
                 self.assertEqual(coord.getY(SCIPION), row[1], "Y coordinate not converted properly")
                 self.assertEqual(coord.getZ(SCIPION), row[2], "Z coordinate not converted properly")
 
+        # From txt -----------------------------------------------------------------------------------------------------
+        nCoords = 5
+        tomoDim = [1024, 1024, 512]
+
+        def getExpectedCoords():
+            expCoords = np.array([
+                [314, 350, 256],
+                [174, 172, 256],
+                [413, 346, 255],
+                [46, 189, 255],
+                [167, 224, 255]
+            ], dtype=float)
+            # The TXT case is coded with an origin of type BOTTOM_LEFT_CORNER
+            for i in range(len(tomoDim)):
+                expCoords[:, i] = expCoords[:, i] * scaleFactor - tomoDim[i] / 2
+            return expCoords
+
+        def runImportTxtCoords(sRate, boxSize, extraText):
+            protImportCoordinates = self._runImportSetOfCoordinates('*.txt', 'TOMO', 'TXT',
+                                                                    importTomograms=importedTomos,
+                                                                    coordsSRate=sRate,
+                                                                    boxSize=boxSize,
+                                                                    extraText=extraText)
+            return getattr(protImportCoordinates, OUT_COORDS, None)
+
+        # 1) Coordinates with a sampling rate equal to the tomograms' sampling rate
+        scaleFactor = 1
+        output = runImportTxtCoords(self.sRate, self.boxSize, 'sRate equal')
+        self.assertCoordinates(output, nCoords, self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # 2) Coordinates' sampling rate not provided --> assume it's the same as the tomograms' sampling rate
+        scaleFactor = 1
+        output = runImportTxtCoords(self.sRate, self.boxSize, 'sRate not provided')
+        self.assertCoordinates(output, nCoords, self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # 3) Coordinates' sampling rate is half of the tomograms' sampling rate
+        scaleFactor = 0.5
+        output = runImportTxtCoords(scaleFactor * self.sRate, self.boxSize, 'sRate half')
+        self.assertCoordinates(output, nCoords, scaleFactor * self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # 4) Coordinates' sampling rate is double of the tomograms' sampling rate
+        scaleFactor = 2
+        output = runImportTxtCoords(scaleFactor * self.sRate, self.boxSize, 'sRate double')
+        self.assertCoordinates(output, nCoords, scaleFactor * self.boxSize, self.sRate)
+        expectedValues = getExpectedCoords()
+        checkCoordinates(expectedValues, output)
+
+        # From cbox ----------------------------------------------------------------------------------------------------
         expectedCoords = [
             [-512, -512, -256],
             [0, 0, 0],
             [512, 512, 256],
         ]
-
+        protCoordinates = self._runImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX',
+                                                          importTomograms=importedTomos,
+                                                          coordsSRate=self.sRate,
+                                                          boxSize=self.boxSize)
+        output = getattr(protCoordinates, OUT_COORDS, None)
+        self.assertCoordinates(output, 3, self.boxSize, self.sRate)
         checkCoordinates(expectedCoords, output)
 
-        # From emantomo file
+        # From emantomo file -------------------------------------------------------------------------------------------
         if existsPlugin('emantomo'):
-            protCoordinates = self._runTomoImportSetOfCoordinates('*.json', 'EMAN', 'JSON')
-            output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 19, boxSize, samplingRate)
+            protCoordinates = self._runImportSetOfCoordinates('*.json', 'EMAN', 'JSON',
+                                                              importTomograms=importedTomos,
+                                                              coordsSRate=self.sRate,
+                                                              boxSize=self.boxSize)
+            output = getattr(protCoordinates, OUT_COORDS, None)
+            self.assertCoordinates(output, 19, self.boxSize, self.sRate)
 
             # Check se are not loosing precision
             firstCoord = output.getFirstItem()
@@ -308,11 +365,14 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
             self.assertEqual(firstCoord.getY(BOTTOM_LEFT_CORNER), emanCoords[1], "eman coordinate y has a wrong value")
             self.assertEqual(firstCoord.getZ(BOTTOM_LEFT_CORNER), emanCoords[2], "eman coordinate z has a wrong value")
 
-        # From dynamo file
+        # From dynamo file ---------------------------------------------------------------------------------------------
         if existsPlugin('dynamo'):
-            protCoordinates = self._runTomoImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL')
-            output = getattr(protCoordinates, 'outputCoordinates', None)
-            self.assertCoordinates(output, 5, boxSize, samplingRate)
+            protCoordinates = self._runImportSetOfCoordinates('*.tbl', 'DYNAMO', 'TBL',
+                                                              importTomograms=importedTomos,
+                                                              coordsSRate=self.sRate,
+                                                              boxSize=self.boxSize)
+            output = getattr(protCoordinates, OUT_COORDS, None)
+            self.assertCoordinates(output, 5, self.boxSize, self.sRate)
 
     def assertCoordinates(self, coordSet, size, boxSize, samplingRate):
         self.assertTrue(coordSet, 'No 3d coordinates were generated.')
@@ -339,7 +399,7 @@ class TestTomoImportTomograms(BaseTest):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('*.em')
 
-    def _runImportTomograms(self)-> tomo.protocols.ProtImportTomograms:
+    def _runImportTomograms(self) -> tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -350,7 +410,7 @@ class TestTomoImportTomograms(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _runImportTomograms2(self)->tomo.protocols.ProtImportTomograms:
+    def _runImportTomograms2(self) -> tomo.protocols.ProtImportTomograms:
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTomograms,
             filesPath=self.tomogram,
@@ -378,7 +438,7 @@ class TestTomoImportTomograms(BaseTest):
 
         protImport2 = self._runImportTomograms2()
         self.assertSetSize(protImport.Tomograms, size=2, msg=
-                             "There was a problem with Import Tomograms protocol")
+        "There was a problem with Import Tomograms protocol")
 
         for tomogram in protImport2.Tomograms.iterItems():
             self.assertTrue(tomogram.getXDim() == 1024,
@@ -447,10 +507,10 @@ class TestTomoImportTsFromPattern(BaseTest):
         cls.getFileM = cls.dataset.getFile('empiar')
         cls.tiltAxisAngle = 84.1
 
-    def _runImportTiltSeriesM(self, filesPattern='{TS}_{TO}_{TA}.mrc'):
+    def _runImportTiltSeriesM(self, filesPath, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
-            filesPath=self.getFileM,
+            filesPath=filesPath,
             filesPattern=filesPattern,
             voltage=300,
             magnification=105000,
@@ -484,8 +544,36 @@ class TestTomoImportTsFromPattern(BaseTest):
         return protImport
 
     def test_importTiltSeriesM(self):
-        protImport = self._runImportTiltSeriesM()
+        protImport = self._runImportTiltSeriesM(filesPath=self.getFileM)
         self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
+
+        return protImport
+
+    def test_importTiltSeriesM_withBrackets(self):
+        # Make a tmp dir with the angular stacks renamed, so they contain bracket characters in their base names
+        tmpBaseName = ''.join(random.choices(string.ascii_letters, k=5))
+        tmpDir = join(tempfile.gettempdir(), tmpBaseName)
+        makePath(tmpDir)
+        tsMDirKeys = ['tsM10Dir', 'tsM31Dir']
+        str2replace = 'Pertuzumab_'
+        newStr = str2replace + '015[16]_'
+        for tsMDirKey in tsMDirKeys:
+            dirName = self.dataset.getFile(tsMDirKey)
+            newPath = join(tmpDir, basename(dirName))
+            makePath(dirName, newPath)
+            origFiles = glob.glob(join(dirName, '*.mrc'))
+            [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, newStr))) for origFile in
+             origFiles]
+
+        # 1: Brackets in out of the {} labels
+        filesPattern = '*/SKvesicles_Pertuzumab_015[16]_{TS}_{TO}_{TA}.mrc'
+        protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
+        self.checkTSSet(protImport.outputTiltSeriesM, 2, 5)
+
+        # 2: Brackets in the {TS} label
+        filesPattern = '*/SKvesicles_Pertuzumab_{TS}_{TO}_{TA}.mrc'
+        protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
+        self.checkTSSet(protImport.outputTiltSeriesM, 2, 5)
 
         return protImport
 
@@ -640,11 +728,12 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         return testData
 
-    def _runImportTiltSeries(self, isTsMovie=False, exclusionWords=None):
+    def _runImportTiltSeries(self, filesPath, pattern, isTsMovie=False, exclusionWords=None, label="import tilt series"):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
         attribDict = {
-            'filesPath': self.parentDir,
-            'filesPattern': self.pattern,
+            'filesPath': filesPath,
+            'filesPattern': pattern,
+            'objLabel': label
         }
         if exclusionWords:
             attribDict['exclusionWords'] = exclusionWords
@@ -654,7 +743,45 @@ class TestTomoImportTsFromMdoc(BaseTest):
         self.launchProtocol(protImport)
         return protImport
 
-    def _checkResults(self, outputSet, isTsMovie, dimensions, prot, size=None):
+    def test_importTiltSeries_numeric_basename(self):
+        # Make a tmp dir with the TS, renamed to have a numeric base name, and also edit the corresponding mdoc files
+        # for consistency
+        tmpBaseName = ''.join(random.choices(string.ascii_letters, k=5))
+        tmpDir = join(tempfile.gettempdir(), tmpBaseName)
+        makePath(tmpDir)
+        tsMDirKeys = ['tsM10Dir', 'tsM31Dir']
+        fileExt2Copy = ['*.mrcs', '*.mdoc']
+        str2replace = 'stack'
+        origFiles = []
+        labelImageFileLineNum = 2
+        for tsMDirKey in tsMDirKeys:
+            dirName = self.dataset.getFile(tsMDirKey)
+            newPath = join(tmpDir, basename(dirName))
+            makePath(dirName, newPath)
+            # Copy the mrcs and mdoc files to a temp location, removing the 'stack' word from the name, so they become
+            # numerical names: stack10.mdoc --> 10.mdoc
+            for ext in fileExt2Copy:
+                origFiles += glob.glob(join(dirName, ext))
+            [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, ''))) for origFile in origFiles]
+            copiedMdoc = glob.glob(join(newPath, '*.mdoc'))[0]
+            # Update the Image File label in the mdoc to point to the numerical renamed TS
+            with open(copiedMdoc, "r") as f:
+                lines = f.readlines()
+            lines[labelImageFileLineNum] = lines[labelImageFileLineNum].replace(str2replace, '')
+            with open(copiedMdoc, "w") as f:
+                f.writelines(lines)
+
+        isTsMovie = False
+        label = 'Import TS numeric base name'
+        # Run protocol
+        protImport = self._runImportTiltSeries(tmpDir, '*/*.mdoc', isTsMovie=isTsMovie)
+        protImport.setObjLabel(label)
+        # Check results
+        outputSet = getattr(protImport, 'outputTiltSeries', None)
+        self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport, size=2, numericBaseName=True)
+        return protImport
+
+    def _checkResults(self, outputSet, isTsMovie, dimensions, prot, size=None, numericBaseName=False):
         # Generate the test data
         testDict = self._genTestData(isTsMovie)
         # Check set properties
@@ -664,7 +791,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         # Check tilt series movies
         for tsM in outputSet:
-            testDataDict = testDict[tsM.getTsId()]
+            # If numeric base name, the expected results need to be adapted as new files are generated in execution
+            # time to simulate the scenario for that test without having to add more files to the test dataset
+            tsId = tsM.getTsId().replace('TS_', 'stack') if numericBaseName else tsM.getTsId()
+            testDataDict = testDict[tsId]
             # Check set acquisition
             acq = tsM.getAcquisition()
             self.assertAlmostEqual(tsM.getSamplingRate(), testDataDict[self.PIXEL_SIZE], delta=0.001)
@@ -675,6 +805,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
             self.assertAlmostEqual(acq.getAccumDose(), testDataDict[self.ACCUM_DOSE], delta=0.0001)
             # Check angles and accumulated dose per angular acquisition (tilt series image)
             filesList = testDataDict[self.FILENAME_LIST]
+            if numericBaseName:
+                # If numeric base name, the expected results need to be adapted as new files are generated in execution
+                # time to simulate the scenario for that test without having to add more files to the test dataset
+                filesList = [file.replace('stack', '') for file in filesList]
             incDoseList = testDataDict[self.INCOMING_DOSE_LIST]
             accumDoseList = testDataDict[self.ACCUM_DOSE_LIST]
             angleList = testDataDict[self.ANGLE_LIST]
@@ -704,10 +838,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
         isTsMovie = True
         label = 'Import TsM'
         # Run protocol
-        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie, exclusionWords=exclusionWords)
         if exclusionWords:
             label += ' excluding words'
-        protImport.setObjLabel(label)
+
+        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, label=label, isTsMovie=isTsMovie, exclusionWords=exclusionWords)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeriesM', None)
         self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport, size=outputSize)  # ts and tsM have
@@ -727,7 +861,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
     def test_importTiltSeries(self):
         isTsMovie = False
         # Run protocol
-        protImport = self._runImportTiltSeries(isTsMovie=isTsMovie)
+        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, isTsMovie=isTsMovie)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeries', None)
         self._checkResults(outputSet, isTsMovie, (1440, 1024, 1), protImport, size=2)  # ts and tsM have different dims
@@ -886,22 +1020,19 @@ class TestImportTomoMasks(BaseTest):
             self.launchProtocol(protImportTomomasks)
             self.assertEqual(str(eType.exception), ERR_NON_MATCHING_TOMOS)
 
+
 class TestConvert(BaseTest):
 
     def test_list_order(self):
-
-        myList = [20,40,50,10,30]
+        myList = [20, 40, 50, 10, 30]
         orders = getOrderFromList(myList)
-        self.assertEqual(orders, [2,4,5,1,3])
+        self.assertEqual(orders, [2, 4, 5, 1, 3])
 
         myList = [20, 40, 50, 10, 30]
         orders = getOrderFromList(myList)
         self.assertEqual(orders, [2, 4, 5, 1, 3])
 
         # Simulate dose list in symmetric dose scheme
-        myList = [24,21,12,9,3,6,15,18,27]
+        myList = [24, 21, 12, 9, 3, 6, 15, 18, 27]
         orders = getOrderFromList(myList)
-        self.assertEqual(orders, [8,7,4,3,1,2,5,6,9])
-
-
-
+        self.assertEqual(orders, [8, 7, 4, 3, 1, 2, 5, 6, 9])

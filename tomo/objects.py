@@ -25,6 +25,9 @@
 # *
 # **************************************************************************
 import logging
+
+from pwem import ALIGN_NONE
+
 logger = logging.getLogger(__name__)
 
 import csv
@@ -182,6 +185,9 @@ class TiltImageBase:
             self.copyObjId(other)
         if copyTM and other.hasTransform():
             self.copyAttributes(other, '_transform')
+        else:
+            self.setTransform(None)
+
         if other.hasOddEven():
             self.copyAttributes(other, '_oddEvenFileNames')
 
@@ -293,11 +299,10 @@ class TiltSeriesBase(data.SetOfImages):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-        if tiltImage.hasTransform():
-            self._hasAlignment.set(True)
+        # TODO: Do it only once? Size =1?
+        self._hasAlignment.set(tiltImage.hasTransform())
+        self._hasOddEven.set(tiltImage.hasOddEven())
 
-        if tiltImage.hasOddEven():
-            self._hasOddEven.set(True)
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
@@ -1167,6 +1172,8 @@ class Coordinate3D(data.EMObject):
     associated with a coordinate"""
 
     TOMO_ID_ATTR = "_tomoId"
+    GROUP_ID_ATTR = "_groupId"
+    SCORE_ATTR = "_score"
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
@@ -1179,6 +1186,7 @@ class Coordinate3D(data.EMObject):
         self._eulerMatrix = data.Transform()
         self._groupId = Integer(0)  # This may refer to a mesh, ROI, vesicle or any group of coordinates
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
+        self._score = Float(0)
         # coord (it's the tsId)
 
     def _getOffset(self, dim, originFunction=const.SCIPION):
@@ -1405,6 +1413,12 @@ class Coordinate3D(data.EMObject):
 
     def setTomoId(self, tomoId):
         self._tomoId.set(tomoId)
+
+    def getScore(self):
+        return self._score.get()
+
+    def setScore(self, val):
+        self._score.set(val)
 
     def composeCoordId(self, sampligRate):
         return "%s,%s,%s,%s" % (self.getTomoId(),
@@ -1741,6 +1755,19 @@ class SetOfSubTomograms(data.SetOfVolumes):
         if hasattr(other, '_coordsPointer'):  # Like the vesicles in pyseg
             self.copyAttributes(other, '_coordsPointer')
 
+    def append(self, subtomo:SubTomogram):
+        # Set the alignment attribute value when adding the first element to the set
+        if self.isEmpty():
+            if subtomo.hasTransform():
+                trMatrix = subtomo.getTransform().getMatrix()
+                hasNonEyeTransform = not np.allclose(trMatrix, np.eye(4))
+                if hasNonEyeTransform:
+                    self.setAlignment3D()
+            else:
+                self.setAlignment(ALIGN_NONE)
+
+        super().append(subtomo)
+
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
 
@@ -1936,7 +1963,14 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True, **kwargs):
+    def __init__(self,
+                 tsId=None,
+                 fileName=None,
+                 modelName=None,
+                 size=5,
+                 applyTSTransformation=True,
+                 hasResidualInfo=False,
+                 **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
@@ -1946,6 +1980,7 @@ class LandmarkModel(data.EMObject):
         self._tiltSeries = Pointer(objDoStore=False)
         self._count = Integer(0)
         self._chains = None
+        self._hasResidualInfo = Boolean(hasResidualInfo)
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1998,6 +2033,12 @@ class LandmarkModel(data.EMObject):
 
     def setModelName(self, modelName):
         self._modelName.set(modelName)
+
+    def hasResidualInfo(self):
+        return self._hasResidualInfo
+
+    def setHasResidualInfo(self, hasResidualInfo):
+        self._hasResidualInfo.set(hasResidualInfo)
 
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
@@ -2061,6 +2102,7 @@ class SetOfLandmarkModels(data.EMSet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._setOfTiltSeriesPointer = Pointer()
+        self._hasResidualInfo = Boolean(False)
 
     def __getitem__(self, itemId):
         """Add a pointer to a tilt-series before returning the landmark model"""
@@ -2110,6 +2152,12 @@ class SetOfLandmarkModels(data.EMSet):
             self._setOfTiltSeriesPointer.copy(setOfTiltSeries, copyId=False)
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
+
+    def hasResidualInfo(self):
+        return self._hasResidualInfo
+
+    def setHasResidualInfo(self, hasResidualInfo):
+        self._hasResidualInfo.set(hasResidualInfo)
 
 
 class MeshPoint(Coordinate3D):
