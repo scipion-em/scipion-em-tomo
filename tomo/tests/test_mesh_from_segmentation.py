@@ -68,7 +68,7 @@ class TestMeshFromSegmentation(BaseTest):
                                        tomoMasks=protTomoMask.outputTomoMasks,
                                        lowLimit=0.1,
                                        highLimit=1.0,
-                                       density=0.05)
+                                       density=5)
 
         self.launchProtocol(protMesh)
         self.assertIsNotNone(protMesh.outputMeshes, 'mesh from segmentation failed')

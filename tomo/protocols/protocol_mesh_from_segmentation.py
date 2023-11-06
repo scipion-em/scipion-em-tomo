@@ -56,6 +56,7 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
 
         form.addParam('tomoMasks',
                       PointerParam,
+                      important=True,
                       pointerClass=SetOfTomoMasks,
                       label='Tomo Masks',
                       help='Set of tomo mask from which the meshes will be created')
@@ -68,9 +69,9 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
 
         form.addParam('density',
                       FloatParam,
-                      label='Density of the mesh',
-                      default=0.05,
-                      help='This parameter goes from 0 - 1 and defines the percentage of voxel of the tomoMask that'
+                      label='Percentage of density ',
+                      default=5.0,
+                      help='This parameter goes from 0 - 100 and defines the percentage of voxel of the tomoMask that'
                            'will be considered as points of the mesh.')
 
     # --------------------------- INSERT steps functions ------------------------
@@ -95,7 +96,7 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
         tomoFn = tomoMask.getFileName()
         mytomo = mrcfile.read(tomoFn)
 
-        candidates = (self.lowLimit.get() < mytomo) & (mytomo < self.highLimit.get())
+        candidates = (self.lowLimit.get() <= mytomo) & (mytomo <= self.highLimit.get())
 
         coordinates = np.argwhere(candidates)
 
@@ -146,8 +147,8 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
         if self.lowLimit.get()<0.0:
             errors.append('The low limit must be greater than zero')
         if self.highLimit.get()>1.0:
-            errors.append('The high limit must be lessed than zero')
-        if self.density.get()>1.0:
+            errors.append('The high limit must be lesser than zero')
+        if self.density.get()>100:
             errors.append('The density must be lesser than zero')
         if self.density.get()<0.0:
             errors.append('The density must be greater than zero')
