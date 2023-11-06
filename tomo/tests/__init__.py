@@ -59,6 +59,13 @@ DataSet(name='reliontomo', folder='reliontomo',
                'tomo2': '64K_defocus_m2_tomo_12_bin1_WBP_CatBinned1.mrc',
         })
 
+DataSet(name='tomoMask', folder='tomoMask',
+        files={
+               'vTomo1': 'vTomo1_flt.mrc',
+               'vTomo2': 'vTomo2_flt.mrc',
+               'meshCoordinates': 'meshCoordinates.csv',
+        })
+
 EMD_10439 = 'emd_10439'
 
 
