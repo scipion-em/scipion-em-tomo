@@ -21,15 +21,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import time
+
 from pyworkflow.tests import BaseTest, setupTestProject
 from . import DataSet
-import pwem.protocols as emprot
-from tomo.protocols.protocol_mesh_from_segmentation import ProtMeshFromSegmentation, OUTPUTATTRIBUTE
+
+from tomo.protocols.protocol_mesh_from_segmentation import ProtMeshFromSegmentation
 from tomo.protocols.protocol_import_tomograms import ProtImportTomograms, OUTPUT_NAME
 from tomo.protocols.protocol_import_tomomasks import ProtImportTomomasks
-from pyworkflow.plugin import Domain
-import pyworkflow.protocol as pwprot
+
 
 
 class TestMeshFromSegmentation(BaseTest):
@@ -45,7 +44,7 @@ class TestMeshFromSegmentation(BaseTest):
         # Import tomograms
         protTomograms = self.newProtocol(ProtImportTomograms,
                                          objLabel='Import tomograms',
-                                         filesPath='/home/vilas/software/data/tests/tomoMask/',#self.dataset.getPath(),
+                                         filesPath=self.inputDataSet.getPath(),
                                          filesPattern='*.mrc',
                                          samplingRate=20)
         self.launchProtocol(protTomograms)
@@ -57,7 +56,7 @@ class TestMeshFromSegmentation(BaseTest):
         protTomoMask = self.newProtocol(ProtImportTomomasks,
                                            objLabel='Import tomoMaks',
                                            inputTomos=outputTomograms,
-                                           filesPath='/home/vilas/software/data/tests/tomoMask/',#self.dataset.getPath(),,
+                                           filesPath=self.inputDataSet.getPath(),
                                            filesPattern='vTomo*_flt.mrc')
         self.launchProtocol(protTomoMask)
         self.assertIsNotNone(protTomoMask.outputTomoMasks, 'tomoMasks not imported')
