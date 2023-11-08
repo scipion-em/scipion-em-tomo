@@ -116,5 +116,6 @@ class DataSetRe4STATuto(Enum):
     # For EMAN testing
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
 
-RE4_STA_TUTO = 'relion40_sta_tutorial_data_jjEdited'  #'relion40_sta_tutorial_data'
+
+RE4_STA_TUTO = 'relion40_sta_tutorial_data'
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
