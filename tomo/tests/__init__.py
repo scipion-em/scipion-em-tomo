@@ -29,34 +29,34 @@ from pyworkflow.tests import DataSet
 
 DataSet(name='tomo-em', folder='tomo-em',
         files={
-               'tomo1': 'overview_wbp.em',
-               'tomo2': 'overview_wbp2.em',
-               'tomo3': 'tomo_8_mn.mrc',
-               'subtomo': 'basename.hdf',
-               'eman_coordinates': 'coordinates3Deman2',
-               'etomo': 'tutorialData',
-               'empiar': 'EMPIAR-10164',
-               'tsMParentFolder': 'ts_tsM_and_mdocs',
-               'tsM10Dir': 'ts_tsM_and_mdocs/Tomo_10',
-               'tsM31Dir': 'ts_tsM_and_mdocs/Tomo_31',
-               'empiarMdocDirOk': 'ts_tsM_and_mdocs/mdocs/realFromEmpiar/complete',
-               'empiarMdocDirNoOk': 'ts_tsM_and_mdocs/mdocs/realFromEmpiar/incomplete',
-               'realFileNoVoltage1': 'tomo4_delay.st.mdoc',
-               'realFileNoVoltage2': 'TS_54.mrc.mdoc',
-               'simErrorMdocDir': 'ts_tsM_and_mdocs/mdocs/editedForErrorSimulation',
-               'noMaginficationMdoc': 'NoMagnification.mdoc',
-               'noSamplingRateMdoc': 'NoPixelSpacing.mdoc',
-               'noVoltagenoSRateMdoc': 'NoVoltage_NoPixelSpacing.mdoc',
-               'someMissingAnglesMdoc': 'SomeTiltAnglesMissing_1_7_48.mdoc',
-               'noDoseMdoc': 'noDose.mdoc',
-               'ts1_imod': 'tutorialData/BBa.st',
-               'ts2_imod': 'tutorialData/BBb.st'
+            'tomo1': 'overview_wbp.em',
+            'tomo2': 'overview_wbp2.em',
+            'tomo3': 'tomo_8_mn.mrc',
+            'subtomo': 'basename.hdf',
+            'eman_coordinates': 'coordinates3Deman2',
+            'etomo': 'tutorialData',
+            'empiar': 'EMPIAR-10164',
+            'tsMParentFolder': 'ts_tsM_and_mdocs',
+            'tsM10Dir': 'ts_tsM_and_mdocs/Tomo_10',
+            'tsM31Dir': 'ts_tsM_and_mdocs/Tomo_31',
+            'empiarMdocDirOk': 'ts_tsM_and_mdocs/mdocs/realFromEmpiar/complete',
+            'empiarMdocDirNoOk': 'ts_tsM_and_mdocs/mdocs/realFromEmpiar/incomplete',
+            'realFileNoVoltage1': 'tomo4_delay.st.mdoc',
+            'realFileNoVoltage2': 'TS_54.mrc.mdoc',
+            'simErrorMdocDir': 'ts_tsM_and_mdocs/mdocs/editedForErrorSimulation',
+            'noMaginficationMdoc': 'NoMagnification.mdoc',
+            'noSamplingRateMdoc': 'NoPixelSpacing.mdoc',
+            'noVoltagenoSRateMdoc': 'NoVoltage_NoPixelSpacing.mdoc',
+            'someMissingAnglesMdoc': 'SomeTiltAnglesMissing_1_7_48.mdoc',
+            'noDoseMdoc': 'noDose.mdoc',
+            'ts1_imod': 'tutorialData/BBa.st',
+            'ts2_imod': 'tutorialData/BBb.st'
         })
 
 DataSet(name='reliontomo', folder='reliontomo',
         files={
-               'tomo1': '64K_defocus_m2_tomo_10_bin1_WBP_CatBinned1.mrc',
-               'tomo2': '64K_defocus_m2_tomo_12_bin1_WBP_CatBinned1.mrc',
+            'tomo1': '64K_defocus_m2_tomo_10_bin1_WBP_CatBinned1.mrc',
+            'tomo2': '64K_defocus_m2_tomo_12_bin1_WBP_CatBinned1.mrc',
         })
 
 DataSet(name='tomoMask', folder='tomoMask',
@@ -88,3 +88,41 @@ class DataSetEmd10439(Enum):
 
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
 
+
+class DataSetRe4STATuto(Enum):
+    voltage = 300
+    sphericalAb = 2.7
+    amplitudeContrast = 0.07
+    magnification = 105000
+    unbinnedPixSize = 1.35
+    croppedBoxSizeBin4 = 96
+    croppedBoxSizeBin2 = 128
+    tiltAxisAngle = 85.3
+    initialDose = 0
+    dosePerTiltImg = 3.05
+    accumDose = 122
+    exclusionWordsTs03 = 'output 01 43 45 54'
+    exclusionWordsTs03ts54 = 'output 01 43 45'
+    correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
+    # Tilt series
+    tsPath = 'tomograms'
+    tsPattern = '*/{TS}.mrc'
+    transformPattern = 'TS*/*.xf'
+    ctfPattern = '*/*.defocus'
+    # Tomograms
+    tomosPath = 'tomograms'
+    tomosPattern = '*.mrc'
+    sRateBin4 = 5.4
+    # Coordinates
+    coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
+    nCoordsFromTs03 = 99
+    nCoordsFromTs54 = 111
+    # Masks
+    maskBin4 = 'masks/mask_align_bin4.mrc'
+    maskBin2 = 'masks/mask_align_bin2.mrc'
+    # For EMAN testing
+    initVolByEman = 'testEman/initialModel0ByEman.mrc'
+
+
+RE4_STA_TUTO = 'relion40_sta_tutorial_data'
+DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
