@@ -36,7 +36,7 @@ Protocols
 **Latest plugin versions**
 ==========================
 
-If you want to check the latest version and release history go to `CHANGES <https://github.com/scipion-em-tomo/tomo/blob/master/CHANGES.txt>`_
+If you want to check the latest version and release history go to `CHANGES <https://github.com/scipion-em/scipion-em-tomo/blob/master/CHANGES.txt>`_
 
 
 **Installing the plugin**
