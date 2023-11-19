@@ -55,7 +55,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_DOSE = "Accum. dose"
     COL_TI_TRANSFORM = "T. Matrix"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
-                  COL_TI_ENABLED: '_objEnabled',
+                  COL_TI_ACQ_ORDER: '_acqOrder',
                   COL_TI_DOSE: '_acquisition._accumDose'}
 
     def __init__(self, protocol, tiltSeries):
@@ -79,7 +79,6 @@ class TiltSeriesTreeProvider(TreeProvider):
             tsObj._parentObject = None
             objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
-
                 tiObj = ti.clone()
                 # For some reason .clone() does not clone the enabled nor the creation time
                 tiObj.setEnabled(ti.isEnabled())
