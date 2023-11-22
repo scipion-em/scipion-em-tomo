@@ -70,4 +70,4 @@ class TestMeshFromSegmentation(BaseTest):
                                        density=5)
 
         self.launchProtocol(protMesh)
-        self.assertIsNotNone(protMesh.outputMeshes, 'mesh from segmentation failed')
+        self.assertSetSize(getattr(protMesh, ProtMeshFromSegmentation._OUTPUT_NAME), size=77868, msg='mesh from segmentation failed')
