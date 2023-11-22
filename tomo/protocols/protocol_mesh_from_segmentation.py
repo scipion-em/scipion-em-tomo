@@ -144,10 +144,6 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
 
     def _validate(self):
         errors = []
-        if self.lowLimit.get()<0.0:
-            errors.append('The low limit must be greater than zero')
-        if self.highLimit.get()>1.0:
-            errors.append('The high limit must be lesser than zero')
         if self.density.get()>100:
             errors.append('The density must be lesser than zero')
         if self.density.get()<0.0:
