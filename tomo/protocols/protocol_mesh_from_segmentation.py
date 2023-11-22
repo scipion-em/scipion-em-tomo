@@ -35,19 +35,16 @@ import tomo.constants as const
 from tomo.protocols import ProtTomoBase
 import mrcfile
 
-COORD_BASE_FN = 'coords'
-
-# Tomogram type constants for particle extraction
-OUTPUTATTRIBUTE = 'SetOfMeshes'
-
 
 class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
     """
-    Extract a set of subtomograms from a set of tomograms given a set of coordinates.
+    Creates meshes based on segmentations (TomoMasks) voxels values.
     """
     _label = 'meshes from tomoMask'
     _devStatus = BETA
-    _possibleOutputs = {OUTPUTATTRIBUTE: SetOfMeshes}
+    # Output name
+    _OUTPUT_NAME = 'Meshes'
+    _possibleOutputs = {_OUTPUT_NAME: SetOfMeshes}
     listOfMeshCoords = {}
 
     # --------------------------- DEFINE param functions ------------------------
@@ -134,7 +131,7 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
                 outSet.append(mesh)
             grId += 1
         outSet.setPrecedents(inputTomos)
-        self._defineOutputs(outputMeshes=outSet)
+        self._defineOutputs(**{self._OUTPUT_NAME:outSet})
         self._defineSourceRelation(inputTomos, outSet)
 
     # --------------------------- INFO functions ------------------------------
