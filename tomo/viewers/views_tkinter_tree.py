@@ -218,7 +218,13 @@ class TiltSeriesDialogView(pwviewer.View):
 
             data = self._preview.figureimg.get_array()
 
-            data = ski.filters.gaussian(data, sigma=(2, 2))
+            # data = ski.filters.gaussian(data, sigma=(2, 2))
+
+            # Equalization
+            # data = ski.exposure.equalize_hist(np.ma.getdata(data))
+
+            # Adaptive Equalization
+            data = ski.exposure.equalize_adapthist(data, clip_limit=0.03)
 
             self._preview._update(data)
         except Exception as e:

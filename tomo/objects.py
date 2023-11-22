@@ -733,7 +733,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def copyItems(self, inputTs,
                   orderByTs='id', updateTsCallback=None,
-                  orderByTi='id', updateTiCallback=None):
+                  orderByTi='id', updateTiCallback=None,
+                  itemSelectedCallback=None):
         """ Copy items (TiltSeries and TiltImages) from the input Set.
          Params:
             inputTs: input TiltSeries (or movies) from where to copy elements.
@@ -741,16 +742,22 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             updateTsCallback: optional callback after TiltSeries is created
             orderByTi: optional orderBy value for iterating over TiltImages
             updateTiCallback: optional callback after TiltImage is created
+            itemSelectedCallback: Optional, callback receiving an item and
+                returning true if it has to be copied
         """
+        
+        if itemSelectedCallback is None:
+            itemSelectedCallback = SetOfImages.isItemEnabled
+
         for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
-            if ts.isEnabled():
+            if itemSelectedCallback(ts):
                 tsOut = self.ITEM_TYPE()
                 tsOut.copyInfo(ts)
                 tsOut.copyObjId(ts)
                 if updateTsCallback:
                     updateTsCallback(i, ts, tsOut)
                 self.append(tsOut)
-                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
+                for j, ti in enumerate(ts   .iterItems(orderBy=orderByTi)):
                     tiOut = tsOut.ITEM_TYPE()
                     tiOut.copyInfo(ti)
                     tiOut.setAcquisition(ti.getAcquisition())
@@ -2689,6 +2696,26 @@ class SetOfCTFTomoSeries(data.EMSet):
         data.EMSet.copyInfo(self, other)
         self.setSetOfTiltSeries(other.getSetOfTiltSeries(pointer=True))
 
+    def copyItems(self, other, itemSelectedCallback=None):
+        """ Copy items (CTFTomoSeries and CTFTomo) from the other Set.
+         Params:
+            other:  SetOfCTFTomoSeries from where to copy elements.
+            
+            itemSelectedCallback: Optional, callback receiving an item and
+                returning true if it has to be copied
+        """
+        for i, ctfSerie in enumerate(other.iterItems()):
+            if itemSelectedCallback(ctfSerie):
+                ctfSerieOut = ctfSerie.clone()
+                self.append(ctfSerieOut)
+
+                for j, ctf in enumerate(ctfSerie.iterItems()):
+                    ctfOut = ctf.clone()
+                    ctfSerieOut.append(ctfOut)
+
+                self.update(ctfSerieOut)
+
+
     def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
         return self._setOfTiltSeriesPointer.get() if not pointer else self._setOfTiltSeriesPointer
@@ -2750,11 +2777,11 @@ class SetOfCTFTomoSeries(data.EMSet):
         return classItem
 
     def iterItems(self, orderBy='id', direction='ASC'):
-        for item in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction):
+        for item in super().iterItems(orderBy=orderBy, direction=direction):
 
             ts = self._getTiltSeriesFromTsId(item.getTsId())
             if ts is None:
-                raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
+                raise Exception("Could not find tilt-series with tsId = %s" % item.getTsId())
 
             item.setTiltSeries(ts)
             self._setItemMapperPath(item)
