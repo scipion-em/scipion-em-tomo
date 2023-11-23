@@ -145,7 +145,6 @@ class TiltImageBase:
 
     def getOdd(self):
         return self._oddEvenFileNames[0]
-
     def getEven(self):
         return self._oddEvenFileNames[1]
 
@@ -247,7 +246,12 @@ class TiltSeriesBase(data.SetOfImages):
 
     def hasOddEven(self):
         return self._hasOddEven.get()
-
+    def getOddFileName(self):
+        firstItem = self.getFirstItem()
+        return firstItem.getOdd().split('@')[1]
+    def getEvenFileName(self):
+        firstItem = self.getFirstItem()
+        return firstItem.getEven().split('@')[1]
     def setAnglesCount(self, value):
 
         if isinstance(value, int):
