@@ -246,12 +246,18 @@ class TiltSeriesBase(data.SetOfImages):
 
     def hasOddEven(self):
         return self._hasOddEven.get()
+
+    def extractFileName(self, inputStr):
+        return inputStr.split('@')[-1]
+
     def getOddFileName(self):
         firstItem = self.getFirstItem()
-        return firstItem.getOdd().split('@')[1]
+        return self.extractFileName(firstItem.getOdd())
+
     def getEvenFileName(self):
         firstItem = self.getFirstItem()
-        return firstItem.getEven().split('@')[1]
+        return self.extractFileName(firstItem.getEven())
+
     def setAnglesCount(self, value):
 
         if isinstance(value, int):
