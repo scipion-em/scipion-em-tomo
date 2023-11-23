@@ -51,7 +51,7 @@ from pwem.protocols import ProtImport
 from tomo.convert import (getAnglesFromHeader, getAnglesFromMdoc,
                           getAnglesAndDosesFromTlt)
 from tomo.convert.mdoc import normalizeTSId, MDoc
-from tomo.objects import TomoAcquisition
+from tomo.objects import TomoAcquisition, SetOfTiltSeries, SetOfTiltSeriesM
 
 from .protocol_base import ProtTomoBase
 
@@ -83,6 +83,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
     accumDoses = None
     incomingDose = None
     meanDosesPerFrame = None
+
+    OUTPUT_NAME = 'outputTiltSeries'
+    _possibleOutputs = {OUTPUT_NAME: SetOfTiltSeries}
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
@@ -251,7 +254,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             self.info("Using glob pattern: '%s'" % self._globPattern)
             self.info("Using regex pattern: '%s'" % self._regexPattern)
 
-        outputSet = getattr(self, self._outputName, None)
+        outputSet = getattr(self, self.OUTPUT_NAME, None)
 
         if outputSet is None:
             createSetFunc = getattr(self, self._createOutputName)
@@ -370,14 +373,14 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
         if someAdded:
             self.debug('Updating output...')
-            self._updateOutputSet(self._outputName, outputSet,
+            self._updateOutputSet(self.OUTPUT_NAME, outputSet,
                                   state=outputSet.STREAM_OPEN)
             self.debug('Update Done.')
 
         self.debug('Checking if finished...someNew: %s' % someNew)
 
         # Close the output set
-        self._updateOutputSet(self._outputName, outputSet,
+        self._updateOutputSet(self.OUTPUT_NAME, outputSet,
                               state=outputSet.STREAM_CLOSED)
 
     # -------------------------- INFO functions -------------------------------
@@ -493,7 +496,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
             # Set output names depending on the import type
         # (either movies or images)
-        self._outputName = 'outputTiltSeries'
         self._createOutputName = '_createSetOfTiltSeries'
 
         # Keep track of which existing tilt-series has already been found
@@ -910,6 +912,9 @@ class ProtImportTsMovies(ProtImportTsBase):
     _label = 'import tilt-series movies'
     _devStatus = pw.BETA
 
+    OUTPUT_NAME = ProtImportTsBase.OUTPUT_NAME+"M"
+    _possibleOutputs = {OUTPUT_NAME:SetOfTiltSeriesM}
+
     def _defineAngleParam(self, form):
         """ Used in subclasses to define the option to fetch tilt angles. """
         group = form.addGroup('Tilt info',
@@ -950,7 +955,6 @@ class ProtImportTsMovies(ProtImportTsBase):
 
     def _initialize(self):
         ProtImportTsBase._initialize(self)
-        self._outputName += 'M'
         self._createOutputName += 'M'
 
     def _validateAngles(self):
