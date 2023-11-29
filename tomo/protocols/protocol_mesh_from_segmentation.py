@@ -103,9 +103,7 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
         # Randomize the order of the array and get the permutation indices
         idxArrayPermutations = np.random.permutation(idxArray)
 
-        print(coordinates[5])
-
-        rho = self.density.get()
+        rho = self.density.get()/100.0
         self.listOfMeshCoords[tsId] = coordinates[idxArrayPermutations[0:int(np.floor(segmentedPoints*rho))]]
 
 
