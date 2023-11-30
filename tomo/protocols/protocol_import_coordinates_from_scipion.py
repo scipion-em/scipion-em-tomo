@@ -73,7 +73,7 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
     def importCoordinatesStep(self):
         inTomoSet = self.importTomograms.get()
         inCoordsSet = SetOfCoordinates3D()
-        outCoordsSet = self._createSetOfCoordinates3D(inTomoSet)
+        outCoordsSet = self._createSetOfCoordinates3D(self.importTomograms)
 
         # Generate a set of 3d coordinates and assign the mapper of the introduced sqlite file
         inCoordsSet.setSamplingRate(inTomoSet.getSamplingRate())
