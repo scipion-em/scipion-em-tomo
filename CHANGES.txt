@@ -1,3 +1,4 @@
+v3.4.1: Picking template changed
 v3.4:
   - Compose tilt series: Allowing tilt series with gaps
   - New protocol: "meshes from tomoMask"
