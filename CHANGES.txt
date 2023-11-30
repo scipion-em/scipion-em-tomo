@@ -1,10 +1,10 @@
-v3.4.1: Picking template changed
 v3.4:
   - Compose tilt series: Allowing tilt series with gaps
   - New protocol: "meshes from tomoMask"
   - Tomoviewer: Can sort by acquisition order too.
   - Sampling rate in Coordinates3D rounded to 2 decimal places upon visualization.
   - HIV STA template divided into 2: Dynamo STA and Relion4 STA
+  - Picking template tutorial (cryolo, eman, deepfinder) changed
   Developers:
   - TestBaseCentralizedLayer: New test class to make more precise assertions on outputs.
   - Adding a method for extracting odd-even filenames
