@@ -1,2 +1,2 @@
-mrcfile
+mrcfile>=1.4.0,<=1.4.3
 scipion-em
