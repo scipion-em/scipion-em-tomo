@@ -412,7 +412,7 @@ You'll need to download its dataset -> scipion3 testdata --download HIV_alignmen
     {
         "object.className": "ProtNovaCtfTomoReconstruction",
         "object.id": "5066",
-        "object.label": "novactf - 3d ctf correction and reconstruction",
+        "object.label": "novactf - 3d ctf reconstruction",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
