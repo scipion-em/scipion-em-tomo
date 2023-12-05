@@ -1,3 +1,7 @@
+v3.4.1:
+  - Update HIV-tiltseries-alignment-reconstruction.json template
+  - Update Picking template II
+  - Update Relion4 template
 v3.4:
   - Compose tilt series: Allowing tilt series with gaps
   - New protocol: "meshes from tomoMask"
