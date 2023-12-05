@@ -196,15 +196,12 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_VOLTAGE)
         group.addParam('sphericalAberration', params.FloatParam, default=2.7,
                        label=Message.LABEL_SPH_ABERRATION,
-                       expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_SPH_ABERRATION)
         group.addParam('amplitudeContrast', params.FloatParam, default=0.1,
                        label=Message.LABEL_AMPLITUDE,
-                       expertLevel=params.LEVEL_ADVANCED,
                        help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam, default=50000,
                        label=Message.LABEL_MAGNI_RATE,
-                       expertLevel=params.LEVEL_ADVANCED,
                        allowsNull=True,
                        help=Message.TEXT_MAGNI_RATE)
         group.addParam('samplingRate', params.FloatParam,
