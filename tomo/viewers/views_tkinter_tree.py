@@ -379,23 +379,18 @@ class TomogramsDialog(ToolbarListDialog):
     an ImageJ subprocess from a list of Tomograms.
     """
 
-    def __init__(self, parent, viewer, **kwargs):
+    def __init__(self, parent, viewer, lockGui=False, **kwargs):
         self.path = kwargs.get("path", None)
         self.provider = kwargs.get("provider", None)
-        if viewer:
-            ToolbarListDialog.__init__(self, parent,
-                                       "Tomogram List",
-                                       allowsEmptySelection=False,
-                                       itemDoubleClick=self.doubleClickViewer,
-                                       allowSelect=False,
-                                       **kwargs)
-        else:
-            ToolbarListDialog.__init__(self, parent,
-                                       "Tomogram List",
-                                       allowsEmptySelection=False,
-                                       itemDoubleClick=self.doubleClickOnTomogram,
-                                       allowSelect=False,
-                                       **kwargs)
+        itemDoubleClick = self.doubleClickViewer if viewer else self.doubleClickOnTomogram
+        ToolbarListDialog.__init__(self, parent,
+                                   "Tomogram List",
+                                   allowsEmptySelection=False,
+                                   itemDoubleClick=itemDoubleClick,
+                                   allowSelect=False,
+                                   lockGui=lockGui,
+                                   cancelButton=True,
+                                   **kwargs)
 
     def refresh_gui_viewer(self):
         if self.proc.is_alive():
@@ -863,7 +858,7 @@ class CTFEstimationTree(BoundTree):
 
 
 class CtfEstimationListDialog(ListDialog):
-    def __init__(self, parent, title, provider, protocol, inputTS, **kwargs):
+    def __init__(self, parent, title, provider, protocol, inputTS, lockGui=False, **kwargs):
         self._project = protocol.getProject()
         self._protocol = protocol
         self._inputSetOfTiltSeries = inputTS
@@ -872,8 +867,11 @@ class CtfEstimationListDialog(ListDialog):
         self._show1DPLot = kwargs.pop('plot1Dfunc', None)
         self._show2DPLot = kwargs.pop('plot2Dfunc', None)
         self._showExtraPlot = kwargs.pop('plotExtrafunc', None)
-        ListDialog.__init__(self, parent, title, provider, allowSelect=False,
-                            cancelButton=True, **kwargs)
+        ListDialog.__init__(self, parent, title, provider,
+                            allowSelect=False,
+                            cancelButton=True,
+                            lockGui=lockGui,
+                            **kwargs)
 
     def body(self, bodyFrame):
         bodyFrame.config()

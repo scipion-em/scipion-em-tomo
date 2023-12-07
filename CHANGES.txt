@@ -1,3 +1,5 @@
+v3.5.0:
+  - Prevent viewers from locking the screen focus.
 v3.4.1:
   - Update HIV-tiltseries-alignment-reconstruction.json template
   - Update Picking template II
