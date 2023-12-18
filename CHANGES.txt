@@ -1,5 +1,7 @@
 v3.5.0:
   - Prevent viewers from locking the screen focus.
+v3.4.2:
+  - TS movies not hiding any acquisition parameter to prevent accidental override.
 v3.4.1:
   - Update HIV-tiltseries-alignment-reconstruction.json template
   - Update Picking template II
