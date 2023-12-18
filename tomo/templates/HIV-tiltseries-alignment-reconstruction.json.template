@@ -408,25 +408,5 @@ You'll need to download its dataset -> scipion3 testdata --download HIV_alignmen
         "hostName": "localhost",
         "numberOfThreads": 2,
         "numberOfMpi": 1
-    },
-    {
-        "object.className": "ProtNovaCtfTomoReconstruction",
-        "object.id": "5066",
-        "object.label": "novactf - 3d ctf reconstruction",
-        "object.comment": "",
-        "_useQueue": false,
-        "_prerequisites": "",
-        "_queueParams": null,
-        "runName": null,
-        "runMode": 0,
-        "protTomoCtfDefocus": "5027.",
-        "applyAlignment": true,
-        "doEraseGold": false,
-        "goldDiam": 18,
-        "radialFirstParameter": 0.3,
-        "radialSecondParameter": 0.05,
-        "hostName": "localhost",
-        "numberOfThreads": 2,
-        "numberOfMpi": 1
     }
 ]
