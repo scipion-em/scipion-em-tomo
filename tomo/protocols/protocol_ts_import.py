@@ -202,6 +202,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                        help=Message.TEXT_AMPLITUDE)
         group.addParam('magnification', params.IntParam, default=50000,
                        label=Message.LABEL_MAGNI_RATE,
+                       expertLevel=params.LEVEL_ADVANCED,
                        allowsNull=True,
                        help=Message.TEXT_MAGNI_RATE)
         group.addParam('samplingRate', params.FloatParam,
