@@ -28,7 +28,7 @@ import numpy as np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -154,6 +154,10 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
             self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # At least, check that the TsId was not lost in metadata generation or copying methods
+            self.assertIsNotNone(getattr(tomo, Tomogram.TS_ID_FIELD, None),
+                                 msg=f'Tomogram {tomo.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
+                                     f'or it is empty.')
             # Check the dimensions
             if expectedDimensions:
                 x, y, z = tomo.getDimensions()
