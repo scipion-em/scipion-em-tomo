@@ -3,6 +3,7 @@ v3.5.0:
   - Prevent viewers from locking the screen focus.
  Developers:
   - Expand the method checkTomograms from the Test Centralization Layer.
+  - Import tomograms: the acquisition is now copied to both the set and the items.
 v3.4.2:
   - TS movies not hiding any acquisition parameter to prevent accidental override.
 v3.4.1:
