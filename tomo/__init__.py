@@ -27,7 +27,7 @@
 import os
 import pwem
 from .constants import (NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD,
-                        getNaparyEnvName, V0_3_11, NAPARI_DEF_VER)
+                        getNaparyEnvName, NAPARI_DEF_VER)
 
 __version__ = '3.5.0'
 _logo = "icon.png"
@@ -60,9 +60,9 @@ class Plugin(pwem.Plugin):
         NAPARI_INSTALLED = f"napari_{version}_installed"
         installCmd = [cls.getCondaActivationCmd(),
                       f'conda create -y -n {ENV_NAME} -c conda-forge',
-                      'python=3.10 napari=0.4.17 pyqt pip &&',
+                      f'python=3.10 napari={version} pyqt pip &&',
                       f'conda activate {ENV_NAME} &&',
-                      f'pip install napari-tomotwin napari-boxmanager=={version}']
+                      f'pip install napari-tomotwin napari-boxmanager']
 
         # Flag installation finished
         installCmd.append(f'&& touch {NAPARI_INSTALLED}')
@@ -81,5 +81,4 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        cls.addNapariPackage(env, V0_3_11)
         cls.addNapariPackage(env, NAPARI_DEF_VER, default=True)
