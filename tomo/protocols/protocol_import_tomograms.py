@@ -135,7 +135,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         self._parseAcquisitionData()
         if self.importAcquisitionFrom.get() != self.FROM_FILE_IMPORT:
-            tomoSet.setAcquisition(self.acquisitionParameters)
+            tomoSet.setAcquisition(self._extractAcquisitionParameters(None))
         fileNameList = []
 
         def setDefaultOrigin():
