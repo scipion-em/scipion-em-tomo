@@ -27,6 +27,7 @@ from .protocol_assign_tomo2tomoMask import ProtAssignTomo2TomoMask
 from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from .protocol_import_tomomasks import ProtImportTomomasks
+from .protocol_import_ctf import ProtImportTsCTF
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
