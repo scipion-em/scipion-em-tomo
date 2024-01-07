@@ -152,9 +152,9 @@ class ProtImportTsCTF(ProtTomoImportFiles):
                              for defocusFn in self.iterFiles()]
             matchResults = list(set(tsIdList) & set(defocusBNames))
             if not matchResults:
-                errorMsg.append(f'No matching files found.\n'
-                                f'CTF filenames are expected to include tsId e.g. tsId_ctf_avrot.txt\n'
-                                f'The suffixes "_ctf" or "_avrot" are not mandatory.')
+                errorMsg.append('No matching files found.\n'
+                                'CTF filenames are expected to include tsId e.g. tsId_ctf_avrot.txt\n'
+                                'The suffixes "_ctf" or "_avrot" are not mandatory.')
         else:
             errorMsg.append('Unable to find the files provided:\n\n'
                             '\t-filePath = %s\n'
