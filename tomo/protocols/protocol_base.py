@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import pyworkflow as pw
+from pyworkflow.protocol import IntParam
 from pyworkflow.protocol.params import (PointerParam, EnumParam, PathParam,
                                         FloatParam, StringParam,
                                         BooleanParam, LEVEL_ADVANCED)
@@ -265,6 +266,30 @@ class ProtTomoImportAcquisition:
                            "positive.\n See "
                            "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
 
+        form.addParam('voltage', FloatParam, default=300,
+                       label=Message.LABEL_VOLTAGE,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_VOLTAGE)
+
+        form.addParam('sphericalAberration', FloatParam, default=2.7,
+                       label=Message.LABEL_SPH_ABERRATION,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_SPH_ABERRATION)
+
+        form.addParam('amplitudeContrast', FloatParam, default=0.1,
+                       label=Message.LABEL_AMPLITUDE,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_AMPLITUDE)
+
+        form.addParam('magnification', IntParam, default=50000,
+                       label=Message.LABEL_MAGNI_RATE,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_MAGNI_RATE)
+
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
             self.acquisitionParameters = {
@@ -272,6 +297,10 @@ class ProtTomoImportAcquisition:
                 'angleMax': self.acquisitionAngleMax.get(),
                 'step': self.step.get(),
                 'tiltAxisAngle': self.tiltAxisAngle.get(),
+                'voltage': self.voltage.get(),
+                'sphericalAberration': self.sphericalAberration.get(),
+                'amplitudeContrast': self.amplitudeContrast.get(),
+                'magnification': self.magnification.get()
             }
         else:
             params = open(self.acquisitionData.get(), "r")
