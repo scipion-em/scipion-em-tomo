@@ -295,7 +295,6 @@ class ProtTomoImportAcquisition:
                 'voltage': self.voltage.get(),
                 'sphericalAberration': self.sphericalAberration.get(),
                 'amplitudeContrast': self.amplitudeContrast.get(),
-                'magnification': self.magnification.get()
             }
         else:
             params = open(self.acquisitionData.get(), "r")
