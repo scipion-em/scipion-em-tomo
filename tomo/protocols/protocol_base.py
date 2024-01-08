@@ -284,11 +284,6 @@ class ProtTomoImportAcquisition:
                        condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
                        help=Message.TEXT_AMPLITUDE)
 
-        form.addParam('magnification', IntParam, default=50000,
-                       label=Message.LABEL_MAGNI_RATE,
-                       allowsNull=True,
-                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                       help=Message.TEXT_MAGNI_RATE)
 
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
