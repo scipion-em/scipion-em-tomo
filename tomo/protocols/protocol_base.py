@@ -25,7 +25,6 @@
 # **************************************************************************
 
 import pyworkflow as pw
-from pyworkflow.protocol import IntParam
 from pyworkflow.protocol.params import (PointerParam, EnumParam, PathParam,
                                         FloatParam, StringParam,
                                         BooleanParam, LEVEL_ADVANCED)
