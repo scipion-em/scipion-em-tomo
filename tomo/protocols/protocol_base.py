@@ -265,6 +265,25 @@ class ProtTomoImportAcquisition:
                            "positive.\n See "
                            "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
 
+        form.addParam('voltage', FloatParam, default=300,
+                       label=Message.LABEL_VOLTAGE,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_VOLTAGE)
+
+        form.addParam('sphericalAberration', FloatParam, default=2.7,
+                       label=Message.LABEL_SPH_ABERRATION,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_SPH_ABERRATION)
+
+        form.addParam('amplitudeContrast', FloatParam, default=0.1,
+                       label=Message.LABEL_AMPLITUDE,
+                       allowsNull=True,
+                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                       help=Message.TEXT_AMPLITUDE)
+
+
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
             self.acquisitionParameters = {
@@ -272,6 +291,9 @@ class ProtTomoImportAcquisition:
                 'angleMax': self.acquisitionAngleMax.get(),
                 'step': self.step.get(),
                 'tiltAxisAngle': self.tiltAxisAngle.get(),
+                'voltage': self.voltage.get(),
+                'sphericalAberration': self.sphericalAberration.get(),
+                'amplitudeContrast': self.amplitudeContrast.get(),
             }
         else:
             params = open(self.acquisitionData.get(), "r")
