@@ -227,8 +227,8 @@ class ProtTomoImportAcquisition:
 
         form.addParam('acquisitionData', PathParam,
                       label="Acquisition parameters file",
-                      help="File with the acquisition parameters for every "
-                           "subtomogram to import. File must be in plain format."
+                      help="File with the acquisition parameters for each "
+                           "tomogram or subtomogram to import. File must be in plain format."
                            " The file must contain a row per file to be imported "
                            "and have the following parameters in order: \n"
                            "\n"
