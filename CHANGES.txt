@@ -1,6 +1,7 @@
 v3.5.0:
  Users:
   - Prevent viewers from locking the screen focus.
+  - Napari 0.4.17 is the default version. boxmanager and tomotwin are now independent
  Developers:
   - Expand the method checkTomograms from the Test Centralization Layer.
   - Import tomograms: the acquisition is now copied to both the set and the items.
