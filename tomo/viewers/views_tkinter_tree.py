@@ -197,7 +197,7 @@ class TiltSeriesDialogView(pwviewer.View):
 
     def show(self):
         ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
-                   previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True)
+                   previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True, lockGui=False)
 
 
     def getPreviewWidget(self, frame):
