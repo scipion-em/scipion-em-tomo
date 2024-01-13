@@ -73,9 +73,8 @@ def getNaparyEnvName(version):
     return f"napari-{version}"
 
 
-V0_3_11 = '0.3.11'
-V0_4_4 = '0.4.4'
+V0_4_17 = '0.4.17'
 
-NAPARI_DEF_VER = V0_4_4
+NAPARI_DEF_VER = V0_4_17
 NAPARI_ACTIVATION_CMD = 'conda activate %s' % getNaparyEnvName(NAPARI_DEF_VER)
 NAPARI_ENV_ACTIVATION = 'NAPARI_ENV_ACTIVATION'
