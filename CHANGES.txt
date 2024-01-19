@@ -6,7 +6,7 @@ v3.5.0:
   - Expand the method checkTomograms from the Test Centralization Layer.
   - Import tomograms: the acquisition is now copied to both the set and the items.
   - Some refactor in protocol_ts_estimate_ctf.py required for the new CTF code design prots approach.
-  - TiltSeries object: add a method to generate the imod tlt file considering the excluded views.
+  - TiltSeries object: expand the method to generate the imod tlt file allowing to consider the excluded views.
 v3.4.2:
   - TS movies not hiding any acquisition parameter to prevent accidental override.
 v3.4.1:
