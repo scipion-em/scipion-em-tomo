@@ -593,17 +593,16 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 
         return tiltcomPath
 
-    def writeTltFile(self, ts_folder, **kwargs):
+    def writeTltFile(self, ts_folder, excludeViews=False):
         """Writes a tlt file.
         :param ts_folder: path of the directory in which the tlt file will be generated.
-        :keyword tltIgnoresExcluded: boolean used to indicate if the tlt file should contain only the data concerning
-        the non-excluded views (True) or all of them (False)
+        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
         """
-        tltIgnoresExcluded = kwargs.get('tltIgnoresExcluded', False)
         xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
             for ti in self.iterItems():
-                if tltIgnoresExcluded and not ti.isEnabled():
+                if excludeViews and not ti.isEnabled():
                     continue
                 f.write(str(ti.getTiltAngle()) + '\n')
 
@@ -655,13 +654,16 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         - tlt
         - xf
         - xtilt
+        :param folderName: path of the directory in which the files will be generated.
+        :keyword tltIgnoresExcluded: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
         """
         # Create a newst.com file
         self.writeNewstcomFile(folderName, **kwargs)
         # Create a tilt.com file
         self.writeTiltcomFile(folderName, **kwargs)
         # Create a .tlt file
-        self.writeTltFile(folderName, **kwargs)
+        self.writeTltFile(folderName, excludeViews=kwargs.get('tltIgnoresExcluded', False))
         # Create a .xtilt file
         self.writeXtiltFile(folderName)
         # Create a .xf file
