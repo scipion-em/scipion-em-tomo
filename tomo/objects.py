@@ -599,6 +599,15 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             for ti in self:
                 f.write(str(ti.getTiltAngle()) + '\n')
 
+    def writeTltFileOnlyNonExcluded(self, ts_folder):
+        xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
+        excludedViewsList = self.getExcludedViewsIndex()
+        with open(xtiltPath, 'w') as f:
+            for i, ti in enumerate(self):
+                # Only write it if not in the list of exclude views
+                if i + 1 not in excludedViewsList:
+                    f.write(str(ti.getTiltAngle()) + '\n')
+
     def writeXtiltFile(self, ts_folder):
         xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
@@ -646,7 +655,11 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         # Create a tilt.com file
         self.writeTiltcomFile(folderName, **kwargs)
         # Create a .tlt file
-        self.writeTltFile(folderName)
+        tltIgnoresExcluded = kwargs.get('tltIgnoresExcluded', None)
+        if tltIgnoresExcluded:
+            self.writeTltFile(folderName)
+        else:
+            self.writeTltFileOnlyNonExcluded(folderName)
         # Create a .xtilt file
         self.writeXtiltFile(folderName)
         # Create a .xf file
