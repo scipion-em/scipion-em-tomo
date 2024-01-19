@@ -593,20 +593,19 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 
         return tiltcomPath
 
-    def writeTltFile(self, ts_folder):
+    def writeTltFile(self, ts_folder, **kwargs):
+        """Writes a tlt file.
+        :param ts_folder: path of the directory in which the tlt file will be generated.
+        :keyword tltIgnoresExcluded: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False)
+        """
+        tltIgnoresExcluded = kwargs.get('tltIgnoresExcluded', False)
         xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
-            for ti in self:
+            for ti in self.iterItems():
+                if tltIgnoresExcluded and not ti.isEnabled():
+                    continue
                 f.write(str(ti.getTiltAngle()) + '\n')
-
-    def writeTltFileOnlyNonExcluded(self, ts_folder):
-        xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
-        excludedViewsList = self.getExcludedViewsIndex()
-        with open(xtiltPath, 'w') as f:
-            for i, ti in enumerate(self):
-                # Only write it if not in the list of exclude views
-                if i + 1 not in excludedViewsList:
-                    f.write(str(ti.getTiltAngle()) + '\n')
 
     def writeXtiltFile(self, ts_folder):
         xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
@@ -650,16 +649,19 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             csvW.writerows(tsMatrixTransformList)
 
     def writeImodFiles(self, folderName, **kwargs):
+        """Writes the following IMOD files:
+        - newst.com
+        - tilt.com
+        - tlt
+        - xf
+        - xtilt
+        """
         # Create a newst.com file
         self.writeNewstcomFile(folderName, **kwargs)
         # Create a tilt.com file
         self.writeTiltcomFile(folderName, **kwargs)
         # Create a .tlt file
-        tltIgnoresExcluded = kwargs.get('tltIgnoresExcluded', None)
-        if tltIgnoresExcluded:
-            self.writeTltFile(folderName)
-        else:
-            self.writeTltFileOnlyNonExcluded(folderName)
+        self.writeTltFile(folderName, **kwargs)
         # Create a .xtilt file
         self.writeXtiltFile(folderName)
         # Create a .xf file
