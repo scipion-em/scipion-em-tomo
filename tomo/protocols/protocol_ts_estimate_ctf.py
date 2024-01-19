@@ -42,6 +42,7 @@ class ProtTsEstimateCTF(ProtTsProcess):
     """
     Base class for estimating the CTF on TiltSeries
     """
+
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         """ Define input parameters from this program into the given form. """
@@ -236,23 +237,9 @@ class ProtTsEstimateCTF(ProtTsProcess):
         for CTF estimation that are common for all micrographs. """
         # Get pointer to input micrographs
         inputTs = self._getInputTs()
-        acq = inputTs.getAcquisition()
         downFactor = self.getAttributeValue('ctfDownFactor', 1.0)
-        sampling = inputTs.getSamplingRate()
-        if downFactor != 1.0:
-            sampling *= downFactor
-        self._params = {'voltage': acq.getVoltage(),
-                        'sphericalAberration': acq.getSphericalAberration(),
-                        'magnification': acq.getMagnification(),
-                        'ampContrast': acq.getAmplitudeContrast(),
-                        'samplingRate': sampling,
-                        'scannedPixelSize': inputTs.getScannedPixelSize(),
-                        'windowSize': self.windowSize.get(),
-                        'lowRes': self.lowRes.get(),
-                        'highRes': self.highRes.get(),
-                        'minDefocus': self.minDefocus.get(),
-                        'maxDefocus': self.maxDefocus.get()
-                        }
+        self._params = createCtfParams(inputTs, self.windowSize.get(), self.lowRes.get(), self.highRes.get(),
+                                       self.minDefocus.get(), self.maxDefocus.get(), downFactor=downFactor)
 
     def getCtfParamsDict(self):
         """ Return a copy of the global params dict,
@@ -287,3 +274,25 @@ class ProtTsEstimateCTF(ProtTsProcess):
 
     def allowsDelete(self, obj):
         return True
+
+
+def createCtfParams(inputTs, windowSize, lowRes, highRes, minDefocus, maxDefocus, downFactor=1.0):
+    """ This function define a dictionary with parameters used
+    for CTF estimation that are common for all micrographs. """
+    # Get pointer to input micrographs
+    acq = inputTs.getAcquisition()
+    sampling = inputTs.getSamplingRate()
+    if downFactor != 1.0:
+        sampling *= downFactor
+    return {'voltage': acq.getVoltage(),
+            'sphericalAberration': acq.getSphericalAberration(),
+            'magnification': acq.getMagnification(),
+            'ampContrast': acq.getAmplitudeContrast(),
+            'samplingRate': sampling,
+            'scannedPixelSize': inputTs.getScannedPixelSize(),
+            'windowSize': windowSize,
+            'lowRes': lowRes,
+            'highRes': highRes,
+            'minDefocus': minDefocus,
+            'maxDefocus': maxDefocus
+            }

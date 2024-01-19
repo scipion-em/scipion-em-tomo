@@ -122,6 +122,8 @@ class DataSetRe4STATuto(Enum):
     maskBin2 = 'masks/mask_align_bin2.mrc'
     # For EMAN testing
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
+    # For CISTEM Ctffind import testing
+    cistemFilesPath = 'testCtfFind'
 
 
 RE4_STA_TUTO = 'relion40_sta_tutorial_data'
