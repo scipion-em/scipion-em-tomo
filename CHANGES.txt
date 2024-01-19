@@ -1,6 +1,9 @@
 v3.5.0:
  Users:
   - Prevent viewers from locking the screen focus.
+  - Improve SetOfCoordinates3D str method.
+  - Fit vesicles prot nos requesting the tomograms. Refactored.
+  - Fix accum dose in TS import without mdoc.
   - Napari 0.4.17 is the default version. boxmanager and tomotwin are now independent
  Developers:
   - Expand the method checkTomograms from the Test Centralization Layer.

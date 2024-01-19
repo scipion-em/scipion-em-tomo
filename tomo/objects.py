@@ -1612,8 +1612,9 @@ class SetOfCoordinates3D(data.EMSet):
             boxStr = ' %d x %d x %d' % (boxSize, boxSize, boxSize)
         else:
             boxStr = 'No-Box'
-        s = "%s (%d items, %s, %.2f Å/px%s)" % (self.getClassName(), self.getSize(), boxStr,
-                                                self.getSamplingRate(), self._appendStreamState())
+        sRate = '%.2f' % self.getSamplingRate() if self.getSamplingRate() is not None else 'None!!!'
+        s = "%s (%d items, %s, %s Å/px%s)" % (self.getClassName(), self.getSize(), boxStr,
+                                              sRate, self._appendStreamState())
 
         return s
 

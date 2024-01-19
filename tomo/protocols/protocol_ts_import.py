@@ -321,6 +321,8 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                         dose = accumDoseList[counter]
                     else:
                         dosePerFrame = self.dosePerFrame.get()
+                        if not dose:
+                            dose = to * dosePerFrame
 
                     # Incoming dose in current ti
                     ti.getAcquisition().setDosePerFrame(dosePerFrame)
