@@ -29,12 +29,14 @@ import pwem
 from .constants import (NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD,
                         getNaparyEnvName, NAPARI_DEF_VER)
 
-__version__ = '3.5.0'
+__version__ = '3.5.1'
 _logo = "icon.png"
 _references = []
 
 
 class Plugin(pwem.Plugin):
+    _url = "https://github.com/scipion-em/scipion-em-tomo"
+
     @classmethod
     def _defineVariables(cls):
         cls._defineVar(NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD)
