@@ -408,12 +408,3 @@ def scaleTrMatrixShifts(inTrMatrix, scaleFactor):
         inTrMatrix[1, 3] = scaledShifts[1]
         inTrMatrix[2, 3] = scaledShifts[2]
     return inTrMatrix
-
-
-def setWrongDefocus(ctfModel):
-    """ Set parameters if results parsing has failed.
-    :param ctfModel: the model to be updated
-    """
-    ctfModel.setDefocusU(-999)
-    ctfModel.setDefocusV(-1)
-    ctfModel.setDefocusAngle(-999)
