@@ -28,7 +28,7 @@ import numpy as np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -48,7 +48,7 @@ class TestBaseCentralizedLayer(BaseTest):
     def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
                         testAcqObj=None, alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False,
                         hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
-                        isInterpolated=False):
+                        isInterpolated=False, excludedViewsDict=None):
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -68,6 +68,9 @@ class TestBaseCentralizedLayer(BaseTest):
         :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
         :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
         or not (False).
+        :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
+        expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
+        to False and the expected transformation matrix is the identity.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # Check the set attributes
@@ -86,18 +89,28 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inTsSet.interpolated(), isInterpolated)
         # Check the main properties of the set items
         for i, ts in enumerate(inTsSet):
+            tsId = ts.getTsId()
             # Check the dimensions
             if expectedDimensions:
                 x, y, z = ts.getDimensions()
                 if type(expectedDimensions) is dict:
-                    self.assertEqual([x, y, z], expectedDimensions[ts.getTsId()])
+                    self.assertEqual([x, y, z], expectedDimensions[tsId])
                 else:
                     self.assertEqual([x, y, z], expectedDimensions)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
-            for ti in ts:
+            for ind, ti in enumerate(ts):
+                # Excluded view
+                if excludedViewsDict:
+                    isExcludedView = True if ind in excludedViewsDict[tsId] else False
+                else:
+                    isExcludedView = False
+                self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
                 # Alignment matrix
-                self.checkTransformMatrix(ti.getTransform().getMatrix(), alignment=hasAlignment, is2d=True)
+                self.checkTransformMatrix(ti.getTransform().getMatrix(),
+                                          alignment=hasAlignment,
+                                          is2d=True,
+                                          isExcludedView=isExcludedView)
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
@@ -123,9 +136,28 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
 
     # CTF ##############################################################################################################
-    def checkCTFs(self, inCtfSet, expectedSetSize=-1, streamState=2):
+    def checkCTFs(self, inCtfSet, expectedSetSize=-1, excludedViewsDict=None, streamState=2):
+        """
+        :param inCtfSet: A SetOfCtfTomoSeries.
+        :param expectedSetSize: expected set site to check.
+        :param excludedViewsDict: a dictionary of structure {key --> tsId: value --> list of the indices of images
+        that are expected to have been excluded}. An excluded view in a CTFTomo means that its attribute _objEnabled is
+        set to False and the expected values for defocusU, defocusV, and DefocusAngle will be -999, -1,
+        and -999, correspondingly, as what's done by the CTFModel method called setWrongDefocus.
+        :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        """
         self.assertSetSize(inCtfSet, expectedSetSize)
         self.assertEqual(inCtfSet.getStreamState(), streamState)
+        for ctf in inCtfSet:
+            tsId = ctf.getTsId()
+            for ind, ctfi in enumerate(ctf):
+                # Excluded view
+                if excludedViewsDict:
+                    isExcludedView = True if ind in excludedViewsDict[tsId] else False
+                else:
+                    isExcludedView = False
+                self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
+                self.checkCtfTomo(ctf, isExcludedView)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
@@ -515,3 +547,26 @@ class TestBaseCentralizedLayer(BaseTest):
         yc_max = extremes[3]
         zc_max = extremes[5]
         self.assertTrue(xc_max < xt / 2 and yc_max < yt / 2 and zc_max < zt / 2)
+
+    def checkObjectEnabled(self, obj, isExcludedView, tsId, ind):
+        enb = obj.isEnabled()
+        objType = 'CTF' if type(obj) is CTFTomoSeries else 'Tilt image'
+        if isExcludedView:
+            self.assertFalse(enb, msg='TsId = %s: %s %i was expected not to be Enabled' % (tsId, objType, ind))
+        else:
+            self.assertTrue(enb, msg='TsId = %s: %s %i was expected to be Enabled' % (tsId, objType, ind))
+
+    def checkCtfTomo(self, ctf, isExcluded):
+        defocusU = ctf.getDefocusU()
+        defocusV = ctf.getDefocusV()
+        defocusAngle = ctf.getDefocusAngle()
+        defocusVals = [defocusU, defocusV, defocusAngle]
+        if isExcluded:
+            expectedDefocusU = -999
+            expectedDefocusV = -1
+            expectedDefocusAngle = -999
+            self.assertTrue(np.allclose(np.array(defocusVals),
+                                        np.array([expectedDefocusU, expectedDefocusV, expectedDefocusAngle])))
+        else:
+            for val in defocusVals:
+                self.assertGreaterEqual(val, 0)
