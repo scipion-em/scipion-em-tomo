@@ -157,7 +157,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 else:
                     isExcludedView = False
                 self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
-                self.checkCtfTomo(ctf, isExcludedView)
+                self.checkCtfTomo(ctfi, isExcludedView)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
