@@ -42,6 +42,7 @@ class ImportChoice(IntEnum):
     CTFFIND = 0
     IMOD = 1
     GCTF = 2
+    ARETOMO = 3
 
 
 class outputs(Enum):
@@ -59,7 +60,8 @@ class ProtImportTsCTF(ProtTomoImportFiles):
         """
         return [ImportChoice.CTFFIND.name,
                 ImportChoice.IMOD.name,
-                ImportChoice.GCTF.name]
+                ImportChoice.GCTF.name,
+                ImportChoice.ARETOMO.name]
 
     def _getDefaultChoice(self):
         return 0
@@ -153,8 +155,13 @@ class ProtImportTsCTF(ProtTomoImportFiles):
             matchResults = list(set(tsIdList) & set(defocusBNames))
             if not matchResults:
                 errorMsg.append('No matching files found.\n'
-                                'CTF filenames are expected to include tsId e.g. tsId_ctf_avrot.txt\n'
-                                'The suffixes "_ctf" or "_avrot" are not mandatory.')
+                                'CTF filenames are expected to include tsId e.g. tsId_ctf_avrot.txt. The suffixes '
+                                '"_ctf" or "_avrot" are not mandatory.\n'
+                                'The tsIds detected in the tilt series introduced are:\n'
+                                '%s\n'
+                                'The defocus files base names detected are (excluding the suffixes "_ctf" and '
+                                '"_avrot"):\n'
+                                '%s' % (tsIdList, defocusBNames))
         else:
             errorMsg.append('Unable to find the files provided:\n\n'
                             '\t-filePath = %s\n'
@@ -197,6 +204,10 @@ class ProtImportTsCTF(ProtTomoImportFiles):
         elif importFrom == ImportChoice.GCTF.value:
             importFunc = Domain.importFromPlugin('gctf.convert',
                                                  'GctfImportCTF',
+                                                 doRaise=True)
+        elif importFrom == ImportChoice.ARETOMO.value:
+            importFunc = Domain.importFromPlugin('aretomo.convert',
+                                                 'AretomoCtfParser',
                                                  doRaise=True)
         else:
             importFunc = None

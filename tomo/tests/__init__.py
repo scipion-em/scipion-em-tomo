@@ -124,7 +124,9 @@ class DataSetRe4STATuto(Enum):
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
     # For CISTEM Ctffind import testing
     cistemFilesPath = 'testCtfFind'
+    # For Aretomo2 CTF import testing
+    aretomoCtfFilesPath = 'testAreTomoCtf'
 
 
-RE4_STA_TUTO = 'relion40_sta_tutorial_data'
+RE4_STA_TUTO = 'relion40_sta_tutorial_data_edited'
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})

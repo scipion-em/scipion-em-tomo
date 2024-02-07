@@ -29,24 +29,25 @@ import random
 import string
 import tempfile
 from os.path import join, exists, abspath, basename
-
-import numpy
 import numpy as np
 
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink, makePath, copyFile
-from pyworkflow.object import Pointer
+from pyworkflow.object import Pointer, Boolean
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 
-from tomo.protocols.protocol_ts_import import MDoc
-from . import DataSet
+from tomo.protocols.protocol_ts_import import MDoc, ProtImportTs
+from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto
+from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
+from ..objects import SetOfTiltSeries
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
+from ..protocols.protocol_import_ctf import ImportChoice, ProtImportTsCTF
 from ..utils import existsPlugin
 
 from imod.protocols import ProtImodTomoNormalization
@@ -669,7 +670,7 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         for key in testDataDict:
             testData = testDataDict[key]
-            ind = numpy.argsort(testData[self.ANGLE_LIST])
+            ind = np.argsort(testData[self.ANGLE_LIST])
 
             incDoses = []
             accumDoses = []
@@ -1036,3 +1037,85 @@ class TestConvert(BaseTest):
         myList = [24, 21, 12, 9, 3, 6, 15, 18, 27]
         orders = getOrderFromList(myList)
         self.assertEqual(orders, [8, 7, 4, 3, 1, 2, 5, 6, 9])
+
+
+class TestImportTomoCtf(TestBaseCentralizedLayer):
+    ds = None
+    nTiltSeries = 2
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
+        cls.inTsSet = cls._runImportTs()
+
+    @classmethod
+    def _runImportTs(cls):
+        print(magentaStr("\n==> Importing the tilt series:"))
+        protTsImport = cls.newProtocol(ProtImportTs,
+                                       filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                       filesPattern=DataSetRe4STATuto.tsPattern.value,
+                                       exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value,
+                                       anglesFrom=2,  # From tlt file
+                                       voltage=DataSetRe4STATuto.voltage.value,
+                                       magnification=DataSetRe4STATuto.magnification.value,
+                                       sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
+                                       amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
+                                       samplingRate=DataSetRe4STATuto.unbinnedPixSize.value,
+                                       doseInitial=DataSetRe4STATuto.initialDose.value,
+                                       dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value,
+                                       tiltAxisAngle=DataSetRe4STATuto.tiltAxisAngle.value)
+
+        cls.launchProtocol(protTsImport)
+        tsImported = getattr(protTsImport, protTsImport.OUTPUT_NAME, None)
+        return tsImported
+
+    def test_import_ctf_aretomo_01(self):
+        print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
+                         "\n\t- TS without excluded views"))
+        prot = self.newProtocol(ProtImportTsCTF,
+                                importFrom=ImportChoice.ARETOMO.value,
+                                filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
+                                filesPattern='*.txt',
+                                inputSetOfTiltSeries=self.inTsSet)
+        self.launchProtocol(prot)
+        self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name, None))
+
+    # def test_import_ctf_aretomo_02(self):
+    #     print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
+    #                      "\n\t- TS with some excluded views"))
+    #
+    #     # Exclude some views in each TS
+    #     exludedViews = {'TS_03': [0, 1, 2, 34, 35, 36, 37, 38, 39],
+    #                     'TS_54': [0, 1, 2, 39, 40]}
+    #     tsSet = self.inTsSet
+    #     tsSetEx = SetOfTiltSeries.create('/tmp', template='tiltseries')
+    #     tsSetEx.copyInfo(tsSet)
+    #     for ts in tsSet:
+    #         newTs = ts.clone()
+    #         newTs.copyInfo(ts)
+    #         tsSetEx.append(newTs)
+    #         exclusionList = exludedViews[ts.getTsId()]
+    #         for i, ti in enumerate(ts):
+    #             newTi = ti.clone()
+    #             newTi.copyInfo(ti, copyId=True, copyTM=True)
+    #             if i in exclusionList:
+    #                 newTi.setEnabled(False)
+    #             newTs.append(newTi)
+    #         # newTs.write(properties=False)
+    #         tsSetEx.update(newTs)
+    #         tsSetEx.write()
+    #
+    #     # Launch the protocol and check the results
+    #     prot = self.newProtocol(ProtImportTsCTF,
+    #                             importFrom=ImportChoice.ARETOMO.value,
+    #                             filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
+    #                             filesPattern='*.txt',
+    #                             inputSetOfTiltSeries=tsSetEx)
+    #     self.launchProtocol(prot)
+    #     self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name), excludedViewsDict=exludedViews)
+
+    def _checkCTFs(self, ctfSet, excludedViewsDict=None):
+        self.checkCTFs(ctfSet,
+                       expectedSetSize=self.nTiltSeries,
+                       excludedViewsDict=excludedViewsDict)
