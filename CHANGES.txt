@@ -3,7 +3,6 @@ v3.5.1:
   - New protocol to import tilt-series CTF from different plugins
  Developers:
   - Improve the Test Centralization layer.
-  - Centralize method SetWrongDefocus
 v3.5.0:
  Users:
   - Prevent viewers from locking the screen focus.
