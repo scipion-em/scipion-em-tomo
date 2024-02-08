@@ -729,7 +729,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
 
         return testData
 
-    def _runImportTiltSeries(self, filesPath, pattern, isTsMovie=False, exclusionWords=None, label="import tilt series"):
+    def _runImportTiltSeries(self, filesPath, pattern, isTsMovie=False, exclusionWords=None,
+                             label="import tilt series"):
         prot = tomo.protocols.ProtImportTsMovies if isTsMovie else tomo.protocols.ProtImportTs
         attribDict = {
             'filesPath': filesPath,
@@ -842,7 +843,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
         if exclusionWords:
             label += ' excluding words'
 
-        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, label=label, isTsMovie=isTsMovie, exclusionWords=exclusionWords)
+        protImport = self._runImportTiltSeries(self.parentDir, self.pattern, label=label, isTsMovie=isTsMovie,
+                                               exclusionWords=exclusionWords)
         # Check results
         outputSet = getattr(protImport, 'outputTiltSeriesM', None)
         self._checkResults(outputSet, isTsMovie, (1152, 1152, 6), protImport, size=outputSize)  # ts and tsM have
@@ -1081,39 +1083,38 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
         self.launchProtocol(prot)
         self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name, None))
 
-    # def test_import_ctf_aretomo_02(self):
-    #     print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
-    #                      "\n\t- TS with some excluded views"))
-    #
-    #     # Exclude some views in each TS
-    #     exludedViews = {'TS_03': [0, 1, 2, 34, 35, 36, 37, 38, 39],
-    #                     'TS_54': [0, 1, 2, 39, 40]}
-    #     tsSet = self.inTsSet
-    #     tsSetEx = SetOfTiltSeries.create('/tmp', template='tiltseries')
-    #     tsSetEx.copyInfo(tsSet)
-    #     for ts in tsSet:
-    #         newTs = ts.clone()
-    #         newTs.copyInfo(ts)
-    #         tsSetEx.append(newTs)
-    #         exclusionList = exludedViews[ts.getTsId()]
-    #         for i, ti in enumerate(ts):
-    #             newTi = ti.clone()
-    #             newTi.copyInfo(ti, copyId=True, copyTM=True)
-    #             if i in exclusionList:
-    #                 newTi.setEnabled(False)
-    #             newTs.append(newTi)
-    #         # newTs.write(properties=False)
-    #         tsSetEx.update(newTs)
-    #         tsSetEx.write()
-    #
-    #     # Launch the protocol and check the results
-    #     prot = self.newProtocol(ProtImportTsCTF,
-    #                             importFrom=ImportChoice.ARETOMO.value,
-    #                             filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
-    #                             filesPattern='*.txt',
-    #                             inputSetOfTiltSeries=tsSetEx)
-    #     self.launchProtocol(prot)
-    #     self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name), excludedViewsDict=exludedViews)
+    def test_import_ctf_aretomo_02(self):
+        print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
+                         "\n\t- TS with some excluded views"))
+
+        # Exclude some views in each TS
+        exludedViews = {'TS_03': [0, 1, 2, 34, 35, 36, 37, 38, 39],
+                        'TS_54': [0, 1, 2, 39, 40]}
+        nTiltImages = {'TS_03': 40,
+                       'TS_54': 41}
+        tsSet = self.inTsSet
+        # To do this properly, the sets must be iterated by direct indexing of the elements, as the iterators
+        # stop iterating after having executed a mapper update operation
+        for n in range(self.nTiltSeries):
+            ts = tsSet[n + 1]
+            tsId = ts.getTsId()
+            exclusionList = exludedViews[tsId]
+            for i in range(nTiltImages[tsId]):
+                ti = ts[i + 1]
+                if i in exclusionList:
+                    ti.setEnabled(False)
+                    ts.update(ti)
+            ts.write()
+            tsSet.update(ts)
+
+        # Launch the protocol and check the results
+        prot = self.newProtocol(ProtImportTsCTF,
+                                importFrom=ImportChoice.ARETOMO.value,
+                                filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
+                                filesPattern='*.txt',
+                                inputSetOfTiltSeries=tsSet)
+        self.launchProtocol(prot)
+        self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name), excludedViewsDict=exludedViews)
 
     def _checkCTFs(self, ctfSet, excludedViewsDict=None):
         self.checkCTFs(ctfSet,
