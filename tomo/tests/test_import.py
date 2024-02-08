@@ -1113,6 +1113,7 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                                 filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
                                 filesPattern='*.txt',
                                 inputSetOfTiltSeries=tsSet)
+        prot.setObjLabel('Import CTFs, some views excluded')
         self.launchProtocol(prot)
         self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name), excludedViewsDict=exludedViews)
 
