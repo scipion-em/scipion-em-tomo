@@ -1,6 +1,7 @@
 v3.5.1:
  Users:
   - New protocol to import tilt-series CTF from different plugins
+  - The CTF tomo series viewer now only plots the Enabled tilt images/ctfs.
  Developers:
   - Improve the Test Centralization layer.
   - Tests for AreTomo2 CTF import added.

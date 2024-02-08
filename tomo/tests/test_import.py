@@ -1049,7 +1049,6 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
-        cls.inTsSet = cls._runImportTs()
 
     @classmethod
     def _runImportTs(cls):
@@ -1073,17 +1072,21 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
         return tsImported
 
     def test_import_ctf_aretomo_01(self):
+        inTsSet = self._runImportTs()
+
         print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
                          "\n\t- TS without excluded views"))
         prot = self.newProtocol(ProtImportTsCTF,
                                 importFrom=ImportChoice.ARETOMO.value,
                                 filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
                                 filesPattern='*.txt',
-                                inputSetOfTiltSeries=self.inTsSet)
+                                inputSetOfTiltSeries=inTsSet)
         self.launchProtocol(prot)
         self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name, None))
 
     def test_import_ctf_aretomo_02(self):
+        inTsSet = self._runImportTs()
+
         print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
                          "\n\t- TS with some excluded views"))
 
@@ -1092,11 +1095,10 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                         'TS_54': [0, 1, 2, 39, 40]}
         nTiltImages = {'TS_03': 40,
                        'TS_54': 41}
-        tsSet = self.inTsSet
         # To do this properly, the sets must be iterated by direct indexing of the elements, as the iterators
         # stop iterating after having executed a mapper update operation
         for n in range(self.nTiltSeries):
-            ts = tsSet[n + 1]
+            ts = inTsSet[n + 1]
             tsId = ts.getTsId()
             exclusionList = exludedViews[tsId]
             for i in range(nTiltImages[tsId]):
@@ -1105,14 +1107,14 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                     ti.setEnabled(False)
                     ts.update(ti)
             ts.write()
-            tsSet.update(ts)
+            inTsSet.update(ts)
 
         # Launch the protocol and check the results
         prot = self.newProtocol(ProtImportTsCTF,
                                 importFrom=ImportChoice.ARETOMO.value,
                                 filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
                                 filesPattern='*.txt',
-                                inputSetOfTiltSeries=tsSet)
+                                inputSetOfTiltSeries=inTsSet)
         prot.setObjLabel('Import CTFs, some views excluded')
         self.launchProtocol(prot)
         self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name), excludedViewsDict=exludedViews)

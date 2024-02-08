@@ -1100,17 +1100,30 @@ class CtfEstimationListDialog(ListDialog):
         for ts in self._inputSetOfTiltSeries:
             if ts.getTsId() == itemSelected:
                 for item in ts:
-                    angList.append(item.getTiltAngle())
+                    # Related to excluded views:
+                    # Only represent the enabled tilt images
+                    if item.isEnabled():
+                        angList.append(item.getTiltAngle())
                 break
 
         for ctfSerie in self.provider.getCTFSeries():
             if ctfSerie.getTsId() == itemSelected:
                 for item in ctfSerie.iterItems(orderBy='id'):
-                    defocusUList.append(item.getDefocusU())
-                    defocusVList.append(item.getDefocusV())
-                    phShList.append(
-                        item.getPhaseShift() if item.hasPhaseShift() else 0)
-                    resList.append(item.getResolution())
+                    defocusU = item.getDefocusU()
+                    # Related to excluded views:
+                    #   pwem method setWrongDefocus assigns:
+                    #   ctfModel.setDefocusU(-999)
+                    #   ctfModel.setDefocusV(-1)
+                    #   ctfModel.setDefocusAngle(-999)
+                    # If it's the case, the corresponding point won't be added to be plotted as
+                    # it will widen the representation range, what would make the represented region
+                    # of interest smaller
+                    if item.isEnabled():
+                        defocusUList.append(defocusU)
+                        defocusVList.append(item.getDefocusV())
+                        phShList.append(
+                            item.getPhaseShift() if item.hasPhaseShift() else 0)
+                        resList.append(item.getResolution())
 
                 fig = Figure(figsize=(7, 7), dpi=100)
                 defocusPlot = fig.add_subplot(111)
