@@ -1122,4 +1122,5 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
     def _checkCTFs(self, ctfSet, excludedViewsDict=None):
         self.checkCTFs(ctfSet,
                        expectedSetSize=self.nTiltSeries,
-                       excludedViewsDict=excludedViewsDict)
+                       excludedViewsDict=excludedViewsDict,
+                       expectedPsdFile=True)

@@ -136,10 +136,13 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
 
     # CTF ##############################################################################################################
-    def checkCTFs(self, inCtfSet, expectedSetSize=-1, excludedViewsDict=None, streamState=2):
+    def checkCTFs(self, inCtfSet, expectedSetSize=-1, expectedPsdFile=None, excludedViewsDict=None, streamState=2):
         """
         :param inCtfSet: A SetOfCtfTomoSeries.
         :param expectedSetSize: expected set site to check.
+        :param expectedPsdFile: boolean used to indicate if the psd file is expected to be present or not in the
+        metadata stored for each CTFTomoSeries that composes SetOfCtfTomoSeries tested. In case it is expected to be
+        present for some of the CTFTomoSeries, a dict of structure {key --> tsId: value --> boolean} is also admitted
         :param excludedViewsDict: a dictionary of structure {key --> tsId: value --> list of the indices of images
         that are expected to have been excluded}. An excluded view in a CTFTomo means that its attribute _objEnabled is
         set to False and the expected values for defocusU, defocusV, and DefocusAngle will be -999, -1,
@@ -148,6 +151,7 @@ class TestBaseCentralizedLayer(BaseTest):
         """
         self.assertSetSize(inCtfSet, expectedSetSize)
         self.assertEqual(inCtfSet.getStreamState(), streamState)
+        expectPsdFile = False
         for ctf in inCtfSet:
             tsId = ctf.getTsId()
             for ind, ctfi in enumerate(ctf):
@@ -156,8 +160,13 @@ class TestBaseCentralizedLayer(BaseTest):
                     isExcludedView = True if ind in excludedViewsDict[tsId] else False
                 else:
                     isExcludedView = False
+                # Expected psd file
+                if type(expectedPsdFile) is dict:
+                    expectPsdFile = expectedPsdFile[tsId]
+                elif type(expectedPsdFile) is bool:
+                    expectPsdFile = expectedPsdFile
                 self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
-                self.checkCtfTomo(ctfi, isExcludedView)
+                self.checkCtfTomo(ctfi, isExcludedView, expectPsdFile)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
@@ -556,7 +565,7 @@ class TestBaseCentralizedLayer(BaseTest):
         else:
             self.assertTrue(enb, msg='TsId = %s: %s %i was expected to be Enabled' % (tsId, objType, ind))
 
-    def checkCtfTomo(self, ctf, isExcluded):
+    def checkCtfTomo(self, ctf, isExcluded, expectPsdFile):
         defocusU = ctf.getDefocusU()
         defocusV = ctf.getDefocusV()
         defocusAngle = ctf.getDefocusAngle()
@@ -568,5 +577,9 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertTrue(np.allclose(np.array(defocusVals),
                                         np.array([expectedDefocusU, expectedDefocusV, expectedDefocusAngle])))
         else:
+            # Check the defocusU, defocusV and defocus angle values
             for val in defocusVals:
                 self.assertGreaterEqual(val, 0)
+            # Check the psd file
+            if expectPsdFile:
+                self.assertTrue(exists(ctf.getPsdFile().rsplit('@', 1)[-1]))  # Expected syntax is index@psdFile
