@@ -101,7 +101,7 @@ class ProtImportTsCTF(ProtTomoImportFiles):
             tsObjId = ts.getObjId()
 
             for defocusFn in defocusFiles:
-                if tsId == removeBaseExt(defocusFn).replace('_ctf', '').replace('_avrot', ''):
+                if tsId == normalizeTSId(removeBaseExt(defocusFn).replace('_ctf', '').replace('_avrot', '')):
                     logger.info("Parsing file: " + defocusFn)
 
                     newCTFTomoSeries = CTFTomoSeries()
