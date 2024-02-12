@@ -31,6 +31,7 @@ import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
 from pyworkflow.utils import removeBaseExt
+from ..convert.mdoc import normalizeTSId
 
 from ..objects import SetOfCTFTomoSeries, TiltSeries, CTFTomoSeries
 from .protocol_base import ProtTomoImportFiles
@@ -150,7 +151,7 @@ class ProtImportTsCTF(ProtTomoImportFiles):
         matchingFiles = self.getMatchFiles()
         if matchingFiles:
             tsIdList = self._getInputTs().getUniqueValues(TiltSeries.TS_ID_FIELD)
-            defocusBNames = [pwutils.removeBaseExt(defocusFn).replace('_ctf', '').replace('_avrot', '')
+            defocusBNames = [normalizeTSId(pwutils.removeBaseExt(defocusFn).replace('_ctf', '').replace('_avrot', ''))
                              for defocusFn in self.iterFiles()]
             matchResults = list(set(tsIdList) & set(defocusBNames))
             if not matchResults:
