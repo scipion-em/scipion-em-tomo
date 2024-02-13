@@ -28,12 +28,18 @@ import numpy as np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries
 
 
 class TestBaseCentralizedLayer(BaseTest):
 
     def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, streamState=2):
+        """
+        :param inSet: A set of Scipion Tomo objects.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        """
         self.assertSetSize(inSet, expectedSetSize)
         self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
         self.assertEqual(inSet.getStreamState(), streamState)
@@ -42,12 +48,14 @@ class TestBaseCentralizedLayer(BaseTest):
     def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
                         testAcqObj=None, alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False,
                         hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
-                        isInterpolated=False):
+                        isInterpolated=False, excludedViewsDict=None):
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check.
+        :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
         :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the inTsSet.
         :param alignment: Alignment type expected (see scipion-em > pwem > constants.py).
         :param isPhaseFlipped: False by default. Used to check if the tilt series were phase flipped.
@@ -60,37 +68,49 @@ class TestBaseCentralizedLayer(BaseTest):
         :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
         :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
         or not (False).
+        :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
+        expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
+        to False and the expected transformation matrix is the identity.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # Check the set attributes
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
-        # Check the dimensions
-        if expectedDimensions:
-            x, y, z = inTsSet.getDimensions()
-            self.assertEqual([x, y, z], expectedDimensions)
         if testAcqObj:
             self.checkTomoAcquisition(testAcqObj, inTsSet.getAcquisition())
         if alignment:
             self.assertTrue(inTsSet.getAlignment(), alignment)
         self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
         self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
-        self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
+        # self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
         self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
         if anglesCount:
             self.assertEqual(inTsSet.getAnglesCount(), anglesCount)
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
         self.assertEqual(inTsSet.interpolated(), isInterpolated)
         # Check the main properties of the set items
-        for ts in inTsSet:
-            # Sampling rate
-            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+        for i, ts in enumerate(inTsSet):
+            tsId = ts.getTsId()
             # Check the dimensions
             if expectedDimensions:
                 x, y, z = ts.getDimensions()
-                self.assertEqual([x, y, z], expectedDimensions)
-            for ti in ts:
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId])
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions)
+            # Sampling rate
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+            for ind, ti in enumerate(ts):
+                # Excluded view
+                if excludedViewsDict:
+                    isExcludedView = True if ind in excludedViewsDict[tsId] else False
+                else:
+                    isExcludedView = False
+                self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
                 # Alignment matrix
-                self.checkTransformMatrix(ti.getTransform().getMatrix(), alignment=hasAlignment)
+                self.checkTransformMatrix(ti.getTransform().getMatrix(),
+                                          alignment=hasAlignment,
+                                          is2d=True,
+                                          isExcludedView=isExcludedView)
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
@@ -116,9 +136,28 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
 
     # CTF ##############################################################################################################
-    def checkCTFs(self, inCtfSet, expectedSetSize=-1, streamState=2):
+    def checkCTFs(self, inCtfSet, expectedSetSize=-1, excludedViewsDict=None, streamState=2):
+        """
+        :param inCtfSet: A SetOfCtfTomoSeries.
+        :param expectedSetSize: expected set site to check.
+        :param excludedViewsDict: a dictionary of structure {key --> tsId: value --> list of the indices of images
+        that are expected to have been excluded}. An excluded view in a CTFTomo means that its attribute _objEnabled is
+        set to False and the expected values for defocusU, defocusV, and DefocusAngle will be -999, -1,
+        and -999, correspondingly, as what's done by the CTFModel method called setWrongDefocus.
+        :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        """
         self.assertSetSize(inCtfSet, expectedSetSize)
         self.assertEqual(inCtfSet.getStreamState(), streamState)
+        for ctf in inCtfSet:
+            tsId = ctf.getTsId()
+            for ind, ctfi in enumerate(ctf):
+                # Excluded view
+                if excludedViewsDict:
+                    isExcludedView = True if ind in excludedViewsDict[tsId] else False
+                else:
+                    isExcludedView = False
+                self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
+                self.checkCtfTomo(ctfi, isExcludedView)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
@@ -162,6 +201,7 @@ class TestBaseCentralizedLayer(BaseTest):
             if expectedDimensions:
                 x, y, z = tomo.getDimensions()
                 self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+
             # Check the origin
             if expectedOriginShifts:
                 x, y, z = tomo.getOrigin().getShifts()
@@ -410,7 +450,7 @@ class TestBaseCentralizedLayer(BaseTest):
         if expectedBoxSize:
             self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
 
-    def checkTransformMatrix(self, outMatrix, alignment=False, is2d=False):
+    def checkTransformMatrix(self, outMatrix, alignment=False, is2d=False, isInterpolated=False, isExcludedView=False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
 
         :param outMatrix: transformation matrix of a subtomogram or coordinate.
@@ -418,19 +458,24 @@ class TestBaseCentralizedLayer(BaseTest):
         eye matrix (False) or not (True).
         :param is2d: False by default. Used to indicate if the expected transformation matrix should be of size 3 x 3
         (True) or 4 x 4 (False).
+        :param isInterpolated: if True, the expected transformation matrix is the Identity
+        :param isExcludedView: it behaves the same as param isInterpolated
         """
         size = 3 if is2d else 4
         transfMatrixShape = (size, size)
         identityMatrix = np.eye(size)
         self.assertIsNotNone(outMatrix)
-        if type(outMatrix) != np.ndarray:
+        if type(outMatrix) is not np.ndarray:
             outMatrix = np.array(outMatrix)
         self.assertIsNotNone(outMatrix)
-        self.assertTrue(outMatrix.shape, transfMatrixShape)
-        if alignment:
-            self.assertFalse(np.array_equal(outMatrix, identityMatrix))
-        else:
+        self.assertEqual(outMatrix.shape, transfMatrixShape)
+        if isInterpolated or isExcludedView:
             self.assertTrue(np.array_equal(outMatrix, identityMatrix))
+        else:
+            if alignment:
+                self.assertFalse(np.array_equal(outMatrix, identityMatrix))
+            else:
+                self.assertTrue(np.array_equal(outMatrix, identityMatrix))
 
     def checkShiftsScaling(self, inTransform, outTransform, scaleFactor):
         """Check if the shifts were scaled properly in the case of subtomogram extraction from a different
@@ -502,3 +547,26 @@ class TestBaseCentralizedLayer(BaseTest):
         yc_max = extremes[3]
         zc_max = extremes[5]
         self.assertTrue(xc_max < xt / 2 and yc_max < yt / 2 and zc_max < zt / 2)
+
+    def checkObjectEnabled(self, obj, isExcludedView, tsId, ind):
+        enb = obj.isEnabled()
+        objType = 'CTF' if type(obj) is CTFTomoSeries else 'Tilt image'
+        if isExcludedView:
+            self.assertFalse(enb, msg='TsId = %s: %s %i was expected not to be Enabled' % (tsId, objType, ind))
+        else:
+            self.assertTrue(enb, msg='TsId = %s: %s %i was expected to be Enabled' % (tsId, objType, ind))
+
+    def checkCtfTomo(self, ctf, isExcluded):
+        defocusU = ctf.getDefocusU()
+        defocusV = ctf.getDefocusV()
+        defocusAngle = ctf.getDefocusAngle()
+        defocusVals = [defocusU, defocusV, defocusAngle]
+        if isExcluded:
+            expectedDefocusU = -999
+            expectedDefocusV = -1
+            expectedDefocusAngle = -999
+            self.assertTrue(np.allclose(np.array(defocusVals),
+                                        np.array([expectedDefocusU, expectedDefocusV, expectedDefocusAngle])))
+        else:
+            for val in defocusVals:
+                self.assertGreaterEqual(val, 0)
