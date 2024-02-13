@@ -104,6 +104,7 @@ class DataSetRe4STATuto(Enum):
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
+    symmetry = 'C6'
     # Tilt series
     tsPath = 'tomograms'
     tsPattern = '*/{TS}.mrc'
@@ -117,9 +118,11 @@ class DataSetRe4STATuto(Enum):
     coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
     nCoordsFromTs03 = 99
     nCoordsFromTs54 = 111
+    nCoordsTotal = 210
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
+    maskFscBin2 = 'masks/mask_fsc_bin2.mrc'
     # For EMAN testing
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
     # For CISTEM Ctffind import testing
@@ -128,5 +131,5 @@ class DataSetRe4STATuto(Enum):
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
 
-RE4_STA_TUTO = 'relion40_sta_tutorial_data'
+RE4_STA_TUTO = 'relion40_sta_tutorial_data_edited'
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
