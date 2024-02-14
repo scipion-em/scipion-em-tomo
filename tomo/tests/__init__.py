@@ -119,6 +119,8 @@ class DataSetRe4STATuto(Enum):
     nCoordsFromTs03 = 99
     nCoordsFromTs54 = 111
     nCoordsTotal = 210
+    # Initial model
+    initModelRelion = 'initial_model_relion_bin4.mrc'
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
