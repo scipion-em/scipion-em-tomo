@@ -27,14 +27,16 @@
 import os
 import pwem
 from .constants import (NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD,
-                        getNaparyEnvName, V0_3_11, NAPARI_DEF_VER)
+                        getNaparyEnvName, NAPARI_DEF_VER)
 
-__version__ = '3.4.1'
+__version__ = '3.5.1'
 _logo = "icon.png"
 _references = []
 
 
 class Plugin(pwem.Plugin):
+    _url = "https://github.com/scipion-em/scipion-em-tomo"
+
     @classmethod
     def _defineVariables(cls):
         cls._defineVar(NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD)
@@ -60,9 +62,9 @@ class Plugin(pwem.Plugin):
         NAPARI_INSTALLED = f"napari_{version}_installed"
         installCmd = [cls.getCondaActivationCmd(),
                       f'conda create -y -n {ENV_NAME} -c conda-forge',
-                      'python=3.10 napari=0.4.17 pyqt pip &&',
+                      f'python=3.10 napari={version} pyqt pip &&',
                       f'conda activate {ENV_NAME} &&',
-                      f'pip install napari-tomotwin napari-boxmanager=={version}']
+                      'pip install napari-tomotwin napari-boxmanager']
 
         # Flag installation finished
         installCmd.append(f'&& touch {NAPARI_INSTALLED}')
@@ -81,5 +83,4 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        cls.addNapariPackage(env, V0_3_11)
         cls.addNapariPackage(env, NAPARI_DEF_VER, default=True)

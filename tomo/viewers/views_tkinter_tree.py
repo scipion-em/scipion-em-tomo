@@ -197,7 +197,7 @@ class TiltSeriesDialogView(pwviewer.View):
 
     def show(self):
         ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
-                   previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True)
+                   previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True, lockGui=False)
 
 
     def getPreviewWidget(self, frame):
@@ -379,23 +379,18 @@ class TomogramsDialog(ToolbarListDialog):
     an ImageJ subprocess from a list of Tomograms.
     """
 
-    def __init__(self, parent, viewer, **kwargs):
+    def __init__(self, parent, viewer, lockGui=False, **kwargs):
         self.path = kwargs.get("path", None)
         self.provider = kwargs.get("provider", None)
-        if viewer:
-            ToolbarListDialog.__init__(self, parent,
-                                       "Tomogram List",
-                                       allowsEmptySelection=False,
-                                       itemDoubleClick=self.doubleClickViewer,
-                                       allowSelect=False,
-                                       **kwargs)
-        else:
-            ToolbarListDialog.__init__(self, parent,
-                                       "Tomogram List",
-                                       allowsEmptySelection=False,
-                                       itemDoubleClick=self.doubleClickOnTomogram,
-                                       allowSelect=False,
-                                       **kwargs)
+        itemDoubleClick = self.doubleClickViewer if viewer else self.doubleClickOnTomogram
+        ToolbarListDialog.__init__(self, parent,
+                                   "Tomogram List",
+                                   allowsEmptySelection=False,
+                                   itemDoubleClick=itemDoubleClick,
+                                   allowSelect=False,
+                                   lockGui=lockGui,
+                                   cancelButton=True,
+                                   **kwargs)
 
     def refresh_gui_viewer(self):
         if self.proc.is_alive():
@@ -863,7 +858,7 @@ class CTFEstimationTree(BoundTree):
 
 
 class CtfEstimationListDialog(ListDialog):
-    def __init__(self, parent, title, provider, protocol, inputTS, **kwargs):
+    def __init__(self, parent, title, provider, protocol, inputTS, lockGui=False, **kwargs):
         self._project = protocol.getProject()
         self._protocol = protocol
         self._inputSetOfTiltSeries = inputTS
@@ -872,8 +867,11 @@ class CtfEstimationListDialog(ListDialog):
         self._show1DPLot = kwargs.pop('plot1Dfunc', None)
         self._show2DPLot = kwargs.pop('plot2Dfunc', None)
         self._showExtraPlot = kwargs.pop('plotExtrafunc', None)
-        ListDialog.__init__(self, parent, title, provider, allowSelect=False,
-                            cancelButton=True, **kwargs)
+        ListDialog.__init__(self, parent, title, provider,
+                            allowSelect=False,
+                            cancelButton=True,
+                            lockGui=lockGui,
+                            **kwargs)
 
     def body(self, bodyFrame):
         bodyFrame.config()
@@ -1102,17 +1100,30 @@ class CtfEstimationListDialog(ListDialog):
         for ts in self._inputSetOfTiltSeries:
             if ts.getTsId() == itemSelected:
                 for item in ts:
-                    angList.append(item.getTiltAngle())
+                    # Related to excluded views:
+                    # Only represent the enabled tilt images
+                    if item.isEnabled():
+                        angList.append(item.getTiltAngle())
                 break
 
         for ctfSerie in self.provider.getCTFSeries():
             if ctfSerie.getTsId() == itemSelected:
                 for item in ctfSerie.iterItems(orderBy='id'):
-                    defocusUList.append(item.getDefocusU())
-                    defocusVList.append(item.getDefocusV())
-                    phShList.append(
-                        item.getPhaseShift() if item.hasPhaseShift() else 0)
-                    resList.append(item.getResolution())
+                    defocusU = item.getDefocusU()
+                    # Related to excluded views:
+                    #   pwem method setWrongDefocus assigns:
+                    #   ctfModel.setDefocusU(-999)
+                    #   ctfModel.setDefocusV(-1)
+                    #   ctfModel.setDefocusAngle(-999)
+                    # If it's the case, the corresponding point won't be added to be plotted as
+                    # it will widen the representation range, what would make the represented region
+                    # of interest smaller
+                    if item.isEnabled():
+                        defocusUList.append(defocusU)
+                        defocusVList.append(item.getDefocusV())
+                        phShList.append(
+                            item.getPhaseShift() if item.hasPhaseShift() else 0)
+                        resList.append(item.getResolution())
 
                 fig = Figure(figsize=(7, 7), dpi=100)
                 defocusPlot = fig.add_subplot(111)

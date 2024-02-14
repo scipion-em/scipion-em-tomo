@@ -94,7 +94,7 @@ class TomoDataViewer(pwviewer.Viewer):
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
             path = os.path.join(path, '..')
             setOfMeshes2Files(outputMeshes, path)
-            setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
+            TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path, lockGui=False)
 
         return views
 

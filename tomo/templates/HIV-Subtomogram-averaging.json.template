@@ -54,9 +54,9 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "inputSetOfTiltSeries": "2.outputTiltSeries"
     },
     {
-        "object.className": "CistemProtTsImportCtf",
-        "object.id": "113",
-        "object.label": "cistem - import tomo CTFs",
+        "object.className": "ProtImportTsCTF",
+        "object.id": "91",
+        "object.label": "tomo - import tomo CTFs",
         "object.comment": "",
         "_useQueue": false,
         "_prerequisites": "",
@@ -113,7 +113,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
     },
     {
         "object.className": "ProtRelionPrepareData",
-        "object.id": "270",
+        "object.id": "212",
         "object.label": "reliontomo - Prepare data for Relion 4",
         "object.comment": "",
         "_useQueue": false,
@@ -127,7 +127,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "flipZ": true,
         "swapXY": false,
         "inputTS": "3.TiltSeries",
-        "inputCtfTs": "113.outputCTFs",
+        "inputCtfTs": "91.outputCTFs",
         "inputCoords": "227.coordinates"
     },
     {
@@ -148,7 +148,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "thickness": -1,
         "hostName": "localhost",
         "numberOfThreads": 4,
-        "protPrepare": "270."
+        "protPrepare": "212."
     },
     {
         "object.className": "ProtRelionReconstructParticle",
@@ -168,7 +168,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "binningFactor": 4.0,
         "symmetry": "C6",
         "snrWiener": 0.0,
-        "inReParticles": "270.relionParticles"
+        "inReParticles": "212.relionParticles"
     },
     {
         "object.className": "ProtRelionMakePseudoSubtomograms",
@@ -190,7 +190,7 @@ You'll need to download its dataset -> scipion3 testdata --download relion40_sta
         "coneAngle": 10.0,
         "applyOffsets": false,
         "outputInFloat16": false,
-        "inReParticles": "270.relionParticles"
+        "inReParticles": "212.relionParticles"
     },
     {
         "object.className": "ProtRelion3DClassifySubtomograms",
