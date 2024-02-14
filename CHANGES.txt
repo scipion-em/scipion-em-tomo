@@ -1,8 +1,11 @@
 v3.5.1:
  Users:
   - New protocol to import tilt-series CTF from different plugins
+  - The CTF tomo series viewer now only plots the Enabled tilt images/ctfs.
+  - Template HIV- STA with reliontomo: update the CTF importing method to the new centralized located in em-tomo.
  Developers:
   - Improve the Test Centralization layer.
+  - Tests for AreTomo2 CTF import added.
 v3.5.0:
  Users:
   - Prevent viewers from locking the screen focus.
