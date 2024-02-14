@@ -95,6 +95,8 @@ class DataSetRe4STATuto(Enum):
     amplitudeContrast = 0.07
     magnification = 105000
     unbinnedPixSize = 1.35
+    boxSizeBin4 = 192
+    boxSizeBin2 = 256
     croppedBoxSizeBin4 = 96
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = 85.3
