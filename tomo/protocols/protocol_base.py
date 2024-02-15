@@ -232,11 +232,11 @@ class ProtTomoImportAcquisition:
                            " The file must contain a row per file to be imported "
                            "and have the following parameters in order: \n"
                            "\n"
-                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step AngleAxis1 AngleAxis2' \n"
+                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step TiltAxisAngle' \n"
                            "\n"
-                           "An example would be: \n"
-                           "subtomo1.em -40 40 3 25 30 \n"
-                           "subtomo2.em -45 50 2 15 15 \n",
+                           "An example would be:\n"
+                           "subtomo1.em -40 40 3 85\n"
+                           "subtomo2.em -45 50 2 85\n",
                       condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
 
         form.addParam('acquisitionAngleMax', FloatParam,
