@@ -23,12 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists
+from os.path import exists, isabs, islink
 import numpy as np
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -45,6 +45,56 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inSet.getStreamState(), streamState)
 
     # TILT SERIES ######################################################################################################
+    def checkTiltSeriesM(self, inTsMSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
+                         testAcqObj=None, anglesCount=None, checkIds=False):
+        """
+        :param inTsMSet: SetOfTiltSeries.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the inTsSet. A dict
+        of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
+        of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
+        :param checkIds: boolean used to perform id checking: objId must start with 1 --> i +1. When using {TO} the
+        objId ends up with that value. For movies, it is 0, 39, 40
+        """
+        # Check the set attributes
+        self.checkSetGeneralProps(inTsMSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if anglesCount and type(anglesCount) is not dict:
+            self.assertEqual(inTsMSet.getAnglesCount(), anglesCount)
+        for tsM in inTsMSet:
+            tsId = tsM.getTsId()
+            if testAcqObj:
+                if type(testAcqObj) is dict:
+                    self.checkTomoAcquisition(testAcqObj[tsId], tsM.getAcquisition())
+                else:
+                    self.checkTomoAcquisition(testAcqObj, tsM.getAcquisition())
+            # Check the expected dimensions
+            if expectedDimensions:
+                x, y, z = tsM.getDimensions()
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId])
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions)
+            # Check the angles count
+            if anglesCount:
+                nAngles = tsM.getAnglesCount()
+                if anglesCount is dict:
+                    self.assertEqual(nAngles, anglesCount[tsId])
+                else:
+                    self.assertEqual(nAngles, anglesCount)
+            # Check the filenames
+            for i, ti in enumerate(tsM):
+                self.assertFalse(isabs(ti.getFileName()), "Tilt image file %s is not absolute!. Should be relative.")
+                self.assertTrue(islink(ti.getFileName()), "Tilt series file %s is not a link." % ti.getFileName())
+                # objId must start with 1 --> i +1
+                # When using {TO} the objId ends up with that value. For movies, it is 0, 39, 40
+                if checkIds:
+                    self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
+
     def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
                         testAcqObj=None, alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False,
                         hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
@@ -64,7 +114,8 @@ class TestBaseCentralizedLayer(BaseTest):
         (thus, the transformation matrix is not the identity).
         :param hasOddEven: False by default. Used to indicate if the set of tilt series are expected to have even/odd
         tilt series associated (generated with the even/odd angles or frames).
-        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set.
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
+        of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
         :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
         :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
         or not (False).
@@ -83,7 +134,7 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
         # self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
         self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
-        if anglesCount:
+        if anglesCount and type(anglesCount) is not dict:
             self.assertEqual(inTsSet.getAnglesCount(), anglesCount)
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
         self.assertEqual(inTsSet.interpolated(), isInterpolated)
@@ -97,6 +148,13 @@ class TestBaseCentralizedLayer(BaseTest):
                     self.assertEqual([x, y, z], expectedDimensions[tsId])
                 else:
                     self.assertEqual([x, y, z], expectedDimensions)
+            # Check the angles count
+            if anglesCount:
+                nAngles = ts.getAnglesCount()
+                if anglesCount is dict:
+                    self.assertEqual(nAngles, anglesCount[tsId])
+                else:
+                    self.assertEqual(nAngles, anglesCount)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
             for ind, ti in enumerate(ts):
@@ -126,6 +184,9 @@ class TestBaseCentralizedLayer(BaseTest):
         * Dose per frame.
         * Accumulated dose.
         * Tilt axis angle.
+        * Min tilt angle.
+        * Max tilt angle.
+        * Tilt angle step.
         """
         self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
@@ -134,6 +195,9 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
         self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
         self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
 
     # CTF ##############################################################################################################
     def checkCTFs(self, inCtfSet, expectedSetSize=-1, expectedPsdFile=None, excludedViewsDict=None, streamState=2):

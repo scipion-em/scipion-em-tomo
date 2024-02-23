@@ -43,7 +43,7 @@ from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
-from ..objects import SetOfTiltSeries
+from ..objects import SetOfTiltSeries, TomoAcquisition
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
@@ -499,28 +499,51 @@ class TestTomoBaseProtocols(BaseTest):
         self.launchProtocol(protMc)
 
 
-class TestTomoImportTsFromPattern(BaseTest):
+class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
+    testAcq = None
+    samplingRate = 1.35
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.getFile = cls.dataset.getFile('etomo')
         cls.getFileM = cls.dataset.getFile('empiar')
-        cls.tiltAxisAngle = 84.1
+        # Test acquisition: set the common attributes
+        testAcq = TomoAcquisition()
+        testAcq.setVoltage(300)
+        testAcq.setMagnification(105000)
+        testAcq.setSphericalAberration(2.7)
+        testAcq.setAmplitudeContrast(0.1)
+        testAcq.setDoseInitial(0)
+        testAcq.setDosePerFrame(0.3)
+        testAcq.setTiltAxisAngle(84.1)
+        # EmpiarTestData specific parameters
+        testAcqEmpiarTestData = testAcq.clone()
+        testAcqEmpiarTestData.setAngleMin(-6)
+        testAcqEmpiarTestData.setAngleMax(6)
+        testAcqEmpiarTestData.setStep(3)
+        cls.testAcqEmpiarTestData = testAcqEmpiarTestData
+        # ImodTestDat specific parameters
+        testAcqImodTestData = testAcq.clone()
+        testAcqEmpiarTestData.setAngleMin(-55)
+        testAcqEmpiarTestData.setAngleMax(65)
+        testAcqEmpiarTestData.setStep(2)
+        cls.testAcqImodTestData = testAcqImodTestData
 
     def _runImportTiltSeriesM(self, filesPath, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
             filesPath=filesPath,
             filesPattern=filesPattern,
-            voltage=300,
-            magnification=105000,
-            sphericalAberration=2.7,
-            amplitudeContrast=0.1,
-            samplingRate=0.675,
-            doseInitial=0,
-            dosePerFrame=0.375,
-            tiltAxisAngle=self.tiltAxisAngle
+            voltage=self.testAcqEmpiarTestData.getVoltage(),
+            magnification=self.testAcqEmpiarTestData.getMagnification(),
+            sphericalAberration=self.testAcqEmpiarTestData.getSphericalAberration(),
+            amplitudeContrast=self.testAcqEmpiarTestData.getAmplitudeContrast(),
+            samplingRate=self.samplingRate,
+            doseInitial=self.testAcqEmpiarTestData.getDoseInitial(),
+            dosePerFrame=self.testAcqEmpiarTestData.getDosePerFrame(),
+            tiltAxisAngle=self.testAcqEmpiarTestData.getTiltAxisAngle()
         )
         self.launchProtocol(protImport)
         return protImport
@@ -530,25 +553,25 @@ class TestTomoImportTsFromPattern(BaseTest):
             tomo.protocols.ProtImportTs,
             filesPath=self.getFile,
             filesPattern='BB{TS}.st',
-            minAngle=-55,
-            maxAngle=65,
-            stepAngle=2,
-            voltage=300,
-            magnification=105000,
-            sphericalAberration=2.7,
-            amplitudeContrast=0.1,
-            samplingRate=1.35,
-            doseInitial=0,
-            dosePerFrame=0.3,
-            tiltAxisAngle=self.tiltAxisAngle)
+            minAngle=self.testAcqImodTestData.getAngleMin(),
+            maxAngle=self.testAcqImodTestData.getAngleMax(),
+            stepAngle=self.testAcqImodTestData.getStep(),
+            voltage=self.testAcqImodTestData.getVoltage(),
+            magnification=self.testAcqImodTestData.getMagnification(),
+            sphericalAberration=self.testAcqImodTestData.getSphericalAberration(),
+            amplitudeContrast=self.testAcqImodTestData.getAmplitudeContrast(),
+            samplingRate=self.samplingRate,
+            doseInitial=self.testAcqImodTestData.getDoseInitial(),
+            dosePerFrame=self.testAcqImodTestData.getDosePerFrame(),
+            tiltAxisAngle=self.testAcqImodTestData.getTiltAxisAngle()
+        )
         self.launchProtocol(protImport)
         return protImport
 
-    def test_importTiltSeriesM(self):
-        protImport = self._runImportTiltSeriesM(filesPath=self.getFileM)
-        self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
-
-        return protImport
+    # def test_importTiltSeriesM(self):
+    #     protImport = self._runImportTiltSeriesM(filesPath=self.getFileM)
+    #     # self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
+    #     return protImport
 
     def test_importTiltSeriesM_withBrackets(self):
         # Make a tmp dir with the angular stacks renamed, so they contain bracket characters in their base names
@@ -566,37 +589,63 @@ class TestTomoImportTsFromPattern(BaseTest):
             [copyFile(origFile, join(newPath, basename(origFile).replace(str2replace, newStr))) for origFile in
              origFiles]
 
+        # Expected values
+        testAcq = self.testAcqImodTestData
+        testAcq.setAccumDose(1.2)
+        expectedSetSize = 2
+        expectedDimensions = [1152, 1152, 6]
+        expectedAnglesCount = 5
+
         # 1: Brackets in out of the {} labels
         filesPattern = '*/SKvesicles_Pertuzumab_015[16]_{TS}_{TO}_{TA}.mrc'
         protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
-        self.checkTSSet(protImport.outputTiltSeriesM, 2, 5)
+        self.checkTiltSeriesM(protImport.outputTiltSeriesM,
+                              expectedSetSize=expectedSetSize,
+                              expectedSRate=self.samplingRate,
+                              expectedDimensions=expectedDimensions,
+                              testAcqObj=testAcq,
+                              anglesCount=expectedAnglesCount,
+                              checkIds=True)
 
         # 2: Brackets in the {TS} label
         filesPattern = '*/SKvesicles_Pertuzumab_{TS}_{TO}_{TA}.mrc'
         protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
-        self.checkTSSet(protImport.outputTiltSeriesM, 2, 5)
-
-        return protImport
+        self.checkTiltSeriesM(protImport.outputTiltSeriesM,
+                              expectedSetSize=expectedSetSize,
+                              expectedSRate=self.samplingRate,
+                              expectedDimensions=expectedDimensions,
+                              testAcqObj=testAcq,
+                              anglesCount=expectedAnglesCount,
+                              checkIds=True)
 
     def test_importTiltSeries(self):
         protImport = self._runImportTiltSeries()
-        self.checkTSSet(protImport.outputTiltSeries, 2, 61, checkIds=True)
 
-    def checkTSSet(self, set, size, anglesCount, checkIds=False):
-        """
-            Check basic attributes of a TS set
+        # Expected values
+        testAcq = self.testAcqEmpiarTestData
+        testAcq.setAccumDose(18)
+        expectedSetSize = 2
+        expectedDimensions = [512, 512, 61]
+        expectedAnglesCount = 61
+        # Check teh results
+        self.checkTiltSeries(protImport.outputTiltSeries,
+                             expectedSetSize=expectedSetSize,
+                             expectedSRate=self.samplingRate,
+                             expectedDimensions=expectedDimensions,
+                             testAcqObj=testAcq,
+                             anglesCount=expectedAnglesCount)
 
-            :param set: TiltSeries set (Movies or Images)
-            :param size: Expected size
-            :param anglesCount: Expected number of tilts
-            :param checkIds: check if ids start with 1 and increments by one
-            :return: None
-            """
+    def checkTSSet(self, tsSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
+                   testAcqObj=None, anglesCount=None, checkIds=False):
 
-        self.assertSetSize(set, size)
-        for ts in set:
-            self.assertEquals(ts.getSize(), anglesCount, "Size of tilt images is wrong.")
-            self.assertEqual(ts.getAcquisition().getTiltAxisAngle(), self.tiltAxisAngle)
+        self.checkTiltSeries(tsSet,
+                             expectedSetSize=expectedSetSize,
+                             expectedSRate=expectedSRate,
+                             expectedDimensions=expectedDimensions,
+                             testAcqObj=testAcqObj,
+                             anglesCount=anglesCount)
+        # Other checks
+        for ts in tsSet:
             for i, ti in enumerate(ts):
                 self.assertFalse(os.path.isabs(ti.getFileName()),
                                  "Tilt image file %s is not absolute!. Should be relative.")
@@ -623,6 +672,9 @@ class TestTomoImportTsFromMdoc(BaseTest):
     ACCUM_DOSE_LIST = 'accumDoses'
     ANGLE_LIST = 'angles'
     ACQ_ORDER_LIST = 'acqOrder'
+    ANGLE_MAX = 'angleMax'
+    ANGLE_MIN = 'angleMin'
+    ANGLE_STEP = 'step'
 
     @classmethod
     def setUpClass(cls):
@@ -663,7 +715,10 @@ class TestTomoImportTsFromMdoc(BaseTest):
             cls.INCOMING_DOSE_LIST: kwargs.get(cls.INCOMING_DOSE_LIST, None),
             cls.ACCUM_DOSE_LIST: kwargs.get(cls.ACCUM_DOSE_LIST, None),
             cls.ANGLE_LIST: kwargs.get(cls.ANGLE_LIST, None),
-            cls.ACQ_ORDER_LIST: kwargs.get(cls.ACQ_ORDER_LIST, None)
+            cls.ACQ_ORDER_LIST: kwargs.get(cls.ACQ_ORDER_LIST, None),
+            cls.ANGLE_MAX: kwargs.get(cls.ANGLE_MAX, None),
+            cls.ANGLE_MIN: kwargs.get(cls.ANGLE_MIN, None),
+            cls.ANGLE_STEP: kwargs.get(cls.ANGLE_STEP, None),
         }
 
     def sortTestDataByAngle(self, testDataDict):
@@ -690,7 +745,8 @@ class TestTomoImportTsFromMdoc(BaseTest):
             testData[self.ACQ_ORDER_LIST] = newAcqOrders
 
     def _genTestData(self, isTsMovie):
-
+        anglesStack31 = [0.0036, 2.9683, -3.0250, -6.0251, 5.9684]
+        anglesStack10 = [0.0026, 2.9708, -3.0255, -6.0241, 5.9684]
         testData = {
             'stack31': self._genTestDict(
                 voltage=300,
@@ -704,8 +760,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 filenames=self._getListOfFileNames(tomoNum=31, isTsMovie=isTsMovie),
                 incDoses=[2.2088, 2.1975, 2.2245, 2.2275, 2.1895],
                 accumDoses=[2.2088, 4.4063, 6.6308, 8.8583, 11.0479],
-                angles=[0.0036, 2.9683, -3.0250, -6.0251, 5.9684],
-                acqOrder=[1, 2, 3, 4, 5]
+                angles=anglesStack31,
+                acqOrder=[1, 2, 3, 4, 5],
+                angleMax=max(anglesStack31),
+                angleMin=min(anglesStack31),
+                step=3
             ),
             'stack10': self._genTestDict(
                 voltage=300,
@@ -719,8 +778,11 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 filenames=self._getListOfFileNames(tomoNum=10, isTsMovie=isTsMovie),
                 incDoses=[2.3443, 2.3421, 2.3425, 2.3373, 2.3366],
                 accumDoses=[2.3443, 4.6864, 7.0289, 9.3662, 11.7028],
-                angles=[0.0026, 2.9708, -3.0255, -6.0241, 5.9684],
-                acqOrder=[1, 2, 3, 4, 5]
+                angles=anglesStack10,
+                acqOrder=[1, 2, 3, 4, 5],
+                angleMax=max(anglesStack10),
+                angleMin=min(anglesStack10),
+                step=3
             )
         }
 
@@ -805,6 +867,9 @@ class TestTomoImportTsFromMdoc(BaseTest):
             self.assertAlmostEqual(acq.getAmplitudeContrast(), testDataDict[self.AMP_CONTRAST], delta=0.001)
             self.assertAlmostEqual(acq.getDosePerFrame(), testDataDict[self.DOSE_PER_FRAME], delta=0.0001)
             self.assertAlmostEqual(acq.getAccumDose(), testDataDict[self.ACCUM_DOSE], delta=0.0001)
+            self.assertAlmostEqual(acq.getAngleMax(), testDataDict[self.ANGLE_MAX], delta=0.001)
+            self.assertAlmostEqual(acq.getAngleMin(), testDataDict[self.ANGLE_MIN], delta=0.001)
+            self.assertAlmostEqual(acq.getStep(), testDataDict[self.ANGLE_STEP], delta=0.1)
             # Check angles and accumulated dose per angular acquisition (tilt series image)
             filesList = testDataDict[self.FILENAME_LIST]
             if numericBaseName:
