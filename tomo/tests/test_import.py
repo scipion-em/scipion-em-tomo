@@ -34,7 +34,7 @@ import numpy as np
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink, makePath, copyFile
-from pyworkflow.object import Pointer, Boolean
+from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 
 from tomo.protocols.protocol_ts_import import MDoc, ProtImportTs
@@ -43,7 +43,7 @@ from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
-from ..objects import SetOfTiltSeries, TomoAcquisition
+from ..objects import TomoAcquisition
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
@@ -524,54 +524,77 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
         testAcqEmpiarTestData.setAngleMax(6)
         testAcqEmpiarTestData.setStep(3)
         cls.testAcqEmpiarTestData = testAcqEmpiarTestData
+        # EmpiarTestData2 specific parameters
+        testAcqEmpiarTestData2 = testAcq.clone()
+        testAcqEmpiarTestData2.setAngleMin(-60)
+        testAcqEmpiarTestData2.setAngleMax(60)
+        testAcqEmpiarTestData2.setStep(60)
+        cls.testAcqEmpiarTestData2 = testAcqEmpiarTestData2
         # ImodTestDat specific parameters
         testAcqImodTestData = testAcq.clone()
-        testAcqEmpiarTestData.setAngleMin(-55)
-        testAcqEmpiarTestData.setAngleMax(65)
-        testAcqEmpiarTestData.setStep(2)
+        testAcqImodTestData.setAngleMin(-55)
+        testAcqImodTestData.setAngleMax(65)
+        testAcqImodTestData.setStep(2)
         cls.testAcqImodTestData = testAcqImodTestData
 
-    def _runImportTiltSeriesM(self, filesPath, filesPattern='{TS}_{TO}_{TA}.mrc'):
+    def _runImportTiltSeriesM(self, acq, filesPath, filesPattern='{TS}_{TO}_{TA}.mrc'):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTsMovies,
             filesPath=filesPath,
             filesPattern=filesPattern,
-            voltage=self.testAcqEmpiarTestData.getVoltage(),
-            magnification=self.testAcqEmpiarTestData.getMagnification(),
-            sphericalAberration=self.testAcqEmpiarTestData.getSphericalAberration(),
-            amplitudeContrast=self.testAcqEmpiarTestData.getAmplitudeContrast(),
+            voltage=acq.getVoltage(),
+            magnification=acq.getMagnification(),
+            sphericalAberration=acq.getSphericalAberration(),
+            amplitudeContrast=acq.getAmplitudeContrast(),
             samplingRate=self.samplingRate,
-            doseInitial=self.testAcqEmpiarTestData.getDoseInitial(),
-            dosePerFrame=self.testAcqEmpiarTestData.getDosePerFrame(),
-            tiltAxisAngle=self.testAcqEmpiarTestData.getTiltAxisAngle()
+            doseInitial=acq.getDoseInitial(),
+            dosePerFrame=acq.getDosePerFrame(),
+            tiltAxisAngle=acq.getTiltAxisAngle()
         )
         self.launchProtocol(protImport)
         return protImport
 
-    def _runImportTiltSeries(self):
+    def _runImportTiltSeries(self, acq):
         protImport = self.newProtocol(
             tomo.protocols.ProtImportTs,
             filesPath=self.getFile,
             filesPattern='BB{TS}.st',
-            minAngle=self.testAcqImodTestData.getAngleMin(),
-            maxAngle=self.testAcqImodTestData.getAngleMax(),
-            stepAngle=self.testAcqImodTestData.getStep(),
-            voltage=self.testAcqImodTestData.getVoltage(),
-            magnification=self.testAcqImodTestData.getMagnification(),
-            sphericalAberration=self.testAcqImodTestData.getSphericalAberration(),
-            amplitudeContrast=self.testAcqImodTestData.getAmplitudeContrast(),
+            minAngle=acq.getAngleMin(),
+            maxAngle=acq.getAngleMax(),
+            stepAngle=acq.getStep(),
+            voltage=acq.getVoltage(),
+            magnification=acq.getMagnification(),
+            sphericalAberration=acq.getSphericalAberration(),
+            amplitudeContrast=acq.getAmplitudeContrast(),
             samplingRate=self.samplingRate,
-            doseInitial=self.testAcqImodTestData.getDoseInitial(),
-            dosePerFrame=self.testAcqImodTestData.getDosePerFrame(),
-            tiltAxisAngle=self.testAcqImodTestData.getTiltAxisAngle()
+            doseInitial=acq.getDoseInitial(),
+            dosePerFrame=acq.getDosePerFrame(),
+            tiltAxisAngle=acq.getTiltAxisAngle()
         )
         self.launchProtocol(protImport)
         return protImport
 
-    # def test_importTiltSeriesM(self):
-    #     protImport = self._runImportTiltSeriesM(filesPath=self.getFileM)
-    #     # self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
-    #     return protImport
+    def test_importTiltSeriesM(self):
+        # Expected values
+        testAcq = self.testAcqEmpiarTestData2
+        testAcq.setAccumDose(0.6)
+        expectedSetSize = 2
+        expectedDimensions = [7420, 7676, 8]
+        expectedAnglesCount = 3
+
+        # Run teh protocol
+        protImport = self._runImportTiltSeriesM(testAcq, filesPath=self.getFileM)
+
+        # Check the results
+        # self.checkTSSet(protImport.outputTiltSeriesM, 2, 3)
+        self.checkTiltSeriesM(protImport.outputTiltSeriesM,
+                              expectedSetSize=expectedSetSize,
+                              expectedSRate=self.samplingRate,
+                              expectedDimensions=expectedDimensions,
+                              testAcqObj=testAcq,
+                              anglesCount=expectedAnglesCount,
+                              checkIds=True)
+        return protImport
 
     def test_importTiltSeriesM_withBrackets(self):
         # Make a tmp dir with the angular stacks renamed, so they contain bracket characters in their base names
@@ -590,7 +613,7 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
              origFiles]
 
         # Expected values
-        testAcq = self.testAcqImodTestData
+        testAcq = self.testAcqEmpiarTestData
         testAcq.setAccumDose(1.2)
         expectedSetSize = 2
         expectedDimensions = [1152, 1152, 6]
@@ -598,7 +621,7 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
 
         # 1: Brackets in out of the {} labels
         filesPattern = '*/SKvesicles_Pertuzumab_015[16]_{TS}_{TO}_{TA}.mrc'
-        protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
+        protImport = self._runImportTiltSeriesM(testAcq, filesPath=tmpDir, filesPattern=filesPattern)
         self.checkTiltSeriesM(protImport.outputTiltSeriesM,
                               expectedSetSize=expectedSetSize,
                               expectedSRate=self.samplingRate,
@@ -609,7 +632,7 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
 
         # 2: Brackets in the {TS} label
         filesPattern = '*/SKvesicles_Pertuzumab_{TS}_{TO}_{TA}.mrc'
-        protImport = self._runImportTiltSeriesM(filesPath=tmpDir, filesPattern=filesPattern)
+        protImport = self._runImportTiltSeriesM(testAcq, filesPath=tmpDir, filesPattern=filesPattern)
         self.checkTiltSeriesM(protImport.outputTiltSeriesM,
                               expectedSetSize=expectedSetSize,
                               expectedSRate=self.samplingRate,
@@ -618,20 +641,23 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
                               anglesCount=expectedAnglesCount,
                               checkIds=True)
 
-    def test_importTiltSeries(self):
-        protImport = self._runImportTiltSeries()
-
-        # Expected values
-        testAcq = self.testAcqEmpiarTestData
+    def test_importTiltSeries(self):        # Expected values
+        testAcq = self.testAcqImodTestData
         testAcq.setAccumDose(18)
         expectedSetSize = 2
         expectedDimensions = [512, 512, 61]
         expectedAnglesCount = 61
+
+        # Run the protocol
+        protImport = self._runImportTiltSeries(testAcq)
+
         # Check teh results
         self.checkTiltSeries(protImport.outputTiltSeries,
                              expectedSetSize=expectedSetSize,
                              expectedSRate=self.samplingRate,
+                             imported=True,
                              expectedDimensions=expectedDimensions,
+                             testSetAcqObj=testAcq,
                              testAcqObj=testAcq,
                              anglesCount=expectedAnglesCount)
 
@@ -641,7 +667,9 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
         self.checkTiltSeries(tsSet,
                              expectedSetSize=expectedSetSize,
                              expectedSRate=expectedSRate,
+                             imported=True,
                              expectedDimensions=expectedDimensions,
+                             testSetAcqObj=testAcqObj,
                              testAcqObj=testAcqObj,
                              anglesCount=anglesCount)
         # Other checks

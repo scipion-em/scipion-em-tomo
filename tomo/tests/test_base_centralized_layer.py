@@ -24,16 +24,21 @@
 # *
 # **************************************************************************
 from os.path import exists, isabs, islink
+from typing import List, Union
+
 import numpy as np
+
+from pwem import ALIGN_NONE
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
+    TomoAcquisition, SetOfTiltSeriesM
 
 
 class TestBaseCentralizedLayer(BaseTest):
 
-    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, streamState=2):
+    def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float, streamState: int = 2):
         """
         :param inSet: A set of Scipion Tomo objects.
         :param expectedSetSize: expected set site to check.
@@ -45,8 +50,11 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inSet.getStreamState(), streamState)
 
     # TILT SERIES ######################################################################################################
-    def checkTiltSeriesM(self, inTsMSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
-                         testAcqObj=None, anglesCount=None, checkIds=False):
+    def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
+                         expectedDimensions: List[int] = None,
+                         testAcqObj: TomoAcquisition = None,
+                         anglesCount: Union[dict, int] = None,
+                         checkIds: bool = False):
         """
         :param inTsMSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -54,24 +62,24 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check. A dict of
         structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
         TS with different number of tilt images.
-        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the inTsSet. A dict
-        of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tilt
+        series Movies.
         :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
         of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
         :param checkIds: boolean used to perform id checking: objId must start with 1 --> i +1. When using {TO} the
         objId ends up with that value. For movies, it is 0, 39, 40
         """
-        # Check the set attributes
+        # CHECK THE SET ------------------------------------------------------------------------------------------------
         self.checkSetGeneralProps(inTsMSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
-        if anglesCount and type(anglesCount) is not dict:
-            self.assertEqual(inTsMSet.getAnglesCount(), anglesCount)
+        if anglesCount:
+            self.checkAnglesCount(inTsMSet, anglesCount)
+        if testAcqObj:
+            self.checkTomoAcquisition(testAcqObj, inTsMSet.getAcquisition())
+        # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for tsM in inTsMSet:
             tsId = tsM.getTsId()
             if testAcqObj:
-                if type(testAcqObj) is dict:
-                    self.checkTomoAcquisition(testAcqObj[tsId], tsM.getAcquisition())
-                else:
-                    self.checkTomoAcquisition(testAcqObj, tsM.getAcquisition())
+                self.checkTomoAcquisition(testAcqObj, tsM.getAcquisition(), tsId=tsId)
             # Check the expected dimensions
             if expectedDimensions:
                 x, y, z = tsM.getDimensions()
@@ -81,11 +89,7 @@ class TestBaseCentralizedLayer(BaseTest):
                     self.assertEqual([x, y, z], expectedDimensions)
             # Check the angles count
             if anglesCount:
-                nAngles = tsM.getAnglesCount()
-                if anglesCount is dict:
-                    self.assertEqual(nAngles, anglesCount[tsId])
-                else:
-                    self.assertEqual(nAngles, anglesCount)
+                self.checkAnglesCount(tsM, anglesCount)
             # Check the filenames
             for i, ti in enumerate(tsM):
                 self.assertFalse(isabs(ti.getFileName()), "Tilt image file %s is not absolute!. Should be relative.")
@@ -95,50 +99,65 @@ class TestBaseCentralizedLayer(BaseTest):
                 if checkIds:
                     self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
 
-    def checkTiltSeries(self, inTsSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
-                        testAcqObj=None, alignment=None, isPhaseFlipped=False, isAmplitudeCorrected=False,
-                        hasAlignment=False, hasOddEven=False, anglesCount=None, hasCtfCorrected=False,
-                        isInterpolated=False, excludedViewsDict=None):
+    def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float, imported: bool,
+                        expectedDimensions: List[int] = None,
+                        testSetAcqObj: TomoAcquisition = None,
+                        testAcqObj: Union[dict, TomoAcquisition] = None,
+                        alignment: str = ALIGN_NONE,
+                        isPhaseFlipped: bool = False,
+                        isAmplitudeCorrected: bool = False,
+                        hasAlignment: bool = False,
+                        hasOddEven: bool = False,
+                        anglesCount: Union[dict, int] = None,
+                        hasCtfCorrected: bool = False,
+                        isInterpolated: bool = False,
+                        excludedViewsDict: dict = None):
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param imported: boolean used to indicate if the introduced set correspond to an imported set, which means, in
+        terms of tilt image transformation matrix, not to have it.
         :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check. A dict of
         structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
         TS with different number of tilt images.
-        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the inTsSet.
+        :param testSetAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tilt
+        series. It may not be the same as testAcqObj, as in the case of heterogeneous sets of tilt series.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tilt series. A
+        dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
         :param alignment: Alignment type expected (see scipion-em > pwem > constants.py).
         :param isPhaseFlipped: False by default. Used to check if the tilt series were phase flipped.
         :param isAmplitudeCorrected: False by default. The same as before, but for the amplitude correction.
-        :param hasAlignment: False by default. Used to indicated if the tilt series are expected to have been aligned
-        (thus, the transformation matrix is not the identity).
+        :param hasAlignment: False by default. Used to indicate if the tilt series are expected to have been aligned
+        (thus, the transformation matrix is not the identity) or not, and then the tilt series attribute _hasAlignment
+        will be expected to be False and the tilt images will be expected not to have any transformation matrix
+        associated.
         :param hasOddEven: False by default. Used to indicate if the set of tilt series are expected to have even/odd
         tilt series associated (generated with the even/odd angles or frames).
         :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
         of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
         :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
         :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
-        or not (False).
+        or not (False). Also, if interpolated, the expected transformation matrix will be expected to be the identity.
         :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
         expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
         to False and the expected transformation matrix is the identity.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
-        # Check the set attributes
+        # CHECK THE SET ------------------------------------------------------------------------------------------------
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
-        if testAcqObj:
-            self.checkTomoAcquisition(testAcqObj, inTsSet.getAcquisition())
-        if alignment:
-            self.assertTrue(inTsSet.getAlignment(), alignment)
+        if testSetAcqObj:
+            self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition())
+        self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
+        self.assertEqual(inTsSet.getAlignment(), alignment)
         self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
         self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
-        # self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
-        self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
-        if anglesCount and type(anglesCount) is not dict:
-            self.assertEqual(inTsSet.getAnglesCount(), anglesCount)
-        self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
         self.assertEqual(inTsSet.interpolated(), isInterpolated)
-        # Check the main properties of the set items
+        self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
+        self.checkAnglesCount(inTsSet, anglesCount)
+        self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
+
+        # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for i, ts in enumerate(inTsSet):
             tsId = ts.getTsId()
             # Check the dimensions
@@ -148,16 +167,26 @@ class TestBaseCentralizedLayer(BaseTest):
                     self.assertEqual([x, y, z], expectedDimensions[tsId])
                 else:
                     self.assertEqual([x, y, z], expectedDimensions)
+            # Check the acquisition
+            if testAcqObj:
+                tsAcq = ts.getAcquisition()
+                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId)
             # Check the angles count
             if anglesCount:
-                nAngles = ts.getAnglesCount()
-                if anglesCount is dict:
-                    self.assertEqual(nAngles, anglesCount[tsId])
-                else:
-                    self.assertEqual(nAngles, anglesCount)
+                self.checkAnglesCount(ts, anglesCount)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+            # Alignment
+            self.assertEqual(ts.hasAlignment(), hasAlignment)
+            self.assertEqual(ts.getAlignment(), alignment)
+            # Interpolated
+            self.assertEqual(ts.interpolated(), isInterpolated)
+
+            # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
             for ind, ti in enumerate(ts):
+                # # Acquisition
+                # if testAcqObj:
+                #     self.checkTomoAcquisition(testAcqObj, ti.getAcquisition(), tsId=tsId)
                 # Excluded view
                 if excludedViewsDict:
                     isExcludedView = True if ind in excludedViewsDict[tsId] else False
@@ -165,17 +194,60 @@ class TestBaseCentralizedLayer(BaseTest):
                     isExcludedView = False
                 self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
                 # Alignment matrix
-                self.checkTransformMatrix(ti.getTransform().getMatrix(),
-                                          alignment=hasAlignment,
-                                          is2d=True,
-                                          isExcludedView=isExcludedView)
+                self.checkTiTransformMatrix(ti,
+                                            isImported=imported,
+                                            isInterpolated=isInterpolated,
+                                            is2d=True,
+                                            isExcludedView=isExcludedView)
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
                 self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=0.001)
 
+    def checkAnglesCount(self, inSet, anglesCount, tsId=None):
+        """
+        :param inSet: it may be a set of tilt series or a single tilt series.
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
+        of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
+        :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
+        """
+        tesAnglesCount = anglesCount[tsId] if type(anglesCount) is dict else anglesCount
+        self.assertEqual(inSet.getAnglesCount(), tesAnglesCount)
+
+    def checkTiTransformMatrix(self, ti, isImported=False, isInterpolated=False, isExcludedView=False, is2d=False):
+        """Checks the shape and coarsely the contents of the transformation matrix provided. Expected behavior is:
+        -> If interpolated, no matrix is associated.
+        -> Else:
+            -> If excluded view, the expected transformation matrix is the Identity.
+            -> Else: the transformation matrix exists, and it is not the identity.
+
+        :param ti: current tilt image.
+        :param isImported: boolean used to indicate if the introduced set correspond to an imported set, which means, in
+        terms of tilt image transformation matrix, not to have it.
+        :param is2d: False by default. Used to indicate if the expected transformation matrix should be of size 3 x 3
+        (True) or 4 x 4 (False).
+        :param isInterpolated: if True, the expected transformation matrix is the Identity
+        :param isExcludedView: it behaves the same as param isInterpolated
+        """
+        if isImported or isInterpolated:
+            self.assertIsNone(ti.getTransform())
+        else:
+            size = 3 if is2d else 4
+            transfMatrixShape = (size, size)
+            identityMatrix = np.eye(size)
+            outMatrix = ti.getTransform().getMatrix()
+            self.assertIsNotNone(outMatrix)
+            if type(outMatrix) is not np.ndarray:
+                outMatrix = np.array(outMatrix)
+            self.assertIsNotNone(outMatrix)
+            self.assertEqual(outMatrix.shape, transfMatrixShape)
+            if isExcludedView:
+                self.assertTrue(np.array_equal(outMatrix, identityMatrix))
+            else:
+                self.assertFalse(np.array_equal(outMatrix, identityMatrix))
+
     # TOMO ACQUISITION #################################################################################################
-    def checkTomoAcquisition(self, testAcq, currentAcq):
+    def checkTomoAcquisition(self, testAcq, currentAcq, tsId=None):
         """It compares two TomoAcquisition objects, considering the following attributes:
         * Magnification.
         * Voltage.
@@ -187,7 +259,13 @@ class TestBaseCentralizedLayer(BaseTest):
         * Min tilt angle.
         * Max tilt angle.
         * Tilt angle step.
+
+        :param testAcq: reference TomoAcquisition. It can also be a dict of structure {key --> tsId: value:
+        TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param currentAcq: TomoAcquisition to be tested.
+        :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
         """
+        testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
         self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
         self.assertAlmostEqual(testAcq.getSphericalAberration(), currentAcq.getSphericalAberration(), delta=0.01)
