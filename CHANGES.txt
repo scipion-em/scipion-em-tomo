@@ -1,6 +1,9 @@
 v3.6.0:
+ Users:
+  - Acquisition data storage fixed when importing tilt series and tilt series movies (min angle, max angle, and step)
  Developers:
   - Test dataset relion40_sta_tutorial_data expanded.
+  - TCL: methods dor checking sets of TS and TsM improved.
 v3.5.0:
  Users:
   - New protocol to import tilt-series CTF from different plugins
