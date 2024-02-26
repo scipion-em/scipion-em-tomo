@@ -99,7 +99,8 @@ class TestBaseCentralizedLayer(BaseTest):
                 if checkIds:
                     self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
 
-    def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float, imported: bool,
+    def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float,
+                        imported: bool = False,
                         expectedDimensions: List[int] = None,
                         testSetAcqObj: TomoAcquisition = None,
                         testAcqObj: Union[dict, TomoAcquisition] = None,
