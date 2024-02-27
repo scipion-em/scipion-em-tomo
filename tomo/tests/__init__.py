@@ -102,7 +102,7 @@ class DataSetRe4STATuto(Enum):
     tiltAxisAngle = 85.3
     initialDose = 0
     dosePerTiltImg = 3.05
-    accumDose = 122
+    accumDose = 118.95
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'

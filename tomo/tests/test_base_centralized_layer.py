@@ -159,7 +159,7 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
-        for i, ts in enumerate(inTsSet):
+        for ts in inTsSet:
             tsId = ts.getTsId()
             # Check the dimensions
             if expectedDimensions:
