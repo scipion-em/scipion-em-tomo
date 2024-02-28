@@ -317,7 +317,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             tsAcq.setStep(step)
 
             # Add each tilt images to the tiltSeries
-            for f, to, ta, dose in tiltSeriesList:
+            for f, to, ta, accDose in tiltSeriesList:
                 try:
                     # Link/move to extra
                     imageFile = f[1] if type(f) is tuple else f
@@ -331,21 +331,24 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                                  acquisitionOrder=to,
                                  tiltAngle=ta)
 
-                    ti.setAcquisition(tsAcq.clone())
-
+                    tiAcq = tsAcq.clone()
                     # Calculate the dose
                     if self.MDOC_DATA_SOURCE:
                         dosePerFrame = incomingDoseList[counter]
-                        dose = accumDoseList[counter]
+                        accDose = accumDoseList[counter]
+                        initialDose = self.doseInitial.get() if counter == 0 else sum(incomingDoseList[:counter + 1])
                     else:
                         dosePerFrame = self.dosePerFrame.get()
-                        if not dose:
-                            dose = to * dosePerFrame
-
+                        if not accDose:
+                            accDose = to * dosePerFrame
+                    initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
+                    # Initial dose in current ti
+                    tiAcq.setDoseInitial(initialDose)
                     # Incoming dose in current ti
-                    ti.getAcquisition().setDosePerFrame(dosePerFrame)
+                    tiAcq.setDosePerFrame(dosePerFrame)
                     # Accumulated dose in current ti
-                    ti.getAcquisition().setAccumDose(dose)
+                    tiAcq.setAccumDose(accDose)
+                    ti.setAcquisition(tiAcq)
                     tiltSeriesObjList.append(ti)
                     counter += 1
 
@@ -375,21 +378,21 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                 # been updated before, so the mean value is used to be the
                 # reference in the acquisition of the
                 # whole tilt series movie
-                tsAcq.setDosePerFrame(mean(incomingDoseList) + self.doseInitial.get())
-                setAcq.setDosePerFrame(mean(incomingDoseList) + self.doseInitial.get())
+                meanDosePerFrame = mean(incomingDoseList)
+                tsAcq.setDosePerFrame(meanDosePerFrame)
+                setAcq.setDosePerFrame(meanDosePerFrame)
             else:
-                accumDose = self.dosePerFrame.get() * (len(tiltSeriesList) - 1) + self.doseInitial.get()
+                accumDose = self.dosePerFrame.get() * len(tiltSeriesList)
+                dosePerFrame = self.dosePerFrame.get()
+                tiltAxisAngle = self.tiltAxisAngle.get()
 
-                tsAcq.setDosePerFrame(self.dosePerFrame.get())
+                tsAcq.setDosePerFrame(dosePerFrame)
                 tsAcq.setAccumDose(accumDose)
-                tsAcq.setTiltAxisAngle(self.tiltAxisAngle.get())
+                tsAcq.setTiltAxisAngle(tiltAxisAngle)
 
-                setAcq.setDosePerFrame(self.dosePerFrame.get())
+                setAcq.setDosePerFrame(dosePerFrame)
                 setAcq.setAccumDose(accumDose)
-                setAcq.setTiltAxisAngle(self.tiltAxisAngle.get())
-
-            # # Assign the angular part of the acquisition
-            # angles = [ti.getTiltAngle() for ti in tsObj]
+                setAcq.setTiltAxisAngle(tiltAxisAngle)
 
             tsObj.setAcquisition(tsAcq)
             outputSet.update(tsObj)  # update items and size info
@@ -698,7 +701,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             """ Add one file matching to the list. """
 
             order = int(match.group('TO'))
-            dose = int(self.dosePerFrame.get()) * order
+            dose = float(self.dosePerFrame.get()) * order
             angle = float(match.group('TA'))
             fileList.append((file, order, angle, dose))
 
@@ -977,11 +980,6 @@ class ProtImportTsMovies(ProtImportTsBase):
         ProtImportTsBase._fillAcquisitionInfo(self, inputTs)
         inputTs.setGain(self.gainFile.get())
         inputTs.setDark(self.darkFile.get())
-
-        # if not self.MDOC_DATA_SOURCE:
-        #     acq = inputTs.getAcquisition()
-        #     acq.setDoseInitial(self.doseInitial.get())
-        #     acq.setDosePerFrame(self.dosePerFrame.get())
 
     def _initialize(self):
         ProtImportTsBase._initialize(self)

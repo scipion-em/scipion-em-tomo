@@ -577,10 +577,10 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
     def test_importTiltSeriesM(self):
         # Expected values
         testAcq = self.testAcqEmpiarTestData2
-        testAcq.setAccumDose(0.6)
         expectedSetSize = 2
         expectedDimensions = [7420, 7676, 8]
         expectedAnglesCount = 3
+        testAcq.setAccumDose(testAcq.getDosePerFrame() * expectedAnglesCount)
 
         # Run teh protocol
         protImport = self._runImportTiltSeriesM(testAcq, filesPath=self.getFileM)
@@ -614,10 +614,10 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
 
         # Expected values
         testAcq = self.testAcqEmpiarTestData
-        testAcq.setAccumDose(1.2)
         expectedSetSize = 2
         expectedDimensions = [1152, 1152, 6]
         expectedAnglesCount = 5
+        testAcq.setAccumDose(testAcq.getDosePerFrame() * expectedAnglesCount)
 
         # 1: Brackets in out of the {} labels
         filesPattern = '*/SKvesicles_Pertuzumab_015[16]_{TS}_{TO}_{TA}.mrc'
@@ -641,12 +641,12 @@ class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
                               anglesCount=expectedAnglesCount,
                               checkIds=True)
 
-    def test_importTiltSeries(self):        # Expected values
+    def test_importTiltSeries(self):
         testAcq = self.testAcqImodTestData
-        testAcq.setAccumDose(18)
         expectedSetSize = 2
         expectedDimensions = [512, 512, 61]
         expectedAnglesCount = 61
+        testAcq.setAccumDose(testAcq.getDosePerFrame() * expectedAnglesCount)
 
         # Run the protocol
         protImport = self._runImportTiltSeries(testAcq)

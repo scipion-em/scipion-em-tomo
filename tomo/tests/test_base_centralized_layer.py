@@ -25,15 +25,13 @@
 # **************************************************************************
 from os.path import exists, isabs, islink
 from typing import List, Union
-
 import numpy as np
-
 from pwem import ALIGN_NONE
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
-    TomoAcquisition, SetOfTiltSeriesM
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -101,7 +99,7 @@ class TestBaseCentralizedLayer(BaseTest):
 
     def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float,
                         imported: bool = False,
-                        expectedDimensions: List[int] = None,
+                        expectedDimensions: Union[List[int], dict] = None,
                         testSetAcqObj: TomoAcquisition = None,
                         testAcqObj: Union[dict, TomoAcquisition] = None,
                         alignment: str = ALIGN_NONE,
@@ -110,6 +108,7 @@ class TestBaseCentralizedLayer(BaseTest):
                         hasAlignment: bool = False,
                         hasOddEven: bool = False,
                         anglesCount: Union[dict, int] = None,
+                        anglesCountSet: int = None,
                         hasCtfCorrected: bool = False,
                         isInterpolated: bool = False,
                         excludedViewsDict: dict = None):
@@ -137,6 +136,8 @@ class TestBaseCentralizedLayer(BaseTest):
         tilt series associated (generated with the even/odd angles or frames).
         :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
         of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
+        :param anglesCountSet: only for heterogeneous sets. Number of angles expected in the set descrioption
+        (Properties table).
         :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
         :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
         or not (False). Also, if interpolated, the expected transformation matrix will be expected to be the identity.
@@ -155,7 +156,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
         self.assertEqual(inTsSet.interpolated(), isInterpolated)
         self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
-        self.checkAnglesCount(inTsSet, anglesCount)
+        if anglesCountSet:
+            self.checkAnglesCount(inTsSet, anglesCountSet)
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
@@ -174,7 +176,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId)
             # Check the angles count
             if anglesCount:
-                self.checkAnglesCount(ts, anglesCount)
+                self.checkAnglesCount(ts, anglesCount, tsId=tsId)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
             # Alignment
@@ -205,17 +207,24 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Sampling rate
                 self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=0.001)
 
-    def checkAnglesCount(self, inSet, anglesCount, tsId=None):
+    def checkAnglesCount(self,
+                         inSet: Union[SetOfTiltSeries, TiltSeries],
+                         anglesCount: Union[int, dict],
+                         tsId: str = None):
         """
         :param inSet: it may be a set of tilt series or a single tilt series.
         :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
         of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
         :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
         """
-        tesAnglesCount = anglesCount[tsId] if type(anglesCount) is dict else anglesCount
-        self.assertEqual(inSet.getAnglesCount(), tesAnglesCount)
+        tsAnglesCount = anglesCount[tsId] if type(anglesCount) is dict else anglesCount
+        self.assertEqual(inSet.getAnglesCount(), tsAnglesCount)
 
-    def checkTiTransformMatrix(self, ti, isImported=False, isInterpolated=False, isExcludedView=False, is2d=False):
+    def checkTiTransformMatrix(self, ti: TiltImage,
+                               isImported: bool = False,
+                               isInterpolated: bool = False,
+                               isExcludedView: bool = False,
+                               is2d: bool = False):
         """Checks the shape and coarsely the contents of the transformation matrix provided. Expected behavior is:
         -> If interpolated, no matrix is associated.
         -> Else:
