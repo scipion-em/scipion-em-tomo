@@ -26,7 +26,8 @@
 
 import glob
 import threading
-from tkinter import *
+from tkinter import messagebox, BOTH, RAISED
+
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -43,6 +44,13 @@ import tomo.objects
 from ..convert.convert import getMeshVolFileName
 
 
+class TiltImageStates:
+    EXCLUDED = 'excluded'
+    INCLUDED = 'included'
+    ODD = 'odd'
+    EVEN = 'even'
+
+
 class TiltSeriesTreeProvider(TreeProvider):
     """ Model class that will retrieve the information from TiltSeries and
     prepare the columns/rows models required by the TreeDialog GUI.
@@ -50,7 +58,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TS = 'Tilt series'
     COL_TI = 'Path'
     COL_TI_ANGLE = 'Tilt angle'
-    COL_TI_ENABLED = 'Included'
+    COL_TI_ENABLED = 'Excluded'
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DOSE = "Accum. dose"
     COL_TI_TRANSFORM = "T. Matrix"
@@ -60,11 +68,41 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
-        self.tiltseries = tiltSeries
+        self.tiltSeries = tiltSeries
         TreeProvider.__init__(self, sortingColumnName=self.COL_TS)
-        self.selectedDict = {}
+        self.excludedDict = {}
         self.mapper = protocol.mapper
         self.maxNum = 200
+        self.updatedCount = 0
+
+    def configureTags(self, tree):
+        self.tree = tree
+        standardFont = getDefaultFont()
+        self.tree.tag_configure(TiltImageStates.EXCLUDED,  font=standardFont, foreground='red')
+        self.tree.tag_configure(TiltImageStates.INCLUDED,  font=standardFont, foreground='black')
+        self.tree.tag_configure(TiltImageStates.EVEN, background='#F2F2F2', foreground='black')
+        self.tree.tag_configure(TiltImageStates.ODD, background='#E6E6E6', foreground='black')
+
+    def _itemSelected(self, obj):
+        excluded = 'True' if obj.isEnabled() else 'False'
+        obj.setEnabled(not obj.isEnabled())
+        _, y, _, _ = self.tree.bbox(self.tree.selection()[0])
+        selectedItem = self.tree.identify_row(y+1)
+        itemValues = self.tree.item(selectedItem, 'values')
+        newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
+        tags = TiltImageStates.EVEN
+        if TiltImageStates.ODD in self.tree.item(selectedItem, 'tags'):
+            tags = TiltImageStates.ODD
+
+        if excluded == 'True':
+            self.tree.item(selectedItem, tags=(TiltImageStates.EXCLUDED, tags,))
+            self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']][obj.getObjId()] = True
+            self.updatedCount += 1
+        else:
+            self.tree.item(selectedItem, tags=(TiltImageStates.INCLUDED, tags,))
+            self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']].pop(obj.getObjId())
+            self.updatedCount -= 1
+        self.tree.item(selectedItem, values=newValues)
 
     def getObjects(self):
         # Retrieve all objects of type className
@@ -73,20 +111,28 @@ class TiltSeriesTreeProvider(TreeProvider):
         orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
         direction = 'ASC' if self.isSortingAscending() else 'DESC'
 
-        for ts in self.tiltseries:
+        for ts in self.tiltSeries:
+            self.excludedDict[ts.getTsId()] = {}
             tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
-                tiObj = ti.clone()
-                # For some reason .clone() does not clone the enabled nor the creation time
+                tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
+                if not ti.isEnabled():
+                    self.excludedDict[ts.getTsId()][ti.getObjId()] = True
                 tiObj.setEnabled(ti.isEnabled())
                 tiObj._allowsSelection = False
                 tiObj._parentObject = tsObj
                 objects.append(tiObj)
 
         return objects
+
+    def getExcludedViews(self):
+        return self.excludedDict
+
+    def getUpdatedCount(self):
+        return self.updatedCount
 
     def _sortObjects(self, objects):
         pass
@@ -103,7 +149,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TI_DOSE, 100),
             (self.COL_TI, 400),
         ]
-        if not isinstance(self.tiltseries, tomo.objects.SetOfTiltSeriesM):
+        if not isinstance(self.tiltSeries, tomo.objects.SetOfTiltSeriesM):
             cols.append((self.COL_TI_TRANSFORM, 300))
 
         return cols
@@ -119,6 +165,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getObjectInfo(self, obj: tomo.objects.TiltImageBase):
         objId = obj.getObjId()
         tsId = obj.getTsId()
+        tags = None
 
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = objId
@@ -134,7 +181,7 @@ class TiltSeriesTreeProvider(TreeProvider):
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
-                      str(obj.isEnabled()),
+                      str(not obj.isEnabled()),
                       round(dose, 2) if dose is not None else "",
                       "%d@%s" % (obj.getIndex() or 1, obj.getFileName()),
                       ]
@@ -145,13 +192,26 @@ class TiltSeriesTreeProvider(TreeProvider):
 
             opened = False
 
-        return {
+            tags = TiltImageStates.INCLUDED
+            if not obj.isEnabled():
+                obj.setEnabled(False)
+                tags = TiltImageStates.EXCLUDED
+
+        item = {
             'key': key, 'text': text,
             'values': tuple(values),
             'open': opened,
             'selected': False,
             'parent': obj._parentObject
         }
+
+        if tags is not None:
+            if obj.getObjId() % 2 == 0:
+                item['tags'] = (tags, TiltImageStates.ODD)
+            else:
+                item['tags'] = (tags, TiltImageStates.EVEN)
+
+        return item
 
     def getObjectActions(self, obj):
         actions = []
@@ -162,12 +222,106 @@ class TiltSeriesTreeProvider(TreeProvider):
             for viewerClass in viewers:
                 def createViewer(viewerClass, obj):
                     proj = self.protocol.getProject()
-                    item = self.tiltseries[obj.getObjId()]  # to load mapper
-                    return lambda: viewerClass(project=proj).visualize(item)
-                actions.append(('Open with %s' % viewerClass.__name__,
-                                createViewer(viewerClass, obj)))
+                    item = self.tiltSeries[obj.getObjId()]  # to load mapper
+                    return lambda: viewerClass(project=proj, protocol=self.protocol).visualize(item)
+                actions.append((viewerClass.getName(), createViewer(viewerClass, obj)))
+        else:
+            actionName = "Exclude" if obj.isEnabled() else "Include"
+            actions.append((actionName, lambda: self._itemSelected(obj)))
 
         return actions
+
+
+class TiltSeriesDialog(ToolbarListDialog):
+    def __init__(self, parent, title, provider, tiltSeries, protocol, **kwargs):
+
+        self._tiltSeries = tiltSeries
+        self._protocol = protocol
+        self._provider = provider
+        self._applyContrastCallback = kwargs.get('applyContrastCallback', None)
+
+
+        toolbarButtons = [
+            dialog.ToolbarButton('Toggle exclusion', self._toggleExlucion, Icon.ACTION_CLOSE,
+                                 tooltip="Exclude or include the selected tiltimage", shortcut='<space>'),
+            dialog.ToolbarButton('Increase contrast', self._applyContrastCallback, Icon.ACTION_CONTRAST,
+                                 tooltip="Apply contrast to the selected tiltimage", shortcut='<Control-c>'),
+            dialog.ToolbarButton('Save', self._saveExcluded, Icon.ACTION_SAVE,
+                                 tooltip="Create a new output with excluded views marked", shortcut='<Control-s>'),
+            dialog.ToolbarButton('|', None)
+        ]
+
+        if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
+            viewers = Domain.findViewers(tomo.objects.TiltSeries.getClassName(),
+                                         pwviewer.DESKTOP_TKINTER)
+            for viewerClass in viewers:
+                def launchViewer():
+                    proj = self._protocol.getProject()
+                    viewerInstance = viewerClass(project=proj, protocol=self._protocol)
+                    return lambda event: self.launchViewer(viewerInstance)
+                toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
+
+        toolbarButtons.append(dialog.ToolbarButton('|', None))
+        toolbarButtons.append(dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP))
+
+
+        ToolbarListDialog.__init__(self, parent, title, provider, toolbarButtons=toolbarButtons, **kwargs)
+
+    def body(self, bodyFrame):
+        ToolbarListDialog.body(self, bodyFrame)
+        firstTiltImage = self.tree.get_children(self.tree.get_children()[0])[0]
+        if firstTiltImage:
+            self.tree.selection_set(firstTiltImage)
+
+    def launchViewer(self, viewerInstance):
+        itemSelected = self.tree.selection()
+        obj = self.tree._objects[self.tree.index(itemSelected) + 1]
+        item = self._tiltSeries[obj.getObjId()]
+        viewerInstance.visualize(item)
+
+    def _showHelp(self, event=None):
+        showInfo('TiltSeries viewer help',
+                 'This viewer allows you to exclude or include TiltImages.\n\n'
+                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use right-click.\n'
+                 '2. Increase contrast button to enhance the tiltimage contrast.\n'
+                 '3. Save button to create a new set with excluded views marked.', self)
+
+    def _toggleExlucion(self, event=None):
+        itemSelected = self.tree.selection()
+        obj = self.tree._objects[self.tree.index(itemSelected) + 1]
+        self._provider._itemSelected(obj)
+
+    def _saveExcluded(self, event=None):
+        outputSetOfTiltSeries = self._protocol._createSetOfTiltSeries(suffix=str(self._protocol.getOutputsSize()))
+        outputSetOfTiltSeries.copyInfo(self._tiltSeries)
+        outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
+        excludedViews = self._provider.getExcludedViews()
+        updatedCount = self._provider.getUpdatedCount()
+        msg = "Are you sure you want to create a new set of TiltSeries with excluded views marked?" if updatedCount \
+            else "This set of TiltSeries is unchanged. Are you still sure you want to generate a new set?"
+        result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
+        if result == messagebox.YES:
+            for ts in self._tiltSeries:
+                newTs = ts.clone()
+                newTs.copyInfo(ts)
+                outputSetOfTiltSeries.append(newTs)
+                for ti in ts.iterItems():
+                    newTi = ti.clone()
+                    newTi.copyInfo(ti, copyId=True)
+                    newTi.setAcquisition(ti.getAcquisition())
+                    newTi.setLocation(ti.getLocation())
+                    # For some reason .clone() does not clone the enabled nor the creation time
+                    included = False if ti.getObjId() in excludedViews[ts.getTsId()] else True
+                    newTi.setEnabled(included)
+                    newTs.append(newTi)
+
+                newTs.setDim(ts.getDim())
+                newTs.write()
+
+                outputSetOfTiltSeries.update(newTs)
+                outputSetOfTiltSeries.write()
+
+            self._protocol._defineOutputs(**{'TiltSeries_' + str(self._protocol.getOutputsSize()+1): outputSetOfTiltSeries})
 
 
 class TiltSeriesDialogView(pwviewer.View):
@@ -192,13 +346,14 @@ class TiltSeriesDialogView(pwviewer.View):
         """
         self._tkParent = parent
         self._protocol = protocol
-        self._provider = TiltSeriesTreeProvider(protocol, tiltSeries)
-        self._preview = None # To store preview widget
+        self._tiltSeries = tiltSeries
+        self._provider = TiltSeriesTreeProvider(self._protocol, self._tiltSeries)
+        self._preview = None  # To store preview widget
 
     def show(self):
-        ListDialog(self._tkParent, 'Tilt series viewer', self._provider,
-                   previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True, lockGui=False)
-
+        TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
+                         lockGui=True, previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True,
+                         applyContrastCallback=self.gaussianFilter)
 
     def getPreviewWidget(self, frame):
 
@@ -206,7 +361,6 @@ class TiltSeriesDialogView(pwviewer.View):
             from pyworkflow.gui.matplotlib_image import ImagePreview
             self._preview = ImagePreview(frame, dim=500, label="Tilt series", listenersDict={"<Button-1>": self.gaussianFilter})
             self._preview.grid(row=0, column=0)
-
         return self._preview
 
     def gaussianFilter(self, event):
@@ -214,15 +368,10 @@ class TiltSeriesDialogView(pwviewer.View):
         # Try to increase the contrast. TODO: Move this to somewhere more resusable
         try:
             import skimage as ski
-
-
             data = self._preview.figureimg.get_array()
-
             # data = ski.filters.gaussian(data, sigma=(2, 2))
-
             # Equalization
             # data = ski.exposure.equalize_hist(np.ma.getdata(data))
-
             # Adaptive Equalization
             data = ski.exposure.equalize_adapthist(data, clip_limit=0.03)
 
