@@ -278,7 +278,7 @@ class TiltSeriesDialog(ToolbarListDialog):
         updatedCount = self._provider.getUpdatedCount()
         msg = "Are you sure you want to create a new set of TiltSeries with excluded views marked?" if updatedCount \
             else "This set of TiltSeries is unchanged. Are you still sure you want to generate a new set?"
-        result = messagebox.askquestion("Confirmation", msg, icon='warning', **{'parent': self})
+        result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
         if result == messagebox.YES:
             for ts in self._tiltSeries:
                 newTs = ts.clone()
