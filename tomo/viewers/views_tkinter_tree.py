@@ -223,9 +223,8 @@ class TiltSeriesTreeProvider(TreeProvider):
                 def createViewer(viewerClass, obj):
                     proj = self.protocol.getProject()
                     item = self.tiltSeries[obj.getObjId()]  # to load mapper
-                    return lambda: viewerClass(project=proj).visualize(item)
-                actions.append(('Open with %s' % viewerClass.__name__,
-                                createViewer(viewerClass, obj)))
+                    return lambda: viewerClass(project=proj, protocol=self.protocol).visualize(item)
+                actions.append((viewerClass.getName(), createViewer(viewerClass, obj)))
         else:
             actionName = "Exclude" if obj.isEnabled() else "Include"
             actions.append((actionName, lambda: self._itemSelected(obj)))
@@ -241,6 +240,7 @@ class TiltSeriesDialog(ToolbarListDialog):
         self._provider = provider
         self._applyContrastCallback = kwargs.get('applyContrastCallback', None)
 
+
         toolbarButtons = [
             dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP),
             dialog.ToolbarButton('Toggle exclusion', self._toggleExlucion, Icon.ACTION_CLOSE,
@@ -250,6 +250,17 @@ class TiltSeriesDialog(ToolbarListDialog):
             dialog.ToolbarButton('Save', self._saveExcluded, Icon.ACTION_SAVE,
                                  tooltip="Create a new output with excluded views marked", shortcut='<Control-s>')
         ]
+
+        if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
+            viewers = Domain.findViewers(tomo.objects.TiltSeries.getClassName(),
+                                         pwviewer.DESKTOP_TKINTER)
+            for viewerClass in viewers:
+                def launchViewer():
+                    proj = self._protocol.getProject()
+                    viewerInstance = viewerClass(project=proj, protocol=self._protocol)
+                    return lambda event: self.launchViewer(viewerInstance)
+                toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
+
         ToolbarListDialog.__init__(self, parent, title, provider, toolbarButtons=toolbarButtons, **kwargs)
 
     def body(self, bodyFrame):
@@ -257,6 +268,12 @@ class TiltSeriesDialog(ToolbarListDialog):
         firstTiltImage = self.tree.get_children(self.tree.get_children()[0])[0]
         if firstTiltImage:
             self.tree.selection_set(firstTiltImage)
+
+    def launchViewer(self, viewerInstance):
+        itemSelected = self.tree.selection()
+        obj = self.tree._objects[self.tree.index(itemSelected) + 1]
+        item = self._tiltSeries[obj.getObjId()]
+        viewerInstance.visualize(item)
 
     def _showHelp(self, event=None):
         showInfo('TiltSeries viewer help',
