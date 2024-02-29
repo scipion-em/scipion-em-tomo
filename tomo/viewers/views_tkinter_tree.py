@@ -242,13 +242,13 @@ class TiltSeriesDialog(ToolbarListDialog):
 
 
         toolbarButtons = [
-            dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP),
             dialog.ToolbarButton('Toggle exclusion', self._toggleExlucion, Icon.ACTION_CLOSE,
                                  tooltip="Exclude or include the selected tiltimage", shortcut='<space>'),
             dialog.ToolbarButton('Increase contrast', self._applyContrastCallback, Icon.ACTION_CONTRAST,
                                  tooltip="Apply contrast to the selected tiltimage", shortcut='<Control-c>'),
             dialog.ToolbarButton('Save', self._saveExcluded, Icon.ACTION_SAVE,
-                                 tooltip="Create a new output with excluded views marked", shortcut='<Control-s>')
+                                 tooltip="Create a new output with excluded views marked", shortcut='<Control-s>'),
+            dialog.ToolbarButton('|', None)
         ]
 
         if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
@@ -260,6 +260,10 @@ class TiltSeriesDialog(ToolbarListDialog):
                     viewerInstance = viewerClass(project=proj, protocol=self._protocol)
                     return lambda event: self.launchViewer(viewerInstance)
                 toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
+
+        toolbarButtons.append(dialog.ToolbarButton('|', None))
+        toolbarButtons.append(dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP))
+
 
         ToolbarListDialog.__init__(self, parent, title, provider, toolbarButtons=toolbarButtons, **kwargs)
 
