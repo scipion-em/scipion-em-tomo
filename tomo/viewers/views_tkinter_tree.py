@@ -274,7 +274,7 @@ class TiltSeriesDialog(ToolbarListDialog):
             self.tree.selection_set(firstTiltImage)
 
     def launchViewer(self, viewerInstance):
-        itemSelected = self.tree.selection()
+        itemSelected = self.tree.selection() if not self.tree.parent(self.tree.selection()) else self.tree.parent(self.tree.selection())
         obj = self.tree._objects[self.tree.index(itemSelected) + 1]
         item = self._tiltSeries[obj.getObjId()]
         viewerInstance.visualize(item)
