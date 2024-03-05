@@ -74,6 +74,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.mapper = protocol.mapper
         self.maxNum = 200
         self.updatedCount = 0
+        self.objects = []
 
     def configureTags(self, tree):
         self.tree = tree
@@ -106,7 +107,9 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def getObjects(self):
         # Retrieve all objects of type className
-        objects = []
+
+        if self.objects:
+            return self.objects
 
         orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
         direction = 'ASC' if self.isSortingAscending() else 'DESC'
@@ -116,7 +119,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
-            objects.append(tsObj)
+            self.objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
                 tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
                 if not ti.isEnabled():
@@ -124,9 +127,17 @@ class TiltSeriesTreeProvider(TreeProvider):
                 tiObj.setEnabled(ti.isEnabled())
                 tiObj._allowsSelection = False
                 tiObj._parentObject = tsObj
-                objects.append(tiObj)
+                self.objects.append(tiObj)
 
-        return objects
+        return self.objects
+
+    def getTiltSerieRepresentative(self, tiltSerie):
+        """This method returns the central tiltImage of the set."""
+        size = tiltSerie.getSize()
+        objects = self.getObjects()
+        for index, obj in enumerate(objects):
+            if obj == tiltSerie:
+                return self.objects[index + int(size/2)]
 
     def getExcludedViews(self):
         return self.excludedDict
@@ -264,7 +275,6 @@ class TiltSeriesDialog(ToolbarListDialog):
         toolbarButtons.append(dialog.ToolbarButton('|', None))
         toolbarButtons.append(dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP))
 
-
         ToolbarListDialog.__init__(self, parent, title, provider, toolbarButtons=toolbarButtons, **kwargs)
 
     def body(self, bodyFrame):
@@ -272,6 +282,13 @@ class TiltSeriesDialog(ToolbarListDialog):
         firstTiltImage = self.tree.get_children(self.tree.get_children()[0])[0]
         if firstTiltImage:
             self.tree.selection_set(firstTiltImage)
+
+    def validateClose(self):
+        if self._provider.getUpdatedCount():
+            msg = "Do you want to exit and loose your changes ? "
+            result = messagebox.askquestion("Loosing changes", msg, icon='warning', **{'parent': self})
+            return result == messagebox.YES
+        return True
 
     def launchViewer(self, viewerInstance):
         itemSelected = self.tree.selection() if not self.tree.parent(self.tree.selection()) else self.tree.parent(self.tree.selection())
@@ -379,25 +396,17 @@ class TiltSeriesDialogView(pwviewer.View):
         except Exception as e:
             print(e)
 
-    def previewTiltSeries(self, obj: tomo.objects.SetOfTiltSeries, frame):
-
+    def previewTiltSeries(self, obj, frame):
         preview = self.getPreviewWidget(frame)
-        if isinstance(obj, tomo.objects.TiltImage):
-            image = obj.getImage()
-            data =image.getData()
-
-            # # Try to increase the contrast. TODO: Move this to somewhere more resusable
-            # try:
-            #     import skimage as ski
-            #     data = ski.filters.gaussian(data, sigma=(4, 4))
-            # except:
-            #     pass
-            preview._update(data)
-            text = "Tilt image at %sº" % obj.getTiltAngle()
-        else:
-            preview.clear()
+        if isinstance(obj, tomo.objects.TiltSeries):
             text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
+            obj = self._provider.getTiltSerieRepresentative(obj)
+        else:
+            text = "Tilt image at %sº" % obj.getTiltAngle()
 
+        image = obj.getImage()
+        data = image.getData()
+        preview._update(data)
         preview.setLabel(text)
 
 class TomogramsTreeProvider(TreeProvider):
