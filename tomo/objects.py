@@ -892,7 +892,7 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         SetOfTiltSeriesBase.copyInfo(self, other)
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
-        # self._firstFramesRange.set(other.getFramesRange())
+        self._firstFramesRange.set(other.getFramesRange())
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
