@@ -74,6 +74,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.mapper = protocol.mapper
         self.maxNum = 200
         self.updatedCount = 0
+        self.changes = 0
         self.objects = []
 
     def configureTags(self, tree):
@@ -99,10 +100,12 @@ class TiltSeriesTreeProvider(TreeProvider):
             self.tree.item(selectedItem, tags=(TiltImageStates.EXCLUDED, tags,))
             self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']][obj.getObjId()] = True
             self.updatedCount += 1
+            self.changes += 1
         else:
             self.tree.item(selectedItem, tags=(TiltImageStates.INCLUDED, tags,))
             self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']].pop(obj.getObjId())
             self.updatedCount -= 1
+            self.changes -= 1
         self.tree.item(selectedItem, values=newValues)
 
     def getObjects(self):
@@ -144,6 +147,12 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def getUpdatedCount(self):
         return self.updatedCount
+
+    def getchanges(self):
+        return self.changes
+
+    def resetChanges(self):
+        self.changes = 0
 
     def _sortObjects(self, objects):
         pass
@@ -284,7 +293,7 @@ class TiltSeriesDialog(ToolbarListDialog):
             self.tree.selection_set(firstTiltImage)
 
     def validateClose(self):
-        if self._provider.getUpdatedCount():
+        if self._provider.getUpdatedCount() and self._provider.getchanges():
             msg = "Do you want to exit and loose your changes ? "
             result = messagebox.askquestion("Loosing changes", msg, icon='warning', **{'parent': self})
             return result == messagebox.YES
@@ -309,15 +318,17 @@ class TiltSeriesDialog(ToolbarListDialog):
         self._provider._itemSelected(obj)
 
     def _saveExcluded(self, event=None):
-        outputSetOfTiltSeries = self._protocol._createSetOfTiltSeries(suffix=str(self._protocol.getOutputsSize()))
-        outputSetOfTiltSeries.copyInfo(self._tiltSeries)
-        outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
-        excludedViews = self._provider.getExcludedViews()
         updatedCount = self._provider.getUpdatedCount()
-        msg = "Are you sure you want to create a new set of TiltSeries with excluded views marked?" if updatedCount \
-            else "This set of TiltSeries is unchanged. Are you still sure you want to generate a new set?"
+        changes = self._provider.getchanges()
+        msg = "Are you sure you want to create a new set of TiltSeries with excluded views marked?" if updatedCount and changes \
+            else "This set of TiltSeries has already been saved previously or is the original one. Are you still sure you want to generate a new set?"
         result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
         if result == messagebox.YES:
+            outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
+                                                                        suffix=str(self._protocol.getOutputsSize()))
+            outputSetOfTiltSeries.copyInfo(self._tiltSeries)
+            outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
+            excludedViews = self._provider.getExcludedViews()
             for ts in self._tiltSeries:
                 newTs = ts.clone()
                 newTs.copyInfo(ts)
@@ -337,8 +348,9 @@ class TiltSeriesDialog(ToolbarListDialog):
 
                 outputSetOfTiltSeries.update(newTs)
                 outputSetOfTiltSeries.write()
-
             self._protocol._defineOutputs(**{'TiltSeries_' + str(self._protocol.getOutputsSize()+1): outputSetOfTiltSeries})
+            messagebox.showinfo('Information', 'The new set has been created successfully', icon='info', **{'parent': self})
+            self._provider.resetChanges()
 
 
 class TiltSeriesDialogView(pwviewer.View):
