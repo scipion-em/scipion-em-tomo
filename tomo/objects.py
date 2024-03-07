@@ -2804,8 +2804,9 @@ class SetOfCTFTomoSeries(data.EMSet):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC'):
-        for item in super().iterItems(orderBy=orderBy, direction=direction):
+    def iterItems(self, orderBy='id', direction='ASC', **kwargs):
+        for item in super().iterItems(orderBy=orderBy,
+                                      direction=direction, **kwargs):
 
             ts = self._getTiltSeriesFromTsId(item.getTsId())
             if ts is None:
