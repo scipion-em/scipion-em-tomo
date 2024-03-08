@@ -198,6 +198,9 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
+    def clone(self):
+        return  super().clone(copyEnable=True)
+
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
         TiltImageBase.copyInfo(self, other, copyId=copyId, copyTM=copyTM)
@@ -790,6 +793,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                     tiOut.setAcquisition(ti.getAcquisition())
                     tiOut.copyObjId(ti)
                     tiOut.setLocation(ti.getLocation())
+                    tiOut.setEnabled(ti.isEnabled()) # Clone disabled tilt images
                     if updateTiCallback:
                         updateTiCallback(j, ts, ti, tsOut, tiOut)
                     tsOut.append(tiOut)
@@ -2280,13 +2284,18 @@ class CTFTomo(data.CTFModel):
         self._index = Integer(kwargs.get('index', None))
 
     def copyInfo(self, other, copyId=False):
+        """ Copy info is similar to clone, but is often used to tranfer data from other type of objects with same attributes"""
         self.copy(other, copyId=copyId)
 
-    def copy(self, other, copyId=True, ignoreAttrs=[]):
+    def clone(self, copyEnable=True):
+        return super().clone(copyEnable=copyEnable)
+
+    def copy(self, other, copyId=True, ignoreAttrs=[], copyEnable=True):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
                             '_resolution', '_fitQuality', '_index')
 
-        self.setEnabled(other.isEnabled())
+        if copyEnable:
+            self.setEnabled(other.isEnabled())
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
