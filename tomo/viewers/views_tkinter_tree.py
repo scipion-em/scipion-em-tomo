@@ -262,7 +262,7 @@ class TiltSeriesDialog(ToolbarListDialog):
 
 
         toolbarButtons = [
-            dialog.ToolbarButton('Toggle exclusion', self._toggleExlucion, Icon.ACTION_CLOSE,
+            dialog.ToolbarButton('Toggle exclusion', self._toggleExclusion, Icon.ACTION_CLOSE,
                                  tooltip="Exclude or include the selected tiltimage", shortcut='<space>'),
             dialog.ToolbarButton('Increase contrast', self._applyContrastCallback, Icon.ACTION_CONTRAST,
                                  tooltip="Apply contrast to the selected tiltimage", shortcut='<Control-c>'),
@@ -312,7 +312,7 @@ class TiltSeriesDialog(ToolbarListDialog):
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
                  '3. Save button to create a new set with excluded views marked.', self)
 
-    def _toggleExlucion(self, event=None):
+    def _toggleExclusion(self, event=None):
         itemSelected = self.tree.selection()
         obj = self.tree._objects[self.tree.index(itemSelected) + 1]
         self._provider._itemSelected(obj)
@@ -320,7 +320,7 @@ class TiltSeriesDialog(ToolbarListDialog):
     def _saveExcluded(self, event=None):
         updatedCount = self._provider.getUpdatedCount()
         changes = self._provider.getchanges()
-        msg = "Are you sure you want to create a new set of TiltSeries with excluded views marked?" if updatedCount and changes \
+        msg = "Are you sure you want to create a new set of TiltSeries?" if updatedCount and changes \
             else "This set of TiltSeries has already been saved previously or is the original one. Are you still sure you want to generate a new set?"
         result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
         if result == messagebox.YES:
@@ -348,8 +348,9 @@ class TiltSeriesDialog(ToolbarListDialog):
 
                 outputSetOfTiltSeries.update(newTs)
                 outputSetOfTiltSeries.write()
-            self._protocol._defineOutputs(**{'TiltSeries_' + str(self._protocol.getOutputsSize()+1): outputSetOfTiltSeries})
-            messagebox.showinfo('Information', 'The new set has been created successfully', icon='info', **{'parent': self})
+            outputName = 'TiltSeries_' + str(self._protocol.getOutputsSize()+1)
+            self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
+            self.info('The new set (%s) has been created successfully' % outputName)
             self._provider.resetChanges()
 
 
