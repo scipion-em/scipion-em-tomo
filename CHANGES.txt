@@ -1,4 +1,6 @@
 v3.6.0:
+ Users:
+  - Tilt series subsets and CTFTomoseries clone the enable flag
  Developers:
   - Test dataset relion40_sta_tutorial_data expanded.
 v3.5.0:

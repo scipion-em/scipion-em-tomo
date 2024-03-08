@@ -30,7 +30,8 @@ from tomo.constants import SCIPION
 from tomo.objects import (SetOfTiltSeriesCoordinates, TiltSeriesCoordinate,
                           SetOfSubTomograms, SetOfTomograms, Tomogram,
                           SetOfCoordinates3D, Coordinate3D, SubTomogram,
-                          SetOfTiltSeries, TiltSeries, TiltImage, LandmarkModel)
+                          SetOfTiltSeries, TiltSeries, TiltImage, LandmarkModel,
+                          CTFTomo)
 
 TS_1 = "TS_1"
 TS_2 = "TS_2"
@@ -143,6 +144,15 @@ class TestTomoModel(BaseTest):
         tomo = subtomos.getTomogram(subtomo)
         self.assertEqual(tomo.getTsId(), TS_1, "Recovered tomogram from SOST.getTomogram() does not work.")
 
+    def test_set_of_ctfTomo_series(self):
+        # test enabled is cloned
+        newCtf = CTFTomo()
+
+        newCtf.setEnabled(False)
+
+        clonedCTF = newCtf.clone()
+        self.assertFalse(clonedCTF.isEnabled(), "Enabled not cloned for the tomo CTF")
+
     def test_set_of_tilt_series(self):
         """ Tests the SetOfTiltSeries model"""
 
@@ -191,6 +201,14 @@ class TestTomoModel(BaseTest):
         ts2 = tiltseries[2]
         ti2 = ts2.getFirstItem()
         self.assertEqual(ti2.getTsId(), TS_2, "Tilt image wrong for the tilt series 2")
+
+        # test enabled is cloned
+        newTi= TiltImage()
+
+        newTi.setEnabled(False)
+
+        clonedTi = newTi.clone()
+        self.assertFalse(clonedTi.isEnabled(), "Enabled not cloned for the tilt image")
 
     def test_landmarks(self):
         """ Test the Landmark model"""
