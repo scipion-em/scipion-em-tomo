@@ -74,6 +74,8 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.mapper = protocol.mapper
         self.maxNum = 200
         self.updatedCount = 0
+        self.changes = 0
+        self.objects = []
 
     def configureTags(self, tree):
         self.tree = tree
@@ -98,15 +100,19 @@ class TiltSeriesTreeProvider(TreeProvider):
             self.tree.item(selectedItem, tags=(TiltImageStates.EXCLUDED, tags,))
             self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']][obj.getObjId()] = True
             self.updatedCount += 1
+            self.changes += 1
         else:
             self.tree.item(selectedItem, tags=(TiltImageStates.INCLUDED, tags,))
             self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']].pop(obj.getObjId())
             self.updatedCount -= 1
+            self.changes -= 1
         self.tree.item(selectedItem, values=newValues)
 
     def getObjects(self):
         # Retrieve all objects of type className
-        objects = []
+
+        if self.objects:
+            return self.objects
 
         orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
         direction = 'ASC' if self.isSortingAscending() else 'DESC'
@@ -116,7 +122,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
-            objects.append(tsObj)
+            self.objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
                 tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
                 if not ti.isEnabled():
@@ -124,15 +130,29 @@ class TiltSeriesTreeProvider(TreeProvider):
                 tiObj.setEnabled(ti.isEnabled())
                 tiObj._allowsSelection = False
                 tiObj._parentObject = tsObj
-                objects.append(tiObj)
+                self.objects.append(tiObj)
 
-        return objects
+        return self.objects
+
+    def getTiltSerieRepresentative(self, tiltSerie):
+        """This method returns the central tiltImage of the set."""
+        size = tiltSerie.getSize()
+        objects = self.getObjects()
+        for index, obj in enumerate(objects):
+            if obj == tiltSerie:
+                return self.objects[index + int(size/2)]
 
     def getExcludedViews(self):
         return self.excludedDict
 
     def getUpdatedCount(self):
         return self.updatedCount
+
+    def getchanges(self):
+        return self.changes
+
+    def resetChanges(self):
+        self.changes = 0
 
     def _sortObjects(self, objects):
         pass
@@ -242,7 +262,7 @@ class TiltSeriesDialog(ToolbarListDialog):
 
 
         toolbarButtons = [
-            dialog.ToolbarButton('Toggle exclusion', self._toggleExlucion, Icon.ACTION_CLOSE,
+            dialog.ToolbarButton('Toggle exclusion', self._toggleExclusion, Icon.ACTION_CLOSE,
                                  tooltip="Exclude or include the selected tiltimage", shortcut='<space>'),
             dialog.ToolbarButton('Increase contrast', self._applyContrastCallback, Icon.ACTION_CONTRAST,
                                  tooltip="Apply contrast to the selected tiltimage", shortcut='<Control-c>'),
@@ -264,7 +284,6 @@ class TiltSeriesDialog(ToolbarListDialog):
         toolbarButtons.append(dialog.ToolbarButton('|', None))
         toolbarButtons.append(dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP))
 
-
         ToolbarListDialog.__init__(self, parent, title, provider, toolbarButtons=toolbarButtons, **kwargs)
 
     def body(self, bodyFrame):
@@ -272,6 +291,13 @@ class TiltSeriesDialog(ToolbarListDialog):
         firstTiltImage = self.tree.get_children(self.tree.get_children()[0])[0]
         if firstTiltImage:
             self.tree.selection_set(firstTiltImage)
+
+    def validateClose(self):
+        if self._provider.getUpdatedCount() and self._provider.getchanges():
+            msg = "Do you want to exit and loose your changes ? "
+            result = messagebox.askquestion("Loosing changes", msg, icon='warning', **{'parent': self})
+            return result == messagebox.YES
+        return True
 
     def launchViewer(self, viewerInstance):
         itemSelected = self.tree.selection() if not self.tree.parent(self.tree.selection()) else self.tree.parent(self.tree.selection())
@@ -286,21 +312,23 @@ class TiltSeriesDialog(ToolbarListDialog):
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
                  '3. Save button to create a new set with excluded views marked.', self)
 
-    def _toggleExlucion(self, event=None):
+    def _toggleExclusion(self, event=None):
         itemSelected = self.tree.selection()
         obj = self.tree._objects[self.tree.index(itemSelected) + 1]
         self._provider._itemSelected(obj)
 
     def _saveExcluded(self, event=None):
-        outputSetOfTiltSeries = self._protocol._createSetOfTiltSeries(suffix=str(self._protocol.getOutputsSize()))
-        outputSetOfTiltSeries.copyInfo(self._tiltSeries)
-        outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
-        excludedViews = self._provider.getExcludedViews()
         updatedCount = self._provider.getUpdatedCount()
-        msg = "Are you sure you want to create a new set of TiltSeries with excluded views marked?" if updatedCount \
-            else "This set of TiltSeries is unchanged. Are you still sure you want to generate a new set?"
+        changes = self._provider.getchanges()
+        msg = "Are you sure you want to create a new set of TiltSeries?" if updatedCount and changes \
+            else "This set of TiltSeries has already been saved previously or is the original one. Are you still sure you want to generate a new set?"
         result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
         if result == messagebox.YES:
+            outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
+                                                                        suffix=str(self._protocol.getOutputsSize()))
+            outputSetOfTiltSeries.copyInfo(self._tiltSeries)
+            outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
+            excludedViews = self._provider.getExcludedViews()
             for ts in self._tiltSeries:
                 newTs = ts.clone()
                 newTs.copyInfo(ts)
@@ -320,8 +348,10 @@ class TiltSeriesDialog(ToolbarListDialog):
 
                 outputSetOfTiltSeries.update(newTs)
                 outputSetOfTiltSeries.write()
-
-            self._protocol._defineOutputs(**{'TiltSeries_' + str(self._protocol.getOutputsSize()+1): outputSetOfTiltSeries})
+            outputName = 'TiltSeries_' + str(self._protocol.getOutputsSize()+1)
+            self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
+            self.info('The new set (%s) has been created successfully' % outputName)
+            self._provider.resetChanges()
 
 
 class TiltSeriesDialogView(pwviewer.View):
@@ -379,25 +409,17 @@ class TiltSeriesDialogView(pwviewer.View):
         except Exception as e:
             print(e)
 
-    def previewTiltSeries(self, obj: tomo.objects.SetOfTiltSeries, frame):
-
+    def previewTiltSeries(self, obj, frame):
         preview = self.getPreviewWidget(frame)
-        if isinstance(obj, tomo.objects.TiltImage):
-            image = obj.getImage()
-            data =image.getData()
-
-            # # Try to increase the contrast. TODO: Move this to somewhere more resusable
-            # try:
-            #     import skimage as ski
-            #     data = ski.filters.gaussian(data, sigma=(4, 4))
-            # except:
-            #     pass
-            preview._update(data)
-            text = "Tilt image at %sº" % obj.getTiltAngle()
-        else:
-            preview.clear()
+        if isinstance(obj, tomo.objects.TiltSeries):
             text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
+            obj = self._provider.getTiltSerieRepresentative(obj)
+        else:
+            text = "Tilt image at %sº" % obj.getTiltAngle()
 
+        image = obj.getImage()
+        data = image.getData()
+        preview._update(data)
         preview.setLabel(text)
 
 class TomogramsTreeProvider(TreeProvider):
