@@ -1110,27 +1110,6 @@ class Tomogram(data.Volume):
                 and self._acquisition.getAngleMin() is not None
                 and self._acquisition.getAngleMax() is not None)
 
-    def getDim(self):
-        """Return image dimensions as tuple: (Xdim, Ydim, Zdim)"""
-        if self._dim is None:
-            from pwem.emlib.image import ImageHandler
-
-            fn = self.getFileName()
-            if fn is not None and os.path.exists(fn.replace(':mrc', '')):
-                x, y, z, n = ImageHandler().getDimensions(self)
-
-                # Some volumes in mrc format can have the z dimension
-                # as n dimension, so we need to consider this case.
-                if z > 1:
-                    self._dim = (x, y, z)
-                    return x, y, z
-                else:
-                    self._dim = (x, y, n)
-                    return x, y, n
-        else:
-            return self._dim
-        return None
-
     def copyInfo(self, other):
         """ Copy basic information """
         super().copyInfo(other)

@@ -5,6 +5,9 @@ v3.6.0:
  Developers:
   - Test dataset relion40_sta_tutorial_data expanded.
   - TCL: methods dor checking sets of TS and TsM improved.
+  - Class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
+    header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file
+    header for each file.
 v3.5.0:
  Users:
   - Improve the TiltSeries viewer. Allowing to exclude TiltImages
