@@ -97,11 +97,6 @@ TS_54 = 'TS_54'
 TS_03 = 'TS_03'
 nAnglesDict = {TS_03: 40,
                TS_54: 41}
-expectedDimsTsDict = {TS_03: [3710, 3838, 40],
-                      TS_54: [3710, 3838, 41]}
-expectedDimsTsInterpDict = {TS_03: [3838, 3710, 40],
-                            TS_54: [3838, 3710, 41]}
-
 # Acquisition
 voltage = 300
 sphericalAb = 2.7
@@ -176,8 +171,8 @@ class DataSetRe4STATuto(Enum):
     transformPattern = 'TS*/*.xf'
     ctfPattern = '*/*.defocus'
     nAnglesDict = nAnglesDict
-    dimsTsBin1Dict = expectedDimsTsDict
-    dimsTsInterpBin1Dict = expectedDimsTsInterpDict
+    dimsTsBin1Dict = {TS_03: [3710, 3838, 40], TS_54: [3710, 3838, 41]}
+    dimsTsInterpBin1Dict = {TS_03: [3838, 3710, 40], TS_54: [3838, 3710, 41]}
     # Tomograms
     tomosPath = 'tomograms'
     tomosPattern = '*.mrc'
