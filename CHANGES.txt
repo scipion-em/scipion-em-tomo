@@ -1,3 +1,8 @@
+v3.6.1:
+ Developers:
+  - Fix: class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
+    header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file
+    header for each file.
 v3.6.0:
  Users:
   - Tilt series subsets and CTFTomoseries clone the enable flag
