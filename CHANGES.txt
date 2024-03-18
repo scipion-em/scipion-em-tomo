@@ -1,5 +1,13 @@
+v3.6.0:
+ Users:
+  - Tilt series subsets and CTFTomoseries clone the enable flag
+  - Acquisition data storage fixed when importing tilt series and tilt series movies (min angle, max angle, and step)
+ Developers:
+  - Test dataset relion40_sta_tutorial_data expanded.
+  - TCL: methods dor checking sets of TS and TsM improved.
 v3.5.0:
  Users:
+  - Improve the TiltSeries viewer. Allowing to exclude TiltImages
   - New protocol to import tilt-series CTF from different plugins
   - The CTF tomo series viewer now only plots the Enabled tilt images/ctfs.
   - Template HIV- STA with reliontomo: update the CTF importing method to the new centralized located in em-tomo.

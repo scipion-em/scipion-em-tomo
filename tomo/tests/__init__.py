@@ -95,15 +95,18 @@ class DataSetRe4STATuto(Enum):
     amplitudeContrast = 0.07
     magnification = 105000
     unbinnedPixSize = 1.35
+    boxSizeBin4 = 192
+    boxSizeBin2 = 256
     croppedBoxSizeBin4 = 96
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = 85.3
     initialDose = 0
     dosePerTiltImg = 3.05
-    accumDose = 122
+    dosePerTiltImgWithTltFile = 3
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
+    symmetry = 'C6'
     # Tilt series
     tsPath = 'tomograms'
     tsPattern = '*/{TS}.mrc'
@@ -117,9 +120,13 @@ class DataSetRe4STATuto(Enum):
     coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
     nCoordsFromTs03 = 99
     nCoordsFromTs54 = 111
+    nCoordsTotal = 210
+    # Initial model
+    initModelRelion = 'initial_model_relion_bin4.mrc'
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
+    maskFscBin2 = 'masks/mask_fsc_bin2.mrc'
     # For EMAN testing
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
     # For CISTEM Ctffind import testing

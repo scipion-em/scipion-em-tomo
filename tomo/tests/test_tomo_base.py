@@ -45,8 +45,6 @@ class TestTomoBase(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestOutput(cls)
-        cls.dataset = DataSet.getDataSet('tomo')
-        cls.getFile = cls.dataset.getFile
 
     def test_plugin(self):
         # Really stupid test to check that tomo plugin is defined

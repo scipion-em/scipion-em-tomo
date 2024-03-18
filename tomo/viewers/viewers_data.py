@@ -54,6 +54,7 @@ class TomoDataViewer(pwviewer.Viewer):
         tomo.objects.SetOfClassesSubTomograms,
         tomo.objects.SetOfMeshes
     ]
+    _name = 'Tomo viewer'
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
