@@ -191,7 +191,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             key = objId
             text = tsId
             values = [str(obj)]
-            opened = True
+            opened = False
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
             text = objId
