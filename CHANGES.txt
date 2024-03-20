@@ -1,4 +1,7 @@
 v3.6.1:
+ Users:
+  - Fix in protocol import TS: when providing mdoc files, label DividedBy2 is now only applied in the case of
+    calculating it from fields MinMaxMean, PixelSpacing and CountsPerElectron (case #4).
  Developers:
   - Fix: class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
     header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file

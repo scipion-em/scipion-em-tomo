@@ -336,27 +336,14 @@ class MDoc:
                 meanVal = minMaxMean.split()[-1]
                 newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
 
-        # # Calculated as in Grigorieff paper -->
-        #  https://dx.doi.org/10.7554/eLife.06980.001
-        # if not newDose and
-        #   _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON,
-        #   EXPOSURE_TIME, DIVIDED_BY_TWO]):
-        #     minMaxMean = zSlice[MIN_MAX_MEAN]
-        #     counts = zSlice[COUNTS_PER_ELECTRON]
-        #     expTime = zSlice[EXPOSURE_TIME]
-        #     divByTwo = zSlice[DIVIDED_BY_TWO]
-        #     if all([minMaxMean, counts, expTime]):
-        #         # Get the mean from a string like '-42 2441 51.7968'
-        #         meanVal = minMaxMean.split()[-1]
-        #         newDose = _getDivByTwoFactor(divByTwo) * float(meanVal) /
-        #                                    (float(counts) * float(expTime))
+                # Calculated as in Grigorieff paper --> https://dx.doi.org/10.7554/eLife.06980.001
+                divByTwo = 0
+                if _keysInDict([DIVIDED_BY_TWO]):
+                    divByTwo = int(zSlice[DIVIDED_BY_TWO])
+                divByTwoFactor = 2 if divByTwo else 1
+                newDose *= divByTwoFactor
 
-        divByTwo = 0
-        if _keysInDict([DIVIDED_BY_TWO]):
-            divByTwo = int(zSlice[DIVIDED_BY_TWO])
-        divByTwoFactor = 2 if divByTwo else 1
-
-        return newDose * divByTwoFactor
+        return newDose
 
     @staticmethod
     def _validateTSFromMdoc(mdoc, tsFile):
