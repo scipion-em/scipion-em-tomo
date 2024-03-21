@@ -25,6 +25,7 @@
 # *
 # **************************************************************************
 import logging
+from typing import Dict, Tuple, Any
 
 from pwem import ALIGN_NONE
 
@@ -130,6 +131,10 @@ def convertMatrix(M, convention=None, direction=None):
 
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
+    TS_ID_FIELD = '_tsId'
+    TILT_ANGLE_FIELD = '_tiltAngle'
+    ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX_FIELD = '_index'
 
     def __init__(self, tsId=None, tiltAngle=None, acquisitionOrder=None, **kwargs):
         self._tiltAngle = Float(tiltAngle)
@@ -145,6 +150,7 @@ class TiltImageBase:
 
     def getOdd(self):
         return self._oddEvenFileNames[0]
+
     def getEven(self):
         return self._oddEvenFileNames[1]
 
@@ -199,7 +205,7 @@ class TiltImage(data.Image, TiltImageBase):
         TiltImageBase.__init__(self, **kwargs)
 
     def clone(self):
-        return  super().clone(copyEnable=True)
+        return super().clone(copyEnable=True)
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
@@ -330,16 +336,20 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False):
+    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False):
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
+        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
         """
 
         angleList = []
 
-        for ti in self.iterItems(orderBy="_tiltAngle"):
+        for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+            if excludeViews and not ti.isEnabled():
+                continue
             angleList.append(ti.getTiltAngle())
 
         if reverse:
@@ -775,7 +785,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             itemSelectedCallback: Optional, callback receiving an item and
                 returning true if it has to be copied
         """
-        
+
         if itemSelectedCallback is None:
             itemSelectedCallback = data.SetOfImages.isItemEnabled
 
@@ -793,7 +803,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                     tiOut.setAcquisition(ti.getAcquisition())
                     tiOut.copyObjId(ti)
                     tiOut.setLocation(ti.getLocation())
-                    tiOut.setEnabled(ti.isEnabled()) # Clone disabled tilt images
+                    tiOut.setEnabled(ti.isEnabled())  # Clone disabled tilt images
                     if updateTiCallback:
                         updateTiCallback(j, ts, ti, tsOut, tiOut)
                     tsOut.append(tiOut)
@@ -2257,10 +2267,13 @@ class Ellipsoid(data.EMObject):
 
 class CTFTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
+    ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX_FIELD = '_index'
 
-    def __init__(self, **kwargs):
-        data.CTFModel.__init__(self, **kwargs)
-        self._index = Integer(kwargs.get('index', None))
+    def __init__(self, index=None, acqOrder=None, **kwargs):
+        super().__init__(**kwargs)
+        self._index = Integer(index)
+        self._acqOrder = Integer(acqOrder)
 
     def copyInfo(self, other, copyId=False):
         """ Copy info is similar to clone, but is often used to tranfer data from other type of objects with same attributes"""
@@ -2313,10 +2326,16 @@ class CTFTomo(data.CTFModel):
         return newCTFTomo
 
     def getIndex(self):
-        return self._index
+        return self._index.get()
 
     def setIndex(self, value):
-        self._index = Integer(value)
+        self._index.set(value)
+
+    def getAcqOrder(self):
+        return self._acqOrder.get()
+
+    def setAcqOrder(self, value):
+        self._acqOrder.set(value)
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -2561,6 +2580,7 @@ class CTFTomo(data.CTFModel):
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
     ITEM_TYPE = CTFTomo
+    TS_ID_FIELD = '_tsId'
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
@@ -2697,6 +2717,79 @@ class CTFTomoSeries(data.EMSet):
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
         pass
 
+    def getCtfModelsFromTs(self, ts: TiltSeries, onlyEnabled: bool = False) -> Tuple[Dict[Any, Any], str]:
+        """Generates a dict{key: acqOrder or _index value, value:CTFTomo} composed of the CTFTomos that matches with
+        the tilt-images present in the provided tilt-series. The matching is carried out using the acquisition order,
+        and if not present (old versions), by index.
+
+        :param ts: tilt-series.
+        :param onlyEnabled: if True, only the CTFTomo that corresponds to an enabled tilt-image from the provided
+        tilt-series will be added to the resulting dictionary.
+        """
+        ctfTomoDict = {}
+        warnMsg = ''
+        ctfTsId = self.getTsId()
+        tsId = ts.getTsId()
+        if ctfTsId == tsId:
+            tiMatchField = TiltImage.ACQ_ORDER_FIELD
+            tiGetter = TiltImage.getAcquisitionOrder
+            ctfGetter = CTFTomo.getAcqOrder
+            if not hasattr(self.getItem('_objId', 1), CTFTomo.ACQ_ORDER_FIELD):
+                tiMatchField = TiltImage.INDEX_FIELD
+                tiGetter = TiltImage.getIndex
+                ctfGetter = CTFTomo.getIndex
+                warnMsg = ('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
+                           '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carrie out '
+                           'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+
+            tsPresentValues = [tiGetter(ti) for ti in ts]
+            for ctfTomo in self:
+                ctfMatchVal = ctfGetter(ctfTomo)
+                if ctfMatchVal in tsPresentValues:
+                    if onlyEnabled:
+                        tiEnabled = ts.getItem(tiMatchField, ctfMatchVal).isEnabled()
+                        if tiEnabled:
+                            ctfTomoDict[ctfMatchVal] = ctfTomo
+                    else:
+                        ctfTomoDict[ctfMatchVal] = ctfTomo
+        else:
+            warnMsg += (f'WARNING! The CTFTomoSeries and the introduced tilt-series have different tsId:\n'
+                        f'{ctfTsId} != {tsId}')
+
+        return ctfTomoDict, warnMsg
+
+    def updateCtfTomoEnableFromTs(self, ts: TiltSeries) -> str:
+        """Updates the field _isEnabled of each CTFTomo contained in the CTFTomoSeries based on:
+
+            1) If the corresponding tilt-image isn't present in the provided tilt-series, it's set to False.
+            2) If it is present, it's updated with the value it has in the corresponding tilt-image.
+
+        The match is carried out using the acquisition order, and if not present (old versions), by index.
+        """
+        tiMatchField = TiltImage.ACQ_ORDER_FIELD
+        tiGetter = TiltImage.getAcquisitionOrder
+        ctfGetter = CTFTomo.getAcqOrder
+        warnMsg = ''
+        hasAcqOrder = getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, Integer(None)).get()
+        if hasAcqOrder is None:
+            tiMatchField = TiltImage.INDEX_FIELD
+            tiGetter = TiltImage.getIndex
+            ctfGetter = CTFTomo.getIndex
+            warnMsg = ('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
+                       '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carrie out '
+                       'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+
+        tsPresentValues = [tiGetter(ti) for ti in ts]
+        for ctfTomo in self:
+            ctfMatchVal = ctfGetter(ctfTomo)
+            if ctfMatchVal in tsPresentValues:
+                tiEnabled = ts.getItem(tiMatchField, ctfMatchVal).isEnabled()
+                ctfTomo.setEnabled(tiEnabled)
+            else:
+                ctfTomo.setEnabled(False)
+
+        return warnMsg
+
 
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
@@ -2730,7 +2823,6 @@ class SetOfCTFTomoSeries(data.EMSet):
                     ctfSerieOut.append(ctfOut)
 
                 self.update(ctfSerieOut)
-
 
     def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
