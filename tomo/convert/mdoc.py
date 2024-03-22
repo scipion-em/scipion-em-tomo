@@ -289,59 +289,46 @@ class MDoc:
         COUNTS_PER_ELECTRON = 'CountsPerElectron'
         DIVIDED_BY_TWO = 'DividedBy2'
 
-        def _keysInDict(listOfKeys):
-            return all([key in zSlice.keys() for key in listOfKeys])
-
         # Different ways of calculating the dose, ordered by priority
         # considering the possible variability between different mdoc files
         newDose = 0
 
-        if pixelSize:
-            pixelSize = float(pixelSize)
-        else:
-            # This case cover the possibility of no sampling rate in form
-            # nor mdoc, avoiding the error execution before the whole
-            # information is gathered and the exception is raised
-            pixelSize = 1
+        # The case  pixelSize = 1 covers the possibility of no sampling rate in form
+        # nor mdoc, avoiding the error execution before the whole
+        # information is gathered and the exception is raised
+        pixelSize = float(pixelSize) if pixelSize else 1
 
         # Directly from field ExposureDose
-        if EXPOSURE_DOSE in zSlice:
-            expDoseVal = zSlice[EXPOSURE_DOSE]
-            if expDoseVal:
-                newDose = float(expDoseVal)
+        expDoseVal = zSlice.get(EXPOSURE_DOSE, None)
+        if expDoseVal:
+            return float(expDoseVal)
 
         # Directly from field FrameDosesAndNumbers
-        if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
-            frameDoseAndNums = zSlice[FRAME_DOSES_AND_NUMBERS]
-            if frameDoseAndNums:
-                # Get the mean from a string like '0 6'
-                data = frameDoseAndNums.split()
-                dosePerFrame = data[0]
-                nFrames = data[1]
-                newDose = float(dosePerFrame) * float(nFrames)
+        frameDoseAndNums = zSlice.get(FRAME_DOSES_AND_NUMBERS, None)
+        if frameDoseAndNums:
+            # Get the mean from a string like '0 6'
+            data = frameDoseAndNums.split()
+            dosePerFrame = data[0]
+            nFrames = data[1]
+            return float(dosePerFrame) * float(nFrames)
 
         # Calculated from fields DoseRate and ExposureTime
-        if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
-            doseRate = zSlice[DOSE_RATE]
-            expTime = zSlice[EXPOSURE_TIME]
-            if doseRate and expTime:
-                newDose = float(doseRate) * float(expTime) / pixelSize ** 2
+        doseRate = zSlice.get(DOSE_RATE, None)
+        expTime = zSlice.get(EXPOSURE_DOSE, None)
+        if doseRate and expTime:
+            return float(doseRate) * float(expTime) / pixelSize ** 2
 
         # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
-        if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON]):
-            minMaxMean = zSlice[MIN_MAX_MEAN]
-            counts = zSlice[COUNTS_PER_ELECTRON]
-            if all([minMaxMean, pixelSize, counts]):
-                # Get the mean from a string like '-42 2441 51.7968'
-                meanVal = minMaxMean.split()[-1]
-                newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
+        minMaxMean = zSlice.get(MIN_MAX_MEAN, None)
+        counts = zSlice.get(COUNTS_PER_ELECTRON, None)
+        if minMaxMean and counts:
+            # Get the mean from a string like '-42 2441 51.7968'
+            meanVal = minMaxMean.split()[-1]
+            newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
 
-                # Calculated as in Grigorieff paper --> https://dx.doi.org/10.7554/eLife.06980.001
-                divByTwo = 0
-                if _keysInDict([DIVIDED_BY_TWO]):
-                    divByTwo = int(zSlice[DIVIDED_BY_TWO])
-                divByTwoFactor = 2 if divByTwo else 1
-                newDose *= divByTwoFactor
+            # Calculated as in Grigorieff paper --> https://dx.doi.org/10.7554/eLife.06980.001
+            divByTwoFactor = 2 if zSlice.get(DIVIDED_BY_TWO, None) else 1
+            return newDose * divByTwoFactor
 
         return newDose
 
