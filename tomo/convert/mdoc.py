@@ -1,14 +1,27 @@
 import logging
-
-logger = logging.getLogger(__name__)
 import os
 from datetime import datetime as dt
 from os.path import join, exists
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from pathlib import PureWindowsPath
 
+
+logger = logging.getLogger(__name__)
 SUB_FRAME_PATH = 'SubFramePath'
 TS_PREFIX = "TS_"
+# Dose on specimen during camera exposure in electrons/sq. Angstrom
+EXPOSURE_DOSE = 'ExposureDose'
+# Dose per frame in electrons per square Angstrom followed
+# by number of frames at that dose
+FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'
+# Dose rate to the camera, in electrons per unbinned pixel per second
+DOSE_RATE = 'DoseRate'
+# Image exposure time
+EXPOSURE_TIME = 'ExposureTime'
+# Minimum, maximum, and mean value for this image
+MIN_MAX_MEAN = 'MinMaxMean'
+COUNTS_PER_ELECTRON = 'CountsPerElectron'
+DIVIDED_BY_TWO = 'DividedBy2'
 
 
 class MDoc:
@@ -100,7 +113,7 @@ class MDoc:
             if not isImportingTsMovies:
                 # Some mdoc files point to an .st file stored in the ImageFile
                 # header line
-                tsFile = join(parentFolder, headerDict.get("ImageFile", None))
+                tsFile = join(parentFolder, headerDict.get("ImageFile", ''))
                 expectedBaseName = self._tsId.replace(TS_PREFIX, '') if tsPrefixAdded else self._tsId
                 if not os.path.exists(tsFile):
                     tsFile = join(parentFolder, expectedBaseName + '.mrcs')
@@ -239,7 +252,8 @@ class MDoc:
             logger.debug("Dose not found or almost 0 (%s) in %s" %
                          (accumulatedDose, self._mdocFileName))
 
-    def _sortByTimestamp(self, zSlices):
+    @staticmethod
+    def _sortByTimestamp(zSlices):
         """ MDOC file is not necessarily sorted by acquisition order,
             use TimeStamp key to sort Z-slices.
         """
@@ -274,74 +288,48 @@ class MDoc:
     def _getDoseFromMdoc(zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by
         zSlice, and add it to the previous accumulated dose"""
-
-        # Dose on specimen during camera exposure in electrons/sq. Angstrom
-        EXPOSURE_DOSE = 'ExposureDose'
-        # Dose per frame in electrons per square Angstrom followed
-        # by number of frames at that dose
-        FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'
-        # Dose rate to the camera, in electrons per unbinned pixel per second
-        DOSE_RATE = 'DoseRate'
-        # Image exposure time
-        EXPOSURE_TIME = 'ExposureTime'
-        # Minimum, maximum, and mean value for this image
-        MIN_MAX_MEAN = 'MinMaxMean'
-        COUNTS_PER_ELECTRON = 'CountsPerElectron'
-        DIVIDED_BY_TWO = 'DividedBy2'
-
-        def _keysInDict(listOfKeys):
-            return all([key in zSlice.keys() for key in listOfKeys])
-
         # Different ways of calculating the dose, ordered by priority
         # considering the possible variability between different mdoc files
         newDose = 0
 
-        if pixelSize:
-            pixelSize = float(pixelSize)
-        else:
-            # This case cover the possibility of no sampling rate in form
-            # nor mdoc, avoiding the error execution before the whole
-            # information is gathered and the exception is raised
-            pixelSize = 1
+        # The case  pixelSize = 1 covers the possibility of no sampling rate in form
+        # nor mdoc, avoiding the error execution before the whole
+        # information is gathered and the exception is raised
+        pixelSize = float(pixelSize) if pixelSize else 1
 
         # Directly from field ExposureDose
-        if EXPOSURE_DOSE in zSlice:
-            expDoseVal = zSlice[EXPOSURE_DOSE]
-            if expDoseVal:
-                newDose = float(expDoseVal)
+        expDoseVal = float(zSlice.get(EXPOSURE_DOSE, 0))  # It may be '0'
+        if expDoseVal:
+            return expDoseVal
 
         # Directly from field FrameDosesAndNumbers
-        if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
-            frameDoseAndNums = zSlice[FRAME_DOSES_AND_NUMBERS]
-            if frameDoseAndNums:
-                # Get the mean from a string like '0 6'
-                data = frameDoseAndNums.split()
-                dosePerFrame = data[0]
-                nFrames = data[1]
-                newDose = float(dosePerFrame) * float(nFrames)
+        frameDoseAndNums = zSlice.get(FRAME_DOSES_AND_NUMBERS, 0)
+        if frameDoseAndNums:
+            # Get the mean from a string like '0 6'
+            data = frameDoseAndNums.split()
+            dosePerFrame = float(data[0])
+            nFrames = float(data[1])
+            newDose = dosePerFrame * nFrames  # Any of them may be 0
+            if newDose:
+                return newDose
 
         # Calculated from fields DoseRate and ExposureTime
-        if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
-            doseRate = zSlice[DOSE_RATE]
-            expTime = zSlice[EXPOSURE_TIME]
-            if doseRate and expTime:
-                newDose = float(doseRate) * float(expTime) / pixelSize ** 2
+        doseRate = float(zSlice.get(DOSE_RATE, 0))
+        expTime = float(zSlice.get(EXPOSURE_DOSE, 0))
+        if doseRate and expTime:
+            return doseRate * expTime / pixelSize ** 2
 
         # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
-        if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON]):
-            minMaxMean = zSlice[MIN_MAX_MEAN]
-            counts = zSlice[COUNTS_PER_ELECTRON]
-            if all([minMaxMean, pixelSize, counts]):
-                # Get the mean from a string like '-42 2441 51.7968'
-                meanVal = minMaxMean.split()[-1]
-                newDose = (float(meanVal) / float(counts)) / pixelSize ** 2
+        minMaxMean = zSlice.get(MIN_MAX_MEAN, 0)
+        counts = float(zSlice.get(COUNTS_PER_ELECTRON, 0))
+        if minMaxMean and counts:
+            # Get the mean from a string like '-42 2441 51.7968'
+            meanVal = float(minMaxMean.split()[-1])
+            newDose = (meanVal / counts) / pixelSize ** 2
 
-                # Calculated as in Grigorieff paper --> https://dx.doi.org/10.7554/eLife.06980.001
-                divByTwo = 0
-                if _keysInDict([DIVIDED_BY_TWO]):
-                    divByTwo = int(zSlice[DIVIDED_BY_TWO])
-                divByTwoFactor = 2 if divByTwo else 1
-                newDose *= divByTwoFactor
+            # Calculated as in Grigorieff paper --> https://dx.doi.org/10.7554/eLife.06980.001
+            divByTwoFactor = 2 if zSlice.get(DIVIDED_BY_TWO, None) else 1
+            return newDose * divByTwoFactor
 
         return newDose
 
