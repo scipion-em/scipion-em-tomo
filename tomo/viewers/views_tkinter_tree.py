@@ -43,6 +43,8 @@ from pyworkflow.plugin import Domain
 import tomo.objects
 from ..convert.convert import getMeshVolFileName
 
+# How many standard deviations to truncate above and below the mean when increasing contrast:
+CONTRAST_STD = 0.5
 
 class TiltImageStates:
     EXCLUDED = 'excluded'
@@ -383,27 +385,28 @@ class TiltSeriesDialogView(pwviewer.View):
     def show(self):
         TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
                          lockGui=True, previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True,
-                         applyContrastCallback=self.gaussianFilter)
+                         applyContrastCallback=self.increaseContrast)
 
     def getPreviewWidget(self, frame):
 
         if not self._preview:
             from pyworkflow.gui.matplotlib_image import ImagePreview
-            self._preview = ImagePreview(frame, dim=500, label="Tilt series", listenersDict={"<Button-1>": self.gaussianFilter})
+            self._preview = ImagePreview(frame, dim=500, label="Tilt series", listenersDict={"<Button-1>": self.increaseContrast})
             self._preview.grid(row=0, column=0)
         return self._preview
 
-    def gaussianFilter(self, event):
+    def increaseContrast(self, event):
 
         # Try to increase the contrast. TODO: Move this to somewhere more resusable
         try:
-            import skimage as ski
+            
             data = self._preview.figureimg.get_array()
-            # data = ski.filters.gaussian(data, sigma=(2, 2))
-            # Equalization
-            # data = ski.exposure.equalize_hist(np.ma.getdata(data))
-            # Adaptive Equalization
-            data = ski.exposure.equalize_adapthist(data, clip_limit=0.03)
+            imgmean = data.mean()
+            imgstd = data.std()
+            low = imgmean - CONTRAST_STD * imgstd
+            high = imgmean + CONTRAST_STD * imgstd
+            data[data < low] = low
+            data[data > high] = high
 
             self._preview._update(data)
         except Exception as e:
