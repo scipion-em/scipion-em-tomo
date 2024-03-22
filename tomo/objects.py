@@ -2331,10 +2331,10 @@ class CTFTomo(data.CTFModel):
     def setIndex(self, value):
         self._index.set(value)
 
-    def getAcqOrder(self):
+    def getAcquisitionOrder(self):
         return self._acqOrder.get()
 
-    def setAcqOrder(self, value):
+    def setAcquisitionOrder(self, value):
         self._acqOrder.set(value)
 
     def getCutOnFreq(self):
@@ -2733,7 +2733,7 @@ class CTFTomoSeries(data.EMSet):
         if ctfTsId == tsId:
             tiMatchField = TiltImage.ACQ_ORDER_FIELD
             tiGetter = TiltImage.getAcquisitionOrder
-            ctfGetter = CTFTomo.getAcqOrder
+            ctfGetter = CTFTomo.getAcquisitionOrder
             if not hasattr(self.getItem('_objId', 1), CTFTomo.ACQ_ORDER_FIELD):
                 tiMatchField = TiltImage.INDEX_FIELD
                 tiGetter = TiltImage.getIndex
@@ -2768,7 +2768,7 @@ class CTFTomoSeries(data.EMSet):
         """
         tiMatchField = TiltImage.ACQ_ORDER_FIELD
         tiGetter = TiltImage.getAcquisitionOrder
-        ctfGetter = CTFTomo.getAcqOrder
+        ctfGetter = CTFTomo.getAcquisitionOrder
         warnMsg = ''
         hasAcqOrder = getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, Integer(None)).get()
         if hasAcqOrder is None:
