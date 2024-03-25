@@ -396,6 +396,12 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
 
             tsObj.setAcquisition(tsAcq)
             outputSet.update(tsObj)  # update items and size info
+
+            if self._isImportingTsMovies():
+                dim = tsObjFirstItem.getDim()
+                framesRange = [1, dim[2], 1]
+                outputSet.setFramesRange(framesRange)
+
             self._existingTs.add(ts)
             someAdded = True
 
