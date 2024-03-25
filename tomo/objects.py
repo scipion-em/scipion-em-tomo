@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 import logging
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
 
 from pwem import ALIGN_NONE
 
@@ -2757,6 +2757,42 @@ class CTFTomoSeries(data.EMSet):
                         f'{ctfTsId} != {tsId}')
 
         return ctfTomoDict, warnMsg
+
+    def getCtfTomoFromTi(self, ti: TiltImage, onlyEnabled: bool = True) -> Optional[CTFTomo]:
+        """Get the corresponding CTFModel from a given tilt-image. If there's no match, it returns None.
+        :param ti: Tilt-image.
+        :param onlyEnabled: boolean used to indicate the matching behaves in terms of the value the attribute
+        _objEnabled from both ti and the matching CTFModel attribute:
+            - If True (default), the CTFModel found is returned only if both the ti and the CTFModel are enabled.
+            - If False, the CTFModel found is returned no matter the value of _objEnabled.
+        """
+        if onlyEnabled and not ti.isEnabled():
+            logger.info(f'The introduced tilt-image is not enabled and working with onlyEnabled = True')
+            return None
+        # Check if the matching criteria can be based on the acquisition order or not (index case)
+        if getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, None):
+            ctfMatchField = CTFTomo.ACQ_ORDER_FIELD
+            tiGetter = TiltImage.getAcquisitionOrder
+        else:
+            ctfMatchField = CTFTomo.INDEX_FIELD
+            tiGetter = TiltImage.getIndex
+            logger.warning('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
+                           '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carried out '
+                           'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+        # Check if there's a matching CTFTomo for the given tilt-image
+        ctfPresentValues = self.getUniqueValues(ctfMatchField)
+        tiMatchValue = tiGetter(ti)
+        if tiMatchValue in ctfPresentValues:
+            ctfTomo = self.getItem(ctfMatchField, tiMatchValue)
+            ctfTomoEnabled = ctfTomo.isEnabled()
+            if ctfTomoEnabled or not (ctfTomoEnabled and onlyEnabled):
+                return ctfTomo
+            else:
+                return None
+        else:
+            logger.info(f'No CTFModel found in the current CTFTomoSeries {self.getTsId()} that matches the given'
+                        f' tilt-image of tsId = {ti.getTsId()}, {ctfMatchField} = {tiMatchValue}.')
+            return None
 
     def updateCtfTomoEnableFromTs(self, ts: TiltSeries) -> str:
         """Updates the field _isEnabled of each CTFTomo contained in the CTFTomoSeries based on:

@@ -1,3 +1,6 @@
+v3.7.0:
+ Developers:
+  - CTFTomoSeries: add method getCtfTomoFromTi
 v3.6.1:
  Users:
   - Collapse the tilt-series tree by default in the tomo data viewer
