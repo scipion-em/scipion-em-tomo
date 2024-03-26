@@ -2785,7 +2785,7 @@ class CTFTomoSeries(data.EMSet):
         if tiMatchValue in ctfPresentValues:
             ctfTomo = self.getItem(ctfMatchField, tiMatchValue)
             ctfTomoEnabled = ctfTomo.isEnabled()
-            if ctfTomoEnabled or not (ctfTomoEnabled and onlyEnabled):
+            if ctfTomoEnabled or (not ctfTomoEnabled and not onlyEnabled):
                 return ctfTomo
             else:
                 return None
