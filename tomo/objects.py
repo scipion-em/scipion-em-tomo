@@ -2770,7 +2770,8 @@ class CTFTomoSeries(data.EMSet):
             logger.info(f'The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
         # Check if the matching criteria can be based on the acquisition order or not (index case)
-        if getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, None):
+        hasCtfAcqOrder = getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, Integer()).get()
+        if hasCtfAcqOrder:
             ctfMatchField = CTFTomo.ACQ_ORDER_FIELD
             tiGetter = TiltImage.getAcquisitionOrder
         else:
