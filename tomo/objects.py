@@ -2717,47 +2717,6 @@ class CTFTomoSeries(data.EMSet):
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
         pass
 
-    def getCtfModelsFromTs(self, ts: TiltSeries, onlyEnabled: bool = False) -> Tuple[Dict[Any, Any], str]:
-        """Generates a dict{key: acqOrder or _index value, value:CTFTomo} composed of the CTFTomos that matches with
-        the tilt-images present in the provided tilt-series. The matching is carried out using the acquisition order,
-        and if not present (old versions), by index.
-
-        :param ts: tilt-series.
-        :param onlyEnabled: if True, only the CTFTomo that corresponds to an enabled tilt-image from the provided
-        tilt-series will be added to the resulting dictionary.
-        """
-        ctfTomoDict = {}
-        warnMsg = ''
-        ctfTsId = self.getTsId()
-        tsId = ts.getTsId()
-        if ctfTsId == tsId:
-            tiMatchField = TiltImage.ACQ_ORDER_FIELD
-            tiGetter = TiltImage.getAcquisitionOrder
-            ctfGetter = CTFTomo.getAcquisitionOrder
-            if not hasattr(self.getItem('_objId', 1), CTFTomo.ACQ_ORDER_FIELD):
-                tiMatchField = TiltImage.INDEX_FIELD
-                tiGetter = TiltImage.getIndex
-                ctfGetter = CTFTomo.getIndex
-                warnMsg = ('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
-                           '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carrie out '
-                           'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-
-            tsPresentValues = [tiGetter(ti) for ti in ts]
-            for ctfTomo in self:
-                ctfMatchVal = ctfGetter(ctfTomo)
-                if ctfMatchVal in tsPresentValues:
-                    if onlyEnabled:
-                        tiEnabled = ts.getItem(tiMatchField, ctfMatchVal).isEnabled()
-                        if tiEnabled:
-                            ctfTomoDict[ctfMatchVal] = ctfTomo
-                    else:
-                        ctfTomoDict[ctfMatchVal] = ctfTomo
-        else:
-            warnMsg += (f'WARNING! The CTFTomoSeries and the introduced tilt-series have different tsId:\n'
-                        f'{ctfTsId} != {tsId}')
-
-        return ctfTomoDict, warnMsg
-
     def getCtfTomoFromTi(self, ti: TiltImage, onlyEnabled: bool = True) -> Optional[CTFTomo]:
         """Get the corresponding CTFModel from a given tilt-image. If there's no match, it returns None.
         :param ti: Tilt-image.
@@ -2794,38 +2753,6 @@ class CTFTomoSeries(data.EMSet):
             logger.info(f'No CTFModel found in the current CTFTomoSeries {self.getTsId()} that matches the given'
                         f' tilt-image of tsId = {ti.getTsId()}, {ctfMatchField} = {tiMatchValue}.')
             return None
-
-    def updateCtfTomoEnableFromTs(self, ts: TiltSeries) -> str:
-        """Updates the field _isEnabled of each CTFTomo contained in the CTFTomoSeries based on:
-
-            1) If the corresponding tilt-image isn't present in the provided tilt-series, it's set to False.
-            2) If it is present, it's updated with the value it has in the corresponding tilt-image.
-
-        The match is carried out using the acquisition order, and if not present (old versions), by index.
-        """
-        tiMatchField = TiltImage.ACQ_ORDER_FIELD
-        tiGetter = TiltImage.getAcquisitionOrder
-        ctfGetter = CTFTomo.getAcquisitionOrder
-        warnMsg = ''
-        hasAcqOrder = getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, Integer(None)).get()
-        if hasAcqOrder is None:
-            tiMatchField = TiltImage.INDEX_FIELD
-            tiGetter = TiltImage.getIndex
-            ctfGetter = CTFTomo.getIndex
-            warnMsg = ('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
-                       '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carrie out '
-                       'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-
-        tsPresentValues = [tiGetter(ti) for ti in ts]
-        for ctfTomo in self:
-            ctfMatchVal = ctfGetter(ctfTomo)
-            if ctfMatchVal in tsPresentValues:
-                tiEnabled = ts.getItem(tiMatchField, ctfMatchVal).isEnabled()
-                ctfTomo.setEnabled(tiEnabled)
-            else:
-                ctfTomo.setEnabled(False)
-
-        return warnMsg
 
 
 class SetOfCTFTomoSeries(data.EMSet):
