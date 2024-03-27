@@ -1,3 +1,7 @@
+v3.7.0:
+ Developers:
+  - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
+  - CTFTomoSeries: add method getCtfTomoFromTi.
 v3.6.1:
  Users:
   - Collapse the tilt-series tree by default in the tomo data viewer
