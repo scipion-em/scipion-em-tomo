@@ -31,7 +31,7 @@ from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
-    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -322,13 +322,19 @@ class TestBaseCentralizedLayer(BaseTest):
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
-    def checkTomograms(self, inTomoSet, expectedSetSize=-1, expectedSRate=-1, expectedDimensions=None,
-                       hasOddEven=False, expectedOriginShifts=None, hasCtf=False, hasHalves=False):
+    def checkTomograms(self, inTomoSet: SetOfTomograms, expectedSetSize: int, expectedSRate: float,
+                       expectedDimensions: Union[List[int], dict] = None,
+                       hasOddEven: bool = False,
+                       expectedOriginShifts: List[float] = None,
+                       hasCtf: bool = False,
+                       hasHalves: bool = False):
         """
         :param inTomoSet: SetOfSubTomograms.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check.
+        :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
         :param hasOddEven: False by default. Used to indicate if the set of tomograms is expected to have even/odd
         halves.
         :param expectedOriginShifts: list containing the expected shifts of the tomogram center in the X, Y, and Z
@@ -361,7 +367,10 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the dimensions
             if expectedDimensions:
                 x, y, z = tomo.getDimensions()
-                self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tomo.getTsId()], msg=checkSizeMsg)
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
 
             # Check the origin
             if expectedOriginShifts:
