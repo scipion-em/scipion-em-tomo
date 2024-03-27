@@ -731,6 +731,7 @@ class TestBaseCentralizedLayer(BaseTest):
         defocusV = ctf.getDefocusV()
         defocusAngle = ctf.getDefocusAngle()
         defocusVals = [defocusU, defocusV, defocusAngle]
+        self.assertGreater(ctf.getAcquisitionOrder(), -1)
         if isExcluded:
             expectedDefocusU = -999
             expectedDefocusV = -1
