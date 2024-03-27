@@ -2728,30 +2728,24 @@ class CTFTomoSeries(data.EMSet):
         if onlyEnabled and not ti.isEnabled():
             logger.info(f'The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
-        # Check if the matching criteria can be based on the acquisition order or not (index case)
-        hasCtfAcqOrder = getattr(self.getFirstItem(), CTFTomo.ACQ_ORDER_FIELD, Integer()).get()
-        if hasCtfAcqOrder:
-            ctfMatchField = CTFTomo.ACQ_ORDER_FIELD
-            tiGetter = TiltImage.getAcquisitionOrder
-        else:
-            ctfMatchField = CTFTomo.INDEX_FIELD
-            tiGetter = TiltImage.getIndex
-            logger.warning('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
-                           '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carried out '
-                           'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-        # Check if there's a matching CTFTomo for the given tilt-image
-        ctfPresentValues = self.getUniqueValues(ctfMatchField)
-        tiMatchValue = tiGetter(ti)
-        if tiMatchValue in ctfPresentValues:
-            ctfTomo = self.getItem(ctfMatchField, tiMatchValue)
-            ctfTomoEnabled = ctfTomo.isEnabled()
-            if ctfTomoEnabled or (not ctfTomoEnabled and not onlyEnabled):
-                return ctfTomo
-            else:
+        try:
+            # The method getItem raises an exception of type UnboundLocalError is the field if the key or the value
+            # are not found
+            ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
+        except UnboundLocalError:
+            try:
+                ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
+                logger.warning('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
+                               '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carried out '
+                               'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+            except UnboundLocalError:
+                logger.warning(f'No CTFModel found in the current CTFTomoSeries {self.getTsId()} that matches the '
+                               f'given tilt-image of tsId = {ti.getTsId()} using the acquisition order and the index.')
                 return None
+
+        if ctfTomo.isEnabled() or not onlyEnabled:
+            return ctfTomo
         else:
-            logger.info(f'No CTFModel found in the current CTFTomoSeries {self.getTsId()} that matches the given'
-                        f' tilt-image of tsId = {ti.getTsId()}, {ctfMatchField} = {tiMatchValue}.')
             return None
 
 
