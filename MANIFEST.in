@@ -1,0 +1,14 @@
+# Include the README
+include *.rst
+
+# Include the license file
+include LICENSE
+
+# Include the changelog and requirements
+include *.txt
+
+# Include conf file
+include tomo/protocols.conf
+
+# Include templates
+include tomo/templates/*template
