@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 import logging
-from typing import Dict, Tuple, Any, Optional
+from typing import Dict, Tuple, Any, Optional, Union
 
 from pwem import ALIGN_NONE
 
@@ -356,6 +356,27 @@ class TiltSeriesBase(data.SetOfImages):
             angleList.reverse()
 
         with open(tltFilePath, 'w') as f:
+            f.writelines("%.3f\n" % angle for angle in angleList)
+
+    def genTltFile(self, outTltFileName: str, reverse: bool = False, presentAcqOrders: Union[set, None] = None) -> None:
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param outTltFileName: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
+        filter the tilt angles that will be written in the tlt file generated.
+        """
+
+        if presentAcqOrders:
+            angleList = [ti for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
+                         ti.getAcquisitionOrder() in presentAcqOrders]
+        else:
+            angleList = [ti for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
+
+        if reverse:
+            angleList.reverse()
+
+        with open(outTltFileName, 'w') as f:
             f.writelines("%.3f\n" % angle for angle in angleList)
 
     def hasOrigin(self):

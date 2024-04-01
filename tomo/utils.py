@@ -29,6 +29,8 @@
 import os
 import re
 import importlib
+from typing import List, Set
+
 import numpy as np
 import math
 import logging
@@ -37,7 +39,8 @@ logger = logging.getLogger(__name__)
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
+    CTFTomoSeries, TiltImage, CTFTomo
 
 
 def existsPlugin(plugin):
@@ -408,3 +411,13 @@ def scaleTrMatrixShifts(inTrMatrix, scaleFactor):
         inTrMatrix[1, 3] = scaledShifts[1]
         inTrMatrix[2, 3] = scaledShifts[2]
     return inTrMatrix
+
+
+def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries) -> Set[int]:
+    """Given a tilt-series and a CTFTomoSeries, it finds the common elements present and enabled in both sets, and
+    returns a list with the corresponding acquisition orders or indices, if acquisition order is not present in the
+    CTFTomoSeries introduced (old versions, backwards compatibility)."""
+    # TODO: add the logic to work with the index in case the acq order is not present in the CTFTomos
+    tsAcqOrderSet = {ti.getAcquisitionOrder() for ti in ts if ti.isEnabled()}
+    ctfAcqOrderSet = {ctf.getAcquisitionOrder() for ctf in ctfTomoSeries if ctf.isEnabled()}
+    return tsAcqOrderSet & ctfAcqOrderSet
