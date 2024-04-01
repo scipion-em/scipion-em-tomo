@@ -2123,6 +2123,11 @@ class LandmarkModel(data.EMObject):
 
             for line in reader:
                 vector = line[0].split()
+
+                # Only consider those landmark models with residual information
+                if vector[3] == 'NaN' or vector[4] == 'NaN':
+                    continue
+
                 outputInfo.append(vector)
 
         return outputInfo
