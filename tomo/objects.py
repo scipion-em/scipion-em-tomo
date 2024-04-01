@@ -2726,7 +2726,7 @@ class CTFTomoSeries(data.EMSet):
             - If False, the CTFModel found is returned no matter the value of _objEnabled.
         """
         if onlyEnabled and not ti.isEnabled():
-            logger.debug(f'The introduced tilt-image is not enabled and working with onlyEnabled = True')
+            logger.debug('The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
         try:
             # The method getItem raises an exception of type UnboundLocalError is the field if the key or the value
