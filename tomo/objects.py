@@ -25,6 +25,7 @@
 # *
 # **************************************************************************
 import logging
+from typing import Dict, Tuple, Any, Optional
 
 from pwem import ALIGN_NONE
 
@@ -130,6 +131,10 @@ def convertMatrix(M, convention=None, direction=None):
 
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
+    TS_ID_FIELD = '_tsId'
+    TILT_ANGLE_FIELD = '_tiltAngle'
+    ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX_FIELD = '_index'
 
     def __init__(self, tsId=None, tiltAngle=None, acquisitionOrder=None, **kwargs):
         self._tiltAngle = Float(tiltAngle)
@@ -145,6 +150,7 @@ class TiltImageBase:
 
     def getOdd(self):
         return self._oddEvenFileNames[0]
+
     def getEven(self):
         return self._oddEvenFileNames[1]
 
@@ -197,6 +203,9 @@ class TiltImage(data.Image, TiltImageBase):
     def __init__(self, location=None, **kwargs):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
+
+    def clone(self):
+        return super().clone(copyEnable=True)
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
@@ -327,16 +336,20 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False):
+    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False):
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
+        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
         """
 
         angleList = []
 
-        for ti in self.iterItems(orderBy="_tiltAngle"):
+        for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+            if excludeViews and not ti.isEnabled():
+                continue
             angleList.append(ti.getTiltAngle())
 
         if reverse:
@@ -772,7 +785,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             itemSelectedCallback: Optional, callback receiving an item and
                 returning true if it has to be copied
         """
-        
+
         if itemSelectedCallback is None:
             itemSelectedCallback = data.SetOfImages.isItemEnabled
 
@@ -790,6 +803,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                     tiOut.setAcquisition(ti.getAcquisition())
                     tiOut.copyObjId(ti)
                     tiOut.setLocation(ti.getLocation())
+                    tiOut.setEnabled(ti.isEnabled())  # Clone disabled tilt images
                     if updateTiCallback:
                         updateTiCallback(j, ts, ti, tsOut, tiOut)
                     tsOut.append(tiOut)
@@ -892,7 +906,7 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         SetOfTiltSeriesBase.copyInfo(self, other)
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
-        # self._firstFramesRange.set(other.getFramesRange())
+        self._firstFramesRange.set(other.getFramesRange())
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -1105,27 +1119,6 @@ class Tomogram(data.Volume):
         return (self._acquisition is not None
                 and self._acquisition.getAngleMin() is not None
                 and self._acquisition.getAngleMax() is not None)
-
-    def getDim(self):
-        """Return image dimensions as tuple: (Xdim, Ydim, Zdim)"""
-        if self._dim is None:
-            from pwem.emlib.image import ImageHandler
-
-            fn = self.getFileName()
-            if fn is not None and os.path.exists(fn.replace(':mrc', '')):
-                x, y, z, n = ImageHandler().getDimensions(self)
-
-                # Some volumes in mrc format can have the z dimension
-                # as n dimension, so we need to consider this case.
-                if z > 1:
-                    self._dim = (x, y, z)
-                    return x, y, z
-                else:
-                    self._dim = (x, y, n)
-                    return x, y, n
-        else:
-            return self._dim
-        return None
 
     def copyInfo(self, other):
         """ Copy basic information """
@@ -2279,19 +2272,27 @@ class Ellipsoid(data.EMObject):
 
 class CTFTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
+    ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX_FIELD = '_index'
 
-    def __init__(self, **kwargs):
-        data.CTFModel.__init__(self, **kwargs)
-        self._index = Integer(kwargs.get('index', None))
+    def __init__(self, index=None, acqOrder=None, **kwargs):
+        super().__init__(**kwargs)
+        self._index = Integer(index)
+        self._acqOrder = Integer(acqOrder)
 
     def copyInfo(self, other, copyId=False):
+        """ Copy info is similar to clone, but is often used to tranfer data from other type of objects with same attributes"""
         self.copy(other, copyId=copyId)
 
-    def copy(self, other, copyId=True, ignoreAttrs=[]):
+    def clone(self, copyEnable=True):
+        return super().clone(copyEnable=copyEnable)
+
+    def copy(self, other, copyId=True, ignoreAttrs=[], copyEnable=True):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
                             '_resolution', '_fitQuality', '_index')
 
-        self.setEnabled(other.isEnabled())
+        if copyEnable:
+            self.setEnabled(other.isEnabled())
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
@@ -2330,10 +2331,16 @@ class CTFTomo(data.CTFModel):
         return newCTFTomo
 
     def getIndex(self):
-        return self._index
+        return self._index.get()
 
     def setIndex(self, value):
-        self._index = Integer(value)
+        self._index.set(value)
+
+    def getAcquisitionOrder(self):
+        return self._acqOrder.get()
+
+    def setAcquisitionOrder(self, value):
+        self._acqOrder.set(value)
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -2578,6 +2585,7 @@ class CTFTomo(data.CTFModel):
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
     ITEM_TYPE = CTFTomo
+    TS_ID_FIELD = '_tsId'
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
@@ -2714,6 +2722,37 @@ class CTFTomoSeries(data.EMSet):
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
         pass
 
+    def getCtfTomoFromTi(self, ti: TiltImage, onlyEnabled: bool = True) -> Optional[CTFTomo]:
+        """Get the corresponding CTFModel from a given tilt-image. If there's no match, it returns None.
+        :param ti: Tilt-image.
+        :param onlyEnabled: boolean used to indicate the matching behaves in terms of the value the attribute
+        _objEnabled from both ti and the matching CTFModel attribute:
+            - If True (default), the CTFModel found is returned only if both the ti and the CTFModel are enabled.
+            - If False, the CTFModel found is returned no matter the value of _objEnabled.
+        """
+        if onlyEnabled and not ti.isEnabled():
+            logger.debug('The introduced tilt-image is not enabled and working with onlyEnabled = True')
+            return None
+        try:
+            # The method getItem raises an exception of type UnboundLocalError is the field if the key or the value
+            # are not found
+            ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
+        except Exception:
+            try:
+                ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
+                logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
+                               '(_acqOrder). The matching between the CTF and the tilt-image is carried out '
+                               'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+            except Exception:
+                logger.warning(f'No CTF found in the current CTF series {self.getTsId()} that matches the '
+                               f'given tilt-image of tsId = {ti.getTsId()}.')
+                return None
+
+        if ctfTomo.isEnabled() or not onlyEnabled:
+            return ctfTomo
+        else:
+            return None
+
 
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
@@ -2747,7 +2786,6 @@ class SetOfCTFTomoSeries(data.EMSet):
                     ctfSerieOut.append(ctfOut)
 
                 self.update(ctfSerieOut)
-
 
     def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
@@ -2809,8 +2847,9 @@ class SetOfCTFTomoSeries(data.EMSet):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC'):
-        for item in super().iterItems(orderBy=orderBy, direction=direction):
+    def iterItems(self, orderBy='id', direction='ASC', **kwargs):
+        for item in super().iterItems(orderBy=orderBy,
+                                      direction=direction, **kwargs):
 
             ts = self._getTiltSeriesFromTsId(item.getTsId())
             if ts is None:

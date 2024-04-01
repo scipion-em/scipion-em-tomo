@@ -1,8 +1,35 @@
+v3.7.0:
+ Developers:
+  - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
+  - CTFTomoSeries: add method getCtfTomoFromTi.
+v3.6.1:
+ Users:
+  - Collapse the tilt-series tree by default in the tomo data viewer
+  - Fix in protocol import TS: when providing mdoc files, label DividedBy2 is now only applied in the case of
+    calculating it from fields MinMaxMean, PixelSpacing and CountsPerElectron (case #4).
+
+Developers:
+  - Fix: class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
+    header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file
+    header for each file.
+  - use setFramesFrange when importing TS movies
+  - Class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
+    header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file
+    header for each file.
+
 v3.6.0:
+ 
+ Users:
+  - Tilt series subsets and CTFTomoseries clone the enable flag
+  - Acquisition data storage fixed when importing tilt series and tilt series movies (min angle, max angle, and step)
+ 
  Developers:
   - Test dataset relion40_sta_tutorial_data expanded.
+  - TCL: methods dor checking sets of TS and TsM improved.
+
 v3.5.0:
  Users:
+  - Improve the TiltSeries viewer. Allowing to exclude TiltImages
   - New protocol to import tilt-series CTF from different plugins
   - The CTF tomo series viewer now only plots the Enabled tilt images/ctfs.
   - Template HIV- STA with reliontomo: update the CTF importing method to the new centralized located in em-tomo.
