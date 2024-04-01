@@ -2726,19 +2726,19 @@ class CTFTomoSeries(data.EMSet):
             - If False, the CTFModel found is returned no matter the value of _objEnabled.
         """
         if onlyEnabled and not ti.isEnabled():
-            logger.info(f'The introduced tilt-image is not enabled and working with onlyEnabled = True')
+            logger.debug(f'The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
         try:
             # The method getItem raises an exception of type UnboundLocalError is the field if the key or the value
             # are not found
             ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
-        except UnboundLocalError:
+        except Exception as e:
             try:
                 ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
                 logger.warning('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
                                '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carried out '
                                'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-            except UnboundLocalError:
+            except Exception as e:
                 logger.warning(f'No CTFModel found in the current CTFTomoSeries {self.getTsId()} that matches the '
                                f'given tilt-image of tsId = {ti.getTsId()} using the acquisition order and the index.')
                 return None
