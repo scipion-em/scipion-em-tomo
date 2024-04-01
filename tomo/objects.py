@@ -2735,12 +2735,12 @@ class CTFTomoSeries(data.EMSet):
         except Exception as e:
             try:
                 ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
-                logger.warning('WARNING! The current CTFTomoSeries does not have the attribute "acquisition order" '
-                               '(_acqOrder). The matching between the CTFTomos and the tilt-images will be carried out '
+                logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
+                               '(_acqOrder). The matching between the CTF and the tilt-images is carried out '
                                'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
             except Exception as e:
-                logger.warning(f'No CTFModel found in the current CTFTomoSeries {self.getTsId()} that matches the '
-                               f'given tilt-image of tsId = {ti.getTsId()} using the acquisition order and the index.')
+                logger.warning(f'No CTFModel found in the current CTF series {self.getTsId()} that matches the '
+                               f'given tilt-image of tsId = {ti.getTsId()}.')
                 return None
 
         if ctfTomo.isEnabled() or not onlyEnabled:
