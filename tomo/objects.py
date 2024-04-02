@@ -368,10 +368,10 @@ class TiltSeriesBase(data.SetOfImages):
         """
 
         if presentAcqOrders:
-            angleList = [ti for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
+            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
                          ti.getAcquisitionOrder() in presentAcqOrders]
         else:
-            angleList = [ti for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
+            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
 
         if reverse:
             angleList.reverse()
@@ -2305,7 +2305,7 @@ class CTFTomo(data.CTFModel):
 
     def copy(self, other, copyId=True, ignoreAttrs=[], copyEnable=True):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
-                            '_resolution', '_fitQuality', '_index')
+                            '_resolution', '_fitQuality', self.INDEX_FIELD, self.ACQ_ORDER_FIELD)
 
         if copyEnable:
             self.setEnabled(other.isEnabled())
