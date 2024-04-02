@@ -67,6 +67,10 @@ class ProtTomoBase:
     def _createSetOfTomograms(self, suffix='')->tomo.objects.SetOfTomograms:
         return self._createSet(tomo.objects.SetOfTomograms,
                                'tomograms%s.sqlite', suffix)
+                               
+    def _createSetOfTomoMasks(self, suffix='') -> tomo.objects.SetOfTomoMasks:
+        return self._createSet(tomo.objects.SetOfTomoMasks,
+                               'tomoMasks%s.sqlite', suffix)
 
     def _createSetOfSubTomograms(self, suffix='') -> tomo.objects.SetOfSubTomograms:
         return self._createSet(tomo.objects.SetOfSubTomograms,
