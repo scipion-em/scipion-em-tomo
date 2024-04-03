@@ -417,7 +417,17 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries) -> S
     """Given a tilt-series and a CTFTomoSeries, it finds the common elements present and enabled in both sets, and
     returns a list with the corresponding acquisition orders or indices, if acquisition order is not present in the
     CTFTomoSeries introduced (old versions, backwards compatibility)."""
-    # TODO: add the logic to work with the index in case the acq order is not present in the CTFTomos
-    tsAcqOrderSet = {ti.getAcquisitionOrder() for ti in ts if ti.isEnabled()}
-    ctfAcqOrderSet = {ctf.getAcquisitionOrder() for ctf in ctfTomoSeries if ctf.isEnabled()}
+    # Attribute _acqOrder was recently added to CTFTomo, so it will be used to discriminate
+    firstCtfTomo = ctfTomoSeries.getFirstItem()
+    acqOrder = getattr(firstCtfTomo, CTFTomo.ACQ_ORDER_FIELD, None)
+    if acqOrder:
+        msgStr = 'acquisition order'
+        tsAcqOrderSet = {ti.getAcquisitionOrder() for ti in ts if ti.isEnabled()}
+        ctfAcqOrderSet = {ctf.getAcquisitionOrder() for ctf in ctfTomoSeries if ctf.isEnabled()}
+    else:
+        msgStr = 'index'
+        tsAcqOrderSet = {ti.getIndex() for ti in ts if ti.isEnabled()}
+        ctfAcqOrderSet = {ctf.getIndex() for ctf in ctfTomoSeries if ctf.isEnabled()}
+
+    logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
