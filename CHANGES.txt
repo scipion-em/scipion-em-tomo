@@ -4,6 +4,8 @@ v3.7.0:
   - CTFTomoSeries: add method getCtfTomoFromTi.
   - CTFTomo: add acqOrder to the attributes list used on its copy method.
   - TiltSeriesBase - method genTltFile: optional input presentAcqOrders to manage the view exclusion.
+  - Utils - add method getCommonTsAndCtfElements to intersect tilt images and CTFs based on the value of the
+    attribute acquisition order, or index in case it's not present or empty (backwards compatibility)
 v3.6.1:
  Users:
   - Collapse the tilt-series tree by default in the tomo data viewer
