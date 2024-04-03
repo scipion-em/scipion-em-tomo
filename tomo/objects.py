@@ -25,6 +25,7 @@
 # *
 # **************************************************************************
 import logging
+from sqlite3 import OperationalError
 from typing import Dict, Tuple, Any, Optional, Union
 
 from pwem import ALIGN_NONE
@@ -2750,16 +2751,19 @@ class CTFTomoSeries(data.EMSet):
             logger.debug('The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
         try:
-            # The method getItem raises an exception of type UnboundLocalError is the field if the key or the value
-            # are not found
+            # The method getItem raises an exception of type:
+            #   - sqlite3.OperationalError if the key is not found
+            #   - UnboundLocalError if the value is not found
             ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
-        except Exception:
+        except UnboundLocalError:
+            return None
+        except OperationalError:
             try:
                 ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
                 logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
                                '(_acqOrder). The matching between the CTF and the tilt-image is carried out '
                                'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-            except Exception:
+            except (OperationalError, UnboundLocalError):
                 logger.warning(f'No CTF found in the current CTF series {self.getTsId()} that matches the '
                                f'given tilt-image of tsId = {ti.getTsId()}.')
                 return None
