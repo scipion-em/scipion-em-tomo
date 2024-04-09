@@ -3,7 +3,7 @@ v3.7.0:
   - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
   - CTFTomoSeries: add method getCtfTomoFromTi.
   - CTFTomo: add acqOrder to the attributes list used on its copy method.
-  - TiltSeriesBase - method genTltFile: optional input presentAcqOrders to manage the view exclusion.
+  - TiltSeriesBase - method generateTltFile expanded: optional input presentAcqOrders to manage the view exclusion.
   - Utils - add method getCommonTsAndCtfElements to intersect tilt images and CTFs based on the value of the
     attribute acquisition order, or index in case it's not present or empty (backwards compatibility)
 v3.6.1:

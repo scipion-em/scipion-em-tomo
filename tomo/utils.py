@@ -420,6 +420,8 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     but it may take common elements no matter if they're enabled or not by setting the input onlyEnabled to False.
     """
     # Attribute _acqOrder was recently added to CTFTomo, so it will be used to discriminate
+    ctfTomoSeries._getMapper()  # Avoid finding closed mappers when combining cached sets of sets (TS, CTF) and
+    # calls to getFirstItem(). The second closes the first and so on
     firstCtfTomo = ctfTomoSeries.getFirstItem()
     acqOrder = getattr(firstCtfTomo, CTFTomo.ACQ_ORDER_FIELD, None)
     if acqOrder:

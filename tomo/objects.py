@@ -337,48 +337,34 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False):
+    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False, presentAcqOrders=None):
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
         :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
         the non-excluded views (True) or all of them (False).
-        """
-
-        angleList = []
-
-        for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-            if excludeViews and not ti.isEnabled():
-                continue
-            angleList.append(ti.getTiltAngle())
-
-        if reverse:
-            angleList.reverse()
-
-        with open(tltFilePath, 'w') as f:
-            f.writelines("%.3f\n" % angle for angle in angleList)
-
-    def genTltFile(self, outTltFileName: str, reverse: bool = False, presentAcqOrders: Union[set, None] = None) -> None:
-        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order.
-        :param outTltFileName: String containing the path where the file is created.
-        :param reverse: Boolean indicating if the angle list must be reversed.
         :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
-        filter the tilt angles that will be written in the tlt file generated.
+        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
+        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
+        (see tomo > utils > getCommonTsAndCtfElements)
         """
 
         if presentAcqOrders:
             angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
                          ti.getAcquisitionOrder() in presentAcqOrders]
         else:
-            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
-
+            angleList = []
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                if excludeViews and not ti.isEnabled():
+                    continue
+                angleList.append(ti.getTiltAngle())
         if reverse:
             angleList.reverse()
 
-        with open(outTltFileName, 'w') as f:
+        with open(tltFilePath, 'w') as f:
             f.writelines("%.3f\n" % angle for angle in angleList)
+
 
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
