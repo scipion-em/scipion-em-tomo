@@ -70,7 +70,7 @@ Install the plugin in developer mode.
 **Configuration variables**
 ===========================
 
-**NAPARI_ENV_ACTIVATION** (default = conda activate napari-0.4.4):
+**NAPARI_ENV_ACTIVATION** (default = conda activate napari-0.4.17):
 Command to activate napari environment (used by other tomo plugins).
 
 
