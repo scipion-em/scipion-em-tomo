@@ -25,7 +25,8 @@
 # *
 # **************************************************************************
 import logging
-from typing import Dict, Tuple, Any, Optional
+from sqlite3 import OperationalError
+from typing import Dict, Tuple, Any, Optional, Union
 
 from pwem import ALIGN_NONE
 
@@ -336,27 +337,34 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False):
+    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False, presentAcqOrders=None):
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
         :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
         the non-excluded views (True) or all of them (False).
+        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
+        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
+        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
+        (see tomo > utils > getCommonTsAndCtfElements)
         """
 
-        angleList = []
-
-        for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-            if excludeViews and not ti.isEnabled():
-                continue
-            angleList.append(ti.getTiltAngle())
-
+        if presentAcqOrders:
+            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
+                         ti.getAcquisitionOrder() in presentAcqOrders]
+        else:
+            angleList = []
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                if excludeViews and not ti.isEnabled():
+                    continue
+                angleList.append(ti.getTiltAngle())
         if reverse:
             angleList.reverse()
 
         with open(tltFilePath, 'w') as f:
             f.writelines("%.3f\n" % angle for angle in angleList)
+
 
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
@@ -2284,7 +2292,7 @@ class CTFTomo(data.CTFModel):
 
     def copy(self, other, copyId=True, ignoreAttrs=[], copyEnable=True):
         self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
-                            '_resolution', '_fitQuality', '_index')
+                            '_resolution', '_fitQuality', self.INDEX_FIELD, self.ACQ_ORDER_FIELD)
 
         if copyEnable:
             self.setEnabled(other.isEnabled())
@@ -2729,16 +2737,19 @@ class CTFTomoSeries(data.EMSet):
             logger.debug('The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
         try:
-            # The method getItem raises an exception of type UnboundLocalError is the field if the key or the value
-            # are not found
+            # The method getItem raises an exception of type:
+            #   - sqlite3.OperationalError if the key is not found
+            #   - UnboundLocalError if the value is not found
             ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
-        except Exception:
+        except UnboundLocalError:
+            return None
+        except OperationalError:
             try:
                 ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
                 logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
                                '(_acqOrder). The matching between the CTF and the tilt-image is carried out '
                                'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-            except Exception:
+            except (OperationalError, UnboundLocalError):
                 logger.warning(f'No CTF found in the current CTF series {self.getTsId()} that matches the '
                                f'given tilt-image of tsId = {ti.getTsId()}.')
                 return None
