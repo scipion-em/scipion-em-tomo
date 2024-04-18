@@ -2873,6 +2873,12 @@ class SetOfCTFTomoSeries(data.EMSet):
             self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
             return self._idDict.get(tsId, None)
 
+    def getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        tsIds = self.aggregate(["MAX"], CTFTomoSeries.TS_ID_FIELD, [CTFTomoSeries.TS_ID_FIELD])
+        tsIds = [d[CTFTomoSeries.TS_ID_FIELD] for d in tsIds]
+        return tsIds
+
 
 class TiltSeriesCoordinate(data.EMObject):
     """This class holds the (x,y,z) positions, in angstroms, and other information
