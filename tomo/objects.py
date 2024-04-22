@@ -846,9 +846,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
-        tsIds = self.aggregate(["MAX"], TiltSeries.TS_ID_FIELD, [TiltSeries.TS_ID_FIELD])
-        tsIds = [d[TiltSeries.TS_ID_FIELD] for d in tsIds]
-        return tsIds
+        return self.getUniqueValues(TiltSeries.TS_ID_FIELD)
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -1660,9 +1658,7 @@ class SetOfCoordinates3D(data.EMSet):
 
     def getTSIds(self):
         """ Returns all the TS ID (tomoId) present in this set"""
-        volIds = self.aggregate(["MAX"], Coordinate3D.TOMO_ID_ATTR, [Coordinate3D.TOMO_ID_ATTR])
-        volIds = [d[Coordinate3D.TOMO_ID_ATTR] for d in volIds]
-        return volIds
+        return self.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
 
 
 class SubTomogram(data.Volume):
@@ -2875,9 +2871,7 @@ class SetOfCTFTomoSeries(data.EMSet):
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
-        tsIds = self.aggregate(["MAX"], CTFTomoSeries.TS_ID_FIELD, [CTFTomoSeries.TS_ID_FIELD])
-        tsIds = [d[CTFTomoSeries.TS_ID_FIELD] for d in tsIds]
-        return tsIds
+        return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
 
 
 class TiltSeriesCoordinate(data.EMObject):
