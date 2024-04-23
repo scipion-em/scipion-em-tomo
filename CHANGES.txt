@@ -6,6 +6,9 @@ v3.7.0:
   - TiltSeriesBase - method generateTltFile expanded: optional input presentAcqOrders to manage the view exclusion.
   - Utils - add method getCommonTsAndCtfElements to intersect tilt images and CTFs based on the value of the
     attribute acquisition order, or index in case it's not present or empty (backwards compatibility)
+  - SetOfCTFTomoSeries: add method getTSIds, just the same as for SetOfTiltSeries and SetOfCoordinates3D.
+  - Method getTSIds methods simplified. They call now getUniqueValues instead of aggregate.
+
 v3.6.1:
  Users:
   - Collapse the tilt-series tree by default in the tomo data viewer
