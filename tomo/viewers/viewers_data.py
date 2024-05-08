@@ -30,7 +30,7 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.viewer as pwviewer
 from pwem.protocols import EMProtocol
-from pwem.viewers import ObjectView, DataViewer, MODE, MODE_MD, VISIBLE
+from pwem.viewers import ObjectView, DataViewer, MODE, MODE_MD, VISIBLE, ORDER
 from pyworkflow.protocol import LabelParam
 
 from .views import ClassesSubTomogramsView
@@ -255,5 +255,13 @@ DataViewer.registerConfig(tomo.objects.SetOfTomograms,
                                   VISIBLE:'id _filename %s %s' %
                                           (tomo.objects.Tomogram.TS_ID_FIELD,
                                            tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD)})
-DataViewer.registerConfig(tomo.objects.SetOfTiltSeries)
 
+# Register Tilt series sets
+labels = ('id enabled _tsId _samplingRate _anglesCount _acquisition._tiltAxisAngle _hastCtf _hasOddEven _ctfCorrected'
+          ' _hasAlignment _acquisition._angleMin _acquisition._angleMax'
+          ' _acquisition._step _size _acquisition._accumDose'
+)
+DataViewer.registerConfig(tomo.objects.SetOfTiltSeries,
+                          config={MODE: MODE_MD,
+                                  ORDER: labels,
+                                  VISIBLE: labels})
