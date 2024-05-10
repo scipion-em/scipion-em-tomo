@@ -1168,6 +1168,10 @@ class SetOfTomograms(data.SetOfVolumes):
         self._hasOddEven.set(item.hasHalfMaps())
         super().update(item)
 
+    def getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        return self.getUniqueValues(Tomogram.TS_ID_FIELD)
+
 
 class TomoMask(Tomogram):
     """ Object used to represent segmented tomograms

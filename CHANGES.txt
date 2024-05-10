@@ -1,6 +1,7 @@
 v3.7.0:
  Developers:
   - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
+  - Add method getTsIds to SetOfTomograms (useful when importing coordinates).
   - CTFTomoSeries: add method getCtfTomoFromTi.
   - CTFTomo: add acqOrder to the attributes list used on its copy method.
   - TiltSeriesBase - method generateTltFile expanded: optional input presentAcqOrders to manage the view exclusion.
