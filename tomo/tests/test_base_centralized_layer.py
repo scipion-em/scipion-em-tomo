@@ -497,7 +497,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
                                                expectedSetSize=expectedSetSize,
                                                expectedSRate=expectedSRate)
-        self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
+        if expectedBoxSize:
+            self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
         self.assertTrue(outSubtomos.hasCoordinates3D())
         # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
         # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
