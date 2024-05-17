@@ -197,3 +197,19 @@ class DataSetRe4STATuto(Enum):
 
 
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
+
+########################################################################################################################
+RE5_STA = 'relion50_sta'
+
+
+class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
+    # Star files
+    coordsPickedWithRe5Star = 'coordsPickedWithRe5.star'
+    particles2dStar = 'extracted2dParticlesBin6/particles.star'
+    particles3dStar = 'extracted3dParticlesBin6/particles.star'
+    # Particles to be imported
+    particles2d = 'extracted2dParticlesBin6/Subtomograms'
+    particles3d = 'extracted3dParticlesBin6/Subtomograms'
+
+
+DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
