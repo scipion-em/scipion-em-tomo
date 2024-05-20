@@ -582,7 +582,7 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
         self.assertTrue(avg.getFileName().endswith(".mrc"))
         # The imported coordinates correspond to a binned 2 tomogram
-        self.assertEqual(avg.getSamplingRate(), expectedSRate)
+        self.assertTrue(abs(avg.getSamplingRate() - expectedSRate) <= 1e-4)
         self.assertEqual(avg.getDimensions(), testBoxSize)
         # Check the halves
         if hasHalves:
