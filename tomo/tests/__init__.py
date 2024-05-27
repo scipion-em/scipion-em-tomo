@@ -187,8 +187,8 @@ class DataSetRe4STATuto(Enum):
     # Rec particle
     recParticleBin6 = 'rec_particle_bin6.mrc'
     recParticleBin2 = 'recParticle_bin2.mrc'
-    recParticleHalf1 = 'half1_bin2.mrc'
-    recParticleHalf2 = 'half2_bin2.mrc'
+    recParticleHalf1Bin2 = 'half1_bin2.mrc'
+    recParticleHalf2Bin2 = 'half2_bin2.mrc'
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
