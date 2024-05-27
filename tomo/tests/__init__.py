@@ -190,6 +190,7 @@ class DataSetRe4STATuto(Enum):
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
     maskFscBin2 = 'masks/mask_fsc_bin2.mrc'
+    maskFscBin4 = 'masks/mask_fsc_bin4.mrc'
     # For EMAN testing
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
     # For CISTEM Ctffind import testing
