@@ -184,6 +184,8 @@ class DataSetRe4STATuto(Enum):
     nCoordsTotal = 210
     # Initial model
     initModelRelion = 'initial_model_relion_bin4.mrc'
+    # Rec particle
+    recParticleBin6 = 'rec_particle_bin6.mrc'
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
