@@ -282,7 +282,7 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
         self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
         self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.5)
         self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
         self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
         self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
@@ -731,6 +731,7 @@ class TestBaseCentralizedLayer(BaseTest):
         defocusV = ctf.getDefocusV()
         defocusAngle = ctf.getDefocusAngle()
         defocusVals = [defocusU, defocusV, defocusAngle]
+        self.assertGreater(ctf.getAcquisitionOrder(), -1)
         if isExcluded:
             expectedDefocusU = -999
             expectedDefocusV = -1

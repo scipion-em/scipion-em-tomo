@@ -29,7 +29,7 @@ import pwem
 from .constants import (NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD,
                         getNaparyEnvName, NAPARI_DEF_VER)
 
-__version__ = '3.6.1'
+__version__ = '3.7.0'
 _logo = "icon.png"
 _references = []
 
@@ -64,7 +64,8 @@ class Plugin(pwem.Plugin):
                       f'conda create -y -n {ENV_NAME} -c conda-forge',
                       f'python=3.10 napari={version} pyqt pip &&',
                       f'conda activate {ENV_NAME} &&',
-                      'pip install napari-tomotwin napari-boxmanager']
+                      'pip install napari-tomotwin napari-boxmanager',
+                      'napari-clusters-plotter@git+https://github.com/BiAPoL/napari-clusters-plotter.git@095d9e8']
 
         # Flag installation finished
         installCmd.append(f'&& touch {NAPARI_INSTALLED}')
