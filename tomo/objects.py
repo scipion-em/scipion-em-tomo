@@ -236,6 +236,7 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
 class TiltSeriesBase(data.SetOfImages):
     TS_ID_FIELD = '_tsId'
+    ACQ_ORDER_FIELD = '_acqOrder'
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
