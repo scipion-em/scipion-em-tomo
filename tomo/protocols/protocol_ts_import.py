@@ -341,7 +341,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                         dosePerFrame = self.dosePerFrame.get()
                         if not accDose:
                             accDose = to * dosePerFrame
-                    initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
+                        initialDose = self.doseInitial.get() if to == 0 else accDose - dosePerFrame
                     # Initial dose in current ti
                     tiAcq.setDoseInitial(initialDose)
                     # Incoming dose in current ti
