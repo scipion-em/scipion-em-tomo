@@ -177,6 +177,10 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the angles count
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
+            # Odd/Even
+            if hasOddEven:
+                self.assertTrue(exists(ts.getEven()))
+                self.assertTrue(exists(ts.getOdd()))
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
             # Alignment
