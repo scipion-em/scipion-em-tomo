@@ -330,7 +330,7 @@ class TestBaseCentralizedLayer(BaseTest):
                        expectedDimensions: Union[List[int], dict] = None,
                        hasOddEven: bool = False,
                        expectedOriginShifts: List[float] = None,
-                       hasCtf: bool = False,
+                       ctfCorrected: bool = False,
                        hasHalves: bool = False):
         """
         :param inTomoSet: SetOfSubTomograms.
@@ -343,7 +343,7 @@ class TestBaseCentralizedLayer(BaseTest):
         halves.
         :param expectedOriginShifts: list containing the expected shifts of the tomogram center in the X, Y, and Z
         directions.
-        :param hasCtf: False by default: Used to indicate if the tomograms have the CTF corrected or not.
+        :param ctfCorrected: False by default: Used to indicate if the tomograms have the CTF corrected or not.
         :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
         compose the set. If True, it will be checked if the corresponding halves files exist.
         """
@@ -356,14 +356,17 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         if hasOddEven:
             self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
-        if hasCtf:
-            self.assertEqual(inTomoSet.hasCtf(), hasCtf)
+        if ctfCorrected is not None:
+            self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
         # Check the set elements main attributes
         for tomo in inTomoSet:
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
             self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # Check the ctf correction
+            if ctfCorrected is not None:
+                self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
             # At least, check that the TsId was not lost in metadata generation or copying methods
             self.assertIsNotNone(getattr(tomo, Tomogram.TS_ID_FIELD, None),
                                  msg=f'Tomogram {tomo.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
