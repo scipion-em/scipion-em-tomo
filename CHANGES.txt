@@ -1,3 +1,7 @@
+v3.7.1:
+ Developers:
+  - Add to Tomogram and SetOfTomograms the attribute _ctfcorrected, the same way it was added to the tilt-series.
+  - Update the TCL based on the previous point.
 v3.7.0:
  Developers:
   - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
