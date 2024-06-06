@@ -23,9 +23,7 @@
 # *
 # **************************************************************************
 
-import time
-import os
-from glob import glob
+
 from pwem.protocols.protocol_import.base import ProtImport
 import pyworkflow as pw
 from pyworkflow.protocol import params, STEPS_PARALLEL, ProtStreamingBase
@@ -36,10 +34,7 @@ import pwem.objects as emobj
 import pwem.objects as SetOfCTF
 import tomo.objects as tomoObj
 from tomo.objects import SetOfCTFTomoSeries, SetOfTiltSeries
-from pwem.objects.data import Transform
-from pyworkflow.object import Integer
-from tomo.protocols import ProtTomoBase
-from pwem.emlib.image import ImageHandler
+
 
 OUT_SCTF = "CTFSeries"
 
@@ -78,19 +73,28 @@ class ProtComposeCTF(ProtImport, ProtStreamingBase):
         It should check its input and when ready conditions are met
         call the self._insertFunctionStep method.
         """
-        while self.inputTS.isStreamOpen() or self.inputSetCTF.isStreamOpen():
-	        matchCTF = self._insertFunctionStep(
-		        self.matchCTF,
-		        prerequisites=[])
-	        outputs = self._insertFunctionStep(
-		        self.outputs,
-		        prerequisites=[matchCTF])
-        
+        #while self.inputTS.isStreamOpen() or self.inputSetCTF.isStreamOpen():
+        while True:
+            self.info('True')
+            self.TS = self.inputTS.get()
+            self.CTFs = self.inputSetCTF.get()
+            matchCTF = self._insertFunctionStep(self.matchCTF, prerequisites=[])
+            outputs = self._insertFunctionStep(self.outputs, prerequisites=[matchCTF])
+            if not self.TS.isStreamOpen() and not self.CTFs.isStreamOpen():
+                self.info('Not more micrographs are expected, set closed')
+                break
+			    
     def matchCTF(self):
-	    pass
+        self.info('Match')
+        for TS in self.TS:
+            for tilt in TS:
+                micName = tilt.getMicName()
+                for CTF in self.CTFs:
+                    if micName == CTF.getMicrograph().getMicName():
+                        self.info('match!: {}'.format(micName))
     
     def outputs(self):
-	    pass
+        pass
     
     def _validate(self):
         pass
