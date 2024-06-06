@@ -156,7 +156,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                        str(self.time4NextTS.get()) + ' secs ...')
         self.waitingMdoc = False
         self.list_current = self.findMdocs()
-
+        self.info(self.list_current)
         self.list_remain = []
 
         for x in self.list_current:
@@ -460,6 +460,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         ti.setAcquisition(ts_obj.getAcquisition().clone())
                         ti.getAcquisition().setDosePerFrame(
                             incoming_dose_list[int(to) - 1])
+                        ti.setMicName(mic.getMicName())
                         ti.getAcquisition().setAccumDose(
                             accumulated_dose_list[int(to) - 1])
                         ti_fn, ti_fn_dw = self._getOutputTiltImagePaths(ti)

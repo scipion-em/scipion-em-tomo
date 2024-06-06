@@ -54,3 +54,4 @@ from .protocol_misalignTS import ProtTomoMisalignTiltSeries
 from .protocol_ctf_consensus import ProtCTFTomoSeriesConsensus
 from .protocol_fit_ellipsoid import TomoProtFitEllipsoid, XmippProtFitEllipsoid
 from .protocol_landmark_to_2d import ProtTomoLandmarksTo2D
+from .protocol_compose_CTF import ProtComposeCTF

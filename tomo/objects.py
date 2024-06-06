@@ -142,7 +142,8 @@ class TiltImageBase:
         self._tsId = String(tsId)
         self._acqOrder = Integer(acquisitionOrder)
         self._oddEvenFileNames = CsvList(pType=str)  # IMPORTANT: The odd is the first one and the even the second one
-
+        self._micName = String()
+	    
     def hasOddEven(self):
         return not self._oddEvenFileNames.isEmpty()
 
@@ -184,7 +185,13 @@ class TiltImageBase:
 
     def setAcquisitionOrder(self, value):
         self._acqOrder.set(value)
+	
+    def getMicName(self):
+        return self._micName.get()
 
+    def setMicName(self, value):
+        self._micName.set(value)
+	    
     def copyInfo(self, other, copyId=False, copyTM=True):
         self.copyAttributes(other, '_tiltAngle', '_tsId', '_acqOrder')
         if copyId:
