@@ -208,13 +208,17 @@ RE5_STA = 'relion50_sta'
 
 
 class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
-    # Star files
+    # Coordinates
     coordsPickedWithRe5Star = 'coordsPickedWithRe5.star'
-    particles2dStar = 'extracted2dParticlesBin6/particles.star'
-    particles3dStar = 'extracted3dParticlesBin6/particles.star'
-    # Particles to be imported
-    particles2d = 'extracted2dParticlesBin6/Subtomograms'
-    particles3d = 'extracted3dParticlesBin6/Subtomograms'
+    nCoords = 1527  # Corresponding to the 2 tomograms imported, TS_03 and TS_54
+    coordsSRate = 10
+    boxSize = 96
+    # Tomogrmas
+    tomosDir = 'tomosRecWithRe5'
+    nTomos = 2
+    binFactor = 6
+    tomosSRate = 10
+    tomosDims = [540, 540, 270]
 
 
 DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
