@@ -1,3 +1,4 @@
+v3.7.1: HOTFIX - join TS bug solved (Thanks to Doulin Sheperd).
 v3.7.0:
  Developers:
   - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
