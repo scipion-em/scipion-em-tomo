@@ -1,3 +1,6 @@
+v3.7.1:
+ Users:
+  - Import TS, TSM and tomos: remove double underscore from both the linked filenames and the tsIds.
 v3.7.0:
  Developers:
   - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
