@@ -205,8 +205,8 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def clone(self):
-        return super().clone(copyEnable=True)
+    def clone(self, copyEnable=True):
+        return super().clone(copyEnable=copyEnable)
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
