@@ -1,3 +1,8 @@
+v3.7.2:
+ Users:
+   - Handling the matching in the ctf import(generalizing without the need to set patterns such as {TS}).
+   - Refactoring the tiltserie viewer
+
 v3.7.1: HOTFIX - join TS bug solved (Thanks to Doulin Sheperd).
 v3.7.0:
  Developers:
