@@ -173,10 +173,10 @@ class TiltSeriesTreeProvider(TreeProvider):
         itemId = self.tree.item(itemSelected)['text']
         itemParent = self.tree.parent(itemSelected)
         if not itemParent:
-            index, obj = self.getTiltSerie(itemId)
+            _, obj = self.getTiltSerie(itemId)
         else:
             tsId = itemSelected[0].split('.')[0]
-            index, obj = self.getTiltImage(tsId, itemId)
+            _, obj = self.getTiltImage(tsId, itemId)
         self._itemSelected(obj)
 
     def getObjects(self):
@@ -609,11 +609,11 @@ class TiltSeriesDialogView(pwviewer.View):
 
         if "image" in elem:  # click on the checkbox
             tsId = tree.item(selectedItem)['text']
-            index, obj = self._provider.getTiltSerie(tsId)
+            _, obj = self._provider.getTiltSerie(tsId)
         elif itemValue in [TiltImageStates.CHECK_UNMARK, TiltImageStates.CHECK_MARK]:
             tsId = tree.item(tree.parent(selectedItem))['text']
             tiId = tree.item(selectedItem)['text']
-            index, obj = self._provider.getTiltImage(tsId, tiId)
+            _, obj = self._provider.getTiltImage(tsId, tiId)
         else:
             return
 
