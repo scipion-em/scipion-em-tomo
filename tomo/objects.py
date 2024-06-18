@@ -205,8 +205,8 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
-    def clone(self):
-        return super().clone(copyEnable=True)
+    def clone(self, copyEnable=True):
+        return super().clone(copyEnable=copyEnable)
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
@@ -236,6 +236,7 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
 class TiltSeriesBase(data.SetOfImages):
     TS_ID_FIELD = '_tsId'
+    ACQ_ORDER_FIELD = '_acqOrder'
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
@@ -1105,6 +1106,7 @@ class Tomogram(data.Volume):
         self._acquisition = None
         self._tsId = String(kwargs.get('tsId', None))
         self._dim = None
+        self._ctfCorrected = Boolean(False)
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -1133,6 +1135,14 @@ class Tomogram(data.Volume):
         if other.hasOrigin():
             self.copyAttributes(other, '_origin')
 
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def setCtfCorrected(self, corrected):
+        """ Sets the ctf correction status"""
+        self._ctfCorrected.set(corrected)
+
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
@@ -1142,6 +1152,7 @@ class SetOfTomograms(data.SetOfVolumes):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
+        self._ctfCorrected = Boolean(False)
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -1153,6 +1164,9 @@ class SetOfTomograms(data.SetOfVolumes):
     def __str__(self):
         sampling = self.getSamplingRate()
         tomoStr = "+oe," if self.hasOddEven() else ''
+        # CTF status
+        if self.ctfCorrected():
+            tomoStr += '+ctf,'
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
@@ -1166,11 +1180,20 @@ class SetOfTomograms(data.SetOfVolumes):
 
     def update(self, item: Tomogram):
         self._hasOddEven.set(item.hasHalfMaps())
+        self.setCtfCorrected(item.ctfCorrected())
         super().update(item)
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(Tomogram.TS_ID_FIELD)
+
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def setCtfCorrected(self, corrected):
+        """ Sets the ctf correction status"""
+        self._ctfCorrected.set(corrected)
 
 
 class TomoMask(Tomogram):
