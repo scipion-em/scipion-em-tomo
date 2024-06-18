@@ -463,6 +463,7 @@ def normalizeTSId(rawTSId):
         '.': '',
         '[': '',
         ']': '',
+        '__': '_',
     }
 
     for specChar, okChar in specialCharDict.items():
