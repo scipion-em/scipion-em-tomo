@@ -54,6 +54,7 @@ class TiltSerieState:
     EXCLUDED = 'excludedTs'
     INCLUDED = 'includedTs'
 
+
 class TiltImageStates:
     EXCLUDED = 'excluded'
     INCLUDED = 'included'
@@ -110,7 +111,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         selectedItem = self.tree.identify_row(y + 1)
         itemValues = self.tree.item(selectedItem, 'values')
 
-        if isinstance(obj, tomo.objects.TiltSeries):
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
             excludedTS = TiltSerieState.INCLUDED if obj.isEnabled() else TiltSerieState.EXCLUDED
             obj.setEnabled(not obj.isEnabled())
             tags = TiltSerieState.INCLUDED
@@ -149,7 +150,10 @@ class TiltSeriesTreeProvider(TreeProvider):
                 self.tree.item(self.tree.parent(selectedItem), tags=(TiltSerieState.EXCLUDED, TiltSerieState.EXCLUDED))
 
     def excludeTiltImage(self, obj,  selectedItem, itemValues, excluded):
-        newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
+        if isinstance(obj, tomo.objects.TiltImageM):
+            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4])
+        else:
+            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
         tags = TiltImageStates.EVEN
         if TiltImageStates.ODD in self.tree.item(selectedItem, 'tags'):
             tags = TiltImageStates.ODD
@@ -219,7 +223,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         is_tsId = isinstance(tiltSerie, str)
 
         for index, obj in enumerate(objects):
-            if isinstance(obj, tomo.objects.TiltSeries):
+            if isinstance(obj, tomo.objects.TiltSeriesBase):
                 if (is_tsId and obj.getTsId() == tiltSerie) or \
                         (not is_tsId and obj.getObjId() == tiltSerie.getObjId()):
                     return index, obj
@@ -229,7 +233,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getTiltImage(self, tsId, treeId):
         objects = self.getObjects()
         for index, obj in enumerate(objects):
-            if isinstance(obj, tomo.objects.TiltImage):
+            if isinstance(obj, tomo.objects.TiltImageBase):
                 if obj.getTsId() == tsId and obj.getObjId() == treeId:
                     return index, obj
 
@@ -331,7 +335,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getObjectActions(self, obj):
         actions = []
 
-        if isinstance(obj, tomo.objects.TiltSeries):
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
             viewers = Domain.findViewers(obj.getClassName(),
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
@@ -359,7 +363,7 @@ class TiltSeriesDialog(ToolbarListDialog):
         toolbarButtons = []
 
         if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
-            viewers = Domain.findViewers(tomo.objects.TiltSeries.getClassName(),
+            viewers = Domain.findViewers(tomo.objects.TiltSeriesBase.getClassName(),
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 def launchViewer():
@@ -397,7 +401,7 @@ class TiltSeriesDialog(ToolbarListDialog):
     def _showHelp(self, event=None):
         showInfo('TiltSeries viewer help',
                  'This viewer allows you to exclude or include TiltImages.\n\n'
-                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use right-click.\n'
+                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox.\n'
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
                  '3. Save button to create a new set with excluded views marked.', self)
 
@@ -467,8 +471,12 @@ class TiltSeriesDialogView(pwviewer.View):
         self._preview = None  # To store preview widget
 
     def show(self):
-       TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
-                         lockGui=True, previewCallback=self.previewTiltSeries,
+        previewCallback = self.previewTiltSeries
+        if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeriesM):
+            previewCallback = None
+
+        TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
+                         lockGui=True, previewCallback=previewCallback,
                          itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True)
 
     def getPreviewWidget(self, frame):
@@ -622,10 +630,10 @@ class TiltSeriesDialogView(pwviewer.View):
     def previewTiltSeries(self, obj, frame):
 
         preview = self.getPreviewWidget(frame)
-        if isinstance(obj, tomo.objects.TiltSeries):
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
             text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
             obj = self._provider.getTiltSerieRepresentative(obj)
-        else:
+        elif isinstance(obj, tomo.objects.TiltImageBase):
             text = "Tilt image at %sº" % obj.getTiltAngle()
 
         image = obj.getImage()
