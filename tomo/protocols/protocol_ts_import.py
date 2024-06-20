@@ -322,7 +322,10 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                     # Link/move to extra
                     imageFile = f[1] if type(f) is tuple else f
 
+                    # Double underscore is used in EMAN to determine set type e.g. phase flipped particles. We replace
+                    # it by a single underscore to avoid possible problems if the user uses EMAN
                     finalDestination = self._getExtraPath(os.path.basename(imageFile))
+                    finalDestination = finalDestination.replace('__', '_')
                     self.copyOrLink(imageFile, finalDestination)
 
                     f = (f[0], finalDestination) if type(f) is tuple else finalDestination
@@ -341,7 +344,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
                         dosePerFrame = self.dosePerFrame.get()
                         if not accDose:
                             accDose = to * dosePerFrame
-                    initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
+                        initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
                     # Initial dose in current ti
                     tiAcq.setDoseInitial(initialDose)
                     # Incoming dose in current ti
