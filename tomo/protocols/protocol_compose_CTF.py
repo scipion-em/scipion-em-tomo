@@ -91,20 +91,7 @@ class ProtComposeCTF(ProtImport, ProtStreamingBase):
                     break
 			    
     def matchCTF(self):
-        self.info('Match')
-        
-        #DYNAMIC TEMPLATE STARTS
-        import os
-        fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        time.sleep(15)
-        #DYNAMIC TEMPLATE ENDS
-        
+        self.info('Match')        
         for TS in self.TS:
             listCTF = []
             for tilt in TS:
