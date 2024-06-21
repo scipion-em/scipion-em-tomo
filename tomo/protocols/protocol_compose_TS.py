@@ -450,6 +450,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                         SOTS.setSamplingRate(mic.getSamplingRate())
                     if os.path.basename(f) in mic.getMicName():
                         ti = tomoObj.TiltImage()
+                        ti.setMicName(mic.getMicName())
                         ti.setLocation(mic.getFileName())
                         ti.setTsId(ts_obj.getObjId())
                         ti.setObjId(counter_ti + 1)

@@ -33,11 +33,10 @@ from tomo.convert.mdoc import MDoc
 import pwem.objects as emobj
 import pwem.objects as SetOfCTF
 import tomo.objects as tomoObj
-from tomo.objects import SetOfCTFTomoSeries, SetOfTiltSeries
+from tomo.objects import SetOfCTFTomoSeries, SetOfTiltSeries, CTFTomoSeries
+import time
 
-
-OUT_SCTF = "CTFSeries"
-
+OUT_CTFS = "CTFTomoSeries"
 
 class ProtComposeCTF(ProtImport, ProtStreamingBase):
     """ Compose in streaming a set of tilt series based on a set of micrographs and mdoc files.
@@ -46,7 +45,7 @@ class ProtComposeCTF(ProtImport, ProtStreamingBase):
     """
     _devStatus = pw.BETA
     _label = 'Compose CTF Series'
-    _possibleOutputs = {OUT_SCTF: SetOfCTFTomoSeries}
+    _possibleOutputs = {OUT_CTFS: SetOfCTFTomoSeries}
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
@@ -66,33 +65,82 @@ class ProtComposeCTF(ProtImport, ProtStreamingBase):
                       important=True,
                       label="Input CTF Series",
                       help='Select the SetOfCTF to import')
+        form.addSection('Streaming')
         
+        form.addParam('refreshTime', params.IntParam, default=120,
+                      label="Time to refresh data collected (secs)")
+	    
     def stepsGeneratorStep(self):
         """
         This step should be implemented by any streaming protocol.
         It should check its input and when ready conditions are met
         call the self._insertFunctionStep method.
         """
-        #while self.inputTS.isStreamOpen() or self.inputSetCTF.isStreamOpen():
+        self.zeroTime = time.time()
+        self.listCTF = []
         while True:
-            self.info('True')
-            self.TS = self.inputTS.get()
-            self.CTFs = self.inputSetCTF.get()
-            matchCTF = self._insertFunctionStep(self.matchCTF, prerequisites=[])
-            outputs = self._insertFunctionStep(self.outputs, prerequisites=[matchCTF])
-            if not self.TS.isStreamOpen() and not self.CTFs.isStreamOpen():
-                self.info('Not more micrographs are expected, set closed')
-                break
+            rTime = time.time() - self.zeroTime
+            if rTime >= self.refreshTime.get():
+                self.zeroTime = time.time()
+                self.TS = self.inputTS.get()
+                self.CTFs = self.inputSetCTF.get()
+                self.matchCTF()
+                self.outputs()
+                if not self.TS.isStreamOpen() and not self.CTFs.isStreamOpen():
+                    self.info('Not more micrographs are expected, set closed')
+                    break
 			    
     def matchCTF(self):
         self.info('Match')
+        
+        #DYNAMIC TEMPLATE STARTS
+        import os
+        fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+        time.sleep(15)
+        #DYNAMIC TEMPLATE ENDS
+        
         for TS in self.TS:
+            listCTF = []
             for tilt in TS:
                 micName = tilt.getMicName()
                 for CTF in self.CTFs:
                     if micName == CTF.getMicrograph().getMicName():
+                        listCTF.append(CTF)
                         self.info('match!: {}'.format(micName))
+            if len(TS) == len(listCTF):
+                self.writeSOCTF(listCTF, TS)
     
+    
+    def writeSOCTF(self, listCTF, TS):
+        outputCtfs = getattr(self, OUT_CTFS, None)
+        if outputCtfs:
+            outputCtfs.enableAppend()
+        else:
+            outputCtfs = SetOfCTFTomoSeries.create(self._getPath(), template='CTFmodels%s.sqlite')
+            outputCtfs.setSetOfTiltSeries(TS)
+            outputCtfs.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{OUT_CTFS: outputCtfs})
+            self._defineSourceRelation(self.inputTS, outputCtfs)
+            
+            newCTFTomoSeries = CTFTomoSeries()
+            newCTFTomoSeries.copyInfo(TS)
+            newCTFTomoSeries.setTiltSeries(TS)
+            newCTFTomoSeries.setTsId(TS)
+            outputCtfs.append(newCTFTomoSeries)
+            outputCtfs.update(newCTFTomoSeries)
+
+            outputCtfs.write()
+            self._store(outputCtfs)
+        return outputCtfs
+    
+    
+
     def outputs(self):
         pass
     
