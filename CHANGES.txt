@@ -1,3 +1,9 @@
+v3.7.2:
+ Users:
+  - Import TS, TSM and tomos: remove double underscore from both the linked filenames and the tsIds.
+ Developers:
+  - Add to Tomogram and SetOfTomograms the attribute _ctfcorrected, the same way it was added to the tilt-series.
+  - Update the TCL based on the previous point.
 v3.7.1: HOTFIX - join TS bug solved (Thanks to Doulin Sheperd).
 v3.7.0:
  Developers:

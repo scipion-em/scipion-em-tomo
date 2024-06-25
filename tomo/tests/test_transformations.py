@@ -178,7 +178,7 @@ with weakImport("xmipptomo"):
 
             with weakImport("emantomo"):
                 # Add eman extraction
-                from emantomo.protocols.protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
+                from emantomo.protocols.protocol_extraction_from_tomo import EmanProtTomoExtraction
                 stExtraction = self.newProtocol(EmanProtTomoExtraction,
                                                 inputCoordinates=protPhantom.coordinates3D,
                                                 boxSize=protPhantom.coordinates3D.getBoxSize(),

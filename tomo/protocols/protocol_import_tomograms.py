@@ -28,9 +28,10 @@ from os.path import abspath, basename
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.utils.path import createAbsLink, removeExt
+from pyworkflow.utils.path import createAbsLink, removeExt, removeBaseExt
 import pyworkflow.protocol.params as params
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
+from ..convert.mdoc import normalizeTSId
 from ..objects import Tomogram, SetOfTomograms
 from ..utils import _getUniqueFileName
 
@@ -168,13 +169,15 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             tomo.setOrigin(origin)
 
             newFileName = basename(fileName).split(':')[0]
+            # Double underscore is used in EMAN to determine set type e.g. phase flipped particles. We replace it
+            # by a single underscore to avoid possible problems if the user uses EMAN
+            newFileName = newFileName.replace('__', '_')
             if newFileName in fileNameList:
-                newFileName = _getUniqueFileName(self.getPattern(),
-                                                 fileName.split(':')[0])
+                newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
 
             fileNameList.append(newFileName)
 
-            tsId = removeExt(newFileName)
+            tsId = normalizeTSId(removeBaseExt(newFileName))
             tomo.setTsId(tsId)
 
             if fileName.endswith(':mrc'):
