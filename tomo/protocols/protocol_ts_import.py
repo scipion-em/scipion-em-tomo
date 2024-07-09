@@ -446,24 +446,26 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         errMsg = []
         self._initialize()
 
-        # If the set of TS imported is heterogeneous in the number of tilt images and the angular data source chosen
-        # with a number of angles that corresponds to the lowest one possible (e. g. 58 if the TS in that compose the
-        # set are of 58 and 59 images), the import finishes successfully, but the size of the data stored will be
-        # different in the TS whose no. images is higher than the angles that correspond to the range, causing an
-        # erratic behaviour in the subsequent protocols
-        if self.anglesFrom.get() == 0:  # Angles from range
-            ih = ImageHandler()
-            filePaths = glob(self._globPattern)
-            filePaths = self._excludeByWords(filePaths)
-            nAngles = len(self._getTiltAngleRange())
-            badTsFiles = []
-            for tsFile in filePaths:
-                _, _, z, n = ih.getDimensions(tsFile)
-                if max(z, n) != nAngles:
-                    badTsFiles.append(basename(tsFile))
-            if badTsFiles:
-                errMsg.append(f'Some of the tilt-series introduced have a different number of images than the number '
-                              f'of angles that corresponds to the introduced range {nAngles} --> {str(badTsFiles)}')
+        if type(self) is ProtImportTs:
+            # If the set of TS imported is heterogeneous in the number of tilt images and the angular data source chosen
+            # with a number of angles that corresponds to the lowest one possible (e. g. 58 if the TS in that compose
+            # the set are of 58 and 59 images), the import finishes successfully, but the size of the data stored will
+            # be different in the TS whose no. images is higher than the angles that correspond to the range, causing
+            # an erratic behaviour in the subsequent protocols
+            if self.anglesFrom.get() == 0:  # Angles from range
+                ih = ImageHandler()
+                filePaths = glob(self._globPattern)
+                filePaths = self._excludeByWords(filePaths)
+                nAngles = len(self._getTiltAngleRange())
+                badTsFiles = []
+                for tsFile in filePaths:
+                    _, _, z, n = ih.getDimensions(tsFile)
+                    nImgs = max(z, n)
+                    if nImgs != nAngles:
+                        badTsFiles.append(f'{basename(tsFile)} - {nImgs}')
+                if badTsFiles:
+                    errMsg.append(f'Some of the tilt-series introduced have a different number of images than the number '
+                                  f'of angles that corresponds to the introduced range [{nAngles}] --> {str(badTsFiles)}')
 
         try:
             # The previous validation must be carried out before this point as the matching OrderedDict generated uses

@@ -1,3 +1,6 @@
+v3.7.3:
+ Users:
+  - Import TS: fix the heterogeneous set of TS validation using a range of angles.
 v3.7.2:
  Users:
   - Import TS, TSM and tomos: remove double underscore from both the linked filenames and the tsIds.
