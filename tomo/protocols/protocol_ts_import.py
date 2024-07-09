@@ -446,7 +446,7 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         errMsg = []
         self._initialize()
 
-        if type(self) is ProtImportTs:
+        if type(self) is ProtImportTs and not self.MDOC_DATA_SOURCE:
             # If the set of TS imported is heterogeneous in the number of tilt images and the angular data source chosen
             # with a number of angles that corresponds to the lowest one possible (e. g. 58 if the TS in that compose
             # the set are of 58 and 59 images), the import finishes successfully, but the size of the data stored will
