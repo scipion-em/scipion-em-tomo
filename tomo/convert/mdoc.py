@@ -470,3 +470,9 @@ def normalizeTSId(rawTSId):
         normTSID = normTSID.replace(specChar, okChar)
 
     return normTSID
+
+
+def deNormalizeTSId(rawTSId):
+    """ Denormalizes the name of a TS"""
+    deNormTSID = rawTSId.replace(TS_PREFIX, '')
+    return deNormTSID

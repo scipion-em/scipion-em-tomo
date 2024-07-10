@@ -29,9 +29,10 @@ import logging
 
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
+from pwem import fnMatching
 from pyworkflow.plugin import Domain
 from pyworkflow.utils import removeBaseExt
-from ..convert.mdoc import normalizeTSId
+from ..convert.mdoc import normalizeTSId, deNormalizeTSId
 
 from ..objects import SetOfCTFTomoSeries, TiltSeries, CTFTomoSeries
 from .protocol_base import ProtTomoImportFiles
@@ -90,45 +91,56 @@ class ProtImportTsCTF(ProtTomoImportFiles):
     # --------------------------- STEPS functions -----------------------------
     def importCTFStep(self):
         ci = self.getImportClass()
-
         outputCtfs = self._getOutputSet()
-        if outputCtfs is None:
-            outputCtfs = self._createOutputSet()
+        atLeastOneMatch = False
 
+        defocusFileDict = {}
         defocusFiles = [fn for fn in self.iterFiles()]
+        for defocusFn in defocusFiles:
+            defocusFileDict[removeBaseExt(defocusFn)] = defocusFn
+
         for ts in self._getInputTs():
             tsId = ts.getTsId()
             tsObjId = ts.getObjId()
 
-            for defocusFn in defocusFiles:
-                if tsId == normalizeTSId(removeBaseExt(defocusFn).replace('_ctf', '').replace('_avrot', '')):
-                    logger.info("Parsing file: " + defocusFn)
+            defocusFileId, defocusFn = fnMatching(deNormalizeTSId(tsId),
+                                                  defocusFileDict,
+                                                  objType='Tilt series')
 
-                    newCTFTomoSeries = CTFTomoSeries()
-                    newCTFTomoSeries.copyInfo(ts)
-                    newCTFTomoSeries.setTiltSeries(ts)
-                    newCTFTomoSeries.setObjId(tsObjId)
-                    newCTFTomoSeries.setTsId(tsId)
+            if defocusFn is not None:
+                atLeastOneMatch = True
+                if outputCtfs is None:
+                    outputCtfs = self._createOutputSet()
 
-                    if self._importFromImod():
-                        # Create IMOD-specific attrs that will be updated later
-                        newCTFTomoSeries.setIMODDefocusFileFlag(None)
-                        newCTFTomoSeries.setNumberOfEstimationsInRange(None)
+                newCTFTomoSeries = CTFTomoSeries()
+                newCTFTomoSeries.copyInfo(ts)
+                newCTFTomoSeries.setTiltSeries(ts)
+                newCTFTomoSeries.setObjId(tsObjId)
+                newCTFTomoSeries.setTsId(tsId)
 
-                    outputCtfs.append(newCTFTomoSeries)
+                if self._importFromImod():
+                    # Create IMOD-specific attrs that will be updated later
+                    newCTFTomoSeries.setIMODDefocusFileFlag(None)
+                    newCTFTomoSeries.setNumberOfEstimationsInRange(None)
 
-                    ci.parseTSDefocusFile(ts, defocusFn, newCTFTomoSeries)
+                outputCtfs.append(newCTFTomoSeries)
 
-                    if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
-                            newCTFTomoSeries.getIsDefocusVDeviationInRange()):
-                        newCTFTomoSeries.setEnabled(False)
+                ci.parseTSDefocusFile(ts, defocusFn, newCTFTomoSeries)
 
-                    outputCtfs.update(newCTFTomoSeries)
-                    defocusFiles.remove(defocusFn)
-                    break
+                if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
+                        newCTFTomoSeries.getIsDefocusVDeviationInRange()):
+                    newCTFTomoSeries.setEnabled(False)
 
-        outputCtfs.write()
-        self._store()
+                outputCtfs.update(newCTFTomoSeries)
+                defocusFileDict.pop(defocusFileId)
+
+                outputCtfs.write()
+                self._store()
+            else:
+                logger.info("%s does not match" % tsId)
+
+            if not atLeastOneMatch:
+                raise Exception('There are no files that match any of the Tilt series')
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
@@ -149,21 +161,7 @@ class ProtImportTsCTF(ProtTomoImportFiles):
     def _validate(self):
         errorMsg = []
         matchingFiles = self.getMatchFiles()
-        if matchingFiles:
-            tsIdList = self._getInputTs().getUniqueValues(TiltSeries.TS_ID_FIELD)
-            defocusBNames = [normalizeTSId(pwutils.removeBaseExt(defocusFn).replace('_ctf', '').replace('_avrot', ''))
-                             for defocusFn in self.iterFiles()]
-            matchResults = list(set(tsIdList) & set(defocusBNames))
-            if not matchResults:
-                errorMsg.append('No matching files found.\n'
-                                'CTF filenames are expected to include tsId e.g. tsId_ctf_avrot.txt. The suffixes '
-                                '"_ctf" or "_avrot" are not mandatory.\n'
-                                'The tsIds detected in the tilt series introduced are:\n'
-                                '%s\n'
-                                'The defocus files base names detected are (excluding the suffixes "_ctf" and '
-                                '"_avrot"):\n'
-                                '%s' % (tsIdList, defocusBNames))
-        else:
+        if not matchingFiles:
             errorMsg.append('Unable to find the files provided:\n\n'
                             '\t-filePath = %s\n'
                             '\t-pattern = %s\n' % (self.filesPath.get(),

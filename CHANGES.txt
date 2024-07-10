@@ -3,6 +3,8 @@ v3.7.3:
   - Import TS: fix the heterogeneous set of TS validation using a range of angles.
 v3.7.2:
  Users:
+   - Handling the matching in the ctf import(generalizing without the need to set patterns such as {TS}).
+   - Refactoring the tiltserie viewer
   - Import TS, TSM and tomos: remove double underscore from both the linked filenames and the tsIds.
   - Import TS: add a validation for the case of heterogeneous sets of TS in the number of tilt images and providing the
     angular data using a range. The cases avoided with this validation prevents erratic behavior in the subsequent
