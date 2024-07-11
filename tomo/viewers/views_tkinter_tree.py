@@ -41,6 +41,7 @@ import pyworkflow.utils as pwutils
 from pyworkflow.plugin import Domain
 
 import tomo.objects
+from . import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
@@ -363,14 +364,15 @@ class TiltSeriesDialog(ToolbarListDialog):
         toolbarButtons = []
 
         if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
-            viewers = Domain.findViewers(tomo.objects.TiltSeriesBase.getClassName(),
+            viewers = Domain.findViewers(tomo.objects.SetOfTiltSeries.getClassName(),
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
-                def launchViewer():
-                    proj = self._protocol.getProject()
-                    viewerInstance = viewerClass(project=proj, protocol=self._protocol)
-                    return lambda event: self.launchViewer(viewerInstance)
-                toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
+                if viewerClass is not TomoDataViewer:
+                    def launchViewer():
+                        proj = self._protocol.getProject()
+                        viewerInstance = viewerClass(project=proj, protocol=self._protocol)
+                        return lambda event: self.launchViewer(viewerInstance)
+                    toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
 
         toolbarButtons.append(dialog.ToolbarButton('|', None))
         toolbarButtons.append(dialog.ToolbarButton('Save', self._saveExcluded, Icon.ACTION_SAVE,

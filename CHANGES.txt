@@ -1,6 +1,7 @@
 v3.7.3:
  Users:
   - Import TS: fix the heterogeneous set of TS validation using a range of angles.
+  - TS viewer: fix the list of tiltseries viewers
 v3.7.2:
  Users:
    - Handling the matching in the ctf import(generalizing without the need to set patterns such as {TS}).
