@@ -155,6 +155,7 @@ class DataSetRe4STATuto(Enum):
     dosePerTiltImg = 3.05  # Mean dose
     dosePerTiltImgWithTltFile = dosePerTiltImgWithTltFile
     exclusionWordsTs03 = 'output 01 43 45 54'
+    exclusionWordsTs54 = 'output 01 43 45 03'
     exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
     symmetry = 'C6'

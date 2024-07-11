@@ -431,6 +431,11 @@ class TiltSeriesBase(data.SetOfImages):
 
 def tiltSeriesToString(tiltSeries):
     s = []
+
+    # Heterogeneous set
+    if tiltSeries._isHeterogeneous.get():
+        s.append('+het')
+
     # Matrix info
     if tiltSeries.hasAlignment():
         s.append('+ali')
@@ -711,6 +716,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
         # have TS with a different number of tilt-images in the same batch)
         self._attrDictForSetsComp = {'sampling rates': 'getSamplingRate'}
+        # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
+        self._isHeterogeneous = Boolean(False)
 
     def getAcquisition(self):
         return self._acquisition
@@ -823,8 +830,14 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 self.update(tsOut)
 
     def update(self, item: TiltSeriesBase):
+        if not self._firstDim.isEmpty():
+            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
+            if currentDims != item.getDim() and not self._isHeterogeneous.get():
+                self._isHeterogeneous.set(True)
+        else:
+            self.setDim(item.getDim())
 
-        self.setDim(item.getDim())
+        # self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
@@ -1159,6 +1172,8 @@ class SetOfTomograms(data.SetOfVolumes):
         # Dimensions are not checked as heterogeneous sets of tomograms may be allowed to be combined (it's not unusual
         # to have tomograms with different thickness in the same batch)
         self._attrDictForSetsComp = {'sampling rates': 'getSamplingRate'}
+        # Used to check if a set is composed of elements with different dimensions, suche as the thickness
+        self._isHeterogeneous = Boolean(False)
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -1169,10 +1184,9 @@ class SetOfTomograms(data.SetOfVolumes):
 
     def __str__(self):
         sampling = self.getSamplingRate()
-        tomoStr = "+oe," if self.hasOddEven() else ''
-        # CTF status
-        if self.ctfCorrected():
-            tomoStr += '+ctf,'
+        tomoStr = '+het,' if self._isHeterogeneous.get() else ''
+        tomoStr += "+oe," if self.hasOddEven() else ''
+        tomoStr += '+ctf,' if self.ctfCorrected() else ''
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
@@ -1185,6 +1199,12 @@ class SetOfTomograms(data.SetOfVolumes):
         return s
 
     def update(self, item: Tomogram):
+        if not self._firstDim.isEmpty():
+            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
+            if currentDims != item.getDim() and not self._isHeterogeneous.get():
+                self._isHeterogeneous.set(True)
+        else:
+            self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
         super().update(item)
