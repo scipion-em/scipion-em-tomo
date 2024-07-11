@@ -708,6 +708,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
+        # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+        # have TS with a different number of tilt-images in the same batch)
+        self._attrDictForSetsComp = {'sampling rates': 'getSamplingRate'}
 
     def getAcquisition(self):
         return self._acquisition
@@ -1153,6 +1156,9 @@ class SetOfTomograms(data.SetOfVolumes):
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
+        # Dimensions are not checked as heterogeneous sets of tomograms may be allowed to be combined (it's not unusual
+        # to have tomograms with different thickness in the same batch)
+        self._attrDictForSetsComp = {'sampling rates': 'getSamplingRate'}
 
     def hasOddEven(self):
         return self._hasOddEven.get()
