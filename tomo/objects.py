@@ -432,9 +432,10 @@ class TiltSeriesBase(data.SetOfImages):
 def tiltSeriesToString(tiltSeries):
     s = []
 
-    # Heterogeneous set
-    if tiltSeries._isHeterogeneous.get():
-        s.append('+het')
+    # Heterogeneous set: only applies to the sets of TS, not to TS themselves, causing error the last in the viewers
+    if type(tiltSeries) is SetOfTiltSeries:
+        if tiltSeries.isHeterogeneousSet():
+            s.append('+het')
 
     # Matrix info
     if tiltSeries.hasAlignment():
@@ -739,6 +740,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Returns true if tilt series has been interpolated"""
         return self._interpolated.get()
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def hasAlignment(self):
         """ Returns true if at least one of its items has alignment information"""
         return self._hasAlignment.get()
@@ -747,7 +754,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected', '_interpolated')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected',
+                            '_interpolated', '_isHeterogeneous')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -832,9 +840,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def update(self, item: TiltSeriesBase):
         if not self._firstDim.isEmpty():
             currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
-            if currentDims != item.getDim() and not self._isHeterogeneous.get():
-                self._isHeterogeneous.set(True)
-        else:
+            if currentDims != item.getDim() and not self.isHeterogeneousSet():
+                self.setIsHeterogeneousSet(True)
+            # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+            # in the case of operations that change the size of the elements, such as the binning.
             self.setDim(item.getDim())
 
         # self.setDim(item.getDim())
