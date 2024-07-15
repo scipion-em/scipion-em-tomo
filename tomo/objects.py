@@ -244,13 +244,16 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
-        self._acquisition = TomoAcquisition()
+        self._acquisition = None  # TomoAcquisition()
         self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
         self._hasOddEven = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
+
+    def hasAcquisition(self):
+        return self._acquisition is not None and self._acquisition.getMagnification() is not None
 
     def getAnglesCount(self):
         return self._anglesCount
@@ -842,11 +845,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
             if currentDims != item.getDim() and not self.isHeterogeneousSet():
                 self.setIsHeterogeneousSet(True)
-            # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
-            # in the case of operations that change the size of the elements, such as the binning.
-            self.setDim(item.getDim())
-
-        # self.setDim(item.getDim())
+        # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+        # in the case of operations that change the size of the elements, such as the binning.
+        self.setDim(item.getDim())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
@@ -1190,6 +1191,12 @@ class SetOfTomograms(data.SetOfVolumes):
     def updateDim(self):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
+
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
 
     def __str__(self):
         sampling = self.getSamplingRate()

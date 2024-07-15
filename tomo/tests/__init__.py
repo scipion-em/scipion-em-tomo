@@ -160,7 +160,10 @@ class DataSetRe4STATuto(Enum):
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
     symmetry = 'C6'
     # Acquisition
+    testAcq01 = testAcq03.clone()
     testAcq03 = testAcq03
+    testAcq43 = testAcq54.clone()
+    testAcq45 = testAcq54.clone()
     testAcq54 = testAcq54
     tsAcqDict = tsAcqDict
     testAcq03Interp = testAcq03Interp
