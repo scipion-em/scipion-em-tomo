@@ -245,7 +245,7 @@ class TiltSeriesBase(data.SetOfImages):
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
         self._acquisition = None  # TomoAcquisition()
-        self._origin = Transform()
+        self._origin = None  # Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
         self._hasOddEven = Boolean(False)
@@ -848,6 +848,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
         # in the case of operations that change the size of the elements, such as the binning.
         self.setDim(item.getDim())
+        self.setAlignment(item.getAlignment())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())

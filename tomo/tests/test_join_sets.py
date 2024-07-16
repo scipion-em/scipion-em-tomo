@@ -22,6 +22,9 @@
 # *  e-mail address 'scipion-users@lists.sourceforge.net'
 # *
 # **************************************************************************
+from imod.constants import OUTPUT_TILTSERIES_NAME
+from imod.protocols import ProtImodTsNormalization, ProtImodImportTransformationMatrix
+from pwem import ALIGN_2D
 from pwem.protocols import ProtUnionSet
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
@@ -44,6 +47,7 @@ tomoDimsThk340 = [928, 928, 340]
 
 class TestJoinTomoSets(TestBaseCentralizedLayer):
     ds = None
+    bin4 = 4
     bin4SRate = DataSetRe4STATuto.unbinnedPixSize.value * 4
 
     @classmethod
@@ -95,6 +99,27 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         cls.launchProtocol(protImportTomos)
         outTomos = getattr(protImportTomos, OUTPUT_NAME, None)
         return outTomos
+
+    @classmethod
+    def _runBinTs(cls, inTsSet):
+        print(magentaStr("\n==> Binning the tilt-series with IMOD:"))
+        protTSNormalization = cls.newProtocol(ProtImodTsNormalization,
+                                              inputSetOfTiltSeries=inTsSet,
+                                              binning=cls.bin4)
+        cls.launchProtocol(protTSNormalization)
+        outTsSet = getattr(protTSNormalization, OUTPUT_TILTSERIES_NAME, None)
+        return outTsSet
+
+    @classmethod
+    def _runImportTrMatrix(cls, inTsSet):
+        print(magentaStr("\n==> Importing the TS' transformation matrices with IMOD:"))
+        protImportTrMatrix = cls.newProtocol(ProtImodImportTransformationMatrix,
+                                             filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                             filesPattern=DataSetRe4STATuto.transformPattern.value,
+                                             inputSetOfTiltSeries=inTsSet)
+        cls.launchProtocol(protImportTrMatrix)
+        outTsSet = getattr(protImportTrMatrix, OUTPUT_TILTSERIES_NAME, None)
+        return outTsSet
 
     def test_join_ts_homogeneous_sets(self):
         print(magentaStr("\n==> Join sets of TS with the same number of tilt-images:"))
@@ -160,6 +185,51 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
                              anglesCount=anglesCountDict,
                              imported=True,
                              isHetereogeneousSet=True)
+
+    def test_join_ts_heterogeneous_sets_with_ali(self):
+        print(magentaStr("\n==> Join sets of TS (+ali) with different number of tilt-images:"))
+        tsSet41imgs = self._runImportTs(exclusionWords='output 01 03')
+        tsSet40imgs = self._runImportTs(exclusionWords='output 43 45 54')
+        # tsSet41imgsBin4 = self._runBinTs(tsSet41imgs)
+        # tsSet40imgsBin4 = self._runBinTs(tsSet40imgs)
+        tsSet41imgsWithAli = self._runImportTrMatrix(tsSet41imgs)
+        tsSet40imgsWithAli = self._runImportTrMatrix(tsSet40imgs)
+        protUnion = self.newProtocol(ProtUnionSet)
+        protUnion.inputSets.append(tsSet41imgsWithAli)
+        protUnion.inputSets.append(tsSet40imgsWithAli)
+        protUnion.setObjLabel('join het tsSets')
+        self.launchProtocol(protUnion)
+        # Check the results
+        expectedDimensions = {
+            TS_01: tsDims40,
+            TS_03: tsDims40,
+            TS_43: tsDims41,
+            TS_45: tsDims41,
+            TS_54: tsDims41,
+        }
+        testAcqObjDict = {
+            TS_01: DataSetRe4STATuto.testAcq01.value,
+            TS_03: DataSetRe4STATuto.testAcq03.value,
+            TS_43: DataSetRe4STATuto.testAcq43.value,
+            TS_45: DataSetRe4STATuto.testAcq45.value,
+            TS_54: DataSetRe4STATuto.testAcq54.value,
+        }
+        anglesCountDict = {
+            TS_01: 40,
+            TS_03: 40,
+            TS_43: 41,
+            TS_45: 41,
+            TS_54: 41,
+        }
+        self.checkTiltSeries(getattr(protUnion, 'outputSet', None),
+                             expectedSetSize=len(testAcqObjDict),
+                             expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
+                             expectedDimensions=expectedDimensions,
+                             testAcqObj=testAcqObjDict,
+                             anglesCount=anglesCountDict,
+                             isHetereogeneousSet=True,
+                             hasAlignment=True,
+                             alignment=ALIGN_2D)
 
     def test_join_tomos_heterogeneous_sets(self):
         print(magentaStr("\n==> Join sets of tomograms with different thickness:"))

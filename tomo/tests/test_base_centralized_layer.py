@@ -27,6 +27,7 @@ from os.path import exists, isabs, islink
 from typing import List, Union
 import numpy as np
 from pwem import ALIGN_NONE
+from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
@@ -181,6 +182,8 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the angles count
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
+            # Check the origin matrix
+            self.checkTsOriginMatrix(ts)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
             # Alignment
@@ -263,6 +266,24 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertTrue(np.array_equal(outMatrix, identityMatrix))
             else:
                 self.assertFalse(np.array_equal(outMatrix, identityMatrix))
+
+    def checkTsOriginMatrix(self, ts: TiltSeries):
+        # Generate the test origin matrix
+        ih = ImageHandler()
+        x, y, _, _ = ih.getDimensions(ts.getFirstItem().getFileName())
+        sRate = ts.getSamplingRate()
+        testOriginMatrix = np.eye(4)
+        testOriginMatrix[0, 3] = - sRate * x / 2
+        testOriginMatrix[1, 3] = - sRate * y / 2
+        tol = 1e-3
+        # Get the generated/stored origin matrix and check it
+        originTransform = ts.getOrigin()
+        self.assertIsNotNone(originTransform)
+        originMatrix = originTransform.getMatrix()
+        self.assertIsNotNone(originMatrix)
+        self.assertTrue(np.allclose(testOriginMatrix, originMatrix, rtol=tol),
+                        msg=f'Tilt-series {ts.getTsId()}: origin matrix is different than the expected within '
+                            f'tolerance {tol} Å.\n{originMatrix} != \n{testOriginMatrix}')
 
     # TOMO ACQUISITION #################################################################################################
     def checkTomoAcquisition(self, testAcq, currentAcq, tsId=None):
