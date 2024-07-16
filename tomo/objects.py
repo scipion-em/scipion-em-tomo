@@ -25,8 +25,11 @@
 # *
 # **************************************************************************
 import logging
+from os.path import exists
 from sqlite3 import OperationalError
 from typing import Dict, Tuple, Any, Optional, Union
+
+import mrcfile
 
 from pwem import ALIGN_NONE
 
@@ -518,8 +521,43 @@ class TiltSeries(TiltSeriesBase):
         return excludeViewsList
 
     def _getExcludedViewsIndex(self):
-
         return self.getExcludedViewsIndex()
+
+    def reStack(self, outFileName: Union[str, None] = None) -> Union[str, None]:
+        """Re-stacks a tilt-series creating a new one without the excluded views obtained by calling the method
+        getExcludedViewsIndex(). If the re-stacked file already exists, no action is carried out (avoid creating
+        the same file multiple times, even more necessary if calling this method from the viewer).
+        :param outFileName: Filename of the re-stacked tilt-series. If None, the re-stacked tilt-series will be
+        generated in the same location as the current tilt-series, but adding the suffix _restacked.
+        :returns: None is the re-stacked file already exists or outFileName if not."""
+        tsFileName = self.getFirstItem().getFileName()
+        if not outFileName:
+            outFileName = path.removeExt(tsFileName) + '_restacked' + path.getExt(tsFileName)
+        if exists(outFileName):
+            return None
+        else:
+            excludedIndices = self.getExcludedViewsIndex()
+            # Load the file
+            with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                tsData = tsMrc.data
+            # Create an empty array in which the re-stacked TS will be stored
+            nx, ny, nImgs = tsData.shape
+            finalNImgs = nImgs - len(excludedIndices)
+            newTsShape = (nx, ny, finalNImgs)
+            newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+            # Fill it with the non-excluded images
+            counter = 0
+            for i in range(nImgs):
+                if i not in excludedIndices:
+                    newTsData[counter] = tsData[i]
+                    counter += 1
+            # Save the re-stacked TS
+            with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                reStackedTsMrc.set_data(newTsData)
+                reStackedTsMrc.update_header_from_data()
+                reStackedTsMrc.update_header_stats()
+                reStackedTsMrc.voxel_size = self.getSamplingRate()
+            return outFileName
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
