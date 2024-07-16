@@ -705,6 +705,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
     USE_CREATE_COPY_FOR_SUBSET = True
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
@@ -717,9 +720,6 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
-        # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
-        # have TS with a different number of tilt-images in the same batch)
-        self._attrDictForSetsComp = {'sampling rates': 'getSamplingRate'}
         # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
         self._isHeterogeneous = Boolean(False)
 
@@ -1174,15 +1174,15 @@ class Tomogram(data.Volume):
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = False
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
-        # Dimensions are not checked as heterogeneous sets of tomograms may be allowed to be combined (it's not unusual
-        # to have tomograms with different thickness in the same batch)
-        self._attrDictForSetsComp = {'sampling rates': 'getSamplingRate'}
         # Used to check if a set is composed of elements with different dimensions, suche as the thickness
         self._isHeterogeneous = Boolean(False)
 
