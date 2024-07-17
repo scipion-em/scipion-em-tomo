@@ -537,27 +537,30 @@ class TiltSeries(TiltSeriesBase):
             return None
         else:
             excludedIndices = self.getExcludedViewsIndex()
-            # Load the file
-            with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
-                tsData = tsMrc.data
-            # Create an empty array in which the re-stacked TS will be stored
-            nx, ny, nImgs = tsData.shape
-            finalNImgs = nImgs - len(excludedIndices)
-            newTsShape = (nx, ny, finalNImgs)
-            newTsData = np.empty(newTsShape, dtype=tsData.dtype)
-            # Fill it with the non-excluded images
-            counter = 0
-            for i in range(nImgs):
-                if i not in excludedIndices:
-                    newTsData[counter] = tsData[i]
-                    counter += 1
-            # Save the re-stacked TS
-            with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
-                reStackedTsMrc.set_data(newTsData)
-                reStackedTsMrc.update_header_from_data()
-                reStackedTsMrc.update_header_stats()
-                reStackedTsMrc.voxel_size = self.getSamplingRate()
-            return outFileName
+            if excludedIndices:
+                # Load the file
+                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                    tsData = tsMrc.data
+                # Create an empty array in which the re-stacked TS will be stored
+                nx, ny, nImgs = tsData.shape
+                finalNImgs = nImgs - len(excludedIndices)
+                newTsShape = (nx, ny, finalNImgs)
+                newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+                # Fill it with the non-excluded images
+                counter = 0
+                for i in range(nImgs):
+                    if i not in excludedIndices:
+                        newTsData[counter] = tsData[i]
+                        counter += 1
+                # Save the re-stacked TS
+                with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                    reStackedTsMrc.set_data(newTsData)
+                    reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_stats()
+                    reStackedTsMrc.voxel_size = self.getSamplingRate()
+                return outFileName
+            else:
+                return None
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
