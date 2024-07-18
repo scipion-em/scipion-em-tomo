@@ -27,6 +27,7 @@ from os.path import exists, isabs, islink
 from typing import List, Union
 import numpy as np
 from pwem import ALIGN_NONE
+from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
@@ -111,7 +112,8 @@ class TestBaseCentralizedLayer(BaseTest):
                         anglesCountSet: int = None,
                         hasCtfCorrected: bool = False,
                         isInterpolated: bool = False,
-                        excludedViewsDict: dict = None):
+                        excludedViewsDict: dict = None,
+                        isHetereogeneousSet: bool = False):
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -144,6 +146,8 @@ class TestBaseCentralizedLayer(BaseTest):
         :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
         expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
         to False and the expected transformation matrix is the identity.
+        :param isHetereogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # CHECK THE SET ------------------------------------------------------------------------------------------------
@@ -159,6 +163,7 @@ class TestBaseCentralizedLayer(BaseTest):
         if anglesCountSet:
             self.checkAnglesCount(inTsSet, anglesCountSet)
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
+        self.assertEqual(inTsSet.isHeterogeneousSet(), isHetereogeneousSet)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
@@ -177,6 +182,8 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the angles count
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
+            # Check the origin matrix
+            self.checkTsOriginMatrix(ts)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
             # Alignment
@@ -260,6 +267,24 @@ class TestBaseCentralizedLayer(BaseTest):
             else:
                 self.assertFalse(np.array_equal(outMatrix, identityMatrix))
 
+    def checkTsOriginMatrix(self, ts: TiltSeries):
+        # Generate the test origin matrix
+        ih = ImageHandler()
+        x, y, _, _ = ih.getDimensions(ts.getFirstItem().getFileName())
+        sRate = ts.getSamplingRate()
+        testOriginMatrix = np.eye(4)
+        testOriginMatrix[0, 3] = - sRate * x / 2
+        testOriginMatrix[1, 3] = - sRate * y / 2
+        tol = 1e-3
+        # Get the generated/stored origin matrix and check it
+        originTransform = ts.getOrigin()
+        self.assertIsNotNone(originTransform)
+        originMatrix = originTransform.getMatrix()
+        self.assertIsNotNone(originMatrix)
+        self.assertTrue(np.allclose(testOriginMatrix, originMatrix, rtol=tol),
+                        msg=f'Tilt-series {ts.getTsId()}: origin matrix is different than the expected within '
+                            f'tolerance {tol} Å.\n{originMatrix} != \n{testOriginMatrix}')
+
     # TOMO ACQUISITION #################################################################################################
     def checkTomoAcquisition(self, testAcq, currentAcq, tsId=None):
         """It compares two TomoAcquisition objects, considering the following attributes:
@@ -279,6 +304,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param currentAcq: TomoAcquisition to be tested.
         :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
         """
+        print(f'Checking the aquisition of tsId = {tsId}')
         testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
         self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
@@ -331,7 +357,10 @@ class TestBaseCentralizedLayer(BaseTest):
                        hasOddEven: bool = False,
                        expectedOriginShifts: List[float] = None,
                        ctfCorrected: bool = False,
-                       hasHalves: bool = False):
+                       hasHalves: bool = False,
+                       isHetereogeneousSet: bool = False,
+                       testSetAcqObj: TomoAcquisition = None,
+                       testAcqObj: Union[dict, TomoAcquisition] = None):
         """
         :param inTomoSet: SetOfSubTomograms.
         :param expectedSetSize: expected set site to check.
@@ -346,6 +375,12 @@ class TestBaseCentralizedLayer(BaseTest):
         :param ctfCorrected: False by default: Used to indicate if the tomograms have the CTF corrected or not.
         :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
         compose the set. If True, it will be checked if the corresponding halves files exist.
+        :param isHetereogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        :param testSetAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tomos.
+        It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tomograms. A
+        dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
         """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
@@ -354,12 +389,16 @@ class TestBaseCentralizedLayer(BaseTest):
 
         # Check the set
         self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if testSetAcqObj:
+            self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition())
+        self.assertEqual(inTomoSet.isHeterogeneousSet(), isHetereogeneousSet)
         if hasOddEven:
             self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
         if ctfCorrected is not None:
             self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
         # Check the set elements main attributes
         for tomo in inTomoSet:
+            tsId = tomo.getTsId()
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
@@ -375,10 +414,13 @@ class TestBaseCentralizedLayer(BaseTest):
             if expectedDimensions:
                 x, y, z = tomo.getDimensions()
                 if type(expectedDimensions) is dict:
-                    self.assertEqual([x, y, z], expectedDimensions[tomo.getTsId()], msg=checkSizeMsg)
+                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
                 else:
                     self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
-
+            # Check the acquisition
+            if testAcqObj:
+                tsAcq = tomo.getAcquisition()
+                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId)
             # Check the origin
             if expectedOriginShifts:
                 x, y, z = tomo.getOrigin().getShifts()

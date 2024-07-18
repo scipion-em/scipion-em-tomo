@@ -247,13 +247,16 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
-        self._acquisition = TomoAcquisition()
-        self._origin = Transform()
+        self._acquisition = None  # TomoAcquisition()
+        self._origin = None  # Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
         self._hasOddEven = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
+
+    def hasAcquisition(self):
+        return self._acquisition is not None and self._acquisition.getMagnification() is not None
 
     def getAnglesCount(self):
         return self._anglesCount
@@ -434,6 +437,12 @@ class TiltSeriesBase(data.SetOfImages):
 
 def tiltSeriesToString(tiltSeries):
     s = []
+
+    # Heterogeneous set: only applies to the sets of TS, not to TS themselves, causing error the last in the viewers
+    if type(tiltSeries) is SetOfTiltSeries:
+        if tiltSeries.isHeterogeneousSet():
+            s.append('+het')
+
     # Matrix info
     if tiltSeries.hasAlignment():
         s.append('+ali')
@@ -748,6 +757,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
     USE_CREATE_COPY_FOR_SUBSET = True
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
@@ -760,6 +772,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
+        # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
+        self._isHeterogeneous = Boolean(False)
 
     def getAcquisition(self):
         return self._acquisition
@@ -781,6 +795,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Returns true if tilt series has been interpolated"""
         return self._interpolated.get()
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def hasAlignment(self):
         """ Returns true if at least one of its items has alignment information"""
         return self._hasAlignment.get()
@@ -789,7 +809,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected', '_interpolated')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected',
+                            '_interpolated', '_isHeterogeneous')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -872,8 +893,14 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 self.update(tsOut)
 
     def update(self, item: TiltSeriesBase):
-
+        if not self._firstDim.isEmpty():
+            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
+            if currentDims != item.getDim() and not self.isHeterogeneousSet():
+                self.setIsHeterogeneousSet(True)
+        # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+        # in the case of operations that change the size of the elements, such as the binning.
         self.setDim(item.getDim())
+        self.setAlignment(item.getAlignment())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
@@ -1199,12 +1226,17 @@ class Tomogram(data.Volume):
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = False
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
+        # Used to check if a set is composed of elements with different dimensions, suche as the thickness
+        self._isHeterogeneous = Boolean(False)
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -1213,12 +1245,17 @@ class SetOfTomograms(data.SetOfVolumes):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def __str__(self):
         sampling = self.getSamplingRate()
-        tomoStr = "+oe," if self.hasOddEven() else ''
-        # CTF status
-        if self.ctfCorrected():
-            tomoStr += '+ctf,'
+        tomoStr = '+het,' if self._isHeterogeneous.get() else ''
+        tomoStr += "+oe," if self.hasOddEven() else ''
+        tomoStr += '+ctf,' if self.ctfCorrected() else ''
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
@@ -1231,6 +1268,12 @@ class SetOfTomograms(data.SetOfVolumes):
         return s
 
     def update(self, item: Tomogram):
+        if not self._firstDim.isEmpty():
+            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
+            if currentDims != item.getDim() and not self._isHeterogeneous.get():
+                self._isHeterogeneous.set(True)
+        else:
+            self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
         super().update(item)
