@@ -465,43 +465,54 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False):
+    def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
-        newStack = True
-        # TODO: Handle output tilt-series datatype format
-        if self.getFirstItem().hasTransform():
-            for index, ti in enumerate(self):
-                if ti.hasTransform():
-                    if newStack:
-                        if swapXY:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getYDim(),
-                                                yDim=ti.getXDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                        else:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getXDim(),
-                                                yDim=ti.getYDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                    transform = ti.getTransform().getMatrix()
-                    transformArray = np.array(transform)
-                    if swapXY:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getXDim(), ti.getYDim()))
-                    else:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getYDim(), ti.getXDim()))
-                else:
-                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        if self.hasAlignment():
+            if excludeViews:
+                excludedViewsInd = self.getExcludedViewsIndex()
+                stackSize = self.getSize() - len(excludedViewsInd)
+                counter = 0
+                for index, ti in enumerate(self.iterItems()):
+                    if index not in excludedViewsInd:
+                        self._applyTransformToTi(ti, ih, swapXY, outputFilePath, stackSize, counter)
+                        counter += 1
+            else:
+                stackSize = self.getSize()
+                for index, ti in enumerate(self.iterItems()):
+                    self._applyTransformToTi(ti, ih, swapXY, outputFilePath, stackSize, index)
         else:
             path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+
+    @staticmethod
+    def _applyTransformToTi(ti, ih, swapXY, outputFilePath, stackSize, index):
+
+        if ti.hasTransform():
+            if swapXY:
+                xDim = ti.getYDim()
+                yDim = ti.getXDim()
+            else:
+                xDim = ti.getXDim()
+                yDim = ti.getYDim()
+            ih.createEmptyImage(fnOut=outputFilePath,
+                                xDim=xDim,
+                                yDim=yDim,
+                                nDim=stackSize)
+            transform = ti.getTransform().getMatrix()
+            transformArray = np.array(transform)
+            inputFilePath = ti.getFileName()
+            if swapXY:
+                ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                  outputFile=str(index + 1) + '@' + outputFilePath,
+                                  transformMatrix=transformArray,
+                                  shape=(ti.getXDim(), ti.getYDim()))
+            else:
+                ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                                  outputFile=str(index + 1) + '@' + outputFilePath,
+                                  transformMatrix=transformArray,
+                                  shape=(ti.getYDim(), ti.getXDim()))
+        else:
+            raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
