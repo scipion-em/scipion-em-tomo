@@ -8,6 +8,7 @@ v3.7.3:
   - Method hasAcquisition re-defined in TSBase for the same reason exposed in the previous line.
   - Attribute _isHetereogeneous and accessors added to SetOfTomograms and SetOfTiltSeries. Used in the string
     representation of both objects.
+  TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded views.
   - TCL:
     * Attribute _isHetereogeneous checked in the corresponding sets.
     * Method checktomograms now is able to check the acquisition.
