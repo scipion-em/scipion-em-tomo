@@ -483,7 +483,7 @@ class TiltSeries(TiltSeriesBase):
                 stackSize = self.getSize() - len(excludedViewsInd)
                 counter = 0
                 for index, ti in enumerate(self.iterItems()):
-                    if index not in excludedViewsInd:
+                    if index + 1 not in excludedViewsInd:
                         self._applyTransformToTi(ti, ih, swapXY, outputFilePath, stackSize, counter)
                         counter += 1
             else:
