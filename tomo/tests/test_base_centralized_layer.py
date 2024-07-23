@@ -183,7 +183,7 @@ class TestBaseCentralizedLayer(BaseTest):
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
             # Check the origin matrix
-            self.checkTsOriginMatrix(ts)
+            self.checkOriginMatrix(ts)
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
             # Alignment
@@ -267,22 +267,27 @@ class TestBaseCentralizedLayer(BaseTest):
             else:
                 self.assertFalse(np.array_equal(outMatrix, identityMatrix))
 
-    def checkTsOriginMatrix(self, ts: TiltSeries):
+    def checkOriginMatrix(self, obj: Union[TiltSeries, Tomogram]):
         # Generate the test origin matrix
         ih = ImageHandler()
-        x, y, _, _ = ih.getDimensions(ts.getFirstItem().getFileName())
-        sRate = ts.getSamplingRate()
+        sRate = obj.getSamplingRate()
         testOriginMatrix = np.eye(4)
+        tol = 1e-3
+        if type(obj) is TiltSeries:
+            x, y, _, _ = ih.getDimensions(obj.getFirstItem().getFileName())
+            z = 0
+        else:
+            x, y, z = obj.getDim()
         testOriginMatrix[0, 3] = - sRate * x / 2
         testOriginMatrix[1, 3] = - sRate * y / 2
-        tol = 1e-3
+        testOriginMatrix[2, 3] = - sRate * z / 2
         # Get the generated/stored origin matrix and check it
-        originTransform = ts.getOrigin()
+        originTransform = obj.getOrigin()
         self.assertIsNotNone(originTransform)
         originMatrix = originTransform.getMatrix()
         self.assertIsNotNone(originMatrix)
         self.assertTrue(np.allclose(testOriginMatrix, originMatrix, rtol=tol),
-                        msg=f'Tilt-series {ts.getTsId()}: origin matrix is different than the expected within '
+                        msg=f'Tilt-series {obj.getTsId()}: origin matrix is different than the expected within '
                             f'tolerance {tol} Å.\n{originMatrix} != \n{testOriginMatrix}')
 
     # TOMO ACQUISITION #################################################################################################
@@ -417,6 +422,8 @@ class TestBaseCentralizedLayer(BaseTest):
                     self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
                 else:
                     self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            # Check the origin matrix
+            self.checkOriginMatrix(tomo)
             # Check the acquisition
             if testAcqObj:
                 tsAcq = tomo.getAcquisition()
