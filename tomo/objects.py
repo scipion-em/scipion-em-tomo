@@ -46,7 +46,7 @@ import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList, PointerList, Scalar
 
 
 class MATRIX_CONVERSION:
@@ -244,8 +244,8 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
-        self._acquisition = None  # TomoAcquisition()
-        self._origin = None  # Transform()
+        self._acquisition = TomoAcquisition()
+        self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
         self._hasOddEven = Boolean(False)
@@ -430,6 +430,29 @@ class TiltSeriesBase(data.SetOfImages):
 
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
+
+    def copyAttributes(self, other, *attrNames):
+        """ Copy attributes in attrNames from other to self.
+        If the name X is in attrNames, it would be equivalent to:
+        self.X.set(other.X.get())
+        This method is more useful for Scalar attributes.
+        There are two paths for Pointer and PointerList.
+        """
+        for name in attrNames:
+            attr = getattr(self, name, None)
+            otherAttr = getattr(other, name)
+
+            if attr is None or isinstance(attr, TomoAcquisition) or isinstance(attr, Transform):
+                setattr(self, name, otherAttr.clone())
+            elif isinstance(attr, Pointer):
+                attr.copy(otherAttr)
+            elif isinstance(attr, PointerList):
+                for pointer in otherAttr:
+                    attr.append(pointer)
+            elif isinstance(attr, Scalar) and otherAttr.hasPointer():
+                attr.copy(otherAttr)
+            else:
+                attr.set(otherAttr.get())
 
 
 def tiltSeriesToString(tiltSeries):
