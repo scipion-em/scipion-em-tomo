@@ -31,7 +31,6 @@ from tkinter import messagebox, BOTH, RAISED
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from pwem.emlib.image.image_readers import MRCImageReader
 from pwem.viewers import showj
 from pwem.viewers.mdviewer.readers import ScipionImageReader
 from pwem.viewers.showj import runJavaIJapp
