@@ -27,7 +27,7 @@ from os.path import exists, isabs, islink
 from typing import List, Union
 import numpy as np
 from pwem import ALIGN_NONE
-from pwem.emlib.image import ImageHandler
+from pwem.emlib.image.image_readers import MRCImageReader
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
@@ -113,7 +113,8 @@ class TestBaseCentralizedLayer(BaseTest):
                         hasCtfCorrected: bool = False,
                         isInterpolated: bool = False,
                         excludedViewsDict: dict = None,
-                        isHetereogeneousSet: bool = False):
+                        isHetereogeneousSet: bool = False,
+                        expectedOrigin: Union[Union[List[float], np.ndarray], dict] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -148,8 +149,13 @@ class TestBaseCentralizedLayer(BaseTest):
         to False and the expected transformation matrix is the identity.
         :param isHetereogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
         number of tilt-images.
+        :param expectedOrigin: list containing the expected originX,originY, in angstroms, to check. A dict of
+        structure {key --> tsId: value: expectedOrigin} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different dimensions in the same set and. consequently, different origin.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
+        originTol = 0.1  # in angstroms
+        sRateTol = 0.001  # in angstroms/pixel
         # CHECK THE SET ------------------------------------------------------------------------------------------------
         self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
         if testSetAcqObj:
@@ -170,7 +176,8 @@ class TestBaseCentralizedLayer(BaseTest):
             tsId = ts.getTsId()
             # Check the dimensions
             if expectedDimensions:
-                x, y, z = ts.getDimensions()
+                x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
+                z = max(z, n)
                 if type(expectedDimensions) is dict:
                     self.assertEqual([x, y, z], expectedDimensions[tsId])
                 else:
@@ -183,9 +190,14 @@ class TestBaseCentralizedLayer(BaseTest):
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
             # Check the origin matrix
-            self.checkTsOriginMatrix(ts)
+            if expectedOrigin is not None:
+                if type(expectedOrigin) is dict:
+                    testOrigin = expectedOrigin[tsId]
+                else:
+                    testOrigin = expectedOrigin
+                self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTol=originTol)
             # Sampling rate
-            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateTol)
             # Alignment
             self.assertEqual(ts.hasAlignment(), hasAlignment)
             self.assertEqual(ts.getAlignment(), alignment)
@@ -216,7 +228,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
-                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=0.001)
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateTol)
 
     def checkAnglesCount(self,
                          inSet: Union[SetOfTiltSeries, TiltSeries],
@@ -267,23 +279,21 @@ class TestBaseCentralizedLayer(BaseTest):
             else:
                 self.assertFalse(np.array_equal(outMatrix, identityMatrix))
 
-    def checkTsOriginMatrix(self, ts: TiltSeries):
-        # Generate the test origin matrix
-        ih = ImageHandler()
-        x, y, _, _ = ih.getDimensions(ts.getFirstItem().getFileName())
-        sRate = ts.getSamplingRate()
-        testOriginMatrix = np.eye(4)
-        testOriginMatrix[0, 3] = - sRate * x / 2
-        testOriginMatrix[1, 3] = - sRate * y / 2
-        tol = 1e-3
+    def checkTsOriginMatrix(self, ts: TiltSeries, expectedOrigin: List[float], originTol: float = 0.1) -> None:
+        testOrigin = np.array(expectedOrigin)
+        testOrigin = np.append(testOrigin, 0)  # Z shift must be 0 for images
         # Get the generated/stored origin matrix and check it
         originTransform = ts.getOrigin()
         self.assertIsNotNone(originTransform)
         originMatrix = originTransform.getMatrix()
         self.assertIsNotNone(originMatrix)
-        self.assertTrue(np.allclose(testOriginMatrix, originMatrix, rtol=tol),
-                        msg=f'Tilt-series {ts.getTsId()}: origin matrix is different than the expected within '
-                            f'tolerance {tol} Å.\n{originMatrix} != \n{testOriginMatrix}')
+        origX = originMatrix[0, -1]
+        origY = originMatrix[1, -1]
+        origZ = originMatrix[2, -1]
+        origin = np.array([origX, origY, origZ])
+        self.assertTrue(np.allclose(testOrigin, origin, rtol=originTol),
+                        msg=f'Tilt-series {ts.getTsId()}: origin values [originX, originY, originZ] are different than '
+                            f'the expected within tolerance {originTol} Å.\n{testOrigin} != \n{origin}')
 
     # TOMO ACQUISITION #################################################################################################
     def checkTomoAcquisition(self, testAcq, currentAcq, tsId=None):
@@ -304,7 +314,6 @@ class TestBaseCentralizedLayer(BaseTest):
         :param currentAcq: TomoAcquisition to be tested.
         :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
         """
-        print(f'Checking the aquisition of tsId = {tsId}')
         testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
         self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
