@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import glob
+import os.path
 import threading
 from tkinter import messagebox, BOTH, RAISED
 
@@ -442,12 +443,30 @@ class TiltSeriesDialog(ToolbarListDialog):
             outputSetOfTiltSeries.copyInfo(self._tiltSeries)
             outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
             excludedViews = self._provider.getExcludedViews()
+            outputPrefix = 'TiltSeries_'
+            outputSuffix = 0
+            for outputName, _ in self._protocol.iterOutputAttributes():
+                if outputName.startswith(outputPrefix):
+                    suffix = int(outputName.split(outputPrefix)[-1])
+                    if suffix > outputSuffix:
+                        outputSuffix = suffix
+            outputName = outputPrefix + str(outputSuffix + 1)
+            outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
+
+            if restack:  # Creating a new directory to write a new stack
+                imageReader = ScipionImageReader()
+                if not os.path.exists(outputPath):
+                    os.mkdir(outputPath)
+
             for ts in self._tiltSeries:
                 _, obj = self._provider.getTiltSerie(ts.getTsId())
+                newBinaryName = os.path.join(outputPath, ts.getTsId() + '.mrcs')
+                index = 1
                 if not restack or (obj.isEnabled() and restack):
                     newTs = ts.clone()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
+                    stackImages = []
                     for ti in ts.iterItems():
                         included = False if ti.getObjId() in excludedViews[ts.getTsId()] else True
                         if not restack or (included and restack):
@@ -457,16 +476,24 @@ class TiltSeriesDialog(ToolbarListDialog):
                             newTi.setLocation(ti.getLocation())
                             # For some reason .clone() does not clone the enabled nor the creation time
                             newTi.setEnabled(included)
+                            if restack:
+                                stackImages.append(imageReader.open(str(int(ti._acqOrder)-1) + '@' + ti.getFileName()))
+                                newTi.setLocation((index, newBinaryName))
+                                newTi.setObjId(index)
+                                index += 1
+
                             newTs.append(newTi)
+
+                    if restack:
+                       imageReader.write(stackImages, newBinaryName, sr=obj.getSamplingRate(), isStack=True)
 
                     if len(excludedViews[ts.getTsId()]) == ts.getSize():
                         newTs.setEnabled(False)
                     newTs.setDim(ts.getDim())
                     newTs.write()
-
                     outputSetOfTiltSeries.update(newTs)
                     outputSetOfTiltSeries.write()
-            outputName = 'TiltSeries_' + str(self._protocol.getOutputsSize()+1)
+
             self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
             self.info('The new set (%s) has been created successfully' % outputName)
             self._provider.resetChanges()
@@ -664,7 +691,7 @@ class TiltSeriesDialogView(pwviewer.View):
         elif isinstance(obj, tomo.objects.TiltImageBase):
             text = "Tilt image at %sº" % obj.getTiltAngle()
 
-        image = ScipionImageReader().open(str(obj._acqOrder) + '@' + obj.getFileName())
+        image = ScipionImageReader().open(str(obj.getIndex()) + '@' + obj.getFileName())
         # Get original size
         width, height = image.size
 
