@@ -304,13 +304,15 @@ class TestBaseCentralizedLayer(BaseTest):
                             f'the expected within tolerance {originTol} Å.\n{testOrigin} != \n{origin}')
 
     # TOMO ACQUISITION #################################################################################################
-    def checkTomoAcquisition(self, testAcq: TomoAcquisition, currentAcq: TomoAcquisition,
+    def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict], currentAcq: TomoAcquisition,
                              tsId: Union[str, None] = None,
                              isTomogramAcq: bool = False) -> None:
         """It compares two TomoAcquisition objects, considering the following attributes:
+
         * Magnification.
         * Voltage.
         * Spherical aberration.
+        * Amplitude contrast.
         * Initial dose.
         * Dose per frame.
         * Accumulated dose.
@@ -324,18 +326,24 @@ class TestBaseCentralizedLayer(BaseTest):
         :param currentAcq: TomoAcquisition to be tested.
         :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
         :param isTomogramAcq: boolean used to indicate if the acquisitoon introduced corresponds to a tomogram instead
-        of a tilt-series. In that case, the attributes checked will not contain the dose related ones.
+        of a tilt-series. In that case, the attributes checked will be:
+
+        * Voltage.
+        * Spherical aberration.
+        * Amplitude contrast.
+
         """
 
         testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
-        self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
         self.assertAlmostEqual(testAcq.getSphericalAberration(), currentAcq.getSphericalAberration(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.5)
-        self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
+        self.assertAlmostEqual(testAcq.getAmplitudeContrast(), currentAcq.getAmplitudeContrast(), delta=0.01)
         if not isTomogramAcq:
+            self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
+            self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.5)
+            self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
             self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
             self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
             self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
@@ -417,7 +425,7 @@ class TestBaseCentralizedLayer(BaseTest):
                                   isHeterogeneous=isHeterogeneousSet)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition(), isTomogramAcq=True)
-        self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
+        self.assertEqual(inTomoSet.hasOddEven(), hasOddEven)
         self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
         # Check the set elements main attributes
         for tomo in inTomoSet:
