@@ -37,16 +37,22 @@ from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, To
 
 class TestBaseCentralizedLayer(BaseTest):
 
-    def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float, streamState: int = 2):
+    def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float,
+                             isHeterogeneous: Union[bool, None] = None,
+                             streamState: int = 2) -> None:
         """
         :param inSet: A set of Scipion Tomo objects.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param isHeterogeneous: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images or tomograms with different thicknesses.
         :param streamState: expected stream state, being 2 (default) a stream that is closed.
         """
         self.assertSetSize(inSet, expectedSetSize)
         self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
         self.assertEqual(inSet.getStreamState(), streamState)
+        if isHeterogeneous:
+            self.assertEqual(inSet.isHeterogeneousSet(), isHeterogeneous)
 
     # TILT SERIES ######################################################################################################
     def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
@@ -113,7 +119,7 @@ class TestBaseCentralizedLayer(BaseTest):
                         hasCtfCorrected: bool = False,
                         isInterpolated: bool = False,
                         excludedViewsDict: dict = None,
-                        isHetereogeneousSet: bool = False,
+                        isHeterogeneousSet: Union[bool, None] = None,
                         expectedOrigin: Union[Union[List[float], np.ndarray], dict] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
@@ -147,7 +153,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
         expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
         to False and the expected transformation matrix is the identity.
-        :param isHetereogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
         number of tilt-images.
         :param expectedOrigin: list containing the expected originX,originY, in angstroms, to check. A dict of
         structure {key --> tsId: value: expectedOrigin} is also admitted in the case of heterogeneous sets, e.g.
@@ -157,7 +163,10 @@ class TestBaseCentralizedLayer(BaseTest):
         originTol = 0.1  # in angstroms
         sRateTol = 0.001  # in angstroms/pixel
         # CHECK THE SET ------------------------------------------------------------------------------------------------
-        self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkSetGeneralProps(inTsSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition())
         self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
@@ -169,7 +178,6 @@ class TestBaseCentralizedLayer(BaseTest):
         if anglesCountSet:
             self.checkAnglesCount(inTsSet, anglesCountSet)
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
-        self.assertEqual(inTsSet.isHeterogeneousSet(), isHetereogeneousSet)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
@@ -367,9 +375,9 @@ class TestBaseCentralizedLayer(BaseTest):
                        expectedOriginShifts: List[float] = None,
                        ctfCorrected: bool = False,
                        hasHalves: bool = False,
-                       isHetereogeneousSet: bool = False,
+                       isHeterogeneousSet: Union[bool, None] = None,
                        testSetAcqObj: TomoAcquisition = None,
-                       testAcqObj: Union[dict, TomoAcquisition] = None):
+                       testAcqObj: Union[dict, TomoAcquisition] = None) -> None:
         """
         :param inTomoSet: SetOfSubTomograms.
         :param expectedSetSize: expected set site to check.
@@ -384,7 +392,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param ctfCorrected: False by default: Used to indicate if the tomograms have the CTF corrected or not.
         :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
         compose the set. If True, it will be checked if the corresponding halves files exist.
-        :param isHetereogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
         number of tilt-images.
         :param testSetAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tomos.
         It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
@@ -397,10 +405,12 @@ class TestBaseCentralizedLayer(BaseTest):
         checkOriginMsg = checkMsgPattern % 'origin shifts'
 
         # Check the set
-        self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkSetGeneralProps(inTomoSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition())
-        self.assertEqual(inTomoSet.isHeterogeneousSet(), isHetereogeneousSet)
         if hasOddEven:
             self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
         if ctfCorrected is not None:
