@@ -228,13 +228,6 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tomoSets')
         self.launchProtocol(protUnion)
         # Check the results
-        # testAcqObjDict = {
-        #     TS_01: DataSetRe4STATuto.testAcq01.value,
-        #     TS_03: DataSetRe4STATuto.testAcq03.value,
-        #     TS_43: DataSetRe4STATuto.testAcq43.value,
-        #     TS_45: DataSetRe4STATuto.testAcq45.value,
-        #     TS_54: DataSetRe4STATuto.testAcq54.value,
-        # }
         expectedDimensionsDict = {
             TS_01: tomoDimsThk340,
             TS_03: tomoDimsThk280,
@@ -244,7 +237,6 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         }
         self.checkTomograms(getattr(protUnion, 'outputSet', None),
                             expectedSetSize=len(expectedDimensionsDict),
-                            # testAcqObj=testAcqObjDict,
                             expectedSRate=self.bin4SRate,
                             expectedDimensions=expectedDimensionsDict,
                             isHetereogeneousSet=True)
@@ -259,14 +251,8 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join homogen tomoSets')
         self.launchProtocol(protUnion)
         # Check the results
-        # testAcqObjDict = {
-        #     TS_43: DataSetRe4STATuto.testAcq43.value,
-        #     TS_45: DataSetRe4STATuto.testAcq45.value,
-        # }
         self.checkTomograms(getattr(protUnion, 'outputSet', None),
                             expectedSetSize=2,
-                            # testSetAcqObj=testAcqObjDict[TS_45],
-                            # testAcqObj=testAcqObjDict,
                             expectedSRate=self.bin4SRate,
                             expectedDimensions=tomoDimsThk300,
                             isHetereogeneousSet=False)
