@@ -326,6 +326,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param isTomogramAcq: boolean used to indicate if the acquisitoon introduced corresponds to a tomogram instead
         of a tilt-series. In that case, the attributes checked will not contain the dose related ones.
         """
+
         testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
         self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
@@ -416,10 +417,8 @@ class TestBaseCentralizedLayer(BaseTest):
                                   isHeterogeneous=isHeterogeneousSet)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition(), isTomogramAcq=True)
-        if hasOddEven:
-            self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
-        if ctfCorrected is not None:
-            self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
+        self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
+        self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
         # Check the set elements main attributes
         for tomo in inTomoSet:
             tsId = tomo.getTsId()
