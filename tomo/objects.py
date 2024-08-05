@@ -49,7 +49,7 @@ import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList, PointerList, Scalar
 
 
 class MATRIX_CONVERSION:
@@ -247,8 +247,8 @@ class TiltSeriesBase(data.SetOfImages):
         # TiltSeries will always be used inside a SetOfTiltSeries
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
-        self._acquisition = None  # TomoAcquisition()
-        self._origin = None  # Transform()
+        self._acquisition = TomoAcquisition()
+        self._origin = Transform()
         self._anglesCount = Integer()
         self._hasAlignment = Boolean(False)
         self._hasOddEven = Boolean(False)

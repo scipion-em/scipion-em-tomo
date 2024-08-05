@@ -29,6 +29,7 @@ from pwem.protocols import ProtUnionSet
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
 from tomo.protocols import ProtImportTs, ProtImportTomograms
+from tomo.protocols.protocol_base import ProtTomoImportAcquisition
 from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
@@ -95,7 +96,11 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protImportTomos = cls.newProtocol(ProtImportTomograms,
                                           filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
                                           filesPattern=filesPattern,
-                                          samplingRate=DataSetRe4STATuto.sRateBin4.value)  # Bin 4
+                                          samplingRate=DataSetRe4STATuto.sRateBin4.value,  # Bin 4
+                                          importAcquisitionFrom=ProtTomoImportAcquisition.MANUAL_IMPORT,
+                                          oltage=DataSetRe4STATuto.voltage.value,
+                                          sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
+                                          amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value)
         cls.launchProtocol(protImportTomos)
         outTomos = getattr(protImportTomos, OUTPUT_NAME, None)
         return outTomos
@@ -121,6 +126,31 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         outTsSet = getattr(protImportTrMatrix, OUTPUT_TILTSERIES_NAME, None)
         return outTsSet
 
+    @staticmethod
+    def _getHetTsSetTestData():
+        expectedDimensions = {
+            TS_01: tsDims40,
+            TS_03: tsDims40,
+            TS_43: tsDims41,
+            TS_45: tsDims41,
+            TS_54: tsDims41,
+        }
+        testAcqObjDict = {
+            TS_01: DataSetRe4STATuto.testAcq01.value,
+            TS_03: DataSetRe4STATuto.testAcq03.value,
+            TS_43: DataSetRe4STATuto.testAcq43.value,
+            TS_45: DataSetRe4STATuto.testAcq45.value,
+            TS_54: DataSetRe4STATuto.testAcq54.value,
+        }
+        anglesCountDict = {
+            TS_01: 40,
+            TS_03: 40,
+            TS_43: 41,
+            TS_45: 41,
+            TS_54: 41,
+        }
+        return expectedDimensions, testAcqObjDict, anglesCountDict
+
     def test_join_ts_homogeneous_sets(self):
         print(magentaStr("\n==> Join sets of TS with the same number of tilt-images:"))
         tsSet41imgs1 = self._runImportTs(exclusionWords='output 01 03 43 45')
@@ -144,7 +174,7 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
                              testAcqObj=testAcqObjDict,
                              anglesCount=41,
                              imported=True,
-                             isHetereogeneousSet=False)
+                             isHeterogeneousSet=False)
 
     def test_join_ts_heterogeneous_sets(self):
         print(magentaStr("\n==> Join sets of TS with different number of tilt-images:"))
@@ -156,27 +186,7 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tsSets')
         self.launchProtocol(protUnion)
         # Check the results
-        expectedDimensions = {
-            TS_01: tsDims40,
-            TS_03: tsDims40,
-            TS_43: tsDims41,
-            TS_45: tsDims41,
-            TS_54: tsDims41,
-        }
-        testAcqObjDict = {
-            TS_01: DataSetRe4STATuto.testAcq01.value,
-            TS_03: DataSetRe4STATuto.testAcq03.value,
-            TS_43: DataSetRe4STATuto.testAcq43.value,
-            TS_45: DataSetRe4STATuto.testAcq45.value,
-            TS_54: DataSetRe4STATuto.testAcq54.value,
-        }
-        anglesCountDict = {
-            TS_01: 40,
-            TS_03: 40,
-            TS_43: 41,
-            TS_45: 41,
-            TS_54: 41,
-        }
+        expectedDimensions, testAcqObjDict, anglesCountDict = self._getHetTsSetTestData()
         self.checkTiltSeries(getattr(protUnion, 'outputSet', None),
                              expectedSetSize=len(testAcqObjDict),
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
@@ -184,14 +194,12 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
                              testAcqObj=testAcqObjDict,
                              anglesCount=anglesCountDict,
                              imported=True,
-                             isHetereogeneousSet=True)
+                             isHeterogeneousSet=True)
 
     def test_join_ts_heterogeneous_sets_with_ali(self):
         print(magentaStr("\n==> Join sets of TS (+ali) with different number of tilt-images:"))
         tsSet41imgs = self._runImportTs(exclusionWords='output 01 03')
         tsSet40imgs = self._runImportTs(exclusionWords='output 43 45 54')
-        # tsSet41imgsBin4 = self._runBinTs(tsSet41imgs)
-        # tsSet40imgsBin4 = self._runBinTs(tsSet40imgs)
         tsSet41imgsWithAli = self._runImportTrMatrix(tsSet41imgs)
         tsSet40imgsWithAli = self._runImportTrMatrix(tsSet40imgs)
         protUnion = self.newProtocol(ProtUnionSet)
@@ -200,34 +208,14 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tsSets')
         self.launchProtocol(protUnion)
         # Check the results
-        expectedDimensions = {
-            TS_01: tsDims40,
-            TS_03: tsDims40,
-            TS_43: tsDims41,
-            TS_45: tsDims41,
-            TS_54: tsDims41,
-        }
-        testAcqObjDict = {
-            TS_01: DataSetRe4STATuto.testAcq01.value,
-            TS_03: DataSetRe4STATuto.testAcq03.value,
-            TS_43: DataSetRe4STATuto.testAcq43.value,
-            TS_45: DataSetRe4STATuto.testAcq45.value,
-            TS_54: DataSetRe4STATuto.testAcq54.value,
-        }
-        anglesCountDict = {
-            TS_01: 40,
-            TS_03: 40,
-            TS_43: 41,
-            TS_45: 41,
-            TS_54: 41,
-        }
+        expectedDimensions, testAcqObjDict, anglesCountDict = self._getHetTsSetTestData()
         self.checkTiltSeries(getattr(protUnion, 'outputSet', None),
                              expectedSetSize=len(testAcqObjDict),
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
                              expectedDimensions=expectedDimensions,
                              testAcqObj=testAcqObjDict,
                              anglesCount=anglesCountDict,
-                             isHetereogeneousSet=True,
+                             isHeterogeneousSet=True,
                              hasAlignment=True,
                              alignment=ALIGN_2D)
 
@@ -245,13 +233,13 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tomoSets')
         self.launchProtocol(protUnion)
         # Check the results
-        # testAcqObjDict = {
-        #     TS_01: DataSetRe4STATuto.testAcq01.value,
-        #     TS_03: DataSetRe4STATuto.testAcq03.value,
-        #     TS_43: DataSetRe4STATuto.testAcq43.value,
-        #     TS_45: DataSetRe4STATuto.testAcq45.value,
-        #     TS_54: DataSetRe4STATuto.testAcq54.value,
-        # }
+        testAcqObjDict = {
+            TS_01: DataSetRe4STATuto.testAcq01.value,
+            TS_03: DataSetRe4STATuto.testAcq03.value,
+            TS_43: DataSetRe4STATuto.testAcq43.value,
+            TS_45: DataSetRe4STATuto.testAcq45.value,
+            TS_54: DataSetRe4STATuto.testAcq54.value,
+        }
         expectedDimensionsDict = {
             TS_01: tomoDimsThk340,
             TS_03: tomoDimsThk280,
@@ -261,10 +249,10 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         }
         self.checkTomograms(getattr(protUnion, 'outputSet', None),
                             expectedSetSize=len(expectedDimensionsDict),
-                            # testAcqObj=testAcqObjDict,
                             expectedSRate=self.bin4SRate,
+                            testAcqObj=testAcqObjDict,
                             expectedDimensions=expectedDimensionsDict,
-                            isHetereogeneousSet=True)
+                            isHeterogeneousSet=True)
 
     def test_join_tomos_homogeneous_sets(self):
         print(magentaStr("\n==> Join sets of tomograms with different thickness:"))
@@ -276,17 +264,17 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join homogen tomoSets')
         self.launchProtocol(protUnion)
         # Check the results
-        # testAcqObjDict = {
-        #     TS_43: DataSetRe4STATuto.testAcq43.value,
-        #     TS_45: DataSetRe4STATuto.testAcq45.value,
-        # }
+        testAcqObjDict = {
+            TS_43: DataSetRe4STATuto.testAcq43.value,
+            TS_45: DataSetRe4STATuto.testAcq45.value,
+        }
         self.checkTomograms(getattr(protUnion, 'outputSet', None),
                             expectedSetSize=2,
-                            # testSetAcqObj=testAcqObjDict[TS_45],
-                            # testAcqObj=testAcqObjDict,
                             expectedSRate=self.bin4SRate,
+                            testSetAcqObj=testAcqObjDict[TS_45],
+                            testAcqObj=testAcqObjDict,
                             expectedDimensions=tomoDimsThk300,
-                            isHetereogeneousSet=False)
+                            isHeterogeneousSet=False)
 
 
 
