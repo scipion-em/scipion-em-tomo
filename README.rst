@@ -36,7 +36,7 @@ Protocols
 **Latest plugin versions**
 ==========================
 
-If you want to check the latest version and release history go to `CHANGES <https://github.com/scipion-em-tomo/tomo/blob/master/CHANGES.txt>`_
+If you want to check the latest version and release history go to `CHANGES <https://github.com/scipion-em/scipion-em-tomo/blob/master/CHANGES.txt>`_
 
 
 **Installing the plugin**
@@ -65,6 +65,13 @@ Install the plugin in developer mode.
 .. code-block::
 
     scipion installp -p local/path/to/scipion-em-tomo --devel
+
+
+**Configuration variables**
+===========================
+
+**NAPARI_ENV_ACTIVATION** (default = conda activate napari-0.4.17):
+Command to activate napari environment (used by other tomo plugins).
 
 
 Buildbot status

@@ -48,7 +48,7 @@ class ProtTomoBase:
         setObj = SetClass(filename=setFn, **kwargs)
         return setObj
 
-    def _createSetOfTiltSeriesM(self, suffix='')->tomo.objects.SetOfTiltSeriesM:
+    def _createSetOfTiltSeriesM(self, suffix='') -> tomo.objects.SetOfTiltSeriesM:
         return self._createSet(tomo.objects.SetOfTiltSeriesM,
                                'tiltseriesM%s.sqlite', suffix)
 
@@ -57,14 +57,14 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfTiltSeries,
                                'tiltseries%s.sqlite', suffix)
 
-    def _createSetOfCoordinates3D(self, volSet, suffix='')->tomo.objects.SetOfCoordinates3D:
+    def _createSetOfCoordinates3D(self, volSet, suffix='') -> tomo.objects.SetOfCoordinates3D:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                      'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
         coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
-    def _createSetOfTomograms(self, suffix='')->tomo.objects.SetOfTomograms:
+    def _createSetOfTomograms(self, suffix='') -> tomo.objects.SetOfTomograms:
         return self._createSet(tomo.objects.SetOfTomograms,
                                'tomograms%s.sqlite', suffix)
 
@@ -72,11 +72,11 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfSubTomograms,
                                'subtomograms%s.sqlite', suffix)
 
-    def _createSetOfAverageSubTomograms(self, suffix='')-> tomo.objects.SetOfAverageSubTomograms:
+    def _createSetOfAverageSubTomograms(self, suffix='') -> tomo.objects.SetOfAverageSubTomograms:
         return self._createSet(tomo.objects.SetOfAverageSubTomograms,
                                'avgSubtomograms%s.sqlite', suffix)
 
-    def _createSetOfClassesSubTomograms(self, subTomograms, suffix='')->tomo.objects.SetOfClassesSubTomograms:
+    def _createSetOfClassesSubTomograms(self, subTomograms, suffix='') -> tomo.objects.SetOfClassesSubTomograms:
         classes = self._createSet(tomo.objects.SetOfClassesSubTomograms,
                                   'subtomogramClasses%s.sqlite', suffix)
         classes.setImages(subTomograms)
@@ -86,7 +86,7 @@ class ProtTomoBase:
     def _createSetOfLandmarkModels(self, suffix='') -> tomo.objects.SetOfLandmarkModels:
         return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
 
-    def _createSetOfMeshes(self, volSet, suffix='')->tomo.objects.SetOfMeshes:
+    def _createSetOfMeshes(self, volSet, suffix='') -> tomo.objects.SetOfMeshes:
         meshSet = self._createSet(tomo.objects.SetOfMeshes,
                                   'meshes%s.sqlite', suffix)
         meshSet.setPrecedents(volSet)
@@ -107,13 +107,14 @@ class ProtTomoBase:
                 counter = 1  # when there is not number assume 1
             maxCounter = max(counter, maxCounter)
 
-        return str(maxCounter+1) if maxCounter > 0 else ''  # empty if not output
+        return str(maxCounter + 1) if maxCounter > 0 else ''  # empty if not output
 
 
 class ProtTomoPicking(ProtImport, ProtTomoBase):
     OUTPUT_PREFIX = 'output3DCoordinates'
 
     """ Base class for Tomogram boxing protocols. """
+
     def _defineParams(self, form):
 
         form.addSection(label='Input')
@@ -206,7 +207,6 @@ class ProtTomoSubtomogramAveraging(EMProtocol, ProtTomoBase):
 
 
 class ProtTomoImportAcquisition:
-
     MANUAL_IMPORT = 0
     FROM_FILE_IMPORT = 1
 
@@ -227,16 +227,16 @@ class ProtTomoImportAcquisition:
 
         form.addParam('acquisitionData', PathParam,
                       label="Acquisition parameters file",
-                      help="File with the acquisition parameters for every "
-                           "subtomogram to import. File must be in plain format."
+                      help="File with the acquisition parameters for each "
+                           "tomogram or subtomogram to import. File must be in plain format."
                            " The file must contain a row per file to be imported "
                            "and have the following parameters in order: \n"
                            "\n"
-                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step AngleAxis1 AngleAxis2' \n"
+                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step TiltAxisAngle' \n"
                            "\n"
-                           "An example would be: \n"
-                           "subtomo1.em -40 40 3 25 30 \n"
-                           "subtomo2.em -45 50 2 15 15 \n",
+                           "An example would be:\n"
+                           "subtomo1.em -40 40 3 85\n"
+                           "subtomo2.em -45 50 2 85\n",
                       condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
 
         form.addParam('acquisitionAngleMax', FloatParam,
@@ -265,6 +265,24 @@ class ProtTomoImportAcquisition:
                            "positive.\n See "
                            "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
 
+        form.addParam('voltage', FloatParam, default=300,
+                      label=Message.LABEL_VOLTAGE,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help=Message.TEXT_VOLTAGE)
+
+        form.addParam('sphericalAberration', FloatParam, default=2.7,
+                      label=Message.LABEL_SPH_ABERRATION,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help=Message.TEXT_SPH_ABERRATION)
+
+        form.addParam('amplitudeContrast', FloatParam, default=0.1,
+                      label=Message.LABEL_AMPLITUDE,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help=Message.TEXT_AMPLITUDE)
+
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
             self.acquisitionParameters = {
@@ -272,6 +290,9 @@ class ProtTomoImportAcquisition:
                 'angleMax': self.acquisitionAngleMax.get(),
                 'step': self.step.get(),
                 'tiltAxisAngle': self.tiltAxisAngle.get(),
+                'voltage': self.voltage.get(),
+                'sphericalAberration': self.sphericalAberration.get(),
+                'amplitudeContrast': self.amplitudeContrast.get(),
             }
         else:
             params = open(self.acquisitionData.get(), "r")

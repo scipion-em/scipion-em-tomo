@@ -440,7 +440,7 @@ class ProtTomoMisalignTiltSeries(EMProtocol, ProtTomoBase):
             transformMatrix[1, 0] = np.sin(newAngle)
             transformMatrix[1, 1] = np.cos(newAngle)
 
-        fileName = "TM_" + tsId + ".xf"
+        fileName = "TM_misalignment_" + tsId + ".xf"
         extraPrefix = self._getExtraPath(tsId)
         path.makePath(extraPrefix)
         filePath = os.path.join(extraPrefix, fileName)
@@ -458,6 +458,23 @@ class ProtTomoMisalignTiltSeries(EMProtocol, ProtTomoBase):
                   np.cos(math.radians(incrementAngle)),
                   incrementShiftX,
                   incrementShiftY]
+
+        mode = "a" if os.path.exists(filePath) else "w"
+
+        with open(filePath, mode) as f:
+            writer = csv.writer(f, delimiter='\t')
+
+            writer.writerow(vector)
+
+        fileName = "TM_final_" + tsId + ".xf"
+        filePath = os.path.join(extraPrefix, fileName)
+
+        vector = [transformMatrix[0, 0],
+                  transformMatrix[1, 0],
+                  transformMatrix[0, 1],
+                  transformMatrix[1, 1],
+                  transformMatrix[0, 2],
+                  transformMatrix[1, 2]]
 
         mode = "a" if os.path.exists(filePath) else "w"
 

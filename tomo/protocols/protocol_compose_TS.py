@@ -255,15 +255,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 self.listMdocsRead.append(file2read)
                 self.listMdocsRead.append(file2read)
 
-                self.info("Tilt series ({} tilts) composed from mdoc file: {}\n".
-                    format(len(mdoc_order_angle_list), file2read))
-                # SUMMARY INFO
-                summaryF = self._getPath("summary.txt")
-                summaryF = open(summaryF, "a")
-                summaryF.write(
-                    "Tilt series ({} tilts) composed from mdoc file: {}\n".
-                    format(len(mdoc_order_angle_list), file2read))
-                summaryF.close()
+                self.info("Tilt serie ({} tilts) composed from mdoc file: {}\n".
+                    format(len(mdoc_order_angle_list), os.path.basename(file2read)))
 
 
         self.list_reading.remove(file2read)
@@ -337,20 +330,23 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
         if len(list_mics_matched) != len(mdoc_order_angle_list):
             if not streamOpen:
-                self.info('Micrographs doesnt match with mdoc {} read'
-                      'Number of mics: {}, number of mics on mdoc: {}\n'
-                       'The set of micrographs is closed but has not all'
-                       ' the micrographs the mdoc refer'.format(file2read,
-                len(self.listOfMics), len(mdoc_order_angle_list)))
+                self.info('The set of micrographs is closed but'
+                          'some micrographs ({}) are not abailable to compose the Tilt Serie'
+                          'The Tilt serie will be generated with gaps...'
+                          ).format(len(self.listOfMics) - len(mdoc_order_angle_list))
+            if streamOpen:
+                self.info('Some micrographs ({}) are not abailable to compose the Tilt Serie'
+                          'The Tilt serie will not be generated until the set of micrographs is closed.'
+                          'The mdoc file {} will be read in future'
+                          ).format(len(self.listOfMics) - len(mdoc_order_angle_list), file2read)
                 self.listMdocsRead.append(file2read)
+
                 return False
-            else:
-                self.info('The micrographs read does not belong the mdoc {}. '
-                          'The mdoc will be read in future'.format(os.path.basename(file2read)))
         else:
             self.info('Micrographs matched for the mdoc file: {}'.format(
                 len(list_mics_matched)))
-            return True
+
+        return True
 
     def _loadInputList(self):
         """ Load the input set of mics and create a list. """
@@ -439,7 +435,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         ts_fn_dw = self._getOutputTiltSeriesPath(ts_obj, '_DW')
         counter_ti = 0
 
-        TSAngleFile = self._getPath("{}.rawtlt".format(ts_obj.getTsId()))
+        TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts_obj.getTsId()))
         TSAngleFile = open(TSAngleFile, "a")
         for n in file_ordered_angle_list:
             TSAngleFile.write('{}\n'.format(str(n[2])))
@@ -499,14 +495,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
     def _summary(self):
         summary = []
-
-        summaryF = self._getPath("summary.txt")
-        if not os.path.exists(summaryF):
-            summary.append("No summary file yet.")
+        summary.append('Path with the *.mdoc files for each tilt serie:{}\n'.format(self.filesPath.get()))
+        if not hasattr(self, 'TiltSeries'):
+            summary.append("Output SetOfTiltSeries not ready yet.")
         else:
-            summaryF = open(summaryF, "r")
-            for line in summaryF.readlines():
-                summary.append(line.rstrip())
-            summaryF.close()
-
+            try:
+                summary.append("{} tilt series added".format(self.TiltSeries.getSize()))
+            except Exception as e:
+                print(e)
         return summary
+
+

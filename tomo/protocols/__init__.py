@@ -27,6 +27,7 @@ from .protocol_assign_tomo2tomoMask import ProtAssignTomo2TomoMask
 from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from .protocol_import_tomomasks import ProtImportTomomasks
+from .protocol_import_ctf import ProtImportTsCTF
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
@@ -45,6 +46,7 @@ from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_rotate_astigmatism import ProtRotateAstigmatism
+from .protocol_mesh_from_segmentation import ProtMeshFromSegmentation
 from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
 from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
 from .protocol_compose_TS import ProtComposeTS

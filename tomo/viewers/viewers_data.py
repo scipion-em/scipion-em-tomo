@@ -54,6 +54,7 @@ class TomoDataViewer(pwviewer.Viewer):
         tomo.objects.SetOfClassesSubTomograms,
         tomo.objects.SetOfMeshes
     ]
+    _name = 'Tomo viewer'
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -94,7 +95,7 @@ class TomoDataViewer(pwviewer.Viewer):
             tomoProvider = TomogramsTreeProvider(tomoList, path, 'txt', )
             path = os.path.join(path, '..')
             setOfMeshes2Files(outputMeshes, path)
-            setView = TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path)
+            TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path, lockGui=False)
 
         return views
 
@@ -160,7 +161,7 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
             'displayOddTiltSeries': self._displayOddTiltSeries,
         }
 
-    def _visualize(self, setOfTiltSeries):
+    def _visualize(self, setOfTiltSeries, **kwargs):
         from .views_tkinter_tree import TiltSeriesDialogView
         setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
 

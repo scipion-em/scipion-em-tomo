@@ -1,5 +1,116 @@
-v3.2.1:
+v3.7.3:
+ Users:
+  - Import TS: fix the heterogeneous set of TS validation using a range of angles.
+  - Join heterogeneous sets are possible for tomography objects TS and tomograms.
+  - Fix the protocol tomograms to micrographs. Helps enhanced. ImageHandler replaced by mrcfile.
   - Import from Mdoc: more precise error when calculating the dose. GUI log with more information.
+ Developers:
+  - Attribute _acquisition is initialized as None in TSBase, so the coppyAttributes callen in protocol for joining.
+    sets work properly. The same whith the attribute _origin.
+  - Method hasAcquisition re-defined in TSBase for the same reason exposed in the previous line.
+  - Attribute _isHetereogeneous and accessors added to SetOfTomograms and SetOfTiltSeries. Used in the string
+    representation of both objects.
+  TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded views.
+  - TCL:
+    * Attribute _isHetereogeneous checked in the corresponding sets.
+    * Method checktomograms now is able to check the acquisition.
+    * Method checkTsOriginMatrix added.
+  - TS viewer: fix the list of tiltseries viewers
+v3.7.2:
+ Users:
+   - Handling the matching in the ctf import(generalizing without the need to set patterns such as {TS}).
+   - Refactoring the tiltserie viewer
+  - Import TS, TSM and tomos: remove double underscore from both the linked filenames and the tsIds.
+  - Import TS: add a validation for the case of heterogeneous sets of TS in the number of tilt images and providing the
+    angular data using a range. The cases avoided with this validation prevents erratic behavior in the subsequent
+    protocols.
+ Developers:
+  - Add to Tomogram and SetOfTomograms the attribute _ctfcorrected, the same way it was added to the tilt-series.
+  - Update the TCL based on the previous point.
+v3.7.1: HOTFIX - join TS bug solved (Thanks to Doulin Sheperd).
+v3.7.0:
+ Developers:
+  - Add acquistion order attribute to the CTFTomo to provide a robust matching between tilt-images and CTFTomos.
+  - Add method getTsIds to SetOfTomograms (useful when importing coordinates).
+  - CTFTomoSeries: add method getCtfTomoFromTi.
+  - CTFTomo: add acqOrder to the attributes list used on its copy method.
+  - TiltSeriesBase - method generateTltFile expanded: optional input presentAcqOrders to manage the view exclusion.
+  - Utils - add method getCommonTsAndCtfElements to intersect tilt images and CTFs based on the value of the
+    attribute acquisition order, or index in case it's not present or empty (backwards compatibility)
+  - SetOfCTFTomoSeries: add method getTSIds, just the same as for SetOfTiltSeries and SetOfCoordinates3D.
+  - Method getTSIds methods simplified. They call now getUniqueValues instead of aggregate.
+
+v3.6.1:
+ Users:
+  - Collapse the tilt-series tree by default in the tomo data viewer
+  - Fix in protocol import TS: when providing mdoc files, label DividedBy2 is now only applied in the case of
+    calculating it from fields MinMaxMean, PixelSpacing and CountsPerElectron (case #4).
+
+Developers:
+  - Fix: class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
+    header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file
+    header for each file.
+  - use setFramesFrange when importing TS movies
+  - Class Tomogram method getDim removed as it did not manage heterogeneous sets correctly when iterating (read the
+    header once, stored it and reused). The Volume method is used now instead, as it reads the size from the file
+    header for each file.
+
+v3.6.0:
+
+ Users:
+  - Tilt series subsets and CTFTomoseries clone the enable flag
+  - Acquisition data storage fixed when importing tilt series and tilt series movies (min angle, max angle, and step)
+
+ Developers:
+  - Test dataset relion40_sta_tutorial_data expanded.
+  - TCL: methods dor checking sets of TS and TsM improved.
+
+v3.5.0:
+ Users:
+  - Improve the TiltSeries viewer. Allowing to exclude TiltImages
+  - New protocol to import tilt-series CTF from different plugins
+  - The CTF tomo series viewer now only plots the Enabled tilt images/ctfs.
+  - Template HIV- STA with reliontomo: update the CTF importing method to the new centralized located in em-tomo.
+  - Prevent viewers from locking the screen focus.
+  - Improve SetOfCoordinates3D str method.
+  - Fit vesicles prot nos requesting the tomograms. Refactored.
+  - Fix accum dose in TS import without mdoc.
+  - Napari 0.4.17 is the default version. boxmanager and tomotwin are now independent
+
+Developers:
+  - Improve the Test Centralization layer.
+  - Tests for AreTomo2 CTF import added.
+  - Expand the method checkTomograms from the Test Centralization Layer.
+  - Import tomograms: the acquisition is now copied to both the set and the items.
+  - Some refactor in protocol_ts_estimate_ctf.py required for the new CTF code design prots approach.
+  - TiltSeries object: expand the method to generate the imod tlt file allowing to consider the excluded views.
+  - TS movies not hiding any acquisition parameter to prevent accidental override.
+v3.4.1:
+  - Update HIV-tiltseries-alignment-reconstruction.json template
+  - Update Picking template II
+  - Update Relion4 template
+v3.4:
+  - Compose tilt series: Allowing tilt series with gaps
+  - New protocol: "meshes from tomoMask"
+  - Tomoviewer: Can sort by acquisition order too.
+  - Sampling rate in Coordinates3D rounded to 2 decimal places upon visualization.
+  - HIV STA template divided into 2: Dynamo STA and Relion4 STA
+  - Picking template tutorial (cryolo, eman, deepfinder) changed
+  Developers:
+  - TestBaseCentralizedLayer: New test class to make more precise assertions on outputs.
+  - Adding a method for extracting odd-even filenames
+  - Fix schedule execution in protocol for importing coords from Scipion
+v3.3:
+  - Tomo metadata viewer increase contrast when left clicking on the preview image.
+  - Import tilt series movies using a pattern instead of from mdoc files was improved and admits brackets [] in the
+    basename of the files.
+  - Import tilt series from mdoc now admits numeric base names or base names beginning by a numeric character
+  - New config var: NAPARI_ENV_ACTIVATION, used by other plugins. Napari binary installation is centralized here.
+
+  Developers:
+  - Coordinates 3D object have a new attribute _score to store the coordinates score, when necessary.
+  - SetOfSubTomograms append method now manages the align attribute of the set.
+
 v3.2:
   - New protocol: "Landmarks to 2D coordinates". To jump to SPA from 3d info.
   - Tolerate empty lines in tlt files

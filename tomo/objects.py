@@ -25,6 +25,14 @@
 # *
 # **************************************************************************
 import logging
+from os.path import exists
+from sqlite3 import OperationalError
+from typing import Dict, Tuple, Any, Optional, Union
+
+import mrcfile
+
+from pwem import ALIGN_NONE
+
 logger = logging.getLogger(__name__)
 
 import csv
@@ -41,7 +49,7 @@ import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList, PointerList, Scalar
 
 
 class MATRIX_CONVERSION:
@@ -127,12 +135,16 @@ def convertMatrix(M, convention=None, direction=None):
 
 class TiltImageBase:
     """ Base class for TiltImageM and TiltImage. """
+    TS_ID_FIELD = '_tsId'
+    TILT_ANGLE_FIELD = '_tiltAngle'
+    ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX_FIELD = '_index'
 
     def __init__(self, tsId=None, tiltAngle=None, acquisitionOrder=None, **kwargs):
         self._tiltAngle = Float(tiltAngle)
         self._tsId = String(tsId)
         self._acqOrder = Integer(acquisitionOrder)
-        self._oddEvenFileNames = CsvList(pType=str) #IMPORTANT: The odd is the first one and the even the second one
+        self._oddEvenFileNames = CsvList(pType=str)  # IMPORTANT: The odd is the first one and the even the second one
 
     def hasOddEven(self):
         return not self._oddEvenFileNames.isEmpty()
@@ -182,8 +194,12 @@ class TiltImageBase:
             self.copyObjId(other)
         if copyTM and other.hasTransform():
             self.copyAttributes(other, '_transform')
+        else:
+            self.setTransform(None)
+
         if other.hasOddEven():
             self.copyAttributes(other, '_oddEvenFileNames')
+
 
 class TiltImage(data.Image, TiltImageBase):
     """ Tilt image """
@@ -192,6 +208,8 @@ class TiltImage(data.Image, TiltImageBase):
         data.Image.__init__(self, location, **kwargs)
         TiltImageBase.__init__(self, **kwargs)
 
+    def clone(self, copyEnable=True):
+        return super().clone(copyEnable=copyEnable)
 
     def copyInfo(self, other, copyId=False, copyTM=True, copyStatus=True):
         data.Image.copyInfo(self, other)
@@ -221,6 +239,8 @@ TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
 class TiltSeriesBase(data.SetOfImages):
     TS_ID_FIELD = '_tsId'
+    ACQ_ORDER_FIELD = '_acqOrder'
+
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
         self._tsId = String(kwargs.get('tsId', None))
@@ -235,11 +255,25 @@ class TiltSeriesBase(data.SetOfImages):
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
 
+    def hasAcquisition(self):
+        return self._acquisition is not None and self._acquisition.getMagnification() is not None
+
     def getAnglesCount(self):
         return self._anglesCount
 
     def hasOddEven(self):
         return self._hasOddEven.get()
+
+    def extractFileName(self, inputStr):
+        return inputStr.split('@')[-1]
+
+    def getOddFileName(self):
+        firstItem = self.getFirstItem()
+        return self.extractFileName(firstItem.getOdd())
+
+    def getEvenFileName(self):
+        firstItem = self.getFirstItem()
+        return self.extractFileName(firstItem.getEven())
 
     def setAnglesCount(self, value):
 
@@ -293,11 +327,9 @@ class TiltSeriesBase(data.SetOfImages):
         tiltImage.setTsId(self.getTsId())
         data.SetOfImages.append(self, tiltImage)
 
-        if tiltImage.hasTransform():
-            self._hasAlignment.set(True)
-
-        if tiltImage.hasOddEven():
-            self._hasOddEven.set(True)
+        # TODO: Do it only once? Size =1?
+        self._hasAlignment.set(tiltImage.hasTransform())
+        self._hasOddEven.set(tiltImage.hasOddEven())
 
     def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
         clone = self.getClass()()
@@ -312,23 +344,34 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False):
+    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False, presentAcqOrders=None):
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
+        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
+        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
+        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
+        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
+        (see tomo > utils > getCommonTsAndCtfElements)
         """
 
-        angleList = []
-
-        for ti in self.iterItems(orderBy="_tiltAngle"):
-            angleList.append(ti.getTiltAngle())
-
+        if presentAcqOrders:
+            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
+                         ti.getAcquisitionOrder() in presentAcqOrders]
+        else:
+            angleList = []
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                if excludeViews and not ti.isEnabled():
+                    continue
+                angleList.append(ti.getTiltAngle())
         if reverse:
             angleList.reverse()
 
         with open(tltFilePath, 'w') as f:
             f.writelines("%.3f\n" % angle for angle in angleList)
+
 
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
@@ -394,6 +437,12 @@ class TiltSeriesBase(data.SetOfImages):
 
 def tiltSeriesToString(tiltSeries):
     s = []
+
+    # Heterogeneous set: only applies to the sets of TS, not to TS themselves, causing error the last in the viewers
+    if type(tiltSeries) is SetOfTiltSeries:
+        if tiltSeries.isHeterogeneousSet():
+            s.append('+het')
+
     # Matrix info
     if tiltSeries.hasAlignment():
         s.append('+ali')
@@ -425,43 +474,36 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False):
+    def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
-        newStack = True
-        # TODO: Handle output tilt-series datatype format
-        if self.getFirstItem().hasTransform():
-            for index, ti in enumerate(self):
-                if ti.hasTransform():
-                    if newStack:
-                        if swapXY:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getYDim(),
-                                                yDim=ti.getXDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                        else:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getXDim(),
-                                                yDim=ti.getYDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                    transform = ti.getTransform().getMatrix()
-                    transformArray = np.array(transform)
-                    if swapXY:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getXDim(), ti.getYDim()))
-                    else:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getYDim(), ti.getXDim()))
-                else:
-                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        if self.hasAlignment():
+            firstImg = self.getFirstItem()
+            xDim, yDim, _ = firstImg.getDim()
+            if firstImg.hasTransform() and swapXY:
+                xDim, yDim = yDim, xDim
+            if excludeViews:
+                excludedViewsInd = self.getExcludedViewsIndex()
+                counter = 0
+                for index, ti in enumerate(self.iterItems()):
+                    if index + 1 not in excludedViewsInd:
+                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
+                        counter += 1
+            else:
+                for index, ti in enumerate(self.iterItems()):
+                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
         else:
             path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+
+    @staticmethod
+    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
+        transform = ti.getTransform().getMatrix()
+        transformArray = np.array(transform)
+        inputFilePath = ti.getFileName()
+        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                          outputFile=str(index + 1) + '@' + outputFilePath,
+                          transformMatrix=transformArray,
+                          shape=(yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -480,9 +522,48 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
+    # TODO: deprecate this after IMOD is released. Jorge (07/07/2024)
     def _getExcludedViewsIndex(self):
-
         return self.getExcludedViewsIndex()
+
+    def reStack(self, outFileName: Union[str, None] = None) -> Union[str, None]:
+        """Re-stacks a tilt-series creating a new one without the excluded views obtained by calling the method
+        getExcludedViewsIndex(). If the re-stacked file already exists, no action is carried out (avoid creating
+        the same file multiple times, even more necessary if calling this method from the viewer).
+        :param outFileName: Filename of the re-stacked tilt-series. If None, the re-stacked tilt-series will be
+        generated in the same location as the current tilt-series, but adding the suffix _restacked.
+        :returns: None is the re-stacked file already exists or outFileName if not."""
+        tsFileName = self.getFirstItem().getFileName()
+        if not outFileName:
+            outFileName = path.removeExt(tsFileName) + '_restacked' + path.getExt(tsFileName)
+        if exists(outFileName):
+            return None
+        else:
+            excludedIndices = self.getExcludedViewsIndex()
+            if excludedIndices:
+                # Load the file
+                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                    tsData = tsMrc.data
+                # Create an empty array in which the re-stacked TS will be stored
+                nx, ny, nImgs = tsData.shape
+                finalNImgs = nImgs - len(excludedIndices)
+                newTsShape = (nx, ny, finalNImgs)
+                newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+                # Fill it with the non-excluded images
+                counter = 0
+                for i in range(nImgs):
+                    if i not in excludedIndices:
+                        newTsData[counter] = tsData[i]
+                        counter += 1
+                # Save the re-stacked TS
+                with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                    reStackedTsMrc.set_data(newTsData)
+                    reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_stats()
+                    reStackedTsMrc.voxel_size = self.getSamplingRate()
+                return outFileName
+            else:
+                return None
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -578,10 +659,17 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 
         return tiltcomPath
 
-    def writeTltFile(self, ts_folder):
+    def writeTltFile(self, ts_folder, excludeViews=False):
+        """Writes a tlt file.
+        :param ts_folder: path of the directory in which the tlt file will be generated.
+        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
+        """
         xtiltPath = ts_folder + '/%s.tlt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
-            for ti in self:
+            for ti in self.iterItems():
+                if excludeViews and not ti.isEnabled():
+                    continue
                 f.write(str(ti.getTiltAngle()) + '\n')
 
     def writeXtiltFile(self, ts_folder):
@@ -626,12 +714,22 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             csvW.writerows(tsMatrixTransformList)
 
     def writeImodFiles(self, folderName, **kwargs):
+        """Writes the following IMOD files:
+        - newst.com
+        - tilt.com
+        - tlt
+        - xf
+        - xtilt
+        :param folderName: path of the directory in which the files will be generated.
+        :keyword tltIgnoresExcluded: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
+        """
         # Create a newst.com file
         self.writeNewstcomFile(folderName, **kwargs)
         # Create a tilt.com file
         self.writeTiltcomFile(folderName, **kwargs)
         # Create a .tlt file
-        self.writeTltFile(folderName)
+        self.writeTltFile(folderName, excludeViews=kwargs.get('tltIgnoresExcluded', False))
         # Create a .xtilt file
         self.writeXtiltFile(folderName)
         # Create a .xf file
@@ -642,6 +740,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
     USE_CREATE_COPY_FOR_SUBSET = True
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
@@ -654,6 +755,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
+        # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
+        self._isHeterogeneous = Boolean(False)
 
     def getAcquisition(self):
         return self._acquisition
@@ -675,6 +778,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Returns true if tilt series has been interpolated"""
         return self._interpolated.get()
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def hasAlignment(self):
         """ Returns true if at least one of its items has alignment information"""
         return self._hasAlignment.get()
@@ -683,7 +792,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected', '_interpolated')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected',
+                            '_interpolated', '_isHeterogeneous')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -721,14 +831,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, **kwargs)->TiltSeriesBase:
+    def iterItems(self, **kwargs) -> TiltSeriesBase:
         for item in data.EMSet.iterItems(self, **kwargs):
             self._setItemMapperPath(item)
             yield item
 
     def copyItems(self, inputTs,
                   orderByTs='id', updateTsCallback=None,
-                  orderByTi='id', updateTiCallback=None):
+                  orderByTi='id', updateTiCallback=None,
+                  itemSelectedCallback=None):
         """ Copy items (TiltSeries and TiltImages) from the input Set.
          Params:
             inputTs: input TiltSeries (or movies) from where to copy elements.
@@ -736,9 +847,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             updateTsCallback: optional callback after TiltSeries is created
             orderByTi: optional orderBy value for iterating over TiltImages
             updateTiCallback: optional callback after TiltImage is created
+            itemSelectedCallback: Optional, callback receiving an item and
+                returning true if it has to be copied
         """
+
+        if itemSelectedCallback is None:
+            itemSelectedCallback = data.SetOfImages.isItemEnabled
+
         for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
-            if ts.isEnabled():
+            if itemSelectedCallback(ts):
                 tsOut = self.ITEM_TYPE()
                 tsOut.copyInfo(ts)
                 tsOut.copyObjId(ts)
@@ -751,6 +868,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                     tiOut.setAcquisition(ti.getAcquisition())
                     tiOut.copyObjId(ti)
                     tiOut.setLocation(ti.getLocation())
+                    tiOut.setEnabled(ti.isEnabled())  # Clone disabled tilt images
                     if updateTiCallback:
                         updateTiCallback(j, ts, ti, tsOut, tiOut)
                     tsOut.append(tiOut)
@@ -758,8 +876,14 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 self.update(tsOut)
 
     def update(self, item: TiltSeriesBase):
-
+        if not self._firstDim.isEmpty():
+            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
+            if currentDims != item.getDim() and not self.isHeterogeneousSet():
+                self.setIsHeterogeneousSet(True)
+        # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+        # in the case of operations that change the size of the elements, such as the binning.
         self.setDim(item.getDim())
+        self.setAlignment(item.getAlignment())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
@@ -785,9 +909,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
-        tsIds = self.aggregate(["MAX"], TiltSeries.TS_ID_FIELD, [TiltSeries.TS_ID_FIELD])
-        tsIds = [d[TiltSeries.TS_ID_FIELD] for d in tsIds]
-        return tsIds
+        return self.getUniqueValues(TiltSeries.TS_ID_FIELD)
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
@@ -853,7 +975,7 @@ class SetOfTiltSeriesM(SetOfTiltSeriesBase):
         SetOfTiltSeriesBase.copyInfo(self, other)
         self._gainFile.set(other.getGain())
         self._darkFile.set(other.getDark())
-        # self._firstFramesRange.set(other.getFramesRange())
+        self._firstFramesRange.set(other.getFramesRange())
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -992,6 +1114,7 @@ class TiltSeriesDict:
 
 class TomoAcquisition(data.Acquisition):
     """ Tomography acquisition metadata object"""
+
     def __init__(self, angleMin=None, angleMax=None, step=None,
                  accumDose=None, tiltAxisAngle=None, **kwargs):
         data.Acquisition.__init__(self, **kwargs)
@@ -1039,11 +1162,13 @@ class Tomogram(data.Volume):
     """
     TS_ID_FIELD = '_tsId'
     ORIGIN_MATRIX_FIELD = '_origin._matrix'
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
         self._tsId = String(kwargs.get('tsId', None))
         self._dim = None
+        self._ctfCorrected = Boolean(False)
 
     def getTsId(self):
         """ Get unique TiltSeries ID, usually retrieved from the
@@ -1065,27 +1190,6 @@ class Tomogram(data.Volume):
                 and self._acquisition.getAngleMin() is not None
                 and self._acquisition.getAngleMax() is not None)
 
-    def getDim(self):
-        """Return image dimensions as tuple: (Xdim, Ydim, Zdim)"""
-        if self._dim is None:
-            from pwem.emlib.image import ImageHandler
-
-            fn = self.getFileName()
-            if fn is not None and os.path.exists(fn.replace(':mrc', '')):
-                x, y, z, n = ImageHandler().getDimensions(self)
-
-                # Some volumes in mrc format can have the z dimension
-                # as n dimension, so we need to consider this case.
-                if z > 1:
-                    self._dim = (x, y, z)
-                    return x, y, z
-                else:
-                    self._dim = (x, y, n)
-                    return x, y, n
-        else:
-            return self._dim
-        return None
-
     def copyInfo(self, other):
         """ Copy basic information """
         super().copyInfo(other)
@@ -1093,15 +1197,29 @@ class Tomogram(data.Volume):
         if other.hasOrigin():
             self.copyAttributes(other, '_origin')
 
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def setCtfCorrected(self, corrected):
+        """ Sets the ctf correction status"""
+        self._ctfCorrected.set(corrected)
+
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = False
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
+        self._ctfCorrected = Boolean(False)
+        # Used to check if a set is composed of elements with different dimensions, suche as the thickness
+        self._isHeterogeneous = Boolean(False)
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -1110,9 +1228,17 @@ class SetOfTomograms(data.SetOfVolumes):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def __str__(self):
         sampling = self.getSamplingRate()
-        tomoStr = "+oe," if self.hasOddEven() else ''
+        tomoStr = '+het,' if self._isHeterogeneous.get() else ''
+        tomoStr += "+oe," if self.hasOddEven() else ''
+        tomoStr += '+ctf,' if self.ctfCorrected() else ''
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
@@ -1125,8 +1251,27 @@ class SetOfTomograms(data.SetOfVolumes):
         return s
 
     def update(self, item: Tomogram):
+        if not self._firstDim.isEmpty():
+            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
+            if currentDims != item.getDim() and not self._isHeterogeneous.get():
+                self._isHeterogeneous.set(True)
+        else:
+            self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
+        self.setCtfCorrected(item.ctfCorrected())
         super().update(item)
+
+    def getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        return self.getUniqueValues(Tomogram.TS_ID_FIELD)
+
+    def ctfCorrected(self):
+        """ Returns true if ctf has been corrected"""
+        return self._ctfCorrected.get()
+
+    def setCtfCorrected(self, corrected):
+        """ Sets the ctf correction status"""
+        self._ctfCorrected.set(corrected)
 
 
 class TomoMask(Tomogram):
@@ -1167,6 +1312,8 @@ class Coordinate3D(data.EMObject):
     associated with a coordinate"""
 
     TOMO_ID_ATTR = "_tomoId"
+    GROUP_ID_ATTR = "_groupId"
+    SCORE_ATTR = "_score"
 
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
@@ -1179,6 +1326,7 @@ class Coordinate3D(data.EMObject):
         self._eulerMatrix = data.Transform()
         self._groupId = Integer(0)  # This may refer to a mesh, ROI, vesicle or any group of coordinates
         self._tomoId = String(kwargs.get('tomoId', None))  # Used to access to the corresponding tomogram from each
+        self._score = Float(0)
         # coord (it's the tsId)
 
     def _getOffset(self, dim, originFunction=const.SCIPION):
@@ -1406,6 +1554,12 @@ class Coordinate3D(data.EMObject):
     def setTomoId(self, tomoId):
         self._tomoId.set(tomoId)
 
+    def getScore(self):
+        return self._score.get()
+
+    def setScore(self, val):
+        self._score.set(val)
+
     def composeCoordId(self, sampligRate):
         return "%s,%s,%s,%s" % (self.getTomoId(),
                                 int(sampligRate * self._x.get()),
@@ -1494,7 +1648,6 @@ class SetOfCoordinates3D(data.EMSet):
             raise Exception('Invalid input tomogram of type %s'
                             % type(volume))
 
-
         # Iterate over all coordinates if tomoId is None,
         # otherwise use tomoId to filter the where selection
         for coord in self.iterItems(where=coordWhere, orderBy=orderBy):
@@ -1563,8 +1716,9 @@ class SetOfCoordinates3D(data.EMSet):
             boxStr = ' %d x %d x %d' % (boxSize, boxSize, boxSize)
         else:
             boxStr = 'No-Box'
+        sRate = '%.2f' % self.getSamplingRate() if self.getSamplingRate() is not None else 'None!!!'
         s = "%s (%d items, %s, %s Å/px%s)" % (self.getClassName(), self.getSize(), boxStr,
-                                              self.getSamplingRate(), self._appendStreamState())
+                                              sRate, self._appendStreamState())
 
         return s
 
@@ -1609,10 +1763,7 @@ class SetOfCoordinates3D(data.EMSet):
 
     def getTSIds(self):
         """ Returns all the TS ID (tomoId) present in this set"""
-        volIds = self.aggregate(["MAX"], Coordinate3D.TOMO_ID_ATTR, [Coordinate3D.TOMO_ID_ATTR])
-        volIds = [d[Coordinate3D.TOMO_ID_ATTR] for d in volIds]
-        return volIds
-
+        return self.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
 
 
 class SubTomogram(data.Volume):
@@ -1623,6 +1774,7 @@ class SubTomogram(data.Volume):
 
     VOL_NAME_FIELD = "_volName"
     COORD_VOL_NAME_FIELD = "_coordinate.%s" % Coordinate3D.TOMO_ID_ATTR
+
     def __init__(self, **kwargs):
         data.Volume.__init__(self, **kwargs)
         self._acquisition = None
@@ -1639,7 +1791,7 @@ class SubTomogram(data.Volume):
         self._coordinate = coordinate
         self.setVolId(coordinate.getVolId())
 
-    def getCoordinate3D(self)->Coordinate3D:
+    def getCoordinate3D(self) -> Coordinate3D:
         """Since the object Coordinate3D needs a volume, use the information stored in the
         SubTomogram to reconstruct the corresponding Tomogram associated to its Coordinate3D"""
         # We do not do this here but in the set iterator tha will "plug" the volume (tomogram) is exists
@@ -1662,8 +1814,8 @@ class SubTomogram(data.Volume):
 
     def hasAcquisition(self):
         return self._acquisition is not None and \
-               self._acquisition.getAngleMin() is not None and \
-               self._acquisition.getAngleMax() is not None
+            self._acquisition.getAngleMin() is not None and \
+            self._acquisition.getAngleMax() is not None
 
     def getVolId(self):
         """ Return the tomogram id if the coordinate is not None.
@@ -1723,6 +1875,7 @@ class SubTomogram(data.Volume):
         else:
             return self._transform
 
+
 class SetOfSubTomograms(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
@@ -1741,10 +1894,23 @@ class SetOfSubTomograms(data.SetOfVolumes):
         if hasattr(other, '_coordsPointer'):  # Like the vesicles in pyseg
             self.copyAttributes(other, '_coordsPointer')
 
+    def append(self, subtomo: SubTomogram):
+        # Set the alignment attribute value when adding the first element to the set
+        if self.isEmpty():
+            if subtomo.hasTransform():
+                trMatrix = subtomo.getTransform().getMatrix()
+                hasNonEyeTransform = not np.allclose(trMatrix, np.eye(4))
+                if hasNonEyeTransform:
+                    self.setAlignment3D()
+            else:
+                self.setAlignment(ALIGN_NONE)
+
+        super().append(subtomo)
+
     def hasCoordinates3D(self):
         return self._coordsPointer.hasValue()
 
-    def getCoordinates3D(self, asPointer = False):
+    def getCoordinates3D(self, asPointer=False):
         """ Returns the SetOfCoordinates associated with
         this SetOfSubTomograms"""
 
@@ -1769,7 +1935,7 @@ class SetOfSubTomograms(data.SetOfVolumes):
         else:
             yield
 
-    def iterSubtomos(self, volume: Tomogram =None, orderBy='id')->SubTomogram:
+    def iterSubtomos(self, volume: Tomogram = None, orderBy='id') -> SubTomogram:
         """ Iterates over the sutomograms, enriching them with the related tomogram if apply so coordinate getters and setters will work
         If volume=None, the iteration is performed over the whole
         set of subtomograms.
@@ -1904,7 +2070,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
     """ Store results from a subtomogram averaging method. """
     ITEM_TYPE = ClassSubTomogram
     REP_TYPE = AverageSubTomogram
-    REP_SET_TYPE =SetOfAverageSubTomograms
+    REP_SET_TYPE = SetOfAverageSubTomograms
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1919,6 +2085,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
             logger.warning("The source %s seems an old execution and does not have coordinates associated."
                            " This may set may fail with some protocols treating contained classes "
                            "as SetOfSubtomograms with coordinates.")
+
     def setCoordinates3D(self, coordinates):
         """ Set the SetOfCoordinates associated with
         this set.
@@ -1928,15 +2095,23 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
         else:
             self._coordsPointer.set(coordinates)
 
-    def _setItemMapperPath(self, item:ClassSubTomogram):
+    def _setItemMapperPath(self, item: ClassSubTomogram):
         """ This will happen when retrieving any item from this set. We take this chance to 'inject' the coordinates."""
         super()._setItemMapperPath(item)
         item.setCoordinates3D(self._coordsPointer)
 
+
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
 
-    def __init__(self, tsId=None, fileName=None, modelName=None, size=5, applyTSTransformation=True, **kwargs):
+    def __init__(self,
+                 tsId=None,
+                 fileName=None,
+                 modelName=None,
+                 size=5,
+                 applyTSTransformation=True,
+                 hasResidualInfo=False,
+                 **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._tsId = String(tsId)
         self._fileName = String(fileName)
@@ -1946,6 +2121,7 @@ class LandmarkModel(data.EMObject):
         self._tiltSeries = Pointer(objDoStore=False)
         self._count = Integer(0)
         self._chains = None
+        self._hasResidualInfo = Boolean(hasResidualInfo)
 
     def getTiltSeries(self):
         """ Return the tilt-series associated with this landmark model. """
@@ -1999,6 +2175,12 @@ class LandmarkModel(data.EMObject):
     def setModelName(self, modelName):
         self._modelName.set(modelName)
 
+    def hasResidualInfo(self):
+        return self._hasResidualInfo
+
+    def setHasResidualInfo(self, hasResidualInfo):
+        self._hasResidualInfo.set(hasResidualInfo)
+
     def addLandmark(self, xCoor, yCoor, tiltIm, chainId, xResid, yResid):
         fieldNames = ['xCoor', 'yCoor', 'tiltIm', 'chainId', 'xResid', 'yResid']
 
@@ -2049,9 +2231,9 @@ class LandmarkModel(data.EMObject):
 
     def __str__(self):
         return "%s landmarks of %s Å %s to %s" \
-               % (self.getCount(), self.getSize(),
-                  "to apply" if self.applyTSTransformation() else "applied",
-                  self.getTsId())
+            % (self.getCount(), self.getSize(),
+               "to apply" if self.applyTSTransformation() else "applied",
+               self.getTsId())
 
 
 class SetOfLandmarkModels(data.EMSet):
@@ -2061,6 +2243,7 @@ class SetOfLandmarkModels(data.EMSet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._setOfTiltSeriesPointer = Pointer()
+        self._hasResidualInfo = Boolean(False)
 
     def __getitem__(self, itemId):
         """Add a pointer to a tilt-series before returning the landmark model"""
@@ -2092,7 +2275,7 @@ class SetOfLandmarkModels(data.EMSet):
         for lm in self.iterItems(where="_tsId=='%s'" % tsId):
             return lm
 
-    def getSetOfTiltSeries(self, pointer=False)->SetOfTiltSeries:
+    def getSetOfTiltSeries(self, pointer=False) -> SetOfTiltSeries:
         """ Return the set of tilt-series associated with this set of landmark models. """
 
         if pointer:
@@ -2110,6 +2293,12 @@ class SetOfLandmarkModels(data.EMSet):
             self._setOfTiltSeriesPointer.copy(setOfTiltSeries, copyId=False)
         else:
             self._setOfTiltSeriesPointer.set(setOfTiltSeries)
+
+    def hasResidualInfo(self):
+        return self._hasResidualInfo
+
+    def setHasResidualInfo(self, hasResidualInfo):
+        self._hasResidualInfo.set(hasResidualInfo)
 
 
 class MeshPoint(Coordinate3D):
@@ -2187,19 +2376,27 @@ class Ellipsoid(data.EMObject):
 
 class CTFTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
+    ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX_FIELD = '_index'
 
-    def __init__(self, **kwargs):
-        data.CTFModel.__init__(self, **kwargs)
-        self._index = Integer(kwargs.get('index', None))
+    def __init__(self, index=None, acqOrder=None, **kwargs):
+        super().__init__(**kwargs)
+        self._index = Integer(index)
+        self._acqOrder = Integer(acqOrder)
 
     def copyInfo(self, other, copyId=False):
+        """ Copy info is similar to clone, but is often used to tranfer data from other type of objects with same attributes"""
         self.copy(other, copyId=copyId)
 
-    def copy(self, other, copyId=True, ignoreAttrs=[]):
-        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
-                            '_resolution', '_fitQuality', '_index')
+    def clone(self, copyEnable=True):
+        return super().clone(copyEnable=copyEnable)
 
-        self.setEnabled(other.isEnabled())
+    def copy(self, other, copyId=True, ignoreAttrs=[], copyEnable=True):
+        self.copyAttributes(other, '_defocusU', '_defocusV', '_defocusAngle', '_defocusRatio', '_psdFile',
+                            '_resolution', '_fitQuality', self.INDEX_FIELD, self.ACQ_ORDER_FIELD)
+
+        if copyEnable:
+            self.setEnabled(other.isEnabled())
 
         if other.hasPhaseShift():
             self.setPhaseShift(other.getPhaseShift())
@@ -2238,10 +2435,16 @@ class CTFTomo(data.CTFModel):
         return newCTFTomo
 
     def getIndex(self):
-        return self._index
+        return self._index.get()
 
     def setIndex(self, value):
-        self._index = Integer(value)
+        self._index.set(value)
+
+    def getAcquisitionOrder(self):
+        return self._acqOrder.get()
+
+    def setAcquisitionOrder(self, value):
+        self._acqOrder.set(value)
 
     def getCutOnFreq(self):
         return self._cutOnFreq
@@ -2486,6 +2689,7 @@ class CTFTomo(data.CTFModel):
 class CTFTomoSeries(data.EMSet):
     """ Represents a set of CTF models belonging to the same tilt-series. """
     ITEM_TYPE = CTFTomo
+    TS_ID_FIELD = '_tsId'
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
@@ -2622,6 +2826,40 @@ class CTFTomoSeries(data.EMSet):
     def calculateDefocusVDeviation(self, defocusVTolerance=20):
         pass
 
+    def getCtfTomoFromTi(self, ti: TiltImage, onlyEnabled: bool = True) -> Optional[CTFTomo]:
+        """Get the corresponding CTFModel from a given tilt-image. If there's no match, it returns None.
+        :param ti: Tilt-image.
+        :param onlyEnabled: boolean used to indicate the matching behaves in terms of the value the attribute
+        _objEnabled from both ti and the matching CTFModel attribute:
+            - If True (default), the CTFModel found is returned only if both the ti and the CTFModel are enabled.
+            - If False, the CTFModel found is returned no matter the value of _objEnabled.
+        """
+        if onlyEnabled and not ti.isEnabled():
+            logger.debug('The introduced tilt-image is not enabled and working with onlyEnabled = True')
+            return None
+        try:
+            # The method getItem raises an exception of type:
+            #   - sqlite3.OperationalError if the key is not found
+            #   - UnboundLocalError if the value is not found
+            ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
+        except UnboundLocalError:
+            return None
+        except OperationalError:
+            try:
+                ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
+                logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
+                               '(_acqOrder). The matching between the CTF and the tilt-image is carried out '
+                               'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+            except (OperationalError, UnboundLocalError):
+                logger.warning(f'No CTF found in the current CTF series {self.getTsId()} that matches the '
+                               f'given tilt-image of tsId = {ti.getTsId()}.')
+                return None
+
+        if ctfTomo.isEnabled() or not onlyEnabled:
+            return ctfTomo
+        else:
+            return None
+
 
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
@@ -2636,6 +2874,25 @@ class SetOfCTFTomoSeries(data.EMSet):
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
         self.setSetOfTiltSeries(other.getSetOfTiltSeries(pointer=True))
+
+    def copyItems(self, other, itemSelectedCallback=None):
+        """ Copy items (CTFTomoSeries and CTFTomo) from the other Set.
+         Params:
+            other:  SetOfCTFTomoSeries from where to copy elements.
+            
+            itemSelectedCallback: Optional, callback receiving an item and
+                returning true if it has to be copied
+        """
+        for i, ctfSerie in enumerate(other.iterItems()):
+            if itemSelectedCallback(ctfSerie):
+                ctfSerieOut = ctfSerie.clone()
+                self.append(ctfSerieOut)
+
+                for j, ctf in enumerate(ctfSerie.iterItems()):
+                    ctfOut = ctf.clone()
+                    ctfSerieOut.append(ctfOut)
+
+                self.update(ctfSerieOut)
 
     def getSetOfTiltSeries(self, pointer=False):
         """ Return the tilt-series associated with this CTF model series. """
@@ -2697,12 +2954,13 @@ class SetOfCTFTomoSeries(data.EMSet):
         self._setItemMapperPath(classItem)
         return classItem
 
-    def iterItems(self, orderBy='id', direction='ASC'):
-        for item in data.EMSet.iterItems(self, orderBy=orderBy, direction=direction):
+    def iterItems(self, orderBy='id', direction='ASC', **kwargs):
+        for item in super().iterItems(orderBy=orderBy,
+                                      direction=direction, **kwargs):
 
             ts = self._getTiltSeriesFromTsId(item.getTsId())
             if ts is None:
-                raise ("Could not find tilt-series with tsId = %s" % item.getTsId())
+                raise Exception("Could not find tilt-series with tsId = %s" % item.getTsId())
 
             item.setTiltSeries(ts)
             self._setItemMapperPath(item)
@@ -2715,6 +2973,10 @@ class SetOfCTFTomoSeries(data.EMSet):
         else:
             self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
             return self._idDict.get(tsId, None)
+
+    def getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
 
 
 class TiltSeriesCoordinate(data.EMObject):

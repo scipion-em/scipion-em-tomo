@@ -29,6 +29,8 @@
 import os
 import re
 import importlib
+from typing import List, Set
+
 import numpy as np
 import math
 import logging
@@ -37,7 +39,8 @@ logger = logging.getLogger(__name__)
 import pyworkflow.utils as pwutils
 
 import tomo.constants as const
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
+    CTFTomoSeries, TiltImage, CTFTomo
 
 
 def existsPlugin(plugin):
@@ -408,3 +411,35 @@ def scaleTrMatrixShifts(inTrMatrix, scaleFactor):
         inTrMatrix[1, 3] = scaledShifts[1]
         inTrMatrix[2, 3] = scaledShifts[2]
     return inTrMatrix
+
+
+def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, onlyEnabled: bool = True) -> Set[int]:
+    """Given a tilt-series and a CTFTomoSeries, it finds the common elements present and enabled in both sets, and
+    returns a list with the corresponding acquisition orders or indices, if acquisition order is not present in the
+    CTFTomoSeries introduced (old versions, backwards compatibility). By default, it takes the common active elements,
+    but it may take common elements no matter if they're enabled or not by setting the input onlyEnabled to False.
+    """
+    # Attribute _acqOrder was recently added to CTFTomo, so it will be used to discriminate
+    ctfTomoSeries._getMapper()  # Avoid finding closed mappers when combining cached sets of sets (TS, CTF) and
+    # calls to getFirstItem(). The second closes the first and so on
+    firstCtfTomo = ctfTomoSeries.getFirstItem()
+    acqOrder = getattr(firstCtfTomo, CTFTomo.ACQ_ORDER_FIELD, None)
+    if acqOrder:
+        msgStr = 'acquisition order'
+        if onlyEnabled:
+            tsAcqOrderSet = {ti.getAcquisitionOrder() for ti in ts if ti.isEnabled()}
+            ctfAcqOrderSet = {ctf.getAcquisitionOrder() for ctf in ctfTomoSeries if ctf.isEnabled()}
+        else:
+            tsAcqOrderSet = {ti.getAcquisitionOrder() for ti in ts}
+            ctfAcqOrderSet = {ctf.getAcquisitionOrder() for ctf in ctfTomoSeries}
+    else:
+        msgStr = 'index'
+        if onlyEnabled:
+            tsAcqOrderSet = {ti.getIndex() for ti in ts if ti.isEnabled()}
+            ctfAcqOrderSet = {ctf.getIndex() for ctf in ctfTomoSeries if ctf.isEnabled()}
+        else:
+            tsAcqOrderSet = {ti.getIndex() for ti in ts}
+            ctfAcqOrderSet = {ctf.getIndex() for ctf in ctfTomoSeries}
+
+    logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
+    return tsAcqOrderSet & ctfAcqOrderSet

@@ -1,9 +1,9 @@
 # coding=utf-8
 # **************************************************************************
 # *
-# * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
+# * Authors:     Scipion Team  (scipion@cnb.csic.es) [1]
 # *
-# * [1] EyeSeeTea Ltd, London, UK
+# * [1] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,8 @@ import pyworkflow.utils as pwutils
 
 import pyworkflow.protocol.params as params
 from pyworkflow.plugin import Domain
+from pyworkflow.protocol import LEVEL_ADVANCED
+from pyworkflow.utils import replaceBaseExt, removeBaseExt
 
 from ..objects import SetOfCoordinates3D
 from .protocol_base import ProtTomoImportFiles
@@ -47,14 +49,12 @@ IMPORT_FROM_EMAN = 'eman'
 IMPORT_FROM_DYNAMO = 'dynamo'
 IMPORT_FROM_CBOX = 'cbox'
 
-IMPORT_FROM_CHOICES = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_EMAN, IMPORT_FROM_DYNAMO, IMPORT_FROM_CBOX]
-
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
+
     """Protocol to import a set of tomograms to the project"""
     _outputClassName = 'SetOfCoordinates3D'
-    _label = 'import set of coordinates 3D'
-    _devStatus = BETA
+    _label = 'import coordinates 3D'
 
     def _getImportChoices(self):
         """ Return a list of possible choices
@@ -72,90 +72,93 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         return 0
 
     def __init__(self, **args):
-        ProtTomoImportFiles.__init__(self, **args)
+        super().__init__(**args)
         self.OUTPUT_PREFIX = "outputCoordinates"
+        self.scaleFactor = 1.0
+        self.tomoSRate = None
 
     def _defineParams(self, form):
-        ProtTomoImportFiles._defineParams(self, form)
-        form.addParam('boxSize', params.IntParam, label='Box size')
+        super()._defineImportParams(form)
+        form.addParam('samplingRate', params.FloatParam,
+                      label='Coordinates sampling rate [Å/pix] (opt.)',
+                      allowsNull=True,
+                      help="If empty, the coordinates' sampling rate will be considered to be the same as the "
+                           "tomograms'.\n"
+                           "*IMPORTANT*: If a value is provided, the ratio of both tomograms and coordinates sampling "
+                           "rate will be used to scale the coordinates properly to the tomograms introduced.")
+
+        form.addParam('boxSize', params.IntParam,
+                      label='Box Size [pix]',
+                      default=20,
+                      help='It will be re-scaled to the tomogram size considering the coordinates and tomograms '
+                           'ratio between their corresponding sampling rates.')
 
         form.addParam('importTomograms', params.PointerParam,
                       pointerClass='SetOfTomograms',
                       label='Input tomograms',
-                      help='Select the tomograms/tomogram for which you '
-                            'want to import coordinates. The file names of the tomogram and '
-                            'coordinate files must be the same.')
-
-        form.addParam('shiftX', params.IntParam,
-                      label="Shift x coord by this value",
-                      default=0,
-                      help="Set it to a positive or negative value to shift x")
-
-        form.addParam('shiftY', params.IntParam,
-                      label="Shift y coord by this value",
-                      default=0,
-                      help="Set it to a positive or negative value to shift y")
-
-        form.addParam('shiftZ', params.IntParam,
-                      label="Shift z coord by this value",
-                      default=0,
-                      help="Set it to a positive or negative value to shift z")
+                      help='Select the tomograms to which the coordinates should be referred to.\n'
+                           'The file names of the tomogram and coordinate files must be the same.')
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('importCoordinatesStep',
-                                 self.samplingRate.get())
+        self._initialize()
+        self._insertFunctionStep(self.importCoordinatesStep)
 
     # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        tomoSRate = self.importTomograms.get().getSamplingRate()
+        coordsSRate = self.samplingRate.get()
+        if coordsSRate:
+            self.scaleFactor = coordsSRate / tomoSRate
+        self.tomoSRate = tomoSRate
 
-    def importCoordinatesStep(self, samplingRate):
+    def importCoordinatesStep(self):
         importTomograms = self.importTomograms.get()
-        suffix = self._getOutputSuffix(SetOfCoordinates3D)
-        coordsSet = self._createSetOfCoordinates3D(importTomograms, suffix)
-        coordsSet.setSamplingRate(samplingRate)
+        coordsSet = SetOfCoordinates3D.create(self.getPath(), template='coordinates%s.sqlite')
+        coordsSet.setSamplingRate(self.tomoSRate)
         coordsSet.setPrecedents(importTomograms)
-        coordsSet.setBoxSize(self.boxSize.get())
+        coordsSet.setBoxSize(self.boxSize.get() * self.scaleFactor)
 
         ci = self.getImportClass()
         for tomo in importTomograms.iterItems():
-            tomoName = basename(os.path.splitext(tomo.getFileName())[0])
+            tomoName = removeBaseExt(tomo.getFileName())
             for coordFile, fileId in self.iterFiles():
-                fileName = basename(os.path.splitext(coordFile)[0])
+                fileName = removeBaseExt(coordFile)
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
                     if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]:
                         def addCoordinate(coord, x, y, z):
                             coord.setVolume(tomo.clone())
 
-                            x = x + self.shiftX.get()
-                            y = y + self.shiftY.get()
-                            z = z + self.shiftZ.get()
+                            x = x * self.scaleFactor
+                            y = y * self.scaleFactor
+                            z = z * self.scaleFactor
 
                             coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
                             coordsSet.append(coord)
                         ci.importCoordinates3D(coordFile, addCoordinate)
                     elif self.getImportFrom() == IMPORT_FROM_DYNAMO:
-                        ci(coordFile, coordsSet, tomo.clone())
+                        ci(coordFile, coordsSet, tomo.clone(), scaleFactor=self.scaleFactor)
 
-        args = {}
-        args[self.OUTPUT_PREFIX] = coordsSet
+        args = {self.OUTPUT_PREFIX: coordsSet}
         self._defineOutputs(**args)
         self._defineSourceRelation(self.importTomograms, coordsSet)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
-        return self.hasAttribute('outputCoordinates3D')
+        return self.hasAttribute(self.OUTPUT_PREFIX)
 
     def _getCoordsMessage(self):
-        return "Coordinates %s" % self.getObjectTag('outputCoordinates3D')
+        return "Coordinates %s" % self.getObjectTag(self.OUTPUT_PREFIX)
 
     def _summary(self):
         summary = []
         if self._hasOutput():
-            summary.append("%s imported from:\n%s"
-                           % (self._getCoordsMessage(), self.getPattern()))
-
-            summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-                           self.samplingRate.get())
+            summary.append("%s imported from:\n%s" % (self._getCoordsMessage(), self.getPattern()))
+            tomoSRate = self.importTomograms.get().getSamplingRate()
+            coordsSRate = self.samplingRate.get()
+            if coordsSRate:
+                scaleFactor = coordsSRate / tomoSRate
+                summary.append("*Coordinates were scaled by a factor of %.2f.*" % scaleFactor)
         return summary
 
     def _methods(self):

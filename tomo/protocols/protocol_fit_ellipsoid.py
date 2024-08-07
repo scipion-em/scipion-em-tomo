@@ -25,19 +25,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
 
 ## NOTE: All this code was moved from https://github.com/I2PC/scipion-em-xmipptomo/blob/v3.23.03.2/xmipptomo/protocols/protocol_fit_ellipsoid.py
 
-from os.path import basename
 import numpy as np
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam
-import pyworkflow.utils as pwutlis
 from pwem.protocols import EMProtocol
 from tomo.protocols import ProtTomoBase
-from tomo.objects import MeshPoint, Ellipsoid, SubTomogram
+from tomo.objects import MeshPoint, Ellipsoid, SubTomogram, SetOfCoordinates3D, Coordinate3D, SetOfMeshes
 from tomo.utils import fit_ellipsoid, generatePointCloud
 import tomo.constants as const
+
+
+class FitVesicleOutputs(Enum):
+    meshes = SetOfMeshes
 
 
 class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
@@ -46,9 +49,10 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
 
     _label = 'fit vesicles'
     _devStatus = BETA
+    _possibleOutputs = FitVesicleOutputs
 
-    def __init__(self, **args):
-        EMProtocol.__init__(self, **args)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     # --------------------------- DEFINE param functions ------------------------
     def _defineParams(self, form):
@@ -57,8 +61,6 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
                       label='Subtomograms/Coordinates3D',
                       help='Subtomograms or coordinates3D picked in vesicles. If there are more than one vesicle per '
                            'tomogram, input subtomograms or coordinates should have assigned groupId.')
-        form.addParam('inputTomos', PointerParam, label="Tomograms", pointerClass='SetOfTomograms',
-                      help='Select tomograms from which subtomograms come.')
 
     # --------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):
@@ -66,69 +68,58 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions -------------------------------
     def fitEllipsoidStep(self):
-        input = self.input.get()
-        inputTomos = self.inputTomos.get()
-        outSet = self._createSetOfMeshes(self.inputTomos)
-
-        totalMeshes = 0
-        for tomo in inputTomos.iterItems(iterate=False):
+        inCoords = self.input.get()
+        if type(inCoords) is not SetOfCoordinates3D:  # It may be a SetOfSubTomograms
+            inCoords = inCoords.getCoordinates3D()
+        precedentsDict = inCoords.getPrecedentsInvolved()
+        outSet = self._createSetOfMeshes(inCoords.getPrecedents())
+        outSet.copyInfo(inCoords)
+        vesicleDict = {}
+        for tomoId, tomo in precedentsDict.items():
             self.info("Fitting tomogram %s" % tomo)
-            vesicleList = []
-            vesicleIdList = []
-            tomoName = basename(tomo.getTsId())
-            tomoDim = [float(d) for d in tomo.getDim()]
+            tomoX, tomoY, tomoZ = tomo.getDim()
+            groupIds = inCoords.getUniqueValues(Coordinate3D.GROUP_ID_ATTR, where='%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, tomoId))
+            for groupId in groupIds:
+                vesicleDict['%s_%s' % (tomoId, groupId)] = {'x': [], 'y': [], 'z': [], 'tomo': tomo}
+            for coord in inCoords.iterCoordinates(volume=tomo):
+                key = '%s_%s' % (tomoId, coord.getGroupId())
+                vesicleDict[key]['x'].append(float(coord.getX(const.BOTTOM_LEFT_CORNER)) / tomoX)
+                vesicleDict[key]['y'].append(float(coord.getY(const.BOTTOM_LEFT_CORNER)) / tomoY)
+                vesicleDict[key]['z'].append(float(coord.getZ(const.BOTTOM_LEFT_CORNER)) / tomoZ)
 
-            for item in input.iterCoordinates(volume=tomo):
-                vesicleId = self._getVesicleId(item)
-                if vesicleId not in vesicleIdList:
-                    vesicleIdList.append(vesicleId)
-                    vesicle = self._createSetOfCoordinates3D(inputTomos, '_' + pwutlis.removeBaseExt(tomoName)
-                                                             + '_vesicle_' + str(vesicleId))
-                    vesicleList.append(vesicle)
-                idx = vesicleIdList.index(vesicleId)
-                vesicleList[idx].append(item)
+        for vesicleInd, coordDict in enumerate(vesicleDict.values()):
+            x = coordDict['x']
+            y = coordDict['y']
+            z = coordDict['z']
+            tomo = coordDict['tomo']
+            [center, radii, v, _, chi2] = fit_ellipsoid(np.array(x), np.array(y), np.array(z))
+            algDesc = '%f*x*x + %f*y*y + %f*z*z + 2*%f*x*y + 2*%f*x*z + 2*%f*y*z + 2*%f*x + 2*%f*y + 2*%f*z + %f ' \
+                      '= 0' % (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9])
+            adjEllipsoid = Ellipsoid()
+            adjEllipsoid.setAlgebraicDesc(algDesc)
+            adjEllipsoid.setCenter(str(center))
+            adjEllipsoid.setRadii(str(radii))
+            self.debug(algDesc)
+            self.debug('Chi2: %s' % chi2)
+            pointCloud = generatePointCloud(v, tomo.getDim())
+            if not pointCloud:
+                raise Exception("It does not seem like any output is produced!")
 
-            totalMeshes += len(vesicleList)
+            for point in pointCloud:
+                meshPoint = MeshPoint()
+                meshPoint.setVolume(tomo)
+                meshPoint.setX(point[0], const.BOTTOM_LEFT_CORNER)
+                meshPoint.setY(point[1], const.BOTTOM_LEFT_CORNER)
+                meshPoint.setZ(point[2], const.BOTTOM_LEFT_CORNER)
+                meshPoint.setGroupId(vesicleInd)
+                meshPoint.setDescription(adjEllipsoid)
+                meshPoint.setVolumeName(tomo.getTsId())
+                outSet.append(meshPoint)
 
-            for vesicle in vesicleList:
-                x = []
-                y = []
-                z = []
+        outSet.setNumberOfMeshes(len(vesicleDict.keys()))
 
-                for item in vesicle.iterCoordinates(volume=tomo):
-                    coord = self._getCoor(item)
-                    x.append(float(coord.getX(const.BOTTOM_LEFT_CORNER)) / tomoDim[0])
-                    y.append(float(coord.getY(const.BOTTOM_LEFT_CORNER)) / tomoDim[1])
-                    z.append(float(coord.getZ(const.BOTTOM_LEFT_CORNER)) / tomoDim[2])
-
-                [center, radii, v, _, chi2] = fit_ellipsoid(np.array(x), np.array(y), np.array(z))
-                algDesc = '%f*x*x + %f*y*y + %f*z*z + 2*%f*x*y + 2*%f*x*z + 2*%f*y*z + 2*%f*x + 2*%f*y + 2*%f*z + %f ' \
-                          '= 0' % (v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9])
-                adjEllipsoid = Ellipsoid()
-                adjEllipsoid.setAlgebraicDesc(algDesc)
-                adjEllipsoid.setCenter(str(center))
-                adjEllipsoid.setRadii(str(radii))
-                self.debug(algDesc)
-                self.debug('Chi2: %s'% chi2)
-                pointCloud = generatePointCloud(v, tomo.getDim())
-                if not pointCloud:
-                    raise Exception("It does not seem like any output is produced!")
-
-                for point in pointCloud:
-                    meshPoint = MeshPoint()
-                    meshPoint.setVolume(tomo.clone())
-                    meshPoint.setX(point[0], const.BOTTOM_LEFT_CORNER)
-                    meshPoint.setY(point[1], const.BOTTOM_LEFT_CORNER)
-                    meshPoint.setZ(point[2], const.BOTTOM_LEFT_CORNER)
-                    meshPoint.setGroupId(self._getVesicleId(item))
-                    meshPoint.setDescription(adjEllipsoid)
-                    meshPoint.setVolumeName(tomo.getTsId())
-                    outSet.append(meshPoint)
-        outSet.setPrecedents(inputTomos)
-        outSet.setNumberOfMeshes(totalMeshes)
-
-        self._defineOutputs(outputMeshes=outSet)
-        self._defineSourceRelation(self.inputTomos.get(), outSet)
+        self._defineOutputs(**{self._possibleOutputs.meshes.name: outSet})
+        self._defineSourceRelation(self.input.get(), outSet)
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
@@ -146,9 +137,8 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
         if not self.isFinished():
             summary.append("Output vesicles not ready yet.")
         else:
-            summary.append("%d subtomograms/coordinates3D from %d tomograms\n%d vesicles adjusted" %
-                           (self.input.get().getSize(), self.inputTomos.get().getSize(),
-                            self.outputMeshes.getNumberOfMeshes()))
+            summary.append("%i subtomograms/coordinates3D\n%i vesicles adjusted" %
+                           (self.input.get().getSize(), self.meshes.getNumberOfMeshes()))
         return summary
 
     def _methods(self):
@@ -156,10 +146,11 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
             return ["Protocol not finished yet"]
         else:
             return ["Fit an ellipsoid and compute a 3D set of points (mesh) for each of the %d vesicles adjusted." %
-                self.outputMeshes.getNumberOfMeshes()]
+                    self.outputMeshes.getNumberOfMeshes()]
 
     # --------------------------- UTILS functions --------------------------------------------
-    def _getInputisSubtomo(self, item):
+    @staticmethod
+    def _getInputisSubtomo(item):
         if isinstance(item, SubTomogram):
             return True
         else:
@@ -172,17 +163,6 @@ class TomoProtFitEllipsoid(EMProtocol, ProtTomoBase):
             coor = item
         return coor
 
-    def _getVesicleId(self, item):
-        coor = self._getCoor(item)
-        if coor.hasGroupId():
-            vesicleId = coor.getGroupId()
-        else:
-            vesicleId = '1'  # For now it works with several vesicles in the same tomo just for subtomos with groupId
-        return vesicleId
-
-    def _evaluateQuadric(self, v, x, y, z):
-        return v[0]*x*x + v[1]*y*y + v[2]*z*z + 2*v[3]*x*y + 2*v[4]*x*z + 2*v[5]*y*z + 2*v[6]*x + 2*v[7]*y + 2*v[8]*z +\
-               v[9]
 
 # To keep backwards compatibility in existing projects
 class XmippProtFitEllipsoid(TomoProtFitEllipsoid):

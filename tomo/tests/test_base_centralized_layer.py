@@ -23,34 +23,776 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists
+from os.path import exists, isabs, islink
+from typing import List, Union
 import numpy as np
+from pwem import ALIGN_NONE
+from pwem.emlib.image.image_readers import MRCImageReader
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
-from tomo.objects import SetOfSubTomograms
+from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms
 
 
 class TestBaseCentralizedLayer(BaseTest):
 
-    def check3dTransformMatrix(self, outMatrix, orientedParticles=False):
+    def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float,
+                             isHeterogeneous: Union[bool, None] = None,
+                             streamState: int = 2) -> None:
+        """
+        :param inSet: A set of Scipion Tomo objects.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param isHeterogeneous: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images or tomograms with different thicknesses.
+        :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        """
+        self.assertSetSize(inSet, expectedSetSize)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
+        self.assertEqual(inSet.getStreamState(), streamState)
+        if isHeterogeneous:
+            self.assertEqual(inSet.isHeterogeneousSet(), isHeterogeneous)
+
+    # TILT SERIES ######################################################################################################
+    def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
+                         expectedDimensions: List[int] = None,
+                         testAcqObj: TomoAcquisition = None,
+                         anglesCount: Union[dict, int] = None,
+                         checkIds: bool = False):
+        """
+        :param inTsMSet: SetOfTiltSeries.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tilt
+        series Movies.
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
+        of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
+        :param checkIds: boolean used to perform id checking: objId must start with 1 --> i +1. When using {TO} the
+        objId ends up with that value. For movies, it is 0, 39, 40
+        """
+        # CHECK THE SET ------------------------------------------------------------------------------------------------
+        self.checkSetGeneralProps(inTsMSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if anglesCount:
+            self.checkAnglesCount(inTsMSet, anglesCount)
+        if testAcqObj:
+            self.checkTomoAcquisition(testAcqObj, inTsMSet.getAcquisition())
+        # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
+        for tsM in inTsMSet:
+            tsId = tsM.getTsId()
+            if testAcqObj:
+                self.checkTomoAcquisition(testAcqObj, tsM.getAcquisition(), tsId=tsId)
+            # Check the expected dimensions
+            if expectedDimensions:
+                x, y, z = tsM.getDimensions()
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId])
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions)
+            # Check the angles count
+            if anglesCount:
+                self.checkAnglesCount(tsM, anglesCount)
+            # Check the filenames
+            for i, ti in enumerate(tsM):
+                self.assertFalse(isabs(ti.getFileName()), "Tilt image file %s is not absolute!. Should be relative.")
+                self.assertTrue(islink(ti.getFileName()), "Tilt series file %s is not a link." % ti.getFileName())
+                # objId must start with 1 --> i +1
+                # When using {TO} the objId ends up with that value. For movies, it is 0, 39, 40
+                if checkIds:
+                    self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
+
+    def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float,
+                        imported: bool = False,
+                        expectedDimensions: Union[List[int], dict] = None,
+                        testSetAcqObj: TomoAcquisition = None,
+                        testAcqObj: Union[dict, TomoAcquisition] = None,
+                        alignment: str = ALIGN_NONE,
+                        isPhaseFlipped: bool = False,
+                        isAmplitudeCorrected: bool = False,
+                        hasAlignment: bool = False,
+                        hasOddEven: bool = False,
+                        anglesCount: Union[dict, int] = None,
+                        anglesCountSet: int = None,
+                        hasCtfCorrected: bool = False,
+                        isInterpolated: bool = False,
+                        excludedViewsDict: dict = None,
+                        isHeterogeneousSet: Union[bool, None] = None,
+                        expectedOrigin: Union[Union[List[float], np.ndarray], dict] = None) -> None:
+        """
+        :param inTsSet: SetOfTiltSeries.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param imported: boolean used to indicate if the introduced set correspond to an imported set, which means, in
+        terms of tilt image transformation matrix, not to have it.
+        :param expectedDimensions: list containing the expected X,Y, in pixels, and no. images, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
+        :param testSetAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tilt
+        series. It may not be the same as testAcqObj, as in the case of heterogeneous sets of tilt series.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tilt series. A
+        dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param alignment: Alignment type expected (see scipion-em > pwem > constants.py).
+        :param isPhaseFlipped: False by default. Used to check if the tilt series were phase flipped.
+        :param isAmplitudeCorrected: False by default. The same as before, but for the amplitude correction.
+        :param hasAlignment: False by default. Used to indicate if the tilt series are expected to have been aligned
+        (thus, the transformation matrix is not the identity) or not, and then the tilt series attribute _hasAlignment
+        will be expected to be False and the tilt images will be expected not to have any transformation matrix
+        associated.
+        :param hasOddEven: False by default. Used to indicate if the set of tilt series are expected to have even/odd
+        tilt series associated (generated with the even/odd angles or frames).
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
+        of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
+        :param anglesCountSet: only for heterogeneous sets. Number of angles expected in the set descrioption
+        (Properties table).
+        :param hasCtfCorrected: False by default. Used to indicate if the tilt series have the CTF corrected.
+        :param isInterpolated: False by default. Used to indicate if the tilt series have an alignment applied (True)
+        or not (False). Also, if interpolated, the expected transformation matrix will be expected to be the identity.
+        :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
+        expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
+        to False and the expected transformation matrix is the identity.
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        :param expectedOrigin: list containing the expected originX,originY, in angstroms, to check. A dict of
+        structure {key --> tsId: value: expectedOrigin} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different dimensions in the same set and. consequently, different origin.
+        """
+        # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
+        originTol = 0.1  # in angstroms
+        sRateTol = 0.001  # in angstroms/pixel
+        # CHECK THE SET ------------------------------------------------------------------------------------------------
+        self.checkSetGeneralProps(inTsSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
+        if testSetAcqObj:
+            self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition())
+        self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
+        self.assertEqual(inTsSet.getAlignment(), alignment)
+        self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
+        self.assertEqual(inTsSet.isAmplitudeCorrected(), isAmplitudeCorrected)
+        self.assertEqual(inTsSet.interpolated(), isInterpolated)
+        self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
+        if anglesCountSet:
+            self.checkAnglesCount(inTsSet, anglesCountSet)
+        self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
+
+        # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
+        for ts in inTsSet:
+            tsId = ts.getTsId()
+            # Check the dimensions
+            if expectedDimensions:
+                x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
+                z = max(z, n)
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId])
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions)
+            # Check the acquisition
+            if testAcqObj:
+                tsAcq = ts.getAcquisition()
+                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId)
+            # Check the angles count
+            if anglesCount:
+                self.checkAnglesCount(ts, anglesCount, tsId=tsId)
+            # Check the origin matrix
+            if expectedOrigin is not None:
+                if type(expectedOrigin) is dict:
+                    testOrigin = expectedOrigin[tsId]
+                else:
+                    testOrigin = expectedOrigin
+                self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTol=originTol)
+            # Sampling rate
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateTol)
+            # Alignment
+            self.assertEqual(ts.hasAlignment(), hasAlignment)
+            self.assertEqual(ts.getAlignment(), alignment)
+            # Interpolated
+            self.assertEqual(ts.interpolated(), isInterpolated)
+
+            # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
+            for ind, ti in enumerate(ts):
+                # # Acquisition
+                # if testAcqObj:
+                #     self.checkTomoAcquisition(testAcqObj, ti.getAcquisition(), tsId=tsId)
+                # Excluded view
+                if excludedViewsDict:
+                    isExcludedView = True if ind in excludedViewsDict[tsId] else False
+                else:
+                    isExcludedView = False
+                self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
+                # Odd/Even
+                if hasOddEven:
+                    self.assertTrue(exists(ti.getEven()))
+                    self.assertTrue(exists(ti.getOdd()))
+                # Alignment matrix
+                self.checkTiTransformMatrix(ti,
+                                            isImported=imported,
+                                            isInterpolated=isInterpolated,
+                                            is2d=True,
+                                            isExcludedView=isExcludedView)
+                # Filename
+                self.assertTrue(exists(ti.getFileName()))
+                # Sampling rate
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateTol)
+
+    def checkAnglesCount(self,
+                         inSet: Union[SetOfTiltSeries, TiltSeries],
+                         anglesCount: Union[int, dict],
+                         tsId: str = None):
+        """
+        :param inSet: it may be a set of tilt series or a single tilt series.
+        :param anglesCount: expected number of tilt images in each tilt series that compose the introduced set. A dict
+        of structure {key --> tsId: value: number of tilt images} is also accepted if the set is heterogeneous.
+        :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
+        """
+        tsAnglesCount = anglesCount[tsId] if type(anglesCount) is dict else anglesCount
+        self.assertEqual(inSet.getAnglesCount(), tsAnglesCount)
+
+    def checkTiTransformMatrix(self, ti: TiltImage,
+                               isImported: bool = False,
+                               isInterpolated: bool = False,
+                               isExcludedView: bool = False,
+                               is2d: bool = False):
+        """Checks the shape and coarsely the contents of the transformation matrix provided. Expected behavior is:
+        -> If interpolated, no matrix is associated.
+        -> Else:
+            -> If excluded view, the expected transformation matrix is the Identity.
+            -> Else: the transformation matrix exists, and it is not the identity.
+
+        :param ti: current tilt image.
+        :param isImported: boolean used to indicate if the introduced set correspond to an imported set, which means, in
+        terms of tilt image transformation matrix, not to have it.
+        :param is2d: False by default. Used to indicate if the expected transformation matrix should be of size 3 x 3
+        (True) or 4 x 4 (False).
+        :param isInterpolated: if True, the expected transformation matrix is the Identity
+        :param isExcludedView: it behaves the same as param isInterpolated
+        """
+        if isImported or isInterpolated:
+            self.assertIsNone(ti.getTransform())
+        else:
+            size = 3 if is2d else 4
+            transfMatrixShape = (size, size)
+            identityMatrix = np.eye(size)
+            outMatrix = ti.getTransform().getMatrix()
+            self.assertIsNotNone(outMatrix)
+            if type(outMatrix) is not np.ndarray:
+                outMatrix = np.array(outMatrix)
+            self.assertIsNotNone(outMatrix)
+            self.assertEqual(outMatrix.shape, transfMatrixShape)
+            if isExcludedView:
+                self.assertTrue(np.array_equal(outMatrix, identityMatrix))
+            else:
+                self.assertFalse(np.array_equal(outMatrix, identityMatrix))
+
+    def checkTsOriginMatrix(self, ts: TiltSeries, expectedOrigin: List[float], originTol: float = 0.1) -> None:
+        testOrigin = np.array(expectedOrigin)
+        testOrigin = np.append(testOrigin, 0)  # Z shift must be 0 for images
+        # Get the generated/stored origin matrix and check it
+        originTransform = ts.getOrigin()
+        self.assertIsNotNone(originTransform)
+        originMatrix = originTransform.getMatrix()
+        self.assertIsNotNone(originMatrix)
+        origX = originMatrix[0, -1]
+        origY = originMatrix[1, -1]
+        origZ = originMatrix[2, -1]
+        origin = np.array([origX, origY, origZ])
+        self.assertTrue(np.allclose(testOrigin, origin, rtol=originTol),
+                        msg=f'Tilt-series {ts.getTsId()}: origin values [originX, originY, originZ] are different than '
+                            f'the expected within tolerance {originTol} Å.\n{testOrigin} != \n{origin}')
+
+    # TOMO ACQUISITION #################################################################################################
+    def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict], currentAcq: TomoAcquisition,
+                             tsId: Union[str, None] = None,
+                             isTomogramAcq: bool = False) -> None:
+        """It compares two TomoAcquisition objects, considering the following attributes:
+
+        * Magnification.
+        * Voltage.
+        * Spherical aberration.
+        * Amplitude contrast.
+        * Initial dose.
+        * Dose per frame.
+        * Accumulated dose.
+        * Tilt axis angle.
+        * Min tilt angle.
+        * Max tilt angle.
+        * Tilt angle step.
+
+        :param testAcq: reference TomoAcquisition. It can also be a dict of structure {key --> tsId: value:
+        TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param currentAcq: TomoAcquisition to be tested.
+        :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
+        :param isTomogramAcq: boolean used to indicate if the acquisitoon introduced corresponds to a tomogram instead
+        of a tilt-series. In that case, the attributes checked will be:
+
+        * Voltage.
+        * Spherical aberration.
+        * Amplitude contrast.
+
+        """
+
+        testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
+        self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
+        self.assertAlmostEqual(testAcq.getSphericalAberration(), currentAcq.getSphericalAberration(), delta=0.01)
+        self.assertAlmostEqual(testAcq.getAmplitudeContrast(), currentAcq.getAmplitudeContrast(), delta=0.01)
+        if not isTomogramAcq:
+            self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
+            self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.5)
+            self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
+            self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
+
+    # CTF ##############################################################################################################
+    def checkCTFs(self, inCtfSet, expectedSetSize=-1, expectedPsdFile=None, excludedViewsDict=None, streamState=2):
+        """
+        :param inCtfSet: A SetOfCtfTomoSeries.
+        :param expectedSetSize: expected set site to check.
+        :param expectedPsdFile: boolean used to indicate if the psd file is expected to be present or not in the
+        metadata stored for each CTFTomoSeries that composes SetOfCtfTomoSeries tested. In case it is expected to be
+        present for some of the CTFTomoSeries, a dict of structure {key --> tsId: value --> boolean} is also admitted
+        :param excludedViewsDict: a dictionary of structure {key --> tsId: value --> list of the indices of images
+        that are expected to have been excluded}. An excluded view in a CTFTomo means that its attribute _objEnabled is
+        set to False and the expected values for defocusU, defocusV, and DefocusAngle will be -999, -1,
+        and -999, correspondingly, as what's done by the CTFModel method called setWrongDefocus.
+        :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        """
+        self.assertSetSize(inCtfSet, expectedSetSize)
+        self.assertEqual(inCtfSet.getStreamState(), streamState)
+        expectPsdFile = False
+        for ctf in inCtfSet:
+            tsId = ctf.getTsId()
+            for ind, ctfi in enumerate(ctf):
+                # Excluded view
+                if excludedViewsDict:
+                    isExcludedView = True if ind in excludedViewsDict[tsId] else False
+                else:
+                    isExcludedView = False
+                # Expected psd file
+                if type(expectedPsdFile) is dict:
+                    expectPsdFile = expectedPsdFile[tsId]
+                elif type(expectedPsdFile) is bool:
+                    expectPsdFile = expectedPsdFile
+                self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
+                self.checkCtfTomo(ctfi, isExcludedView, expectPsdFile)
+        # TODO: Check if the CTFs could be checked more exhaustively
+
+    # TOMOGRAMS ########################################################################################################
+    def checkTomograms(self, inTomoSet: SetOfTomograms, expectedSetSize: int, expectedSRate: float,
+                       expectedDimensions: Union[List[int], dict] = None,
+                       hasOddEven: bool = False,
+                       expectedOriginShifts: Union[List[float], None] = None,
+                       ctfCorrected: bool = False,
+                       hasHalves: bool = False,
+                       isHeterogeneousSet: Union[bool, None] = None,
+                       testSetAcqObj: TomoAcquisition = None,
+                       testAcqObj: Union[dict, TomoAcquisition] = None) -> None:
+        """
+        :param inTomoSet: SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
+        :param hasOddEven: False by default. Used to indicate if the set of tomograms is expected to have even/odd
+        halves.
+        :param expectedOriginShifts: list containing the expected shifts of the tomogram center in the X, Y, and Z
+        directions, expressed in angstroms.
+        :param ctfCorrected: False by default: Used to indicate if the tomograms have the CTF corrected or not.
+        :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
+        compose the set. If True, it will be checked if the corresponding halves files exist.
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        :param testSetAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tomos.
+        It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tomograms. A
+        dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
+        """
+        checkMsgPattern = 'Expected and resulting %s are different.'
+        checkSizeMsg = checkMsgPattern % 'dimensions'
+        checkSRateMsg = checkMsgPattern % 'sampling rate'
+        checkOriginMsg = checkMsgPattern % 'origin shifts'
+
+        # Check the set
+        self.checkSetGeneralProps(inTomoSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
+        if testSetAcqObj:
+            self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition(), isTomogramAcq=True)
+        self.assertEqual(inTomoSet.hasOddEven(), hasOddEven)
+        self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
+        # Check the set elements main attributes
+        for tomo in inTomoSet:
+            tsId = tomo.getTsId()
+            # Check if the filename exists
+            self.assertTrue(exists(tomo.getFileName()))
+            # Check the sampling rate
+            self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # Check the ctf correction
+            if ctfCorrected is not None:
+                self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
+            # At least, check that the TsId was not lost in metadata generation or copying methods
+            self.assertIsNotNone(getattr(tomo, Tomogram.TS_ID_FIELD, None),
+                                 msg=f'Tomogram {tomo.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
+                                     f'or it is empty.')
+            # Check the dimensions
+            if expectedDimensions:
+                x, y, z = tomo.getDimensions()
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            # Check the acquisition
+            if testAcqObj:
+                tsAcq = tomo.getAcquisition()
+                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId, isTomogramAcq=True)
+            # Check the origin
+            if expectedOriginShifts is not None:
+                x, y, z = tomo.getOrigin().getShifts()
+                for i, j in zip([x, y, z], expectedOriginShifts):
+                    self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
+            # Check the halves
+            if hasHalves:
+                tsId = tomo.getTsId()
+                self.assertTrue(tomo.hasHalfMaps(), "Halves not registered.")
+                half1, half2 = tomo.getHalfMaps().split(',')
+                self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
+                self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+
+    # COORDINATES ######################################################################################################
+    def checkCoordinates(self, outCoords, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
+                         orientedParticles=False):
+        """Checks the general properties of a SetOfCoordinates3D.
+
+        :param outCoords: SetOf3DCoordinates.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
+        and eye matrix (False) or not (True).
+        """
+
+        # First, check the set size, sampling rate, and box size
+        self.checkCoordsOrPartsSetGeneralProps(outCoords,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate,
+                                               expectedBoxSize=expectedBoxSize)
+        for tomo in outCoords.getPrecedents():
+            for coord in outCoords.iterCoordinates(volume=tomo):
+                self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
+                self.assertEqual(coord.getTomoId(), tomo.getTsId())
+
+    def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
+                                    expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
+        """Checks the results of a coordinate extraction protocol.
+
+        :param inSet: input set from which the coordinates were extracted. It can be a SetOf3DCoordinates or a
+        SetOfSubTomograms.
+        :param outCoords: the resulting SetOf3DCoordinates after the coordinate extraction.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py.
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
+        and eye matrix (False) or not (True)."""
+        if type(inSet) == SetOfSubTomograms:
+            inSet = inSet.getCoordinates3D()
+        # First, check the set size, sampling rate, and box size
+        self.checkCoordsOrPartsSetGeneralProps(outCoords,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate,
+                                               expectedBoxSize=expectedBoxSize)
+        # Check the coordinate extremes
+        inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
+        outCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outCoords)
+        coordScaleFactor = inSet.getSamplingRate() / outCoords.getSamplingRate()
+        shiftsScaleFactor = 1 / coordScaleFactor
+        self.assertTrue(np.array_equal(outCoordsExtremes, coordScaleFactor * inCoordsExtremes))
+        # Other checks per coordinate
+        for inElement, outCoord in zip(inSet, outCoords):
+            # Check the transformation matrices and shifts
+            inSetTrMatrix = inElement.getMatrix(convention=convention)
+            outCoordTrMatrix = outCoord.getMatrix(convention=convention)
+            self.checkTransformMatrix(outCoordTrMatrix, alignment=orientedParticles)
+            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
+            # Check the tomoId
+            self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
+
+    # SUBTOMOGRAMS #####################################################################################################
+    def checkImportedSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
+                                  tomograms=None):
+        """Checks the main properties of an imported set subtomograms.
+
+        :param subtomograms: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param tomograms: SetOfTomograms. If provided, additional features regarding how each subtomogram is referred
+        to the corresponding tomogram will be carried out. If not provided, it will be considered that the subtomograms
+        are not referred to any tomograms (as in some subtomogram importing cases).
+        """
+        # Check the set
+        self.checkCoordsOrPartsSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate)
+        if tomograms:
+            for tomo in tomograms:
+                tomoName = tomo.getFileName()
+                tomoObjId = tomo.getObjId()
+                tomoOrigin = tomo.getOrigin().getMatrix()
+                tomoId = tomo.getTsId()
+                for subtomo in subtomograms.iterSubtomos(volume=tomo):
+                    self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize,
+                                      hasHalves=False)
+                    self.assertEqual(subtomo.getVolName(), tomoName)
+                    self.assertEqual(subtomo.getVolId(), tomoObjId)
+                    self.assertTrue(np.array_equal(subtomo.getOrigin().getMatrix(), tomoOrigin))
+                    self.assertEqual(subtomo.getCoordinate3D().getTomoId(), tomoId)
+        else:
+            for subtomo in subtomograms:
+                self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize,
+                                  hasHalves=False)
+                self.assertFalse(subtomo.hasCoordinate3D())
+
+    def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
+                               convention=TR_SCIPION, orientedParticles=False, expectedExtension='.mrc',
+                               isStack2d=False, noImgs=None):
+        """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
+
+        :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
+        :param outSubtomos: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
+        eye matrix (False) or not (True).
+        SED TO CHECK EACH SUBTOMOGRAM OF THE SET
+        :param expectedExtension: '.mrc' by default. Used to indicate the expected extension of the generated particle,
+        :param isStack2d: False by default. Used to indicate if the subtomogram is a stack of 2d particles or not.
+        :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
+        are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
+        noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        """
+        scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
+        # Check the critical properties of the set
+        # First, check the set size, sampling rate, and box size
+        self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate)
+        if expectedBoxSize:
+            self.getSubtomosDims(outSubtomos,
+                                 is2dStack=isStack2d,
+                                 expectedBoxSize=expectedBoxSize,
+                                 noImgs=noImgs)
+        self.assertTrue(outSubtomos.hasCoordinates3D())
+        # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
+        # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
+        # from the plugin scipion-em-tomo)
+        currentCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outSubtomos)
+        unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
+        self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
+        # Check the subtomograms that compose the set
+        presentTsIds = inCoords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
+        presentPrecedents = [tomo.clone() for tomo in inCoords.getPrecedents() if tomo.getTsId() in presentTsIds]
+        for tomo in presentPrecedents:
+            for incoord, outSubtomo in zip(inCoords.iterCoordinates(volume=tomo),
+                                           outSubtomos.iterSubtomos(volume=tomo)):
+                self.checkSubtomogram(outSubtomo,
+                                      expectedSRate=expectedSRate,
+                                      expectedBoxSize=expectedBoxSize,
+                                      isStack2d=isStack2d,
+                                      noImgs=noImgs,
+                                      expectedExtension=expectedExtension)
+                subtomoTr = outSubtomo.getTransform(convention=convention)
+                subtomoMatrix = subtomoTr.getMatrix()
+                coordinate = outSubtomo.getCoordinate3D()
+                coordTr = coordinate._eulerMatrix
+                self.assertTrue(exists(outSubtomo.getFileName()))
+                # The shifts in the subtomograms transformation matrix should have been scaled properly
+                self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
+                # Imported coordinates were picked using PySeg, so they must have an orientation
+                self.checkTransformMatrix(subtomoMatrix, alignment=orientedParticles)
+                # Check the tomoId
+                self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
+
+    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1,
+                                 expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False, angTol=0.05,
+                                 shiftTol=1, expectedExtension='mrc', isStack2d=False, noImgs=None):
+        """Checks exhaustively the subtomograms generated after having carried out a subtomogram refinement
+
+        :param inSubtomos: SetOfSubTomograms introduced for the subtomo refinement.
+        :param outSubtomos: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
+        and eye matrix.
+        (False) or not (True).
+        USED TO CHECK EACH SUBTOMOGRAM OF THE SET
+        :param expectedExtension: '.mrc' by default. Used to indicate the expected extension of the generated particle,
+        :param isStack2d: False by default. Used to indicate if the subtomogram is a stack of 2d particles or not.
+        :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
+        are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
+        noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        TOLERANCE PARAMETERS:
+        :param angTol: angular tolerance, in degrees. Used to compare the input and output subtomograms transformation
+        matrices.
+        :param shiftTol: shift tolerance, in pixels. Used to compare the input and output subtomograms transformation
+        matrices.
+        """
+        angTolMat = np.ones([3, 3]) * angTol
+        shiftTolMat = np.ones(3) * shiftTol
+        # Check the set
+        self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
+                                               expectedSetSize=expectedSetSize,
+                                               expectedSRate=expectedSRate)
+        if expectedBoxSize:
+            self.getSubtomosDims(outSubtomos,
+                                 is2dStack=isStack2d,
+                                 expectedBoxSize=expectedBoxSize,
+                                 noImgs=noImgs)
+        for inSubtomo, outSubtomo in zip(inSubtomos, outSubtomos):
+            # Check the subtomogram main properties
+            self.checkSubtomogram(outSubtomo,
+                                  expectedSRate=expectedSRate,
+                                  expectedBoxSize=expectedBoxSize,
+                                  isStack2d=isStack2d,
+                                  noImgs=noImgs,
+                                  expectedExtension=expectedExtension)
+            # Check the transformation matrix
+            inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
+            outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
+            self.checkTransformMatrix(outSubtomoMat, alignment=orientedParticles)
+            # The input and output matrices should be different
+            diffMatrix = np.absolute(outSubtomoMat - inSubtomoMat)
+            diffAngularPart = diffMatrix[:3, :3]
+            diffShiftPart = diffMatrix[3, :-1]
+            self.assertTrue(np.any(np.absolute(diffAngularPart - angTolMat) > 0))
+            self.assertTrue(np.any(np.absolute(diffShiftPart - shiftTolMat) > 0))
+            # Check that the input and output particles match (We're comparing two sets, so the convention doesn't
+            # matter as long as the coordinates of both sets are retrieved using the same convention)
+            inCoord = inSubtomo.getCoordinate3D()
+            outCoord = outSubtomo.getCoordinate3D()
+            self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
+            self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
+
+    def checkSubtomogram(self, subtomo, expectedSRate=-1, expectedBoxSize=-1, expectedExtension='.mrc',
+                         isStack2d=False, noImgs=None):
+        """Checks the main properties of a subtomogram.
+
+        :param subtomo: SubTomogram.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedExtension: '.mrc' by default. Used to indicate the expected extension of the generated particle,
+        which may vary in some cases, such as in Relion 5 2D particles (.mrcs).
+        :param isStack2d: False by default. Used to indicate if the subtomogram is a stack of 2d particles or not.
+        :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
+        are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
+        noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        """
+        self.assertTrue(exists(subtomo.getFileName()), "Average %s does not exists" % subtomo.getFileName())
+        self.assertTrue(subtomo.getFileName().endswith(expectedExtension))
+        self.assertTrue(abs(subtomo.getSamplingRate() - expectedSRate) <= 1e-4)
+        self.getSubtomosDims(subtomo,
+                             is2dStack=isStack2d,
+                             expectedBoxSize=expectedBoxSize,
+                             noImgs=noImgs)
+
+    def getSubtomosDims(self, inObj, is2dStack=None, expectedBoxSize=None, noImgs=None):
+        """It can be used with a sigle SubTomogram or a set of them."""
+        if is2dStack:
+            x, y, nIm = inObj.getDimensions()
+            self.assertEqual(x, expectedBoxSize)
+            self.assertEqual(y, expectedBoxSize)
+            self.assertLessEqual(nIm, noImgs)
+        else:
+            testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
+            self.assertEqual(inObj.getDimensions(), testBoxSize)
+
+    # AVERAGE ##########################################################################################################
+    def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
+        """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
+        an initial model or refinement of subtomograms.
+
+        :param avg: AverageSubtomogram.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated."""
+        testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
+        self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
+        self.assertTrue(avg.getFileName().endswith(".mrc"))
+        self.assertTrue(abs(avg.getSamplingRate() - expectedSRate) <= 1e-4)
+        self.assertEqual(avg.getDimensions(), testBoxSize)
+        # Check the halves
+        if hasHalves:
+            self.assertTrue(avg.hasHalfMaps(), "Halves not registered.")
+            half1, half2 = avg.getHalfMaps().split(',')
+            self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
+            self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
+
+    # SUBTOMOGRAM CLASSES ##############################################################################################
+    def checkClasses(self, classesSet, expectedSRate=-1, expectedSetSize=-1, hasRepresentatives=True):
+        """Checks exhaustively the classes generated after having carried out a subtomogram classification
+        :param classesSet: SetOfClassesSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param hasRepresentatives: flag used to indicate if the set of classes is expected to have representatives or
+        not.
+        """
+        self.checkSetGeneralProps(classesSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.assertEqual(classesSet.hasRepresentatives(), hasRepresentatives)
+        representativeFileList = []
+        for subtomoClass in classesSet:
+            if hasRepresentatives:
+                repFileName = subtomoClass.getRepresentative().getFileName()
+                representativeFileList.append(repFileName)
+                self.assertTrue(exists(repFileName))
+            self.assertEqual(subtomoClass.getSamplingRate(), expectedSRate)
+
+        if hasRepresentatives:
+            msg = 'At least one of the representative filenames is repeated, which should not be possible.'
+            self.assertEqual(len(set(representativeFileList)), expectedSetSize, msg=msg)
+
+    # COORDINATES AND PARTICLES TEST UTILS #############################################################################
+    def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
+        # Check the set
+        self.checkSetGeneralProps(inSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        if expectedBoxSize:
+            self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
+
+    def checkTransformMatrix(self, outMatrix, alignment=False, is2d=False, isInterpolated=False, isExcludedView=False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
 
         :param outMatrix: transformation matrix of a subtomogram or coordinate.
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
-        eye matrix
-        (False) or not (True).
+        :param alignment: False by default. Used to specify if the expected transformation matrix should be an
+        eye matrix (False) or not (True).
+        :param is2d: False by default. Used to indicate if the expected transformation matrix should be of size 3 x 3
+        (True) or 4 x 4 (False).
+        :param isInterpolated: if True, the expected transformation matrix is the Identity
+        :param isExcludedView: it behaves the same as param isInterpolated
         """
-        transfMatrixShape = (4, 4)
+        size = 3 if is2d else 4
+        transfMatrixShape = (size, size)
+        identityMatrix = np.eye(size)
         self.assertIsNotNone(outMatrix)
-        if type(outMatrix) != np.ndarray:
+        if type(outMatrix) is not np.ndarray:
             outMatrix = np.array(outMatrix)
         self.assertIsNotNone(outMatrix)
-        self.assertTrue(outMatrix.shape, transfMatrixShape)
-        if orientedParticles:
-            self.assertFalse(np.array_equal(outMatrix, np.eye(4)))
+        self.assertEqual(outMatrix.shape, transfMatrixShape)
+        if isInterpolated or isExcludedView:
+            self.assertTrue(np.array_equal(outMatrix, identityMatrix))
         else:
-            self.assertTrue(np.array_equal(outMatrix, np.eye(4)))
+            if alignment:
+                self.assertFalse(np.array_equal(outMatrix, identityMatrix))
+            else:
+                self.assertTrue(np.array_equal(outMatrix, identityMatrix))
 
     def checkShiftsScaling(self, inTransform, outTransform, scaleFactor):
         """Check if the shifts were scaled properly in the case of subtomogram extraction from a different
@@ -85,7 +827,7 @@ class TestBaseCentralizedLayer(BaseTest):
          the tomogram (Scipion-like)
 
          :param inSet: it can be a SetOf3DCoordinates or a SetOfSubTomograms."""
-        if type(inSet) == SetOfSubTomograms:
+        if type(inSet) is not SetOfCoordinates3D:
             inSet = inSet.getCoordinates3D()
 
         dataDict = inSet.aggregate(['MAX'], '_tomoId', ['_x', '_y', '_z'])
@@ -123,164 +865,30 @@ class TestBaseCentralizedLayer(BaseTest):
         zc_max = extremes[5]
         self.assertTrue(xc_max < xt / 2 and yc_max < yt / 2 and zc_max < zt / 2)
 
-    def checkSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
-        # Check the set
-        self.assertSetSize(inSet, expectedSetSize)
-        self.assertEqual(inSet.getSamplingRate(), expectedSRate)
-        if expectedBoxSize:
-            self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
-
-    def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
-                                    expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
-        """Checks the results of a coordinate extraction protocol.
-
-        :param inSet: input set from which the coordinates were extracted. It can be a SetOf3DCoordinates or a
-        SetOfSubTomograms.
-        :param outCoords: the resulting SetOf3DCoordinates after the coordinate extraction.
-        :param expectedSetSize: expected set site to check.
-        :param expectedBoxSize: expected box size, in pixels, to check.
-        :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py.
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
-        and eye matrix (False) or not (True)."""
-        if type(inSet) == SetOfSubTomograms:
-            inSet = inSet.getCoordinates3D()
-        # First, check the set size, sampling rate, and box size
-        self.checkSetGeneralProps(outCoords,
-                                  expectedSetSize=expectedSetSize,
-                                  expectedSRate=expectedSRate,
-                                  expectedBoxSize=expectedBoxSize)
-        # Check the coordinate extremes
-        inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
-        outCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outCoords)
-        coordScaleFactor = inSet.getSamplingRate() / outCoords.getSamplingRate()
-        shiftsScaleFactor = 1 / coordScaleFactor
-        self.assertTrue(np.array_equal(outCoordsExtremes, coordScaleFactor * inCoordsExtremes))
-        # Other checks per coordinate
-        for inElement, outCoord in zip(inSet, outCoords):
-            # Check the transformation matrices and shifts
-            inSetTrMatrix = inElement.getMatrix(convention=convention)
-            outCoordTrMatrix = outCoord.getMatrix(convention=convention)
-            self.check3dTransformMatrix(outCoordTrMatrix, orientedParticles=orientedParticles)
-            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
-            # Check the tomoId
-            self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
-
-    def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
-        """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
-        an initial model or refinement of subtomograms.
-
-        :param avg: AverageSubtomogram.
-        :param expectedBoxSize: expected box size, in pixels, to check.
-        :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated."""
-        testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
-        self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
-        self.assertTrue(avg.getFileName().endswith(".mrc"))
-        # The imported coordinates correspond to a binned 2 tomogram
-        self.assertEqual(avg.getSamplingRate(), expectedSRate)
-        self.assertEqual(avg.getDimensions(), testBoxSize)
-        # Check the halves
-        if hasHalves:
-            self.assertTrue(avg.hasHalfMaps(), "Halves not registered.")
-            half1, half2 = avg.getHalfMaps().split(',')
-            self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
-            self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
-
-    def checkImportedSubtomograms(self, subtomograms, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1, tomograms=None):
-        """Checks the main properties of an imported set subtomograms.
-
-        :param subtomograms: the resulting SetOfSubTomograms.
-        :param expectedSetSize: expected set site to check.
-        :param expectedBoxSize: expected box size, in pixels, to check.
-        :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param tomograms: SetOfTomograms. If provided, additional features regarding how each subtomogram is referred
-        to the corresponding tomogram will be carried out. If not provided, it will be considered that the subtomograms
-        are not referred to any tomograms (as in some subtomogram importing cases).
-        """
-        # Check the set
-        self.checkSetGeneralProps(subtomograms, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
-        if tomograms:
-            for tomo in tomograms:
-                tomoName = tomo.getFileName()
-                tomoObjId = tomo.getObjId()
-                tomoOrigin = tomo.getOrigin().getMatrix()
-                tomoId = tomo.getTsId()
-                for subtomo in subtomograms.iterSubtomos(volume=tomo):
-                    self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
-                    self.assertEqual(subtomo.getVolName(), tomoName)
-                    self.assertEqual(subtomo.getVolId(), tomoObjId)
-                    self.assertTrue(np.array_equal(subtomo.getOrigin().getMatrix(), tomoOrigin))
-                    self.assertEqual(subtomo.getCoordinate3D().getTomoId(), tomoId)
+    def checkObjectEnabled(self, obj, isExcludedView, tsId, ind):
+        enb = obj.isEnabled()
+        objType = 'CTF' if type(obj) is CTFTomoSeries else 'Tilt image'
+        if isExcludedView:
+            self.assertFalse(enb, msg='TsId = %s: %s %i was expected not to be Enabled' % (tsId, objType, ind))
         else:
-            for subtomo in subtomograms:
-                self.checkAverage(subtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
-                self.assertFalse(subtomo.hasCoordinate3D())
+            self.assertTrue(enb, msg='TsId = %s: %s %i was expected to be Enabled' % (tsId, objType, ind))
 
-    def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                               convention=TR_SCIPION, orientedParticles=False):
-        """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
-
-        :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
-        :param outSubtomos: the resulting SetOfSubTomograms.
-        :param expectedSetSize: expected set site to check.
-        :param expectedBoxSize: expected box size, in pixels, to check.
-        :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be and eye matrix
-        (False) or not (True)."""
-        scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
-        # Check the critical properties of the set
-        # First, check the set size, sampling rate, and box size
-        self.checkSetGeneralProps(outSubtomos,
-                                  expectedSetSize=expectedSetSize,
-                                  expectedSRate=expectedSRate)
-        self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
-        self.assertTrue(outSubtomos.hasCoordinates3D())
-        # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
-        # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
-        # from the plugin scipion-em-tomo)
-        currentCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outSubtomos)
-        unbinnedCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inCoords)
-        self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
-        # Check the subtomograms that compose the set
-        for incoord, outSubtomo in zip(inCoords, outSubtomos):
-            subtomoTr = outSubtomo.getTransform(convention=convention)
-            subtomoMatrix = subtomoTr.getMatrix()
-            coordinate = outSubtomo.getCoordinate3D()
-            coordTr = coordinate._eulerMatrix
-            coordMatrix = coordinate.getMatrix(convention=convention)
-            self.assertTrue(exists(outSubtomo.getFileName()))
-            self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
-            # The shifts in the subtomograms transformation matrix should have been scaled properly
-            self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
-            # Imported coordinates were picked using PySeg, so they must have an orientation
-            self.check3dTransformMatrix(subtomoMatrix, orientedParticles=orientedParticles)
-            # Check the tomoId
-            self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
-
-    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
-                                 convention=TR_SCIPION, orientedParticles=False, angTol=0.05, shiftTol=1):
-        angTolMat = np.ones([3, 3]) * angTol
-        shiftTolMat = np.ones(3) * shiftTol
-        # Check the set
-        self.checkSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
-        for inSubtomo, outSubtomo in zip(inSubtomos, outSubtomos):
-            # Check the subtomogram main properties
-            self.checkAverage(outSubtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
-            # Check the transformation matrix
-            inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
-            outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
-            self.check3dTransformMatrix(outSubtomoMat, orientedParticles=orientedParticles)
-            # The input and output matrices should be different
-            diffMatrix = np.absolute(outSubtomoMat - inSubtomoMat)
-            diffAngularPart = diffMatrix[:3, :3]
-            diffShiftPart = diffMatrix[3, :-1]
-            self.assertTrue(np.any(np.absolute(diffAngularPart - angTolMat) > 0))
-            self.assertTrue(np.any(np.absolute(diffShiftPart - shiftTolMat) > 0))
-            # Check that the input and output particles match (We're comparing tow sets, so the convention doesn't
-            # matter as long as the coordinates of both sets are retrieved using the same convention)
-            inCoord = inSubtomo.getCoordinate3D()
-            outCoord = outSubtomo.getCoordinate3D()
-            self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
-            self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
+    def checkCtfTomo(self, ctf, isExcluded, expectPsdFile):
+        defocusU = ctf.getDefocusU()
+        defocusV = ctf.getDefocusV()
+        defocusAngle = ctf.getDefocusAngle()
+        defocusVals = [defocusU, defocusV, defocusAngle]
+        self.assertGreater(ctf.getAcquisitionOrder(), -1)
+        if isExcluded:
+            expectedDefocusU = -999
+            expectedDefocusV = -1
+            expectedDefocusAngle = -999
+            self.assertTrue(np.allclose(np.array(defocusVals),
+                                        np.array([expectedDefocusU, expectedDefocusV, expectedDefocusAngle])))
+        else:
+            # Check the defocusU, defocusV and defocus angle values
+            for val in defocusVals:
+                self.assertGreaterEqual(val, 0)
+            # Check the psd file
+            if expectPsdFile:
+                self.assertTrue(exists(ctf.getPsdFile().rsplit('@', 1)[-1]))  # Expected syntax is index@psdFile

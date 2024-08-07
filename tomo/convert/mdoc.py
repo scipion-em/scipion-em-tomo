@@ -8,7 +8,23 @@ from os.path import join, exists
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from pathlib import PureWindowsPath
 
+
+logger = logging.getLogger(__name__)
 SUB_FRAME_PATH = 'SubFramePath'
+TS_PREFIX = "TS_"
+# Dose on specimen during camera exposure in electrons/sq. Angstrom
+EXPOSURE_DOSE = 'ExposureDose'
+# Dose per frame in electrons per square Angstrom followed
+# by number of frames at that dose
+FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'
+# Dose rate to the camera, in electrons per unbinned pixel per second
+DOSE_RATE = 'DoseRate'
+# Image exposure time
+EXPOSURE_TIME = 'ExposureTime'
+# Minimum, maximum, and mean value for this image
+MIN_MAX_MEAN = 'MinMaxMean'
+COUNTS_PER_ELECTRON = 'CountsPerElectron'
+DIVIDED_BY_TWO = 'DividedBy2'
 
 
 class MDoc:
@@ -53,6 +69,7 @@ class MDoc:
     TiltAngle = -10.00
     ...
     """
+
     def __init__(self, fileName, voltage=None, magnification=None,
                  samplingRate=None, doseProvidedByUser=None,
                  tiltAngleProvidedByUser=None):
@@ -73,6 +90,13 @@ class MDoc:
         # Acquisition specific attributes (per angle)
         self._tiltsMetadata = []
 
+    @staticmethod
+    def normalizeTSId(mdocFileName):
+        mdocBaseName = removeBaseExt(mdocFileName)
+        tsPrefixAdded = True if mdocBaseName[0].isdigit() else False
+        normTsId = normalizeTSId(mdocFileName)
+        return normTsId, tsPrefixAdded
+
     def read(self, isImportingTsMovies=True, ignoreFilesValidation=False):
         """ Parse mdoc file. There is a collection of getters that may be
         used to access this information:
@@ -88,18 +112,19 @@ class MDoc:
             logger.info("Gathering info")
             # Get acquisition general info
             self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
-            self._tsId = normalizeTSId(mdoc)
+            self._tsId, tsPrefixAdded = self.normalizeTSId(mdoc)
             parentFolder = getParentFolder(mdoc)
             if not isImportingTsMovies:
                 # Some mdoc files point to an .st file stored in the ImageFile
                 # header line
-                tsFile = join(parentFolder, headerDict.get("ImageFile", None))
+                tsFile = join(parentFolder, headerDict.get("ImageFile", ''))
+                expectedBaseName = self._tsId.replace(TS_PREFIX, '') if tsPrefixAdded else self._tsId
                 if not os.path.exists(tsFile):
-                    tsFile = join(parentFolder, self._tsId + '.mrcs')
+                    tsFile = join(parentFolder, expectedBaseName + '.mrcs')
                 if not os.path.exists(tsFile):
-                    tsFile = join(parentFolder, self._tsId + '.mrc')
+                    tsFile = join(parentFolder, expectedBaseName + '.mrc')
                 if not os.path.exists(tsFile):
-                    tsFile = join(parentFolder, self._tsId + '.st')
+                    tsFile = join(parentFolder, expectedBaseName + '.st')
                 validateTSFromMdocErrMsg = self._validateTSFromMdoc(mdoc, tsFile)
 
             # Get acquisition specific (per angle) info
@@ -122,7 +147,7 @@ class MDoc:
                 self._tiltsMetadata.sort(key=lambda x: float(x.getTiltAngle()),
                                          reverse=False)
                 for index, tiMd in enumerate(self._tiltsMetadata):
-                    tiMd.setAngleMovieFile((index+1, tiMd.getAngleMovieFile()))
+                    tiMd.setAngleMovieFile((index + 1, tiMd.getAngleMovieFile()))
 
             return exceptionMsg
         except Exception as e:
@@ -158,8 +183,8 @@ class MDoc:
                         # it manually
                         continue
                     else:
-                        strLine = line.strip().replace(' ', '').\
-                                               replace(',', '').lower()
+                        strLine = line.strip().replace(' ', ''). \
+                            replace(',', '').lower()
                         pattern = 'tiltaxisangle='
                         if pattern in strLine:
                             # Example of the most common syntax
@@ -168,11 +193,11 @@ class MDoc:
                             # [T =     TiltAxisAngle = -91.81  Binning = 1
                             #                                   SpotSize = 7]
                             tiltAxisAngle = \
-                                    strLine.split('=')[2].split('binning')[0]
+                                strLine.split('=')[2].split('binning')[0]
                             # Check if it's a string which
                             # represents a float or not
-                            if tiltAxisAngle.lstrip('-+').\
-                               replace('.', '', 1).isdigit():
+                            if tiltAxisAngle.lstrip('-+'). \
+                                    replace('.', '', 1).isdigit():
                                 self._tiltAxisAngle = float(tiltAxisAngle)
                 elif line.strip():  # global variables no in [T sections]
                     key, value = line.split('=')
@@ -213,23 +238,17 @@ class MDoc:
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
-            try:
-                if self.doseProvidedByUser:
-                    incomingDose = self.doseProvidedByUser
-                else:
-                        incomingDose = self._getDoseFromMdoc(counter, zSlice, self.getSamplingRate())
-                accumulatedDose += incomingDose
-
-            except Exception as e:
-                msg = "Can't read the dose from %s slice: %s." % (counter, e)
-                logger.error(msg, exc_info=e)
-                raise Exception(msg)
-
+            if self.doseProvidedByUser:
+                incomingDose = self.doseProvidedByUser
+            else:
+                incomingDose = \
+                    self._getDoseFromMdoc(zSlice, self.getSamplingRate())
+            accumulatedDose += incomingDose
             self._tiltsMetadata.append(TiltMetadata(
                 angle=zSlice.get('TiltAngle', None),
                 angleFile=self._getAngleMovieFileName(
                     parentFolder, zSlice, tsFile),
-                acqOrder=counter+1,
+                acqOrder=counter + 1,
                 accumDose=accumulatedDose,
                 incomingDose=incomingDose
             ))
@@ -241,7 +260,8 @@ class MDoc:
             logger.debug("Dose not found or almost 0 (%s) in %s" %
                          (accumulatedDose, self._mdocFileName))
 
-    def _sortByTimestamp(self, zSlices):
+    @staticmethod
+    def _sortByTimestamp(zSlices):
         """ MDOC file is not necessarily sorted by acquisition order,
             use TimeStamp key to sort Z-slices.
         """
@@ -273,127 +293,60 @@ class MDoc:
                 raise ValueError("Slice section does not have %s field." % SUB_FRAME_PATH)
 
     @staticmethod
-    def _getDoseFromMdoc(index, zSlice, pixelSize):
+    def _getDoseFromMdoc(zSlice, pixelSize):
         """It calculates the accumulated dose on the frames represented by
         zSlice, and add it to the previous accumulated dose"""
-
-        # Dose on specimen during camera exposure in electrons/sq. Angstrom
-        EXPOSURE_DOSE = 'ExposureDose'
-        # Dose per frame in electrons per square Angstrom followed
-        # by number of frames at that dose
-        FRAME_DOSES_AND_NUMBERS = 'FrameDosesAndNumber'
-        # Dose rate to the camera, in electrons per unbinned pixel per second
-        DOSE_RATE = 'DoseRate'
-        # Image exposure time
-        EXPOSURE_TIME = 'ExposureTime'
-        # Minimum, maximum, and mean value for this image
-        MIN_MAX_MEAN = 'MinMaxMean'
-        COUNTS_PER_ELECTRON = 'CountsPerElectron'
-        DIVIDED_BY_TWO = 'DividedBy2'
-
-        def _keysInDict(listOfKeys):
-            return all([key in zSlice.keys() for key in listOfKeys])
-
-        def _toFloat(value):
-            """ Returns a float different from Nan. If NaN is present 0 es returned
-            :param value: value to validate
-            :return: the value or 0 if value is NaN
-            """
-            value = float(value)
-            return 0 if math.isnan(value) else value
-
         # Different ways of calculating the dose, ordered by priority
         # considering the possible variability between different mdoc files
         newDose = 0
 
-        if pixelSize:
-            pixelSize = float(pixelSize)
-        else:
-            # This case cover the possibility of no sampling rate in form
-            # nor mdoc, avoiding the error execution before the whole
-            # information is gathered and the exception is raised
-            pixelSize = 1
+        # The case  pixelSize = 1 covers the possibility of no sampling rate in form
+        # nor mdoc, avoiding the error execution before the whole
+        # information is gathered and the exception is raised
+        pixelSize = float(pixelSize) if pixelSize else 1
 
         # Directly from field ExposureDose
-        if EXPOSURE_DOSE in zSlice:
-            expDoseVal = zSlice[EXPOSURE_DOSE]
-            if expDoseVal:
-                newDose = _toFloat(expDoseVal)
-                if newDose:
-                    logger.info("Dose for slice %s found in %s: %s" % (index, EXPOSURE_DOSE, newDose))
-                else:
-                    newDose = 0
-
-            if not newDose:
-                logger.info("Dose for slice %s not found in %s: %s" % (index, EXPOSURE_DOSE, expDoseVal))
+        expDoseVal = float(zSlice.get(EXPOSURE_DOSE, 0))  # It may be '0'
+        if expDoseVal:
+            return expDoseVal
 
         # Directly from field FrameDosesAndNumbers
-        if not newDose and FRAME_DOSES_AND_NUMBERS in zSlice:
-            frameDoseAndNums = zSlice[FRAME_DOSES_AND_NUMBERS]
-            if frameDoseAndNums:
-                # Get the mean from a string like '0 6'
-                data = frameDoseAndNums.split()
-                dosePerFrame = data[0]
-                nFrames = data[1]
-                newDose = _toFloat(dosePerFrame) * _toFloat(nFrames)
-                logger.info("Dose for slice %s found in %s: %s" % (index, FRAME_DOSES_AND_NUMBERS, newDose))
-            else:
-                logger.info("Dose for slice %s not found in %s: %s" % (index, FRAME_DOSES_AND_NUMBERS, frameDoseAndNums))
+        frameDoseAndNums = zSlice.get(FRAME_DOSES_AND_NUMBERS, 0)
+        if frameDoseAndNums:
+            # Get the mean from a string like '0 6'
+            data = frameDoseAndNums.split()
+            dosePerFrame = float(data[0])
+            nFrames = float(data[1])
+            newDose = dosePerFrame * nFrames  # Any of them may be 0
+            if newDose:
+                return newDose
 
         # Calculated from fields DoseRate and ExposureTime
-        if not newDose and _keysInDict([DOSE_RATE, EXPOSURE_TIME]):
-            doseRate = zSlice[DOSE_RATE]
-            expTime = zSlice[EXPOSURE_TIME]
-            if doseRate and expTime:
-                newDose = _toFloat(doseRate) * _toFloat(expTime) / pixelSize ** 2
-                logger.info("Dose for slice %s found in %s and %s: %s" % (index, DOSE_RATE, EXPOSURE_DOSE, newDose))
-            else:
-                logger.info("Dose for slice %s not found in %s and %s: %s, %s" % (index, DOSE_RATE, EXPOSURE_TIME, doseRate, expTime))
+        doseRate = float(zSlice.get(DOSE_RATE, 0))
+        expTime = float(zSlice.get(EXPOSURE_DOSE, 0))
+        if doseRate and expTime:
+            return doseRate * expTime / pixelSize ** 2
 
         # Calculated from fields MinMaxMean, PixelSpacing and CountsPerElectron
-        if not newDose and _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON]):
-            minMaxMean = zSlice[MIN_MAX_MEAN]
-            counts = zSlice[COUNTS_PER_ELECTRON]
-            if all([minMaxMean, pixelSize, counts]):
-                # Get the mean from a string like '-42 2441 51.7968'
-                meanVal = minMaxMean.split()[-1]
-                newDose = (_toFloat(meanVal) / _toFloat(counts)) / pixelSize ** 2
-                logger.info("Dose for slice %s found in %s, %s: %s" % (index, MIN_MAX_MEAN, COUNTS_PER_ELECTRON, newDose))
-            else:
-                logger.info("Dose for slice %s not found in %s, %s: %s, %s" % (index,  MIN_MAX_MEAN, COUNTS_PER_ELECTRON, minMaxMean, counts))
+        minMaxMean = zSlice.get(MIN_MAX_MEAN, 0)
+        counts = float(zSlice.get(COUNTS_PER_ELECTRON, 0))
+        if minMaxMean and counts:
+            # Get the mean from a string like '-42 2441 51.7968'
+            meanVal = float(minMaxMean.split()[-1])
+            newDose = (meanVal / counts) / pixelSize ** 2
 
-        # # Calculated as in Grigorieff paper -->
-        #  https://dx.doi.org/10.7554/eLife.06980.001
-        # if not newDose and
-        #   _keysInDict([MIN_MAX_MEAN, COUNTS_PER_ELECTRON,
-        #   EXPOSURE_TIME, DIVIDED_BY_TWO]):
-        #     minMaxMean = zSlice[MIN_MAX_MEAN]
-        #     counts = zSlice[COUNTS_PER_ELECTRON]
-        #     expTime = zSlice[EXPOSURE_TIME]
-        #     divByTwo = zSlice[DIVIDED_BY_TWO]
-        #     if all([minMaxMean, counts, expTime]):
-        #         # Get the mean from a string like '-42 2441 51.7968'
-        #         meanVal = minMaxMean.split()[-1]
-        #         newDose = _getDivByTwoFactor(divByTwo) * float(meanVal) /
-        #                                    (float(counts) * float(expTime))
+            # Calculated as in Grigorieff paper --> https://dx.doi.org/10.7554/eLife.06980.001
+            divByTwoFactor = 2 if zSlice.get(DIVIDED_BY_TWO, None) else 1
+            return newDose * divByTwoFactor
 
-        divByTwo = 0
-        if _keysInDict([DIVIDED_BY_TWO]):
-            divByTwo = int(zSlice[DIVIDED_BY_TWO])
-        divByTwoFactor = 2 if divByTwo else 1
-
-        newDose = newDose * divByTwoFactor
-
-        if newDose == 0:
-            logger.warning("Dose found for slice %s is 0 after trying 4 different calculations. This look like an error.")
         return newDose
 
     @staticmethod
     def _validateTSFromMdoc(mdoc, tsFile):
         errMsg = ''
         if not exists(tsFile):
-            errMsg = '\nMdoc --> %s\nExpected tilt series file not found \n%s'\
-                 % (mdoc, tsFile)
+            errMsg = '\nMdoc --> %s\nExpected tilt series file not found \n%s' \
+                     % (mdoc, tsFile)
 
         return errMsg
 
@@ -511,6 +464,25 @@ def normalizeTSId(rawTSId):
     normTSID = normTSID.split(".")[0]
 
     if normTSID[0].isdigit():
-        normTSID = "TS_" + normTSID
+        normTSID = TS_PREFIX + normTSID
 
-    return normTSID.replace('-', '_').replace('.', '')
+    # Replace/remove from the TsId the special characters that may be problematic when registering the data in
+    # the sqlite
+    specialCharDict = {
+        '-': '_',
+        '.': '',
+        '[': '',
+        ']': '',
+        '__': '_',
+    }
+
+    for specChar, okChar in specialCharDict.items():
+        normTSID = normTSID.replace(specChar, okChar)
+
+    return normTSID
+
+
+def deNormalizeTSId(rawTSId):
+    """ Denormalizes the name of a TS"""
+    deNormTSID = rawTSId.replace(TS_PREFIX, '')
+    return deNormTSID

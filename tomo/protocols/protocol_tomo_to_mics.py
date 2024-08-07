@@ -25,16 +25,13 @@
 # **************************************************************************
 import enum
 from os.path import basename
-
+import mrcfile
 import numpy as np
-
-from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfMicrographs, Micrograph, Acquisition
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, IntParam, GT
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import replaceExt, removeExt
-
 from tomo.constants import BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfCoordinates3D, Coordinate3D, SetOfTomograms
 
@@ -51,20 +48,32 @@ class ProtTomoToMics(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('input', PointerParam, pointerClass='SetOfTomograms',
+        form.addParam('input', PointerParam,
+                      pointerClass='SetOfTomograms',
                       label='Tomograms',
+                      important=True,
                       help='Select the tomograms to be turned into micrographs')
-        form.addParam('slicesGap', IntParam, label="Slices gap", default=10,
+        form.addParam('slicesGap', IntParam,
+                      label="Slices gap",
+                      default=10,
                       validators=[GT(0)],
-                      help='Number of slices to skip when turning tomogram slices into micrographs.')
+                      help='Number of slices to skip when turning the tomogram slices into micrographs, starting from '
+                           'the central slice. For example, if a tomogram has a thickness of 300 pixels and the gap '
+                           'is set to 20, then the list of slices that will be used as reference for each micrograph '
+                           'will be, considering that the slices are numbered from 0 to the thickness value - 1:'
+                           '\n\t- Central slice = 149'
+                           '\n\t- Going up = 169, 189, 209, 229, 249, 269, 289'
+                           '\n\t- Going down = 129, 109, 89, 69, 49, 29, 9.'
+                           '\nSo 15 micrographs will be generated.')
         form.addParam('noSlicesToAvg', IntParam,
                       label='No. slices to sum',
-                      default=1,
+                      default=5,
                       validators=[GT(0)],
-                      help='For each slice corresponding to the slices gap introduced, the introduced number of '
-                           'adjacent slices will be considered to sum. For example, if the number is 5, the slices '
-                           'considered for each sum will be the corresponding to the slice gap indices plus 2 '
-                           'slices above and 2 slices below. If set to 1, no sum will be performed.')
+                      help='It represents the number of adjacent slices that will be sum for each reference slice to '
+                           'get the corresponding micrographs (see help of the parameter "Slices gap"). For example, '
+                           'if the number is 5, 2 slices above and 2 slices below will be sum for each reference '
+                           'slice, so 5 slices will be sum in total to get each micrograph. If set to 1, no sum will '
+                           'be performed.')
 
     # --------------------------- INSERT steps functions --------------------------
     def _insertAllSteps(self):
@@ -76,9 +85,7 @@ class ProtTomoToMics(EMProtocol):
 
     def createOutputStep(self):
         input = self.input.get()
-
         output = SetOfMicrographs.create(self._getPath())
-        # output.copyInfo(input)
         output.setSamplingRate(input.getSamplingRate())
 
         # Acquisition
@@ -102,27 +109,31 @@ class ProtTomoToMics(EMProtocol):
 
     # --------------------------- UTILS functions --------------------------------------------
     def appendMicsFromTomogram(self, output, tomo):
-
         nSlicesAvg = self.noSlicesToAvg.get()
         gap = self.slicesGap.get()
-        self.info("Creating micrographs for %s with a %s gap and adding %s contiguous slices." % (tomo.getTsId(), gap, nSlicesAvg))
+        sRate = tomo.getSamplingRate()
+        self.info("Creating micrographs for %s with a %s gap and adding %s contiguous slices." %
+                  (tomo.getTsId(), gap, nSlicesAvg))
 
-        # Load the tomogram
-        ih = ImageHandler()
-        img = ih.read(tomo.getFileName())
-        data = img.getData()
+        # Load the tomogram image to get the dimensions
+        with mrcfile.mmap(tomo.getFileName(), mode='r+') as tomoMrc:
+            tomogramData = tomoMrc.data
+            thk, width, height = tomogramData.shape
+        shape = (1, width, height)
 
         # For each slice
-        for indexLims in self.genCenterList(len(data), gap, nSlicesAvg):
+        for indexLims in self.genCenterList(thk, gap, nSlicesAvg):
             downLim, center, upLim = indexLims[:]
             micName = tomoSliceToMicName(tomo, center)
             self.info("Creating micrograph (%s) from %s to %s slices of %s" % (micName, downLim, upLim-1,tomo.getTsId()))
-            outputMicName = self._getExtraPath(micName)
-            outputMicName = replaceExt(outputMicName, "mrc")
-            iSlice = np.sum(data[downLim:upLim], axis=0)
-            micImg = ImageHandler()
-            micImg._img.setData(iSlice)
-            micImg.write(micImg._img, outputMicName)
+            outputMicName = replaceExt(self._getExtraPath(micName), "mrc")
+            with mrcfile.new_mmap(outputMicName, shape, overwrite=True) as mic:
+                micData = np.empty(shape, dtype=tomogramData.dtype)
+                micData[0] = np.sum(tomogramData[downLim:upLim], axis=0)
+                mic.set_data(micData)
+                mic.update_header_from_data()
+                mic.update_header_stats()
+                mic.voxel_size = sRate
 
             # Create the micrograph metadata object
             newMic = Micrograph()
@@ -138,7 +149,7 @@ class ProtTomoToMics(EMProtocol):
         """Generates a list of lists in which each element is composed by the lower limit, the center and the upper
         limit of the intervals of indices with a given step (gap) between them and calculating the adjacent indices
         given the total number of slices that will include the interval (nSlicesAvg)."""
-        center = dataLen // 2
+        center = dataLen // 2 - 1  # Indices begin in 0, not in 1
         slicesUp = (nSlicesAvg - 1) // 2  # Minus the gap index
         slicesDown = nSlicesAvg - 1 - slicesUp  # The remaining ones, to cover even and odd cases of nSlicesAvg
         indexListOfLists = [[center - slicesDown, center, center + slicesUp + 1]]
@@ -174,7 +185,8 @@ class Prot2DcoordsTo3DCoordsOutput(enum.Enum):
 
 
 class Prot2DcoordsTo3DCoords(EMProtocol):
-    """ Turns 2d coordinates into set of 3d coordinates. Works in coordination with 'tomograms to micrographs' protocol"""
+    """ Turns 2d coordinates into set of 3d coordinates. Works in coordination with
+    'tomograms to micrographs' protocol"""
     _label = '2d coordinates to 3d coordinates'
     _devStatus = BETA
     _possibleOutputs = Prot2DcoordsTo3DCoordsOutput
@@ -189,7 +201,7 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions --------------------------------------------
     def createOutputStep(self):
@@ -242,7 +254,7 @@ class Prot2DcoordsTo3DCoords(EMProtocol):
 
 
 def tomoSliceToMicName(tomo, slice):
-    return "S%s_%s" % (slice, basename(tomo.getFileName()))
+    return f"S{slice:03}_{basename(tomo.getFileName())}"
 
 
 def sliceAndNameFromMicName(micname):
