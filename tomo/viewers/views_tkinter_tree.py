@@ -443,14 +443,7 @@ class TiltSeriesDialog(ToolbarListDialog):
             outputSetOfTiltSeries.copyInfo(self._tiltSeries)
             outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
             excludedViews = self._provider.getExcludedViews()
-            outputPrefix = 'TiltSeries_'
-            outputSuffix = 0
-            for outputName, _ in self._protocol.iterOutputAttributes():
-                if outputName.startswith(outputPrefix):
-                    suffix = int(outputName.split(outputPrefix)[-1])
-                    if suffix > outputSuffix:
-                        outputSuffix = suffix
-            outputName = outputPrefix + str(outputSuffix + 1)
+            outputName = self._protocol.getNextOutputName('TiltSeries_')
             outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
 
             if restack:  # Creating a new directory to write a new stack
@@ -459,8 +452,9 @@ class TiltSeriesDialog(ToolbarListDialog):
                     os.mkdir(outputPath)
 
             for ts in self._tiltSeries:
-                _, obj = self._provider.getTiltSerie(ts.getTsId())
-                newBinaryName = os.path.join(outputPath, ts.getTsId() + '.mrcs')
+                tsId = ts.getTsId()
+                _, obj = self._provider.getTiltSerie(tsId)
+                newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
                 index = 1
                 if not restack or (obj.isEnabled() and restack):
                     newTs = ts.clone()
@@ -468,16 +462,15 @@ class TiltSeriesDialog(ToolbarListDialog):
                     outputSetOfTiltSeries.append(newTs)
                     stackImages = []
                     for ti in ts.iterItems():
-                        included = False if ti.getObjId() in excludedViews[ts.getTsId()] else True
+                        included = False if ti.getObjId() in excludedViews[tsId] else True
                         if not restack or (included and restack):
                             newTi = ti.clone()
                             newTi.copyInfo(ti, copyId=True)
                             newTi.setAcquisition(ti.getAcquisition())
-                            newTi.setLocation(ti.getLocation())
                             # For some reason .clone() does not clone the enabled nor the creation time
                             newTi.setEnabled(included)
                             if restack:
-                                stackImages.append(imageReader.open(str(int(ti._acqOrder)-1) + '@' + ti.getFileName()))
+                                stackImages.append(imageReader.open(str(index) + '@' + ti.getFileName()))
                                 newTi.setLocation((index, newBinaryName))
                                 newTi.setObjId(index)
                                 index += 1
