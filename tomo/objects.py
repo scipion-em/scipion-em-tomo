@@ -479,12 +479,9 @@ class TiltSeries(TiltSeriesBase):
         inputFilePath = self.getFirstItem().getFileName()
         if self.hasAlignment():
             firstImg = self.getFirstItem()
-            xDim = firstImg.getXDim()
-            yDim = firstImg.getYDim()
+            xDim, yDim, _ = firstImg.getDim()
             if firstImg.hasTransform() and swapXY:
-                xDim = firstImg.getYDim()
-                yDim = firstImg.getXDim()
-
+                xDim, yDim = yDim, xDim
             if excludeViews:
                 excludedViewsInd = self.getExcludedViewsIndex()
                 stackSize = self.getSize() - len(excludedViewsInd)
