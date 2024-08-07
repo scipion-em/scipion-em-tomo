@@ -485,24 +485,24 @@ class TiltSeries(TiltSeriesBase):
             if excludeViews:
                 excludedViewsInd = self.getExcludedViewsIndex()
                 stackSize = self.getSize() - len(excludedViewsInd)
+                ih.createEmptyImage(fnOut=outputFilePath,
+                                    xDim=xDim,
+                                    yDim=yDim,
+                                    nDim=stackSize)
                 counter = 0
                 for index, ti in enumerate(self.iterItems()):
                     if index + 1 not in excludedViewsInd:
-                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, stackSize, counter)
+                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
                         counter += 1
             else:
                 stackSize = self.getSize()
                 for index, ti in enumerate(self.iterItems()):
-                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, stackSize, index)
+                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
         else:
             path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
 
     @staticmethod
-    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, stackSize, index):
-        ih.createEmptyImage(fnOut=outputFilePath,
-                            xDim=xDim,
-                            yDim=yDim,
-                            nDim=stackSize)
+    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
         transform = ti.getTransform().getMatrix()
         transformArray = np.array(transform)
         inputFilePath = ti.getFileName()
