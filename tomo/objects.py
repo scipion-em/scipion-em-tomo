@@ -484,18 +484,12 @@ class TiltSeries(TiltSeriesBase):
                 xDim, yDim = yDim, xDim
             if excludeViews:
                 excludedViewsInd = self.getExcludedViewsIndex()
-                stackSize = self.getSize() - len(excludedViewsInd)
-                ih.createEmptyImage(fnOut=outputFilePath,
-                                    xDim=xDim,
-                                    yDim=yDim,
-                                    nDim=stackSize)
                 counter = 0
                 for index, ti in enumerate(self.iterItems()):
                     if index + 1 not in excludedViewsInd:
                         self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
                         counter += 1
             else:
-                stackSize = self.getSize()
                 for index, ti in enumerate(self.iterItems()):
                     self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
         else:
