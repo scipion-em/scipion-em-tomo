@@ -693,8 +693,9 @@ class TiltSeriesDialogView(pwviewer.View):
             if width > height else (int(THUMBNAIL_SIZE * width / height), THUMBNAIL_SIZE)
 
         # Resize the image creating a thumbnail
-        image.thumbnail((newWidth, newHeight))
-        data = np.array(image)
+        newImage = image.copy()
+        newImage.thumbnail((newWidth, newHeight))
+        data = np.array(newImage)
         preview._update(data)
         preview.setLabel(text)
 
