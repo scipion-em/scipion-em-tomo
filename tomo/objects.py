@@ -522,6 +522,7 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
+    # TODO: deprecate this after IMOD is released. Jorge (07/07/2024)
     def _getExcludedViewsIndex(self):
         return self.getExcludedViewsIndex()
 
