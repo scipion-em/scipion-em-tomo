@@ -30,8 +30,6 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pwem import emlib
 from tomo.objects import SetOfCTFTomoSeries
-import xmipp3
-from xmipp3.convert import setXmippAttribute, getScipionObj
 
 import matplotlib.pyplot as plt
 import logging
@@ -295,7 +293,8 @@ class ProtCTFTomoSeriesConsensus(EMProtocol):
         """ Write the proper metadata for Xmipp from a given CTF """
         ctfMd.clear()
         ctfRow = emlib.metadata.Row()
-        xmipp3.convert.ctfModelToRow(ctf, ctfRow)
+        from xmipp3.convert import ctfModelToRow
+        ctfModelToRow(ctf, ctfRow)
         ctfRow.addToMd(ctfMd)
 
     def _calculateConsensusDefocus(self, ctfTomo1, ctfTomo2):
@@ -426,6 +425,7 @@ def _calculateDiff(value1, value2):
 def setAttribute(obj, label, value):
     if value is None:
         return
+    from xmipp3.convert import getScipionObj
     setattr(obj, label, getScipionObj(value))
 
 def averageAngles(angle1, angle2):

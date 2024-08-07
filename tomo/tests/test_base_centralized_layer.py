@@ -27,6 +27,7 @@ from os.path import exists, isabs, islink
 from typing import List, Union
 import numpy as np
 from pwem import ALIGN_NONE
+from pwem.emlib.image.image_readers import MRCImageReader
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
@@ -36,16 +37,22 @@ from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, To
 
 class TestBaseCentralizedLayer(BaseTest):
 
-    def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float, streamState: int = 2):
+    def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float,
+                             isHeterogeneous: Union[bool, None] = None,
+                             streamState: int = 2) -> None:
         """
         :param inSet: A set of Scipion Tomo objects.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param isHeterogeneous: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images or tomograms with different thicknesses.
         :param streamState: expected stream state, being 2 (default) a stream that is closed.
         """
         self.assertSetSize(inSet, expectedSetSize)
         self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
         self.assertEqual(inSet.getStreamState(), streamState)
+        if isHeterogeneous:
+            self.assertEqual(inSet.isHeterogeneousSet(), isHeterogeneous)
 
     # TILT SERIES ######################################################################################################
     def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
@@ -111,7 +118,9 @@ class TestBaseCentralizedLayer(BaseTest):
                         anglesCountSet: int = None,
                         hasCtfCorrected: bool = False,
                         isInterpolated: bool = False,
-                        excludedViewsDict: dict = None):
+                        excludedViewsDict: dict = None,
+                        isHeterogeneousSet: Union[bool, None] = None,
+                        expectedOrigin: Union[Union[List[float], np.ndarray], dict] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -144,10 +153,20 @@ class TestBaseCentralizedLayer(BaseTest):
         :param excludedViewsDict: a dict of structure {key --> tsId: value: list of the indices of images that are
         expected to have been excluded}. An excluded view means that its corresponding attribure _objEnabled is set
         to False and the expected transformation matrix is the identity.
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        :param expectedOrigin: list containing the expected originX,originY, in angstroms, to check. A dict of
+        structure {key --> tsId: value: expectedOrigin} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different dimensions in the same set and. consequently, different origin.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
+        originTol = 0.1  # in angstroms
+        sRateTol = 0.001  # in angstroms/pixel
         # CHECK THE SET ------------------------------------------------------------------------------------------------
-        self.checkSetGeneralProps(inTsSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.checkSetGeneralProps(inTsSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition())
         self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
@@ -165,7 +184,8 @@ class TestBaseCentralizedLayer(BaseTest):
             tsId = ts.getTsId()
             # Check the dimensions
             if expectedDimensions:
-                x, y, z = ts.getDimensions()
+                x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
+                z = max(z, n)
                 if type(expectedDimensions) is dict:
                     self.assertEqual([x, y, z], expectedDimensions[tsId])
                 else:
@@ -177,8 +197,15 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the angles count
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
+            # Check the origin matrix
+            if expectedOrigin is not None:
+                if type(expectedOrigin) is dict:
+                    testOrigin = expectedOrigin[tsId]
+                else:
+                    testOrigin = expectedOrigin
+                self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTol=originTol)
             # Sampling rate
-            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=0.001)
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateTol)
             # Alignment
             self.assertEqual(ts.hasAlignment(), hasAlignment)
             self.assertEqual(ts.getAlignment(), alignment)
@@ -196,6 +223,10 @@ class TestBaseCentralizedLayer(BaseTest):
                 else:
                     isExcludedView = False
                 self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
+                # Odd/Even
+                if hasOddEven:
+                    self.assertTrue(exists(ti.getEven()))
+                    self.assertTrue(exists(ti.getOdd()))
                 # Alignment matrix
                 self.checkTiTransformMatrix(ti,
                                             isImported=imported,
@@ -205,7 +236,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
-                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=0.001)
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateTol)
 
     def checkAnglesCount(self,
                          inSet: Union[SetOfTiltSeries, TiltSeries],
@@ -256,12 +287,32 @@ class TestBaseCentralizedLayer(BaseTest):
             else:
                 self.assertFalse(np.array_equal(outMatrix, identityMatrix))
 
+    def checkTsOriginMatrix(self, ts: TiltSeries, expectedOrigin: List[float], originTol: float = 0.1) -> None:
+        testOrigin = np.array(expectedOrigin)
+        testOrigin = np.append(testOrigin, 0)  # Z shift must be 0 for images
+        # Get the generated/stored origin matrix and check it
+        originTransform = ts.getOrigin()
+        self.assertIsNotNone(originTransform)
+        originMatrix = originTransform.getMatrix()
+        self.assertIsNotNone(originMatrix)
+        origX = originMatrix[0, -1]
+        origY = originMatrix[1, -1]
+        origZ = originMatrix[2, -1]
+        origin = np.array([origX, origY, origZ])
+        self.assertTrue(np.allclose(testOrigin, origin, rtol=originTol),
+                        msg=f'Tilt-series {ts.getTsId()}: origin values [originX, originY, originZ] are different than '
+                            f'the expected within tolerance {originTol} Å.\n{testOrigin} != \n{origin}')
+
     # TOMO ACQUISITION #################################################################################################
-    def checkTomoAcquisition(self, testAcq, currentAcq, tsId=None):
+    def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict], currentAcq: TomoAcquisition,
+                             tsId: Union[str, None] = None,
+                             isTomogramAcq: bool = False) -> None:
         """It compares two TomoAcquisition objects, considering the following attributes:
+
         * Magnification.
         * Voltage.
         * Spherical aberration.
+        * Amplitude contrast.
         * Initial dose.
         * Dose per frame.
         * Accumulated dose.
@@ -274,18 +325,28 @@ class TestBaseCentralizedLayer(BaseTest):
         TomoAcquisition object} is also accepted if the set is heterogeneous.
         :param currentAcq: TomoAcquisition to be tested.
         :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
+        :param isTomogramAcq: boolean used to indicate if the acquisitoon introduced corresponds to a tomogram instead
+        of a tilt-series. In that case, the attributes checked will be:
+
+        * Voltage.
+        * Spherical aberration.
+        * Amplitude contrast.
+
         """
+
         testAcq = testAcq[tsId] if type(testAcq) is dict else testAcq
-        self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
         self.assertAlmostEqual(testAcq.getVoltage(), currentAcq.getVoltage(), delta=1)
         self.assertAlmostEqual(testAcq.getSphericalAberration(), currentAcq.getSphericalAberration(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
-        self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
+        self.assertAlmostEqual(testAcq.getAmplitudeContrast(), currentAcq.getAmplitudeContrast(), delta=0.01)
+        if not isTomogramAcq:
+            self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
+            self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.5)
+            self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
+            self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
 
     # CTF ##############################################################################################################
     def checkCTFs(self, inCtfSet, expectedSetSize=-1, expectedPsdFile=None, excludedViewsDict=None, streamState=2):
@@ -325,9 +386,12 @@ class TestBaseCentralizedLayer(BaseTest):
     def checkTomograms(self, inTomoSet: SetOfTomograms, expectedSetSize: int, expectedSRate: float,
                        expectedDimensions: Union[List[int], dict] = None,
                        hasOddEven: bool = False,
-                       expectedOriginShifts: List[float] = None,
-                       hasCtf: bool = False,
-                       hasHalves: bool = False):
+                       expectedOriginShifts: Union[List[float], None] = None,
+                       ctfCorrected: bool = False,
+                       hasHalves: bool = False,
+                       isHeterogeneousSet: Union[bool, None] = None,
+                       testSetAcqObj: TomoAcquisition = None,
+                       testAcqObj: Union[dict, TomoAcquisition] = None) -> None:
         """
         :param inTomoSet: SetOfSubTomograms.
         :param expectedSetSize: expected set site to check.
@@ -338,10 +402,16 @@ class TestBaseCentralizedLayer(BaseTest):
         :param hasOddEven: False by default. Used to indicate if the set of tomograms is expected to have even/odd
         halves.
         :param expectedOriginShifts: list containing the expected shifts of the tomogram center in the X, Y, and Z
-        directions.
-        :param hasCtf: False by default: Used to indicate if the tomograms have the CTF corrected or not.
+        directions, expressed in angstroms.
+        :param ctfCorrected: False by default: Used to indicate if the tomograms have the CTF corrected or not.
         :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
         compose the set. If True, it will be checked if the corresponding halves files exist.
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        :param testSetAcqObj: TomoAcquisition object generated to test the acquisition associated to the set of tomos.
+        It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
+        :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tomograms. A
+        dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
         """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
@@ -349,17 +419,24 @@ class TestBaseCentralizedLayer(BaseTest):
         checkOriginMsg = checkMsgPattern % 'origin shifts'
 
         # Check the set
-        self.checkSetGeneralProps(inTomoSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
-        if hasOddEven:
-            self.assertEqual(inTomoSet.hasOddEven, hasOddEven)
-        if hasCtf:
-            self.assertEqual(inTomoSet.hasCtf(), hasCtf)
+        self.checkSetGeneralProps(inTomoSet,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
+        if testSetAcqObj:
+            self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition(), isTomogramAcq=True)
+        self.assertEqual(inTomoSet.hasOddEven(), hasOddEven)
+        self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
         # Check the set elements main attributes
         for tomo in inTomoSet:
+            tsId = tomo.getTsId()
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
             self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # Check the ctf correction
+            if ctfCorrected is not None:
+                self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
             # At least, check that the TsId was not lost in metadata generation or copying methods
             self.assertIsNotNone(getattr(tomo, Tomogram.TS_ID_FIELD, None),
                                  msg=f'Tomogram {tomo.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
@@ -368,12 +445,15 @@ class TestBaseCentralizedLayer(BaseTest):
             if expectedDimensions:
                 x, y, z = tomo.getDimensions()
                 if type(expectedDimensions) is dict:
-                    self.assertEqual([x, y, z], expectedDimensions[tomo.getTsId()], msg=checkSizeMsg)
+                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
                 else:
                     self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
-
+            # Check the acquisition
+            if testAcqObj:
+                tsAcq = tomo.getAcquisition()
+                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId, isTomogramAcq=True)
             # Check the origin
-            if expectedOriginShifts:
+            if expectedOriginShifts is not None:
                 x, y, z = tomo.getOrigin().getShifts()
                 for i, j in zip([x, y, z], expectedOriginShifts):
                     self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
@@ -480,7 +560,8 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertFalse(subtomo.hasCoordinate3D())
 
     def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                               convention=TR_SCIPION, orientedParticles=False):
+                               convention=TR_SCIPION, orientedParticles=False, expectedExtension='.mrc',
+                               isStack2d=False, noImgs=None):
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
 
         :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
@@ -490,14 +571,25 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
-        eye matrix (False) or not (True)."""
+        eye matrix (False) or not (True).
+        SED TO CHECK EACH SUBTOMOGRAM OF THE SET
+        :param expectedExtension: '.mrc' by default. Used to indicate the expected extension of the generated particle,
+        :param isStack2d: False by default. Used to indicate if the subtomogram is a stack of 2d particles or not.
+        :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
+        are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
+        noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        """
         scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
         # Check the critical properties of the set
         # First, check the set size, sampling rate, and box size
         self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
                                                expectedSetSize=expectedSetSize,
                                                expectedSRate=expectedSRate)
-        self.assertEqual(outSubtomos.getDimensions(), (expectedBoxSize, expectedBoxSize, expectedBoxSize))
+        if expectedBoxSize:
+            self.getSubtomosDims(outSubtomos,
+                                 is2dStack=isStack2d,
+                                 expectedBoxSize=expectedBoxSize,
+                                 noImgs=noImgs)
         self.assertTrue(outSubtomos.hasCoordinates3D())
         # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
         # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
@@ -511,12 +603,17 @@ class TestBaseCentralizedLayer(BaseTest):
         for tomo in presentPrecedents:
             for incoord, outSubtomo in zip(inCoords.iterCoordinates(volume=tomo),
                                            outSubtomos.iterSubtomos(volume=tomo)):
+                self.checkSubtomogram(outSubtomo,
+                                      expectedSRate=expectedSRate,
+                                      expectedBoxSize=expectedBoxSize,
+                                      isStack2d=isStack2d,
+                                      noImgs=noImgs,
+                                      expectedExtension=expectedExtension)
                 subtomoTr = outSubtomo.getTransform(convention=convention)
                 subtomoMatrix = subtomoTr.getMatrix()
                 coordinate = outSubtomo.getCoordinate3D()
                 coordTr = coordinate._eulerMatrix
                 self.assertTrue(exists(outSubtomo.getFileName()))
-                self.assertEqual(outSubtomo.getSamplingRate(), expectedSRate)
                 # The shifts in the subtomograms transformation matrix should have been scaled properly
                 self.checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
                 # Imported coordinates were picked using PySeg, so they must have an orientation
@@ -526,7 +623,7 @@ class TestBaseCentralizedLayer(BaseTest):
 
     def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1,
                                  expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False, angTol=0.05,
-                                 shiftTol=1):
+                                 shiftTol=1, expectedExtension='mrc', isStack2d=False, noImgs=None):
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram refinement
 
         :param inSubtomos: SetOfSubTomograms introduced for the subtomo refinement.
@@ -536,8 +633,15 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
-        and eye matrix
+        and eye matrix.
         (False) or not (True).
+        USED TO CHECK EACH SUBTOMOGRAM OF THE SET
+        :param expectedExtension: '.mrc' by default. Used to indicate the expected extension of the generated particle,
+        :param isStack2d: False by default. Used to indicate if the subtomogram is a stack of 2d particles or not.
+        :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
+        are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
+        noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        TOLERANCE PARAMETERS:
         :param angTol: angular tolerance, in degrees. Used to compare the input and output subtomograms transformation
         matrices.
         :param shiftTol: shift tolerance, in pixels. Used to compare the input and output subtomograms transformation
@@ -546,11 +650,22 @@ class TestBaseCentralizedLayer(BaseTest):
         angTolMat = np.ones([3, 3]) * angTol
         shiftTolMat = np.ones(3) * shiftTol
         # Check the set
-        self.checkCoordsOrPartsSetGeneralProps(outSubtomos, expectedSetSize=expectedSetSize,
+        self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
+                                               expectedSetSize=expectedSetSize,
                                                expectedSRate=expectedSRate)
+        if expectedBoxSize:
+            self.getSubtomosDims(outSubtomos,
+                                 is2dStack=isStack2d,
+                                 expectedBoxSize=expectedBoxSize,
+                                 noImgs=noImgs)
         for inSubtomo, outSubtomo in zip(inSubtomos, outSubtomos):
             # Check the subtomogram main properties
-            self.checkAverage(outSubtomo, expectedSRate=expectedSRate, expectedBoxSize=expectedBoxSize, hasHalves=False)
+            self.checkSubtomogram(outSubtomo,
+                                  expectedSRate=expectedSRate,
+                                  expectedBoxSize=expectedBoxSize,
+                                  isStack2d=isStack2d,
+                                  noImgs=noImgs,
+                                  expectedExtension=expectedExtension)
             # Check the transformation matrix
             inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
             outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
@@ -568,6 +683,39 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
 
+    def checkSubtomogram(self, subtomo, expectedSRate=-1, expectedBoxSize=-1, expectedExtension='.mrc',
+                         isStack2d=False, noImgs=None):
+        """Checks the main properties of a subtomogram.
+
+        :param subtomo: SubTomogram.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedExtension: '.mrc' by default. Used to indicate the expected extension of the generated particle,
+        which may vary in some cases, such as in Relion 5 2D particles (.mrcs).
+        :param isStack2d: False by default. Used to indicate if the subtomogram is a stack of 2d particles or not.
+        :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
+        are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
+        noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        """
+        self.assertTrue(exists(subtomo.getFileName()), "Average %s does not exists" % subtomo.getFileName())
+        self.assertTrue(subtomo.getFileName().endswith(expectedExtension))
+        self.assertTrue(abs(subtomo.getSamplingRate() - expectedSRate) <= 1e-4)
+        self.getSubtomosDims(subtomo,
+                             is2dStack=isStack2d,
+                             expectedBoxSize=expectedBoxSize,
+                             noImgs=noImgs)
+
+    def getSubtomosDims(self, inObj, is2dStack=None, expectedBoxSize=None, noImgs=None):
+        """It can be used with a sigle SubTomogram or a set of them."""
+        if is2dStack:
+            x, y, nIm = inObj.getDimensions()
+            self.assertEqual(x, expectedBoxSize)
+            self.assertEqual(y, expectedBoxSize)
+            self.assertLessEqual(nIm, noImgs)
+        else:
+            testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
+            self.assertEqual(inObj.getDimensions(), testBoxSize)
+
     # AVERAGE ##########################################################################################################
     def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
@@ -580,8 +728,7 @@ class TestBaseCentralizedLayer(BaseTest):
         testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
         self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
         self.assertTrue(avg.getFileName().endswith(".mrc"))
-        # The imported coordinates correspond to a binned 2 tomogram
-        self.assertEqual(avg.getSamplingRate(), expectedSRate)
+        self.assertTrue(abs(avg.getSamplingRate() - expectedSRate) <= 1e-4)
         self.assertEqual(avg.getDimensions(), testBoxSize)
         # Check the halves
         if hasHalves:

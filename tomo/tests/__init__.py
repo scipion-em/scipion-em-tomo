@@ -155,11 +155,15 @@ class DataSetRe4STATuto(Enum):
     dosePerTiltImg = 3.05  # Mean dose
     dosePerTiltImgWithTltFile = dosePerTiltImgWithTltFile
     exclusionWordsTs03 = 'output 01 43 45 54'
+    exclusionWordsTs54 = 'output 01 43 45 03'
     exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
     symmetry = 'C6'
     # Acquisition
+    testAcq01 = testAcq03.clone()
     testAcq03 = testAcq03
+    testAcq43 = testAcq54.clone()
+    testAcq45 = testAcq54.clone()
     testAcq54 = testAcq54
     tsAcqDict = tsAcqDict
     testAcq03Interp = testAcq03Interp
@@ -184,6 +188,11 @@ class DataSetRe4STATuto(Enum):
     nCoordsTotal = 210
     # Initial model
     initModelRelion = 'initial_model_relion_bin4.mrc'
+    # Rec particle
+    recParticleBin6 = 'rec_particle_bin6.mrc'
+    recParticleBin2 = 'recParticle_bin2.mrc'
+    recParticleHalf1Bin2 = 'half1_bin2.mrc'
+    recParticleHalf2Bin2 = 'half2_bin2.mrc'
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
@@ -197,3 +206,23 @@ class DataSetRe4STATuto(Enum):
 
 
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})
+
+########################################################################################################################
+RE5_STA = 'relion50_sta'
+
+
+class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
+    # Coordinates
+    coordsPickedWithRe5Star = 'coordsPickedWithRe5.star'
+    nCoords = 1527  # Corresponding to the 2 tomograms imported, TS_03 and TS_54
+    coordsSRate = 10
+    boxSize = 96
+    # Tomogrmas
+    tomosDir = 'tomosRecWithRe5'
+    nTomos = 2
+    binFactor = 6
+    tomosSRate = 10
+    tomosDims = [540, 540, 270]
+
+
+DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})

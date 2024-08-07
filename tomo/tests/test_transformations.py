@@ -178,7 +178,7 @@ with weakImport("xmipptomo"):
 
             with weakImport("emantomo"):
                 # Add eman extraction
-                from emantomo.protocols.protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
+                from emantomo.protocols.protocol_extraction_from_tomo import EmanProtTomoExtraction
                 stExtraction = self.newProtocol(EmanProtTomoExtraction,
                                                 inputCoordinates=protPhantom.coordinates3D,
                                                 boxSize=protPhantom.coordinates3D.getBoxSize(),
@@ -264,14 +264,17 @@ with weakImport("xmipptomo"):
 def addAveragers(test, inputProt, outputName, label):
     """ Add all the averagers available to be run with the subtomo set"""
 
-    # Add reliontomo average method
+    # Add reliontomo average method subtomograms2Star does not exist in Relion-5.0 data model
     with weakImport("reliontomo"):
-        from reliontomo.protocols import ProtRelionSubTomoReconstructAvg
-        relionAve = test.newProtocol(ProtRelionSubTomoReconstructAvg,
-                                     objLabel="Relion rec. - %s" % label)
-        relionAve.inputSubtomos.set(inputProt)
-        relionAve.inputSubtomos.setExtended(outputName)
-        test.launchProtocol(relionAve)
+        # Required method
+        from reliontomo import Plugin
+        if Plugin.isRe40():
+            from reliontomo.protocols import ProtRelionSubTomoReconstructAvg
+            relionAve = test.newProtocol(ProtRelionSubTomoReconstructAvg,
+                                         objLabel="Relion rec. - %s" % label)
+            relionAve.inputSubtomos.set(inputProt)
+            relionAve.inputSubtomos.setExtended(outputName)
+            test.launchProtocol(relionAve)
 
     # Add eman average method
     with weakImport("emantomo"):
