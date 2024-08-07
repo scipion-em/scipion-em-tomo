@@ -386,7 +386,7 @@ class TestBaseCentralizedLayer(BaseTest):
     def checkTomograms(self, inTomoSet: SetOfTomograms, expectedSetSize: int, expectedSRate: float,
                        expectedDimensions: Union[List[int], dict] = None,
                        hasOddEven: bool = False,
-                       expectedOriginShifts: List[float] = None,
+                       expectedOriginShifts: Union[List[float], None] = None,
                        ctfCorrected: bool = False,
                        hasHalves: bool = False,
                        isHeterogeneousSet: Union[bool, None] = None,
@@ -402,7 +402,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param hasOddEven: False by default. Used to indicate if the set of tomograms is expected to have even/odd
         halves.
         :param expectedOriginShifts: list containing the expected shifts of the tomogram center in the X, Y, and Z
-        directions.
+        directions, expressed in angstroms.
         :param ctfCorrected: False by default: Used to indicate if the tomograms have the CTF corrected or not.
         :param hasHalves: False by default. Used to indicate if there should be halves associated to each tomogram that
         compose the set. If True, it will be checked if the corresponding halves files exist.
@@ -453,7 +453,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 tsAcq = tomo.getAcquisition()
                 self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId, isTomogramAcq=True)
             # Check the origin
-            if expectedOriginShifts:
+            if expectedOriginShifts is not None:
                 x, y, z = tomo.getOrigin().getShifts()
                 for i, j in zip([x, y, z], expectedOriginShifts):
                     self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)

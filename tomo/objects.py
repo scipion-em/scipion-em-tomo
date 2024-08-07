@@ -25,8 +25,11 @@
 # *
 # **************************************************************************
 import logging
+from os.path import exists
 from sqlite3 import OperationalError
 from typing import Dict, Tuple, Any, Optional, Union
+
+import mrcfile
 
 from pwem import ALIGN_NONE
 
@@ -471,43 +474,36 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False):
+    def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
-        newStack = True
-        # TODO: Handle output tilt-series datatype format
-        if self.getFirstItem().hasTransform():
-            for index, ti in enumerate(self):
-                if ti.hasTransform():
-                    if newStack:
-                        if swapXY:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getYDim(),
-                                                yDim=ti.getXDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                        else:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getXDim(),
-                                                yDim=ti.getYDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                    transform = ti.getTransform().getMatrix()
-                    transformArray = np.array(transform)
-                    if swapXY:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getXDim(), ti.getYDim()))
-                    else:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getYDim(), ti.getXDim()))
-                else:
-                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        if self.hasAlignment():
+            firstImg = self.getFirstItem()
+            xDim, yDim, _ = firstImg.getDim()
+            if firstImg.hasTransform() and swapXY:
+                xDim, yDim = yDim, xDim
+            if excludeViews:
+                excludedViewsInd = self.getExcludedViewsIndex()
+                counter = 0
+                for index, ti in enumerate(self.iterItems()):
+                    if index + 1 not in excludedViewsInd:
+                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
+                        counter += 1
+            else:
+                for index, ti in enumerate(self.iterItems()):
+                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
         else:
             path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+
+    @staticmethod
+    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
+        transform = ti.getTransform().getMatrix()
+        transformArray = np.array(transform)
+        inputFilePath = ti.getFileName()
+        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                          outputFile=str(index + 1) + '@' + outputFilePath,
+                          transformMatrix=transformArray,
+                          shape=(yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -526,9 +522,48 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
+    # TODO: deprecate this after IMOD is released. Jorge (07/07/2024)
     def _getExcludedViewsIndex(self):
-
         return self.getExcludedViewsIndex()
+
+    def reStack(self, outFileName: Union[str, None] = None) -> Union[str, None]:
+        """Re-stacks a tilt-series creating a new one without the excluded views obtained by calling the method
+        getExcludedViewsIndex(). If the re-stacked file already exists, no action is carried out (avoid creating
+        the same file multiple times, even more necessary if calling this method from the viewer).
+        :param outFileName: Filename of the re-stacked tilt-series. If None, the re-stacked tilt-series will be
+        generated in the same location as the current tilt-series, but adding the suffix _restacked.
+        :returns: None is the re-stacked file already exists or outFileName if not."""
+        tsFileName = self.getFirstItem().getFileName()
+        if not outFileName:
+            outFileName = path.removeExt(tsFileName) + '_restacked' + path.getExt(tsFileName)
+        if exists(outFileName):
+            return None
+        else:
+            excludedIndices = self.getExcludedViewsIndex()
+            if excludedIndices:
+                # Load the file
+                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                    tsData = tsMrc.data
+                # Create an empty array in which the re-stacked TS will be stored
+                nx, ny, nImgs = tsData.shape
+                finalNImgs = nImgs - len(excludedIndices)
+                newTsShape = (nx, ny, finalNImgs)
+                newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+                # Fill it with the non-excluded images
+                counter = 0
+                for i in range(nImgs):
+                    if i not in excludedIndices:
+                        newTsData[counter] = tsData[i]
+                        counter += 1
+                # Save the re-stacked TS
+                with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                    reStackedTsMrc.set_data(newTsData)
+                    reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_stats()
+                    reStackedTsMrc.voxel_size = self.getSamplingRate()
+                return outFileName
+            else:
+                return None
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
