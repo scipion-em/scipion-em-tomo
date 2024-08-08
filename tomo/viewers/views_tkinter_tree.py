@@ -107,9 +107,16 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.tree.tag_configure(TiltImageStates.INCLUDED,  font=standardFont, foreground='black')
         self.tree.tag_configure(TiltImageStates.EVEN, background='#F2F2F2', foreground='black')
         self.tree.tag_configure(TiltImageStates.ODD, background='#E6E6E6', foreground='black')
+        self.tree.bind('<space>', self.onSpace)
 
     def getTree(self):
         return self.tree
+
+    def onSpace(self, event):
+        selectedItem = self.tree.selection()[0]
+        if selectedItem:
+            obj = event.widget._objDict[selectedItem]
+            self._itemSelected(obj)
 
     def _itemSelected(self, obj):
         _, y, _, _ = self.tree.bbox(self.tree.selection()[0])
@@ -410,7 +417,7 @@ class TiltSeriesDialog(ToolbarListDialog):
     def _showHelp(self, event=None):
         showInfo('TiltSeries viewer help',
                  'This viewer allows you to exclude or include TiltImages.\n\n'
-                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox.\n'
+                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox or space over the item\n'
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
                  '3. Save button to create a new set with excluded views marked.', self)
 
