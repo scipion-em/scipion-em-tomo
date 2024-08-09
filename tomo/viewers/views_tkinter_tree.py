@@ -444,6 +444,8 @@ class TiltSeriesDialog(ToolbarListDialog):
 
         result = d.result
         if result != RESULT_CANCEL:
+            self.info('Processing ...')
+            self.update_idletasks()
             restack = result == RESULT_RESTACK
             outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
                                                                         suffix=str(self._protocol.getOutputsSize()))
@@ -457,17 +459,26 @@ class TiltSeriesDialog(ToolbarListDialog):
                 imageReader = ScipionImageReader()
                 if not os.path.exists(outputPath):
                     os.mkdir(outputPath)
+            hasOddEven = self._tiltSeries.hasOddEven()
 
             for ts in self._tiltSeries:
                 tsId = ts.getTsId()
                 _, obj = self._provider.getTiltSerie(tsId)
                 newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
+                if hasOddEven:
+                    oddFileName = ts.getOddFileName()
+                    newOddBinaryName = os.path.join(outputPath, tsId + '_odd.mrcs')
+                    evenFileName = ts.getEvenFileName()
+                    newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
+
                 index = 1
                 if not restack or (obj.isEnabled() and restack):
                     newTs = ts.clone()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
                     stackImages = []
+                    oddFileNames = []
+                    evenFileNames = []
                     for ti in ts.iterItems():
                         included = False if ti.getObjId() in excludedViews[tsId] else True
                         if not restack or (included and restack):
@@ -480,12 +491,19 @@ class TiltSeriesDialog(ToolbarListDialog):
                                 stackImages.append(imageReader.open(str(index) + '@' + ti.getFileName()))
                                 newTi.setLocation((index, newBinaryName))
                                 newTi.setObjId(index)
-                                index += 1
+                                if hasOddEven:
+                                    oddFileNames.append(imageReader.open(str(index) + '@' + oddFileName))
+                                    evenFileNames.append(imageReader.open(str(index) + '@' + evenFileName))
+                                    newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
 
+                                index += 1
                             newTs.append(newTi)
 
                     if restack:
-                       imageReader.write(stackImages, newBinaryName, sr=obj.getSamplingRate(), isStack=True)
+                        imageReader.write(stackImages, newBinaryName, sr=obj.getSamplingRate(), isStack=True)
+                        if hasOddEven:
+                            imageReader.write(oddFileNames, newOddBinaryName, sr=obj.getSamplingRate(), isStack=True)
+                            imageReader.write(evenFileNames, newEvenBinaryName, sr=obj.getSamplingRate(), isStack=True)
 
                     if len(excludedViews[ts.getTsId()]) == ts.getSize():
                         newTs.setEnabled(False)
