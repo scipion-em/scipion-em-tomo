@@ -421,6 +421,9 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
         self._updateOutputSet(self.OUTPUT_NAME, outputSet,
                               state=outputSet.STREAM_CLOSED)
 
+    def allowsDelete(self, obj):
+        return True
+
     # -------------------------- INFO functions -------------------------------
     def _summary(self):
         summary = []

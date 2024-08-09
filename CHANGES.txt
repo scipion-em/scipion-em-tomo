@@ -1,3 +1,9 @@
+v3.7.4:
+ Users:
+  - TS viewer: Deleting excluded views and creating a new TS stack
+ Developers:
+  - TS viewer: Using ScipionImageReader to read tiltseries
+
 v3.7.3:
  Users:
   - Import TS: fix the heterogeneous set of TS validation using a range of angles.

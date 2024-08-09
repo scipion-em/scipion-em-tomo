@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import glob
+import os.path
 import threading
 from tkinter import messagebox, BOTH, RAISED
 
@@ -32,6 +33,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from pwem.viewers import showj
+from pwem.viewers.mdviewer.readers import ScipionImageReader
 from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
@@ -49,7 +51,9 @@ CONTRAST_STD = 2.0
 afterId = None  # Global variable to store the reference of the auto navigate task
 DIRECTION_DOWN = 0
 DIRECTION_UP = 1
-
+RESULT_CREATE_WITH = 0
+RESULT_RESTACK = 1
+THUMBNAIL_SIZE = 512
 
 class TiltSerieState:
     EXCLUDED = 'excludedTs'
@@ -103,9 +107,16 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.tree.tag_configure(TiltImageStates.INCLUDED,  font=standardFont, foreground='black')
         self.tree.tag_configure(TiltImageStates.EVEN, background='#F2F2F2', foreground='black')
         self.tree.tag_configure(TiltImageStates.ODD, background='#E6E6E6', foreground='black')
+        self.tree.bind('<space>', self.onSpace)
 
     def getTree(self):
         return self.tree
+
+    def onSpace(self, event):
+        selectedItem = self.tree.selection()[0]
+        if selectedItem:
+            obj = event.widget._objDict[selectedItem]
+            self._itemSelected(obj)
 
     def _itemSelected(self, obj):
         _, y, _, _ = self.tree.bbox(self.tree.selection()[0])
@@ -131,7 +142,10 @@ class TiltSeriesTreeProvider(TreeProvider):
             size = ts.getSize()
             for tiIndex in range(size):
                 obj = self.objects[tiIndex + index + 1]
-                obj.setEnabled(not obj.isEnabled())
+                if excludedTS == TiltSerieState.INCLUDED:
+                    obj.setEnabled(False)
+                else:
+                    obj.setEnabled(True)
                 item = children[tiIndex]
                 itemValues = self.tree.item(item, 'values')
                 self.excludeTiltImage(obj, item, itemValues, excludedTi)
@@ -147,7 +161,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             if excludedTi == TiltImageStates.CHECK_UNMARK:
                 self.tree.item(parentItem, tags=(TiltSerieState.INCLUDED, TiltSerieState.INCLUDED))
                 parentObj.setEnabled(True)
-            elif obj._parentObject.getAnglesCount() == len(self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']]):
+            elif obj._parentObject.getSize() == len(self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']]):
                 self.tree.item(self.tree.parent(selectedItem), tags=(TiltSerieState.EXCLUDED, TiltSerieState.EXCLUDED))
 
     def excludeTiltImage(self, obj,  selectedItem, itemValues, excluded):
@@ -403,44 +417,83 @@ class TiltSeriesDialog(ToolbarListDialog):
     def _showHelp(self, event=None):
         showInfo('TiltSeries viewer help',
                  'This viewer allows you to exclude or include TiltImages.\n\n'
-                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox.\n'
+                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox or space over the item\n'
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
                  '3. Save button to create a new set with excluded views marked.', self)
 
     def _saveExcluded(self, event=None):
         updatedCount = self._provider.getUpdatedCount()
         changes = self._provider.getchanges()
-        msg = "Are you sure you want to create a new set of TiltSeries?" if updatedCount and changes \
-            else "This set of TiltSeries has already been saved previously or is the original one. Are you still sure you want to generate a new set?"
-        result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
-        if result == messagebox.YES:
+
+        msg = ("Are you going to create a new set of tiltseries with the excluded views?\n\n"
+               "What do you do ? \n\n"
+               "Yes: The set will be created with the excluded views. \n"
+               "Re-stack: Delete excluded views and create a new TS stack") if updatedCount and changes \
+            else ("This set of TiltSeries has already been saved previously or is the original one. \n\n"
+                  "Are you still sure you want to generate a new set?")
+
+        d = GenericDialog(self, "Create a new set of tiltseries", msg,
+                          Icon.ALERT,
+                          buttons=[('Yes', RESULT_CREATE_WITH),
+                                   ('Re-stack', RESULT_RESTACK),
+                                   ('Cancel', RESULT_CANCEL)],
+                          default='Yes',
+                          icons={RESULT_CANCEL: Icon.BUTTON_CANCEL,
+                                 RESULT_CREATE_WITH: Icon.BUTTON_SELECT,
+                                 RESULT_RESTACK: Icon.ACTION_EXECUTE})
+
+        result = d.result
+        if result != RESULT_CANCEL:
+            restack = result == RESULT_RESTACK
             outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
                                                                         suffix=str(self._protocol.getOutputsSize()))
             outputSetOfTiltSeries.copyInfo(self._tiltSeries)
             outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
             excludedViews = self._provider.getExcludedViews()
+            outputName = self._protocol.getNextOutputName('TiltSeries_')
+            outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
+
+            if restack:  # Creating a new directory to write a new stack
+                imageReader = ScipionImageReader()
+                if not os.path.exists(outputPath):
+                    os.mkdir(outputPath)
+
             for ts in self._tiltSeries:
-                newTs = ts.clone()
-                newTs.copyInfo(ts)
-                outputSetOfTiltSeries.append(newTs)
-                for ti in ts.iterItems():
-                    newTi = ti.clone()
-                    newTi.copyInfo(ti, copyId=True)
-                    newTi.setAcquisition(ti.getAcquisition())
-                    newTi.setLocation(ti.getLocation())
-                    # For some reason .clone() does not clone the enabled nor the creation time
-                    included = False if ti.getObjId() in excludedViews[ts.getTsId()] else True
-                    newTi.setEnabled(included)
-                    newTs.append(newTi)
+                tsId = ts.getTsId()
+                _, obj = self._provider.getTiltSerie(tsId)
+                newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
+                index = 1
+                if not restack or (obj.isEnabled() and restack):
+                    newTs = ts.clone()
+                    newTs.copyInfo(ts)
+                    outputSetOfTiltSeries.append(newTs)
+                    stackImages = []
+                    for ti in ts.iterItems():
+                        included = False if ti.getObjId() in excludedViews[tsId] else True
+                        if not restack or (included and restack):
+                            newTi = ti.clone()
+                            newTi.copyInfo(ti, copyId=True)
+                            newTi.setAcquisition(ti.getAcquisition())
+                            # For some reason .clone() does not clone the enabled nor the creation time
+                            newTi.setEnabled(included)
+                            if restack:
+                                stackImages.append(imageReader.open(str(index) + '@' + ti.getFileName()))
+                                newTi.setLocation((index, newBinaryName))
+                                newTi.setObjId(index)
+                                index += 1
 
-                if len(excludedViews[ts.getTsId()]) == ts.getAnglesCount():
-                    newTs.setEnabled(False)
-                newTs.setDim(ts.getDim())
-                newTs.write()
+                            newTs.append(newTi)
 
-                outputSetOfTiltSeries.update(newTs)
-                outputSetOfTiltSeries.write()
-            outputName = 'TiltSeries_' + str(self._protocol.getOutputsSize()+1)
+                    if restack:
+                       imageReader.write(stackImages, newBinaryName, sr=obj.getSamplingRate(), isStack=True)
+
+                    if len(excludedViews[ts.getTsId()]) == ts.getSize():
+                        newTs.setEnabled(False)
+                    newTs.setDim(ts.getDim())
+                    newTs.write()
+                    outputSetOfTiltSeries.update(newTs)
+                    outputSetOfTiltSeries.write()
+
             self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
             self.info('The new set (%s) has been created successfully' % outputName)
             self._provider.resetChanges()
@@ -638,8 +691,18 @@ class TiltSeriesDialogView(pwviewer.View):
         elif isinstance(obj, tomo.objects.TiltImageBase):
             text = "Tilt image at %sº" % obj.getTiltAngle()
 
-        image = obj.getImage()
-        data = image.getData()
+        image = ScipionImageReader().open(str(obj.getIndex()) + '@' + obj.getFileName())
+        # Get original size
+        width, height = image.size
+
+        # Calculate the new dimension keeping the proportion
+        newWidth, newHeight = (THUMBNAIL_SIZE, int(THUMBNAIL_SIZE * height / width)) \
+            if width > height else (int(THUMBNAIL_SIZE * width / height), THUMBNAIL_SIZE)
+
+        # Resize the image creating a thumbnail
+        newImage = image.copy()
+        newImage.thumbnail((newWidth, newHeight))
+        data = np.array(newImage)
         preview._update(data)
         preview.setLabel(text)
 
