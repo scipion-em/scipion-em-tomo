@@ -110,19 +110,12 @@ class TestTomoComposeTS(BaseTest):
         # xcor prealignment
         imod = Domain.importFromPlugin('imod.protocols', doRaise=True)
         prealigment = self.newProtocol(imod.ProtImodXcorrPrealignment,
-                                       objLabel='Xcor preAlignment',
+                                       objLabel='Xcorr preAlignment',
                                        computeAlignment=0,
                                        binning=2)
         prealigment.inputSetOfTiltSeries.set(protCompose.TiltSeries)
         # self.proj.scheduleProtocol(prealigment)
         self.launchProtocol(prealigment)
         # checkOutputs(prealigment, 20)#timeout
-
-        # self.assertIsNotNone(prealigment.InterpolatedTiltSeries, 'TiltSeries dont alignment')
-        try:
-            self.assertIsNotNone(prealigment.outputInterpolatedSetOfTiltSeries,
-                                 'TiltSeries dont alignment')
-        except AttributeError as e:
-            print(e)
-            self.assertIsNotNone(prealigment.InterpolatedTiltSeries,
-                                 'TiltSeries dont alignment')
+        self.assertIsNotNone(prealigment.InterpolatedTiltSeries,
+                             'TiltSeries coarse prealignment has failed')
