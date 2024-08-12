@@ -1,4 +1,7 @@
 import logging
+import math
+
+logger = logging.getLogger(__name__)
 import os
 from datetime import datetime as dt
 from os.path import join, exists
@@ -106,6 +109,7 @@ class MDoc:
             headerDict, zSlices = self._parseMdoc()
             zSlices = self._sortByTimestamp(zSlices)
 
+            logger.info("Gathering info")
             # Get acquisition general info
             self._getAcquisitionInfoFromMdoc(headerDict, zSlices[0])
             self._tsId, tsPrefixAdded = self.normalizeTSId(mdoc)
@@ -158,6 +162,8 @@ class MDoc:
 
         :return: dictionary (header), list of dictionaries (Z slices)
         """
+
+        logger.info("Parsing %s" % self._mdocFileName)
         headerDict = {}
         headerParsed = False
         zvalueList = []  # list of dictionaries with
@@ -227,6 +233,8 @@ class MDoc:
                                               self._samplingRate))
 
     def _getSlicesData(self, zSlices, tsFile):
+
+        logger.info("Getting slices metadata...")
         parentFolder = getParentFolder(self._mdocFileName)
         accumulatedDose = 0
         for counter, zSlice in enumerate(zSlices):
@@ -343,6 +351,8 @@ class MDoc:
         return errMsg
 
     def _validateMdocInfoRead(self, ignoreFilesValidation=False):
+
+        logger.info("Validating mdoc content")
         validateMdocContentsErrorMsgList = []
         msg = [f'\n{self._mdocFileName} is missing:\n']
         missingFiles = []

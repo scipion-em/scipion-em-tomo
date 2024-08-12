@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 
-from pyworkflow import VERSION_2_0
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol.params import MultiPointerParam
@@ -38,7 +37,6 @@ class ProtConsensusClassesSubtomo(EMProtocol, ProtTomoBase):
     """
     _label = 'consensus classes subtomo'
     _devStatus = BETA
-    _lastUpdateVersion = VERSION_2_0
     intersectsList = []
 
     def _defineParams(self, form):
