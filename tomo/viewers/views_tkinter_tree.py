@@ -1275,20 +1275,13 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
                 obj.setEnabled(True)
                 tags = CTFSerieStates.CHECKED
                 self._checkedItems += 1
-
-            if obj.getObjId() % 2 == 0:
-                item['tags'] = (tags, CTFSerieStates.ODD)
-            else:
-                item['tags'] = (tags,  CTFSerieStates.EVEN)
         else:
             tags = CTFSerieStates.OK
             if not obj.isEnabled():
                 tags = CTFSerieStates.FAILED
 
-            if obj.getObjId() % 2 == 0:
-                item['tags'] = (tags, CTFSerieStates.ODD,)
-            else:
-                item['tags'] = (tags, CTFSerieStates.EVEN,)
+        item['tags'] = (tags, CTFSerieStates.ODD) if obj.getObjId() % 2 == 0 else (tags, CTFSerieStates.EVEN)
+
         return item
 
 
