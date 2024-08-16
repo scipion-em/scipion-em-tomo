@@ -1281,10 +1281,14 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             else:
                 item['tags'] = (tags,  CTFSerieStates.EVEN)
         else:
+            tags = CTFSerieStates.OK
+            if not obj.isEnabled():
+                tags = CTFSerieStates.FAILED
+
             if obj.getObjId() % 2 == 0:
-                item['tags'] = (CTFSerieStates.ODD,)
+                item['tags'] = (tags, CTFSerieStates.ODD,)
             else:
-                item['tags'] = (CTFSerieStates.EVEN,)
+                item['tags'] = (tags, CTFSerieStates.EVEN,)
         return item
 
 
@@ -1539,10 +1543,10 @@ class CtfEstimationListDialog(ListDialog):
                                 image=self.im_unchecked)
         self.tree.tag_configure(CTFSerieStates.CHECKED,
                                 image=self.im_checked)
-        self.tree.tag_configure(CTFSerieStates.EVEN, background='#F2F2F2',
-                                foreground='black')
-        self.tree.tag_configure(CTFSerieStates.ODD, background='#E6E6E6',
-                                foreground='black')
+        self.tree.tag_configure(CTFSerieStates.EVEN, background='#F2F2F2')
+        self.tree.tag_configure(CTFSerieStates.ODD, background='#E6E6E6')
+        self.tree.tag_configure(CTFSerieStates.OK, background='#F2F2F2', foreground='black')
+        self.tree.tag_configure(CTFSerieStates.FAILED, background='#E6E6E6', foreground='red')
         self.tree.bind("<Button-1>", self._createPloter, True)
 
     def plotterChildItem(self, itemSelected):
@@ -1592,12 +1596,12 @@ class CtfEstimationListDialog(ListDialog):
                     # If it's the case, the corresponding point won't be added to be plotted as
                     # it will widen the representation range, what would make the represented region
                     # of interest smaller
-                    if item.isEnabled():
-                        defocusUList.append(defocusU)
-                        defocusVList.append(item.getDefocusV())
-                        phShList.append(
-                            item.getPhaseShift() if item.hasPhaseShift() else 0)
-                        resList.append(item.getResolution())
+
+                    defocusUList.append(defocusU)
+                    defocusVList.append(item.getDefocusV())
+                    phShList.append(
+                        item.getPhaseShift() if item.hasPhaseShift() else 0)
+                    resList.append(item.getResolution())
 
                 fig = Figure(figsize=(7, 7), dpi=100)
                 defocusPlot = fig.add_subplot(111)
