@@ -51,7 +51,7 @@ from .protocol_base import ProtTomoBase, ProtTomoImportFiles
 logger = logging.getLogger(__name__)
 
 
-class ProtImportTsBase(ProtImport, ProtTomoBase):
+class ProtImportTsBase(ProtTomoImportFiles):
     """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
     """
     IMPORT_FROM_FILES = 0
@@ -685,25 +685,6 @@ class ProtImportTsBase(ProtImport, ProtTomoBase):
             acq.setDoseInitial(self.doseInitial.get())
 
         return acq
-
-    def _excludeByWords(self, files):
-        exclusionWords = self.exclusionWords.get()
-
-        if exclusionWords is None:
-            return files
-
-        exclusionWordList = exclusionWords.split()
-
-        allowedFiles = []
-
-        for file in files:
-            if any(bannedWord in file for bannedWord in exclusionWordList):
-                logger.info("%s excluded. Contains any of %s" %
-                            (file, exclusionWords))
-                continue
-            allowedFiles.append(file)
-
-        return allowedFiles
 
     def getMatchingFiles(self, isValidation=False):
         """ Return an ordered dict with TiltSeries found in the files as key

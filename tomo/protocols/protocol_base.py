@@ -23,6 +23,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+import re
+from glob import glob
+from os.path import join, getmtime
 
 import pyworkflow as pw
 from pyworkflow.protocol.params import (PointerParam, EnumParam, PathParam,
@@ -33,6 +37,10 @@ from pyworkflow.utils.properties import Message
 from pwem.protocols import ProtImport, EMProtocol, ProtImportFiles
 
 import tomo.objects
+from tomo.constants import TS_LABEL
+from tomo.convert.mdoc import normalizeTSId
+
+logger = logging.getLogger(__name__)
 
 
 class ProtTomoBase:
@@ -134,9 +142,15 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
 
 class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.regEx = None
+        self.regExPattern = None
+        self.globPattern = None
+
+    # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         self._defineImportParams(form)
-
         self._defineAcquisitionParams(form)
 
     @staticmethod
@@ -205,6 +219,59 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
         form.addParam('samplingRate', FloatParam,
                       label=Message.LABEL_SAMP_RATE)
 
+    # --------------------------- UTILS functions -----------------------------
+    def initializeParsing(self):
+        pattern = self.filesPattern.get()
+        if TS_LABEL in pattern:
+            logger.info('Importing using a pattern.')
+            path = self.filesPath.get().strip()
+            pattern = pattern.strip()
+            pattern = join(path, pattern)
+            regExPattern = pattern.replace(TS_LABEL, r'(?P<TS>.*)')  # regex pattern for TS
+            self.regEx = re.compile(regExPattern)
+            self.regExPattern = regExPattern
+            globPattern = pattern.replace(TS_LABEL, '*')
+            # Glob module does not handle well the brackets (it does not list them)
+            self.globPattern = globPattern.replace('[', '*').replace(']', '*')
+        else:
+            logger.info(f'Direct import. Pattern {TS_LABEL} not introduced.')
+
+    def _excludeByWords(self, files):
+        exclusionWords = self.exclusionWords.get()
+
+        if exclusionWords is None:
+            return files
+
+        exclusionWordList = exclusionWords.split()
+
+        allowedFiles = []
+
+        for file in files:
+            if any(bannedWord in file for bannedWord in exclusionWordList):
+                logger.info("%s excluded. Contains any of %s" %
+                            (file, exclusionWords))
+                continue
+            allowedFiles.append(file)
+
+        return allowedFiles
+
+    def getMatchingFilesFromRegEx(self):
+        filePaths = glob(self.globPattern)
+        filePaths = self._excludeByWords(filePaths)
+        filePaths.sort(key=lambda fn: getmtime(fn))
+        matchingFilesDict = dict()
+        for f in filePaths:
+            matchRes = self.regEx.match(f)
+            if matchRes is not None:
+                tsId = matchRes.group('TS')  # Return the complete matched subgroup
+                logger.info("Raw tilt series id is %s." % tsId)
+                tsId = normalizeTSId(tsId)
+                logger.info("Normalized tilt series id is %s." % tsId)
+                matchingFilesDict[tsId] = f
+        return matchingFilesDict
+
+
+    # --------------------------- INFO functions ------------------------------
     def _validate(self):
         pass
 

@@ -547,7 +547,7 @@ class TestTomoImportTomogramsPattern(TestBaseCentralizedLayer):
         exclusionWords = 'TS_03 TS_54'
         importedTomos = self._runImportTomograms(filesPattern=filesPattern,
                                                  exclusionWords=exclusionWords,
-                                                 objLabel='testImportTomos04')
+                                                 objLabel='testImportTomos03')
         # Check the results
         tsIdList = [self.TS_01, self.TS_43, self.TS_45]
         testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList)

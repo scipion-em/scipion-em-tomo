@@ -25,9 +25,7 @@
 # *
 # **************************************************************************
 import logging
-import re
-from glob import glob
-from os.path import abspath, basename, join, getmtime
+from os.path import abspath, basename
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
@@ -39,7 +37,6 @@ from ..objects import Tomogram, SetOfTomograms
 
 logger = logging.getLogger(__name__)
 OUTPUT_NAME = 'Tomograms'
-TS_LABEL = '{TS}'
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -51,9 +48,6 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.Tomograms = None
-        self.regEx = None
-        self.regExPattern = None
-        self.globPattern = None
         self.ih = None
 
 
@@ -125,21 +119,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         self.ih = ImageHandler()
-        pattern = self.filesPattern.get()
-        if TS_LABEL in pattern:
-            logger.info('Importing using a pattern.')
-            path = self.filesPath.get().strip()
-            pattern = self.filesPattern.get().strip()
-            pattern = join(path, pattern)
-            regExPattern = pattern.replace(TS_LABEL, r'(?P<TS>.*)')  # regex pattern for TS
-            self.regEx = re.compile(regExPattern)
-            self.regExPattern = regExPattern
-            globPattern = pattern.replace(TS_LABEL, '*')
-            # Glob module does not handle well the brackets (it does not list them)
-            self.globPattern = globPattern.replace('[', '*').replace(']', '*')
-        else:
-            logger.info(f'Direct import. Pattern {TS_LABEL} not introduced.')
-
+        self.initializeParsing()
 
     def importTomogramsStep(self):
         """ Copy images matching the filename pattern
@@ -172,40 +152,6 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     # --------------------------- UTILS functions ------------------------------
     def _getOrigCoord(self):
         return -1. * self.x.get(), -1. * self.y.get(), -1. * self.z.get()
-
-    def getMatchingFilesFromRegEx(self):
-        filePaths = glob(self.globPattern)
-        filePaths = self._excludeByWords(filePaths)
-        filePaths.sort(key=lambda fn: getmtime(fn))
-        matchingFilesDict = dict()
-        for f in filePaths:
-            matchRes = self.regEx.match(f)
-            if matchRes is not None:
-                tsId = matchRes.group('TS')  # Return the complete matched subgroup
-                logger.info("Raw tilt series id is %s." % tsId)
-                tsId = normalizeTSId(tsId)
-                logger.info("Normalized tilt series id is %s." % tsId)
-                matchingFilesDict[tsId] = f
-        return matchingFilesDict
-
-    def _excludeByWords(self, files):
-        exclusionWords = self.exclusionWords.get()
-
-        if exclusionWords is None:
-            return files
-
-        exclusionWordList = exclusionWords.split()
-
-        allowedFiles = []
-
-        for file in files:
-            if any(bannedWord in file for bannedWord in exclusionWordList):
-                logger.info("%s excluded. Contains any of %s" %
-                            (file, exclusionWords))
-                continue
-            allowedFiles.append(file)
-
-        return allowedFiles
 
     def setDefaultOrigin(self, fileName, origin):
         samplingRate = self.samplingRate.get()
