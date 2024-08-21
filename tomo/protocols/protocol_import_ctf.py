@@ -71,11 +71,7 @@ class ProtImportTsCTF(ProtTomoImportFiles):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         super()._defineImportParams(form)
-        form.addParam('exclusionWords', params.StringParam,
-                      label='Exclusion words:',
-                      help="List of words separated by a space that "
-                           "the path should not have",
-                      expertLevel=params.LEVEL_ADVANCED)
+        super().addExclusionWordsParam(form)
 
         form.addParam('inputSetOfTiltSeries',
                       params.PointerParam,

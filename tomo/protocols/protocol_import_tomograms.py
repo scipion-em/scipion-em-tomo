@@ -59,11 +59,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
-        form.addParam('exclusionWords', params.StringParam,
-                      label='Exclusion words:',
-                      help="List of words separated by a space that the path "
-                           "should not have",
-                      expertLevel=params.LEVEL_ADVANCED)
+        ProtTomoImportFiles.addExclusionWordsParam(form)
 
         ProtTomoImportAcquisition._defineParams(self, form)
 

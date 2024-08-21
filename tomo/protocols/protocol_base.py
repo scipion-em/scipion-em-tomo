@@ -139,6 +139,14 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
 
         self._defineAcquisitionParams(form)
 
+    @staticmethod
+    def addExclusionWordsParam(form):
+        form.addParam('exclusionWords', StringParam,
+                      label='Exclusion words:',
+                      expertLevel=LEVEL_ADVANCED,
+                      help="List of words separated by a space that "
+                           "the path should not have.")
+
     def _defineImportParams(self, form):
         """ Override to add options related to the different types
         of import that are allowed by each protocol.
