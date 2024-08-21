@@ -41,11 +41,13 @@ class TestCorrectTiltOffset(BaseTest):
         cls.getFile = cls.dataset.getFile('tutorialData')
 
     def testCorrectTiltOffSet(self):
+        minAngle = -55
+        maxAngle = 65
         protImport = self.newProtocol(ProtImportTs,
                                     filesPath=self.getFile,
                                     filesPattern='BB{TS}.st',
-                                    minAngle=-55,
-                                    maxAngle=65,
+                                    minAngle=minAngle,
+                                    maxAngle=maxAngle,
                                     stepAngle=2,
                                     voltage=300,
                                     magnification=105000,
@@ -58,16 +60,23 @@ class TestCorrectTiltOffset(BaseTest):
         )
         self.launchProtocol(protImport)
 
-        minAngle = -55
-        maxAngle = 65
+
 
         self.assertFalse(protImport.outputTiltSeries is None)
         self.assertEqual(protImport.outputTiltSeries.getSize(), 2)
+        
 
+        tiltOffset=10
         protCorrectOffset = self.newProtocol(ProtCorrectTiltOffset,
                                              inputTiltSeries=getattr(protImport, 'outputTiltSeries'),
-                                             tiltOffset=10)
+                                             tiltOffset=tiltOffset)
         self.launchProtocol(protCorrectOffset)
+        
+        acqInfo = protCorrectOffset.outputTiltSeries.getAcquisition()
+        newMin = acqInfo.getAngleMin()
+        newMax = acqInfo.getAngleMax()
+        self.assertEqual(acqInfo.getAngleMin(), minAngle+tiltOffset)
+        self.assertEqual(acqInfo.getAngleMax(), maxAngle+tiltOffset)
 
 
 
