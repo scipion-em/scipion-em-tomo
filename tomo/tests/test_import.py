@@ -543,11 +543,22 @@ class TestTomoImportTomogramsPattern(TestBaseCentralizedLayer):
         self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
 
     def testImportTomos03(self):
+        filesPattern = '*TS_{TS}.mrc'  # With this pattern, the tsId become numeric, but the protocol should fix them
+        exclusionWords = 'TS_03 TS_54'
+        importedTomos = self._runImportTomograms(filesPattern=filesPattern,
+                                                 exclusionWords=exclusionWords,
+                                                 objLabel='testImportTomos04')
+        # Check the results
+        tsIdList = [self.TS_01, self.TS_43, self.TS_45]
+        testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList)
+        self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
+
+    def testImportTomos04(self):
         filesPattern = '*{TS}.mrc'
         exclusionWords = DataSetRe4STATuto.exclusionWordsTs03ts54.value
         importedTomos = self._runImportTomograms(filesPattern=filesPattern,
                                                  exclusionWords=exclusionWords,
-                                                 objLabel='testImportTomos03')
+                                                 objLabel='testImportTomos04')
         # Check the results
         tsIdList = [self.TS_03, self. TS_54]
         testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList)
