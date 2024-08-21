@@ -245,6 +245,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoObj.cleanObjId()
         tomoObj.setFileName(newFileName)
         tomoSet.append(tomoObj)
+        tomoSet.update(tomoObj)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
@@ -254,9 +255,8 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         return "Tomograms %s" % self.getObjectTag(OUTPUT_NAME)
 
     def _summary(self):
-
+        summary = []
         try:
-            summary = []
             if self._hasOutput():
                 summary.append("%s imported from:\n%s"
                                % (self._getTomMessage(), self.getPattern()))

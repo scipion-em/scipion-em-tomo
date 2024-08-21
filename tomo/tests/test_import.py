@@ -29,6 +29,8 @@ import random
 import string
 import tempfile
 from os.path import join, exists, abspath, basename
+from typing import List
+
 import numpy as np
 
 from tomo.convert import getOrderFromList
@@ -45,9 +47,11 @@ from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQL
 import tomo.protocols
 from ..objects import TomoAcquisition
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
+from ..protocols.protocol_base import ProtTomoImportAcquisition
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
 from ..protocols.protocol_import_ctf import ImportChoice, ProtImportTsCTF
+from ..protocols.protocol_import_tomograms import OUTPUT_NAME
 from ..utils import existsPlugin
 
 from imod.protocols import ProtImodTomoNormalization
@@ -453,6 +457,104 @@ class TestTomoImportTomograms(BaseTest):
                             "There was a problem with the acquisition angle min")
 
             break
+
+class TestTomoImportTomogramsPattern(TestBaseCentralizedLayer):
+
+    ds = None
+    bin4SRate = DataSetRe4STATuto.unbinnedPixSize.value * 4
+    TS_01 = 'TS_01'
+    TS_03 = 'TS_03'
+    TS_43 = 'TS_43'
+    TS_45 = 'TS_45'
+    TS_54 = 'TS_54'
+    tomoDimsThk300 = [928, 928, 300]
+    tomoDimsThk280 = [928, 928, 280]
+    tomoDimsThk340 = [928, 928, 340]
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
+
+    @classmethod
+    def genTestDicts(cls, tsIdList: List[str]):
+        testAcqObjDict = dict()
+        expectedDimensionsDict = dict()
+        if cls.TS_01 in tsIdList:
+            testAcqObjDict[cls.TS_01] = DataSetRe4STATuto.testAcq01.value
+            expectedDimensionsDict[cls.TS_01] = cls.tomoDimsThk340
+        if cls.TS_03 in tsIdList:
+            testAcqObjDict[cls.TS_03] = DataSetRe4STATuto.testAcq03.value
+            expectedDimensionsDict[cls.TS_03] = cls.tomoDimsThk280
+        if cls.TS_43 in tsIdList:
+            testAcqObjDict[cls.TS_43] = DataSetRe4STATuto.testAcq43.value
+            expectedDimensionsDict[cls.TS_43] = cls.tomoDimsThk300
+        if cls.TS_45 in tsIdList:
+            testAcqObjDict[cls.TS_45] = DataSetRe4STATuto.testAcq45.value
+            expectedDimensionsDict[cls.TS_45] = cls.tomoDimsThk300
+        if cls.TS_54 in tsIdList:
+            testAcqObjDict[cls.TS_54] = DataSetRe4STATuto.testAcq54.value
+            expectedDimensionsDict[cls.TS_54] = cls.tomoDimsThk280
+
+        return testAcqObjDict, expectedDimensionsDict
+
+    @classmethod
+    def _runImportTomograms(cls, filesPattern=None, exclusionWords=None, objLabel=None):
+        print(magentaStr(f"\n==> Importing the tomograms:"
+                         f"\n\t- Files pattern = {filesPattern}"
+                         f"\n\t- Excluded words = {exclusionWords}"))
+        protImportTomos = cls.newProtocol(ProtImportTomograms,
+                                          filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                          filesPattern=filesPattern,
+                                          exclusionWords=exclusionWords,
+                                          samplingRate=DataSetRe4STATuto.sRateBin4.value,  # Bin 4
+                                          importAcquisitionFrom=ProtTomoImportAcquisition.MANUAL_IMPORT,
+                                          oltage=DataSetRe4STATuto.voltage.value,
+                                          sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
+                                          amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value)
+        if objLabel:
+            protImportTomos.setObjLabel(objLabel)
+        cls.launchProtocol(protImportTomos)
+        outTomos = getattr(protImportTomos, OUTPUT_NAME, None)
+        return outTomos
+
+    def _checkTomos(self, inTomos, testAcqObjDict=None, expectedDimensionsDict=None, isHeterogeneousSet=True):
+        self.checkTomograms(inTomos,
+                            expectedSetSize=len(expectedDimensionsDict),
+                            expectedSRate=self.bin4SRate,
+                            testAcqObj=testAcqObjDict,
+                            expectedDimensions=expectedDimensionsDict,
+                            isHeterogeneousSet=isHeterogeneousSet)
+
+    def testImportTomos01(self):
+        filesPattern = DataSetRe4STATuto.tomosPattern.value
+        importedTomos = self._runImportTomograms(filesPattern=filesPattern, objLabel='testImportTomos01')
+        # Check the results
+        tsIdList = [self.TS_01, self.TS_03, self.TS_43, self.TS_45, self. TS_54]
+        testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList)
+        self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
+
+    def testImportTomos02(self):
+        filesPattern = '*{TS}.mrc'
+        importedTomos = self._runImportTomograms(filesPattern=filesPattern, objLabel='testImportTomos02')
+        # Check the results
+        tsIdList = [self.TS_01, self.TS_03, self.TS_43, self.TS_45, self. TS_54]
+        testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList)
+        self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
+
+    def testImportTomos03(self):
+        filesPattern = '*{TS}.mrc'
+        exclusionWords = DataSetRe4STATuto.exclusionWordsTs03ts54.value
+        importedTomos = self._runImportTomograms(filesPattern=filesPattern,
+                                                 exclusionWords=exclusionWords,
+                                                 objLabel='testImportTomos03')
+        # Check the results
+        tsIdList = [self.TS_03, self. TS_54]
+        testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList)
+        self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict,
+                         expectedDimensionsDict=expectedDimensionsDict,
+                         isHeterogeneousSet=False)  # Now the set is homogeneous
+
 
 
 class TestTomoBaseProtocols(BaseTest):
