@@ -182,6 +182,7 @@ class TestBaseCentralizedLayer(BaseTest):
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
             tsId = ts.getTsId()
+            print(f'---> checking the TS tsId = {tsId}')
             # Check the dimensions
             if expectedDimensions:
                 x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
@@ -211,6 +212,7 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(ts.getAlignment(), alignment)
             # Interpolated
             self.assertEqual(ts.interpolated(), isInterpolated)
+            print('---> Done!')
 
             # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
             for ind, ti in enumerate(ts):

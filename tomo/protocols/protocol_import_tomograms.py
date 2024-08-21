@@ -24,18 +24,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import abspath, basename
+import logging
+import re
+from glob import glob
+from os.path import abspath, basename, join, getmtime
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.utils.path import createAbsLink, removeExt, removeBaseExt
+from pyworkflow.utils.path import createAbsLink, removeBaseExt, getExt
 import pyworkflow.protocol.params as params
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
 from ..convert.mdoc import normalizeTSId
 from ..objects import Tomogram, SetOfTomograms
-from ..utils import _getUniqueFileName
 
+logger = logging.getLogger(__name__)
 OUTPUT_NAME = 'Tomograms'
+TS_LABEL = '{TS}'
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -47,10 +51,22 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.Tomograms = None
+        self.regEx = None
+        self.regExPattern = None
+        self.globPattern = None
+        self.ih = None
+
 
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
+        form.addParam('exclusionWords', params.StringParam,
+                      label='Exclusion words:',
+                      help="List of words separated by a space that the path "
+                           "should not have",
+                      expertLevel=params.LEVEL_ADVANCED)
+
         ProtTomoImportAcquisition._defineParams(self, form)
+
         form.addSection('Origin Info')
         form.addParam('setOrigCoord', params.BooleanParam,
                       condition='importFrom == IMPORT_FROM_FILES',
@@ -86,16 +102,16 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                              help='Use origin information in mrc headers of the tomograms.',
                              default=False, condition='setOrigCoord', )
 
-        line = form.addLine('Manual offset',
-                            help="A wizard will suggest you possible "
-                                 "coordinates for the ORIGIN. In MRC volume "
-                                 "files, the ORIGIN coordinates will be "
-                                 "obtained from the file header.\n "
-                                 "In case you prefer set your own ORIGIN "
-                                 "coordinates, write them here. You have to "
-                                 "provide the map center coordinates in "
-                                 "Angstroms (pixels x sampling).\n",
-                            condition='setOrigCoord and not fromMrcHeader')
+        form.addLine('Manual offset',
+                     help="A wizard will suggest you possible "
+                          "coordinates for the ORIGIN. In MRC volume "
+                          "files, the ORIGIN coordinates will be "
+                          "obtained from the file header.\n "
+                          "In case you prefer set your own ORIGIN "
+                          "coordinates, write them here. You have to "
+                          "provide the map center coordinates in "
+                          "Angstroms (pixels x sampling).\n",
+                     condition='setOrigCoord and not fromMrcHeader')
         # line.addParam would produce a nicer looking form
         # but them the wizard icon is drawn outside the visible
         # window. Until this bug is fixed form is a better option
@@ -106,94 +122,129 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         form.addParam('z', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
                       label="z", help="offset along z axis (Angstroms)")
 
-    def _getImportChoices(self):
-        """ Return a list of possible choices
-        from which the import can be done.
-        """
-        return ['eman']
-
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.importTomogramsStep,
-                                 self.getPattern(),
-                                 self.samplingRate.get())
+        self._initialize()
+        self._insertFunctionStep(self.importTomogramsStep)
 
     # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        self.ih = ImageHandler()
+        pattern = self.filesPattern.get()
+        if TS_LABEL in pattern:
+            logger.info('Importing using a pattern.')
+            path = self.filesPath.get().strip()
+            pattern = self.filesPattern.get().strip()
+            pattern = join(path, pattern)
+            regExPattern = pattern.replace(TS_LABEL, r'(?P<TS>.*)')  # regex pattern for TS
+            self.regEx = re.compile(regExPattern)
+            self.regExPattern = regExPattern
+            globPattern = pattern.replace(TS_LABEL, '*')
+            # Glob module does not handle well the brackets (it does not list them)
+            self.globPattern = globPattern.replace('[', '*').replace(']', '*')
+        else:
+            logger.info(f'Direct import. Pattern {TS_LABEL} not introduced.')
 
-    def importTomogramsStep(self, pattern, samplingRate):
+
+    def importTomogramsStep(self):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
-        self.info("Using pattern: '%s'" % pattern)
+        samplingRate = self.samplingRate.get()
 
         # Create a Volume template object
         tomo = Tomogram()
         tomo.setSamplingRate(samplingRate)
-
-        imgh = ImageHandler()
-
-        tomoSet = self._createSetOfTomograms()
+        tomoSet = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
         tomoSet.setSamplingRate(samplingRate)
 
         self._parseAcquisitionData()
         if self.importAcquisitionFrom.get() != self.FROM_FILE_IMPORT:
             tomoSet.setAcquisition(self._extractAcquisitionParameters(None))
-        fileNameList = []
 
-        def setDefaultOrigin():
-            x, y, z, n = imgh.getDimensions(fileName)
-
-            origin.setShifts(x / -2. * samplingRate,
-                             y / -2. * samplingRate,
-                             z / -2. * samplingRate)
-
-        for fileName, fileId in self.iterFiles():
-
-            origin = Transform()
-
-            if self.setOrigCoord.get():
-
-                if self.fromMrcHeader.get():
-
-                    if Ccp4Header.isCompatible(fileName):
-                        ccp4Header = Ccp4Header(fileName, readHeader=True)
-                        origin.setShiftsTuple(ccp4Header.getOrigin())
-                    else:
-                        self.info(
-                            "File %s not compatible with mrc format. Setting default origin: geometrical center of it." % fileName)
-                        setDefaultOrigin()
-                else:
-                    origin.setShiftsTuple(self._getOrigCoord())
-            else:
-                setDefaultOrigin()
-
-            tomo.setOrigin(origin)
-
-            newFileName = basename(fileName).split(':')[0]
-            # Double underscore is used in EMAN to determine set type e.g. phase flipped particles. We replace it
-            # by a single underscore to avoid possible problems if the user uses EMAN
-            newFileName = newFileName.replace('__', '_')
-            if newFileName in fileNameList:
-                newFileName = _getUniqueFileName(self.getPattern(), fileName.split(':')[0])
-
-            fileNameList.append(newFileName)
-
-            tsId = normalizeTSId(removeBaseExt(newFileName))
-            tomo.setTsId(tsId)
-
-            if fileName.endswith(':mrc'):
-                fileName = fileName[:-4]
-            createAbsLink(abspath(fileName), abspath(self._getExtraPath(newFileName)))
-            tomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-
-            tomo.cleanObjId()
-            tomo.setFileName(self._getExtraPath(newFileName))
-            tomoSet.append(tomo)
+        if self.regEx:
+            logger.info("Using glob pattern: '%s'" % self.globPattern)
+            logger.info("Using regex pattern: '%s'" % self.regExPattern)
+            for tsId, fileName in self.getMatchingFilesFromRegEx().items():
+                self.addTomoToSet(fileName, tsId, tomo, tomoSet)
+        else:
+            for fileName, _ in self.iterFiles():
+                tsId = normalizeTSId(removeBaseExt(fileName))
+                self.addTomoToSet(fileName, tsId, tomo, tomoSet)
 
         self._defineOutputs(**{OUTPUT_NAME: tomoSet})
 
     # --------------------------- UTILS functions ------------------------------
     def _getOrigCoord(self):
         return -1. * self.x.get(), -1. * self.y.get(), -1. * self.z.get()
+
+    def getMatchingFilesFromRegEx(self):
+        filePaths = glob(self.globPattern)
+        filePaths = self._excludeByWords(filePaths)
+        filePaths.sort(key=lambda fn: getmtime(fn))
+        matchingFilesDict = dict()
+        for f in filePaths:
+            matchRes = self.regEx.match(f)
+            if matchRes is not None:
+                tsId = matchRes.group('TS')  # Return the complete matched subgroup
+                logger.info("Raw tilt series id is %s." % tsId)
+                tsId = normalizeTSId(tsId)
+                logger.info("Normalized tilt series id is %s." % tsId)
+                matchingFilesDict[tsId] = f
+        return matchingFilesDict
+
+    def _excludeByWords(self, files):
+        exclusionWords = self.exclusionWords.get()
+
+        if exclusionWords is None:
+            return files
+
+        exclusionWordList = exclusionWords.split()
+
+        allowedFiles = []
+
+        for file in files:
+            if any(bannedWord in file for bannedWord in exclusionWordList):
+                logger.info("%s excluded. Contains any of %s" %
+                            (file, exclusionWords))
+                continue
+            allowedFiles.append(file)
+
+        return allowedFiles
+
+    def setDefaultOrigin(self, fileName, origin):
+        samplingRate = self.samplingRate.get()
+        x, y, z, n = self.ih.getDimensions(fileName)
+        origin.setShifts(x / -2. * samplingRate,
+                         y / -2. * samplingRate,
+                         z / -2. * samplingRate)
+
+    def getTomoNewFileName(self, tsId, ext):
+        return self._getExtraPath(f'{tsId}{ext}')
+
+    def addTomoToSet(self, fileName: str, tsId: str, tomoObj: Tomogram, tomoSet: SetOfTomograms) -> None:
+        origin = Transform()
+        if self.setOrigCoord.get():
+            if self.fromMrcHeader.get():
+                if Ccp4Header.isCompatible(fileName):
+                    ccp4Header = Ccp4Header(fileName, readHeader=True)
+                    origin.setShiftsTuple(ccp4Header.getOrigin())
+                else:
+                    logger.info("File %s not compatible with mrc format. Setting default origin: geometrical center "
+                                "of it." % fileName)
+                    self.setDefaultOrigin(fileName, origin)
+            else:
+                origin.setShiftsTuple(self._getOrigCoord())
+        else:
+            self.setDefaultOrigin(fileName, origin)
+
+        tomoObj.setOrigin(origin)
+        tomoObj.setTsId(tsId)
+        newFileName = self.getTomoNewFileName(tsId, getExt(fileName))
+        createAbsLink(abspath(fileName), abspath(newFileName))
+        tomoObj.setAcquisition(self._extractAcquisitionParameters(fileName))
+        tomoObj.cleanObjId()
+        tomoObj.setFileName(newFileName)
+        tomoSet.append(tomoObj)
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
@@ -243,8 +294,14 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
     def _validate(self):
         errors = []
-        try:
-            next(self.iterFiles())
-        except StopIteration:
-            errors.append('No files matching the pattern %s were found.' % self.getPattern())
+        self._initialize()
+        if self.regEx:
+            matchingFileDict = self.getMatchingFilesFromRegEx()
+            if not matchingFileDict:
+                errors.append('No files matching the pattern %s were found.' % self.globPattern)
+        else:
+            try:
+                next(self.iterFiles())
+            except StopIteration:
+                errors.append('No files matching the pattern %s were found.' % self.getPattern())
         return errors
