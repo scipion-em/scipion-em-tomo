@@ -26,6 +26,7 @@
 
 from enum import Enum, IntEnum
 import logging
+from os.path import join
 
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
@@ -70,9 +71,8 @@ class ProtImportTsCTF(ProtTomoImportFiles):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        super()._defineImportParams(form)
-        super().addExclusionWordsParam(form)
-
+        self._defineImportParams(form)
+        self.addExclusionWordsParam(form)
         form.addParam('inputSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
@@ -82,61 +82,49 @@ class ProtImportTsCTF(ProtTomoImportFiles):
 
     # --------------------------- INSERT functions ----------------------------
     def _insertAllSteps(self):
+        self._initialize()
         self._insertFunctionStep(self.importCTFStep)
 
     # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        self.initializeParsing()
+
     def importCTFStep(self):
         ci = self.getImportClass()
-        outputCtfs = self._getOutputSet()
         atLeastOneMatch = False
 
         defocusFileDict = {}
-        defocusFiles = [fn for fn in self.iterFiles()]
-        for defocusFn in defocusFiles:
-            defocusFileDict[removeBaseExt(defocusFn)] = defocusFn
+        if self.regEx:
+            logger.info("Using regex pattern: '%s'" % self.regExPattern)
+            logger.info("Generated glob pattern: '%s'" % self.globPattern)
+            tsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.inputSetOfTiltSeries.get()}
+            defocusFilesDict = self.getMatchingFilesFromRegEx().items()
+            for tsId, ts in tsDict.items():
+                defocusFile = defocusFilesDict.get(tsId, None)
+                if defocusFile:
+                    atLeastOneMatch = True
+                    self.genCtfSet(ts, defocusFile, ci)
+                else:
+                    logger.warning(f'tsId = {tsId}: No defocus file was found.')
 
-        for ts in self._getInputTs():
-            tsId = ts.getTsId()
-            tsObjId = ts.getObjId()
+        else:
+            logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(),
+                                                            self.filesPattern.get().strip()))
+            defocusFiles = [fn for fn in self.iterFiles()]
+            for defocusFn in defocusFiles:
+                defocusFileDict[removeBaseExt(defocusFn)] = defocusFn
 
-            defocusFileId, defocusFn = fnMatching(deNormalizeTSId(tsId),
-                                                  defocusFileDict,
-                                                  objType='Tilt series')
+            for ts in self._getInputTs():
+                tsId = ts.getTsId()
+                _, defocusFn = fnMatching(deNormalizeTSId(tsId), defocusFileDict, objType='Tilt-series')
+                if defocusFn is not None:
+                    atLeastOneMatch = True
+                    self.genCtfSet(ts, defocusFn, ci)
+                else:
+                    logger.warning(f'tsId = {tsId}: No defocus file was found.')
 
-            if defocusFn is not None:
-                atLeastOneMatch = True
-                if outputCtfs is None:
-                    outputCtfs = self._createOutputSet()
-
-                newCTFTomoSeries = CTFTomoSeries()
-                newCTFTomoSeries.copyInfo(ts)
-                newCTFTomoSeries.setTiltSeries(ts)
-                newCTFTomoSeries.setObjId(tsObjId)
-                newCTFTomoSeries.setTsId(tsId)
-
-                if self._importFromImod():
-                    # Create IMOD-specific attrs that will be updated later
-                    newCTFTomoSeries.setIMODDefocusFileFlag(None)
-                    newCTFTomoSeries.setNumberOfEstimationsInRange(None)
-
-                outputCtfs.append(newCTFTomoSeries)
-
-                ci.parseTSDefocusFile(ts, defocusFn, newCTFTomoSeries)
-
-                if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
-                        newCTFTomoSeries.getIsDefocusVDeviationInRange()):
-                    newCTFTomoSeries.setEnabled(False)
-
-                outputCtfs.update(newCTFTomoSeries)
-                defocusFileDict.pop(defocusFileId)
-
-                outputCtfs.write()
-                self._store()
-            else:
-                logger.info("%s does not match" % tsId)
-
-            if not atLeastOneMatch:
-                raise Exception('There are no files that match any of the Tilt series')
+        if not atLeastOneMatch:
+            raise Exception('There are no files that match any of the Tilt series')
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
@@ -228,19 +216,29 @@ class ProtImportTsCTF(ProtTomoImportFiles):
 
             yield fileName
 
-    def _excludeByWords(self, files):
-        exclusionWords = self.exclusionWords.get()
+    def genCtfSet(self, ts, defocusFn, ci):
+        outputCtfs = self._getOutputSet()
+        if outputCtfs is None:
+            outputCtfs = self._createOutputSet()
 
-        if exclusionWords is None:
-            return files
+        newCTFTomoSeries = CTFTomoSeries()
+        newCTFTomoSeries.copyInfo(ts)
+        newCTFTomoSeries.setTiltSeries(ts)
+        newCTFTomoSeries.setTsId(ts.getTsId())
 
-        exclusionWordList = exclusionWords.split()
-        allowedFiles = []
+        if self._importFromImod():
+            # Create IMOD-specific attrs that will be updated later
+            newCTFTomoSeries.setIMODDefocusFileFlag(None)
+            newCTFTomoSeries.setNumberOfEstimationsInRange(None)
 
-        for file in files:
-            if any(bannedWord in file for bannedWord in exclusionWordList):
-                print("%s excluded. Contains any of %s" % (file, exclusionWords))
-                continue
-            allowedFiles.append(file)
+        outputCtfs.append(newCTFTomoSeries)
 
-        return allowedFiles
+        ci.parseTSDefocusFile(ts, defocusFn, newCTFTomoSeries)
+
+        if not (newCTFTomoSeries.getIsDefocusUDeviationInRange() and
+                newCTFTomoSeries.getIsDefocusVDeviationInRange()):
+            newCTFTomoSeries.setEnabled(False)
+
+        outputCtfs.update(newCTFTomoSeries)
+        outputCtfs.write()
+        self._store()

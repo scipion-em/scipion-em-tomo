@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 import logging
-from os.path import abspath, basename
+from os.path import abspath, basename, join
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
@@ -138,11 +138,14 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             tomoSet.setAcquisition(self._extractAcquisitionParameters(None))
 
         if self.regEx:
-            logger.info("Using glob pattern: '%s'" % self.globPattern)
             logger.info("Using regex pattern: '%s'" % self.regExPattern)
+            logger.info("Generated glob pattern: '%s'" % self.globPattern)
             for tsId, fileName in self.getMatchingFilesFromRegEx().items():
                 self.addTomoToSet(fileName, tsId, tomo, tomoSet)
         else:
+            inPattern = self.filesPattern.get()
+            pattern = inPattern.strip() if inPattern else ''
+            logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(), pattern))
             for fileName, _ in self.iterFiles():
                 tsId = normalizeTSId(removeBaseExt(fileName))
                 self.addTomoToSet(fileName, tsId, tomo, tomoSet)
