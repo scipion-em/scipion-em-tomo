@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 from enum import Enum
+from typing import Tuple
 
 from pyworkflow.tests import DataSet
 from tomo.objects import TomoAcquisition
@@ -93,8 +94,11 @@ DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in Dat
 ########################################################################################################################
 RE4_STA_TUTO = 'relion40_sta_tutorial_data'
 
-TS_54 = 'TS_54'
+TS_01 = 'TS_01'
 TS_03 = 'TS_03'
+TS_43 = 'TS_43'
+TS_45 = 'TS_45'
+TS_54 = 'TS_54'
 nAnglesDict = {TS_03: 40,
                TS_54: 41}
 # Acquisition
@@ -159,6 +163,7 @@ class DataSetRe4STATuto(Enum):
     exclusionWordsTs03ts54 = 'output 01 43 45'
     correctCoordsFormula = 'item._y.set(item._y.get() + 18)'
     symmetry = 'C6'
+
     # Acquisition
     testAcq01 = testAcq03.clone()
     testAcq03 = testAcq03
@@ -169,7 +174,14 @@ class DataSetRe4STATuto(Enum):
     testAcq03Interp = testAcq03Interp
     testAcq54Interp = testAcq54Interp
     tsAcqInterpDict = tsAcqInterpDict
-    # Tilt series
+
+    # Tilt series: 5 TS with no. tilt-images:
+    #   - TS_01 = 40
+    #   - TS_03 = 40
+    #   - TS_43 = 41
+    #   - TS_45 = 41
+    #   - TS_54 = 41
+    nTs = 5
     tsPath = 'tomograms'
     tsPattern = '*/{TS}.mrc'
     transformPattern = 'TS*/*.xf'
@@ -177,32 +189,101 @@ class DataSetRe4STATuto(Enum):
     nAnglesDict = nAnglesDict
     dimsTsBin1Dict = {TS_03: [3710, 3838, 40], TS_54: [3710, 3838, 41]}
     dimsTsInterpBin1Dict = {TS_03: [3838, 3710, 40], TS_54: [3838, 3710, 41]}
-    # Tomograms
+    tsDims40 = [3710, 3838, 40]
+    tsDims41 = [3710, 3838, 41]
+
+    # Tomograms: 5 tomograms with a thickness of (px):
+    #   - TS_01 = 340
+    #   - TS_03 = 280
+    #   - TS_43 = 300
+    #   - TS_45 = 300
+    #   - TS_54 = 280
+    nTomos = 5
     tomosPath = 'tomograms'
     tomosPattern = '*.mrc'
     sRateBin4 = 5.4
+    tomoDimsThk300 = [928, 928, 300]
+    tomoDimsThk280 = [928, 928, 280]
+    tomoDimsThk340 = [928, 928, 340]
+
     # Coordinates
     coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
     nCoordsFromTs03 = 99
     nCoordsFromTs54 = 111
     nCoordsTotal = 210
+
     # Initial model
     initModelRelion = 'initial_model_relion_bin4.mrc'
+
     # Rec particle
     recParticleBin6 = 'rec_particle_bin6.mrc'
     recParticleBin2 = 'recParticle_bin2.mrc'
     recParticleHalf1Bin2 = 'half1_bin2.mrc'
     recParticleHalf2Bin2 = 'half2_bin2.mrc'
+
     # Masks
     maskBin4 = 'masks/mask_align_bin4.mrc'
     maskBin2 = 'masks/mask_align_bin2.mrc'
     maskFscBin2 = 'masks/mask_fsc_bin2.mrc'
+
     # For EMAN testing
     initVolByEman = 'testEman/initialModel0ByEman.mrc'
+
     # For CISTEM Ctffind import testing
     cistemFilesPath = 'testCtfFind'
+
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
+
+    @classmethod
+    def genTestTsDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54)):
+        testAcqObjDict = dict()
+        expectedDimensionsDict = dict()
+        anglesCountDict = dict()
+        if TS_01 in tsIdList:
+            testAcqObjDict[TS_01] = cls.testAcq01.value
+            expectedDimensionsDict[TS_01] = cls.tsDims40.value
+            anglesCountDict[TS_01] = 40
+        if TS_03 in tsIdList:
+            testAcqObjDict[TS_03] = cls.testAcq03.value
+            expectedDimensionsDict[TS_03] = cls.tsDims40.value
+            anglesCountDict[TS_03] = 40
+        if TS_43 in tsIdList:
+            testAcqObjDict[TS_43] = cls.testAcq43.value
+            expectedDimensionsDict[TS_43] = cls.tsDims41.value
+            anglesCountDict[TS_43] = 41
+        if TS_45 in tsIdList:
+            testAcqObjDict[TS_45] = cls.testAcq45.value
+            expectedDimensionsDict[TS_45] = cls.tsDims41.value
+            anglesCountDict[TS_45] = 41
+        if TS_54 in tsIdList:
+            testAcqObjDict[TS_54] = cls.testAcq54.value
+            expectedDimensionsDict[TS_54] = cls.tsDims41.value
+            anglesCountDict[TS_54] = 41
+
+        return testAcqObjDict, expectedDimensionsDict, anglesCountDict
+
+    @classmethod
+    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54)):
+        testAcqObjDict = dict()
+        expectedDimensionsDict = dict()
+        if TS_01 in tsIdList:
+            testAcqObjDict[TS_01] = cls.testAcq01.value
+            expectedDimensionsDict[TS_01] = cls.tomoDimsThk340.value
+        if TS_03 in tsIdList:
+            testAcqObjDict[TS_03] = cls.testAcq03.value
+            expectedDimensionsDict[TS_03] = cls.tomoDimsThk280.value
+        if TS_43 in tsIdList:
+            testAcqObjDict[TS_43] = cls.testAcq43.value
+            expectedDimensionsDict[TS_43] = cls.tomoDimsThk300.value
+        if TS_45 in tsIdList:
+            testAcqObjDict[TS_45] = cls.testAcq45.value
+            expectedDimensionsDict[TS_45] = cls.tomoDimsThk300.value
+        if TS_54 in tsIdList:
+            testAcqObjDict[TS_54] = cls.testAcq54.value
+            expectedDimensionsDict[TS_54] = cls.tomoDimsThk280.value
+
+        return testAcqObjDict, expectedDimensionsDict
 
 
 DataSet(name=RE4_STA_TUTO, folder=RE4_STA_TUTO, files={el.name: el.value for el in DataSetRe4STATuto})

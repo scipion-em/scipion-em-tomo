@@ -98,7 +98,7 @@ class ProtImportTsCTF(ProtTomoImportFiles):
             logger.info("Using regex pattern: '%s'" % self.regExPattern)
             logger.info("Generated glob pattern: '%s'" % self.globPattern)
             tsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.inputSetOfTiltSeries.get()}
-            defocusFilesDict = self.getMatchingFilesFromRegEx().items()
+            defocusFilesDict = self.getMatchingFilesFromRegEx()
             for tsId, ts in tsDict.items():
                 defocusFile = defocusFilesDict.get(tsId, None)
                 if defocusFile:
@@ -144,12 +144,18 @@ class ProtImportTsCTF(ProtTomoImportFiles):
 
     def _validate(self):
         errorMsg = []
-        matchingFiles = self.getMatchFiles()
-        if not matchingFiles:
-            errorMsg.append('Unable to find the files provided:\n\n'
-                            '\t-filePath = %s\n'
-                            '\t-pattern = %s\n' % (self.filesPath.get(),
-                                                   self.filesPattern.get()))
+        self._initialize()
+        if self.regEx:
+            matchingFileDict = self.getMatchingFilesFromRegEx()
+            if not matchingFileDict:
+                errorMsg.append('No files matching the pattern %s were found.' % self.globPattern)
+        else:
+            matchingFiles = self.getMatchFiles()
+            if not matchingFiles:
+                errorMsg.append('Unable to find the files provided:\n\n'
+                                '\t-filePath = %s\n'
+                                '\t-pattern = %s\n' % (self.filesPath.get(),
+                                                       self.filesPattern.get()))
 
         if self.importFrom.get() == ImportChoice.GCTF.value:
             errorMsg.append("Import from GCTF is not supported yet.")

@@ -31,19 +31,8 @@ from pyworkflow.utils import magentaStr
 from tomo.protocols import ProtImportTs, ProtImportTomograms
 from tomo.protocols.protocol_base import ProtTomoImportAcquisition
 from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
-from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
+from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto, TS_43, TS_45, TS_54, TS_01, TS_03
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
-
-TS_01 = 'TS_01'
-TS_03 = 'TS_03'
-TS_43 = 'TS_43'
-TS_45 = 'TS_45'
-TS_54 = 'TS_54'
-tsDims40 = [3710, 3838, 40]
-tsDims41 = [3710, 3838, 41]
-tomoDimsThk300 = [928, 928, 300]
-tomoDimsThk280 = [928, 928, 280]
-tomoDimsThk340 = [928, 928, 340]
 
 
 class TestJoinTomoSets(TestBaseCentralizedLayer):
@@ -126,31 +115,6 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         outTsSet = getattr(protImportTrMatrix, OUTPUT_TILTSERIES_NAME, None)
         return outTsSet
 
-    @staticmethod
-    def _getHetTsSetTestData():
-        expectedDimensions = {
-            TS_01: tsDims40,
-            TS_03: tsDims40,
-            TS_43: tsDims41,
-            TS_45: tsDims41,
-            TS_54: tsDims41,
-        }
-        testAcqObjDict = {
-            TS_01: DataSetRe4STATuto.testAcq01.value,
-            TS_03: DataSetRe4STATuto.testAcq03.value,
-            TS_43: DataSetRe4STATuto.testAcq43.value,
-            TS_45: DataSetRe4STATuto.testAcq45.value,
-            TS_54: DataSetRe4STATuto.testAcq54.value,
-        }
-        anglesCountDict = {
-            TS_01: 40,
-            TS_03: 40,
-            TS_43: 41,
-            TS_45: 41,
-            TS_54: 41,
-        }
-        return expectedDimensions, testAcqObjDict, anglesCountDict
-
     def test_join_ts_homogeneous_sets(self):
         print(magentaStr("\n==> Join sets of TS with the same number of tilt-images:"))
         tsSet41imgs1 = self._runImportTs(exclusionWords='output 01 03 43 45')
@@ -161,15 +125,12 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join homogen tsSets')
         self.launchProtocol(protUnion)
         # Check the tests
-        testAcqObjDict = {
-            TS_43: DataSetRe4STATuto.testAcq43.value,
-            TS_45: DataSetRe4STATuto.testAcq45.value,
-            TS_54: DataSetRe4STATuto.testAcq54.value,
-        }
+        tsIdList = (TS_43, TS_45, TS_54)
+        testAcqObjDict, expectedDimensionsDict, anglesCountDict = DataSetRe4STATuto.genTestTsDicts(tsIdList=tsIdList)
         self.checkTiltSeries(getattr(protUnion, 'outputSet', None),
                              expectedSetSize=len(testAcqObjDict),
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
-                             expectedDimensions=tsDims41,
+                             expectedDimensions=DataSetRe4STATuto.tsDims41.value,
                              testSetAcqObj=testAcqObjDict[TS_54],
                              testAcqObj=testAcqObjDict,
                              anglesCount=41,
@@ -186,7 +147,7 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tsSets')
         self.launchProtocol(protUnion)
         # Check the results
-        expectedDimensions, testAcqObjDict, anglesCountDict = self._getHetTsSetTestData()
+        testAcqObjDict, expectedDimensions, anglesCountDict = DataSetRe4STATuto.genTestTsDicts()
         self.checkTiltSeries(getattr(protUnion, 'outputSet', None),
                              expectedSetSize=len(testAcqObjDict),
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
@@ -208,7 +169,7 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tsSets')
         self.launchProtocol(protUnion)
         # Check the results
-        expectedDimensions, testAcqObjDict, anglesCountDict = self._getHetTsSetTestData()
+        testAcqObjDict, expectedDimensions, anglesCountDict = DataSetRe4STATuto.genTestTsDicts()
         self.checkTiltSeries(getattr(protUnion, 'outputSet', None),
                              expectedSetSize=len(testAcqObjDict),
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
@@ -233,20 +194,7 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join het tomoSets')
         self.launchProtocol(protUnion)
         # Check the results
-        testAcqObjDict = {
-            TS_01: DataSetRe4STATuto.testAcq01.value,
-            TS_03: DataSetRe4STATuto.testAcq03.value,
-            TS_43: DataSetRe4STATuto.testAcq43.value,
-            TS_45: DataSetRe4STATuto.testAcq45.value,
-            TS_54: DataSetRe4STATuto.testAcq54.value,
-        }
-        expectedDimensionsDict = {
-            TS_01: tomoDimsThk340,
-            TS_03: tomoDimsThk280,
-            TS_43: tomoDimsThk300,
-            TS_45: tomoDimsThk300,
-            TS_54: tomoDimsThk280,
-        }
+        testAcqObjDict, expectedDimensionsDict = DataSetRe4STATuto.genTestTomoDicts()
         self.checkTomograms(getattr(protUnion, 'outputSet', None),
                             expectedSetSize=len(expectedDimensionsDict),
                             expectedSRate=self.bin4SRate,
@@ -264,16 +212,14 @@ class TestJoinTomoSets(TestBaseCentralizedLayer):
         protUnion.setObjLabel('join homogen tomoSets')
         self.launchProtocol(protUnion)
         # Check the results
-        testAcqObjDict = {
-            TS_43: DataSetRe4STATuto.testAcq43.value,
-            TS_45: DataSetRe4STATuto.testAcq45.value,
-        }
+        tsIdList = (TS_43, TS_45)
+        testAcqObjDict, expectedDimensionsDict = DataSetRe4STATuto.genTestTomoDicts(tsIdList=tsIdList)
         self.checkTomograms(getattr(protUnion, 'outputSet', None),
                             expectedSetSize=2,
                             expectedSRate=self.bin4SRate,
                             testSetAcqObj=testAcqObjDict[TS_45],
                             testAcqObj=testAcqObjDict,
-                            expectedDimensions=tomoDimsThk300,
+                            expectedDimensions=DataSetRe4STATuto.tomoDimsThk300.value,
                             isHeterogeneousSet=False)
 
 

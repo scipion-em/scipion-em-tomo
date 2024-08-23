@@ -40,7 +40,7 @@ from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 
 from tomo.protocols.protocol_ts_import import MDoc, ProtImportTs
-from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto
+from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto, TS_01, TS_43, TS_45, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
@@ -56,15 +56,6 @@ from ..utils import existsPlugin
 
 from imod.protocols import ProtImodTomoNormalization
 
-TS_01 = 'TS_01'
-TS_03 = 'TS_03'
-TS_43 = 'TS_43'
-TS_45 = 'TS_45'
-TS_54 = 'TS_54'
-tomoDimsThk300 = [928, 928, 300]
-tomoDimsThk280 = [928, 928, 280]
-tomoDimsThk340 = [928, 928, 340]
-
 
 class TestTomoImportTomogramsFromPattern(TestBaseCentralizedLayer):
 
@@ -75,28 +66,6 @@ class TestTomoImportTomogramsFromPattern(TestBaseCentralizedLayer):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
-
-    @classmethod
-    def genTestDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54)):
-        testAcqObjDict = dict()
-        expectedDimensionsDict = dict()
-        if TS_01 in tsIdList:
-            testAcqObjDict[TS_01] = DataSetRe4STATuto.testAcq01.value
-            expectedDimensionsDict[TS_01] = tomoDimsThk340
-        if TS_03 in tsIdList:
-            testAcqObjDict[TS_03] = DataSetRe4STATuto.testAcq03.value
-            expectedDimensionsDict[TS_03] = tomoDimsThk280
-        if TS_43 in tsIdList:
-            testAcqObjDict[TS_43] = DataSetRe4STATuto.testAcq43.value
-            expectedDimensionsDict[TS_43] = tomoDimsThk300
-        if TS_45 in tsIdList:
-            testAcqObjDict[TS_45] = DataSetRe4STATuto.testAcq45.value
-            expectedDimensionsDict[TS_45] = tomoDimsThk300
-        if TS_54 in tsIdList:
-            testAcqObjDict[TS_54] = DataSetRe4STATuto.testAcq54.value
-            expectedDimensionsDict[TS_54] = tomoDimsThk280
-
-        return testAcqObjDict, expectedDimensionsDict
 
     @classmethod
     def _runImportTomograms(cls, filesPattern=None, exclusionWords=None, objLabel=None):
@@ -130,14 +99,14 @@ class TestTomoImportTomogramsFromPattern(TestBaseCentralizedLayer):
         filesPattern = DataSetRe4STATuto.tomosPattern.value
         importedTomos = self._runImportTomograms(filesPattern=filesPattern, objLabel='testImportTomos01')
         # Check the results
-        testAcqObjDict, expectedDimensionsDict = self.genTestDicts()
+        testAcqObjDict, expectedDimensionsDict = DataSetRe4STATuto.genTestTomoDicts()
         self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
 
     def testImportTomos02(self):
         filesPattern = '*{TS}.mrc'
         importedTomos = self._runImportTomograms(filesPattern=filesPattern, objLabel='testImportTomos02')
         # Check the results
-        testAcqObjDict, expectedDimensionsDict = self.genTestDicts()
+        testAcqObjDict, expectedDimensionsDict = DataSetRe4STATuto.genTestTomoDicts()
         self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
 
     def testImportTomos03(self):
@@ -148,7 +117,7 @@ class TestTomoImportTomogramsFromPattern(TestBaseCentralizedLayer):
                                                  objLabel='testImportTomos03')
         # Check the results
         tsIdList = (TS_01, TS_43, TS_45)
-        testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList=tsIdList)
+        testAcqObjDict, expectedDimensionsDict = DataSetRe4STATuto.genTestTomoDicts(tsIdList=tsIdList)
         self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict, expectedDimensionsDict=expectedDimensionsDict)
 
     def testImportTomos04(self):
@@ -159,7 +128,7 @@ class TestTomoImportTomogramsFromPattern(TestBaseCentralizedLayer):
                                                  objLabel='testImportTomos04')
         # Check the results
         tsIdList = (TS_03,  TS_54)
-        testAcqObjDict, expectedDimensionsDict = self.genTestDicts(tsIdList=tsIdList)
+        testAcqObjDict, expectedDimensionsDict = DataSetRe4STATuto.genTestTomoDicts(tsIdList=tsIdList)
         self._checkTomos(importedTomos, testAcqObjDict=testAcqObjDict,
                          expectedDimensionsDict=expectedDimensionsDict,
                          isHeterogeneousSet=False)  # Now the set is homogeneous
@@ -700,49 +669,69 @@ class TestTomoImportTsFromMdoc(BaseTest):
                 self.assertTrue(not errorMsg, "There are errors unexpected when validating the Mdocs: %s" % errorMsg)
 
 
-# class TestImportTomoCtfPattern(TestBaseCentralizedLayer):
-#     ds = None
-#     unbinnedSRate = DataSetRe4STATuto.unbinnedPixSize.value
-#
-#     @classmethod
-#     def setUpClass(cls):
-#         setupTestProject(cls)
-#         cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
-#         cls._runPreviousProtocols()
-#
-#     @classmethod
-#     def _runPreviousProtocols(cls):
-#         cls.importedTs = cls._runImportTs()  # 5 tilt-series are imported with the test defaul pattern
-#
-#     @classmethod
-#     def _runImportTs(cls):
-#         print(magentaStr("\n==> Importing the tilt series:"))
-#         protImportTs = cls.newProtocol(ProtImportTs,
-#                                        filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
-#                                        filesPattern=DataSetRe4STATuto.tsPattern.value,
-#                                        exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value,
-#                                        anglesFrom=2,  # From tlt file
-#                                        voltage=DataSetRe4STATuto.voltage.value,
-#                                        magnification=DataSetRe4STATuto.magnification.value,
-#                                        sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
-#                                        amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
-#                                        samplingRate=cls.unbinnedSRate,
-#                                        doseInitial=DataSetRe4STATuto.initialDose.value,
-#                                        dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value,
-#                                        tiltAxisAngle=DataSetRe4STATuto.tiltAxisAngle.value)
-#
-#         cls.launchProtocol(protImportTs)
-#         tsImported = getattr(protImportTs, 'outputTiltSeries', None)
-#         return tsImported
-#
-#     @classmethod
-#     def _runImportCtf(cls, filesPattern):
-#         print(magentaStr("\n==> Importing the CTFs:"))
-#         protImportCtf = cls.newProtocol(ProtImportTsCTF,
-#                                         filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
-#                                         filesPattern=DataSetRe4STATuto.ctfPattern.value,
-#                                         importFrom=ImportChoice.CTFFIND.value,
-#                                         inputSetOfTiltSeries=cls.importedTs)
-#         cls.launchProtocol(protImportCtf)
-#         outputMask = getattr(protImportCtf, protImportCtf._possibleOutputs.CTFs.name, None)
-#         return outputMask
+class TestImportTomoCtfPattern(TestBaseCentralizedLayer):
+    ds = None
+    unbinnedSRate = DataSetRe4STATuto.unbinnedPixSize.value
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
+        cls._runPreviousProtocols()
+
+    @classmethod
+    def _runPreviousProtocols(cls):
+        cls.importedTs = cls._runImportTs()  # 5 tilt-series are imported with the test default pattern
+
+    @classmethod
+    def _runImportTs(cls):
+        print(magentaStr("\n==> Importing the tilt series:"))
+        protImportTs = cls.newProtocol(ProtImportTs,
+                                       filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                       filesPattern=DataSetRe4STATuto.tsPattern.value,
+                                       exclusionWords='output',
+                                       anglesFrom=2,  # From tlt file
+                                       voltage=DataSetRe4STATuto.voltage.value,
+                                       magnification=DataSetRe4STATuto.magnification.value,
+                                       sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
+                                       amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
+                                       samplingRate=cls.unbinnedSRate,
+                                       doseInitial=DataSetRe4STATuto.initialDose.value,
+                                       dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value,
+                                       tiltAxisAngle=DataSetRe4STATuto.tiltAxisAngle.value)
+
+        cls.launchProtocol(protImportTs)
+        tsImported = getattr(protImportTs, 'outputTiltSeries', None)
+        return tsImported
+
+    @classmethod
+    def _runImportCtf(cls, filesPattern=None, exclusionWords=None, objLabel=None):
+        print(magentaStr(f"\n==> Importing the CTFs:"
+                         f"\n\t- Files pattern = {filesPattern}"
+                         f"\n\t- Exclusion words = {exclusionWords}"))
+        protImportCtf = cls.newProtocol(ProtImportTsCTF,
+                                        filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                        filesPattern=filesPattern,
+                                        exclusionWords=exclusionWords,
+                                        importFrom=ImportChoice.CTFFIND.value,
+                                        inputSetOfTiltSeries=cls.importedTs)
+        if objLabel:
+            protImportCtf.setObjLabel(objLabel)
+        cls.launchProtocol(protImportCtf)
+        outputMask = getattr(protImportCtf, protImportCtf._possibleOutputs.CTFs.name, None)
+        return outputMask
+
+
+    def testImportCtfFromPattern01(self):
+        exclusionWords = '01 43 45'  # Imported CTF should be TS_03 and TS_54
+        ctfSet = self._runImportCtf(filesPattern='*/{TS}.defocus',
+                                    exclusionWords=exclusionWords,
+                                    objLabel='testImportCtfFromPattern01')
+        self.checkCTFs(ctfSet, expectedSetSize=2)
+
+    def testImportCtfFromPattern02(self):
+        exclusionWords = '03 54'  # Imported CTF should be TS_01, TS_43, TS_45
+        ctfSet = self._runImportCtf(filesPattern='*/{TS}.defocus',
+                                    exclusionWords=exclusionWords,
+                                    objLabel='testImportCtfFromPattern02')
+        self.checkCTFs(ctfSet, expectedSetSize=3)
