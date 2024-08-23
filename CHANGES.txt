@@ -1,5 +1,6 @@
 v3.7.4:
  Users:
+  - New protocol correct tilt offset: It allows to correct the tilt offset of a tilt series
   - TS viewer: Deleting excluded views and creating a new TS stack
  Developers:
   - TS viewer: Using ScipionImageReader to read tiltseries
