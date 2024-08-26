@@ -141,6 +141,30 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
 
 
 class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
+    """Base protocol to import tomography files. How to write an import protocol. There are two modes that should be
+    implemented to import files, based on the value of the filesPattern form parameter:
+
+    1. If empty (a single file is imported) or using the classic wildcard patterns.
+    2. If the pattern contains the label {TS}, to represent the part of the name desired to be considered as the tsId.
+
+    How to implement an import protocol in Scipion tomo:
+
+    * The method initializeParsing must be called before the steps are generated, directly or as part of an
+    initialization method. This method manages all the functionality required to deal with the {TS} pattern. If this
+    label is not present, it does nothing, and the files matching must be carried out with the method iterFiles.
+
+    * When processing the data, an if statement must be implemented, asking for a pattern {TS} introduced or not (it's
+    the value of the protocol attribute self.regEx, which is filled properly in the execution of the method
+    initializeParsing. Then:
+
+        > if self.regEx: the iterator is obtained by calling the method getMatchingFilesFromRegEx
+        > else: the iterator is obtained via the method iterFiles.
+
+    * With the iterators defined, the rest of the code to generate the corresponding scipion objects is common to both
+    modes.
+
+    A good example is the protocol ProtImportTomograms.
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
