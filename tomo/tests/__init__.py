@@ -121,15 +121,15 @@ testAcq = TomoAcquisition(voltage=voltage,
                           tiltAxisAngle=tiltAxisAngle,
                           dosePerFrame=dosePerTiltImg,
                           angleMax=60,
+                          accumDose=123,  # The tlt files indicate they have the same accum dose, despite they have a
+                          # different number of images
                           step=tiltStep)
 # Acquisition of TS_03
 testAcq03 = testAcq.clone()
 testAcq03.setAngleMin(-57)
-testAcq03.setAccumDose(dosePerTiltImg * nAnglesDict[TS_03])
 # Acquisition of TS_54
 testAcq54 = testAcq.clone()
 testAcq54.setAngleMin(-60)
-testAcq54.setAccumDose(dosePerTiltImg * nAnglesDict[TS_54])
 # Tilt series acq dict
 tsAcqDict = {TS_03: testAcq03,
              TS_54: testAcq54}

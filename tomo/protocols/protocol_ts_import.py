@@ -299,7 +299,8 @@ class ProtImportTsBase(ProtTomoImportFiles):
             # Acquisition exists for both the tilt images and the tilt series, but some values will be different when
             # referred to the whole TS than when referred to a tilt image (such as the accumDose). Angle max, angle mix,
             # and step will be generated here as it will be the same for both the TS and the tilt images.
-            tiltAngles = sorted([float(tiData[2]) for tiData in tiltSeriesList])
+            tiltAngles, acummDoses = zip(*[(float(tiData[2]), float(tiData[3])) for tiData in tiltSeriesList])
+            tiltAngles = sorted(tiltAngles)
             tsAcq = tsObj.getAcquisition().clone()
             maxTilt = tiltAngles[-1]
             minTilt = tiltAngles[0]
@@ -382,7 +383,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
                 tsAcq.setDosePerFrame(meanDosePerFrame)
                 setAcq.setDosePerFrame(meanDosePerFrame)
             else:
-                accumDose = self.dosePerFrame.get() * len(tiltSeriesList)
+                accumDose = max(acummDoses)
                 dosePerFrame = self.dosePerFrame.get()
                 tiltAxisAngle = self.tiltAxisAngle.get()
 

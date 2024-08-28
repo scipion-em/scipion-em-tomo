@@ -175,36 +175,6 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         self._defineImportParams(form)
-        form.addLine('* NOTE: About files import in Scipion Tomo\n(click on the help icon to the right)',
-                     help='There are two modes that should be implemented to import files, based on the value of '
-                          'the Pattern parameter:\n'
-                          '\n1. *Empty* (a single file is imported if File directory parameter is the full path of a '
-                          'single file) or *using the classic wildcard patterns*, as in Scipion for SPA, and explain '
-                          'in the help of the parameter Pattern.\n'
-                          '\n*2. The pattern contains the label {TS}*, used to represent the part of the name desired '
-                          'to be considered as the tsId (Unique identifier of a tilt-series and its derived products, '
-                          'such as tomograms, ctfs, alignment, etc).\n\n'
-                          '*Examples*:\n\n'
-                          '*Example 1*: import only one tomogram named tomoAbc.mrc located if the directory '
-                          '/home/exampleDir.\n'
-                          '\n\tOption 1a: set Files directory to /home/exampleDir/tomoAbc.mrc and leave Pattern empty.\n'
-                          '\n\tOption 1b: set set Files directory to /home/exampleDir and Pattern to tomoAbc.mrc.\n'
-                          '\n\tOption 2: set set Files directory to /home/exampleDir and Pattern to the substring '
-                          'desired to be the tsId:\n\n'
-                          'If the tsId is desired to be tomoAbc, the pattern should be {TS}.mrc, while if the tsId we '
-                          'want, for example to match other objects in the project labelled with tsId based on what '
-                          'follows the word "tomo", it should be tomo{TS}.mrc. In the first case the tsId would be the '
-                          'whole basename, "tomoAbc", while in the second it would be only "Abc".\n\n'
-                          '*Example 2*: import alignment files (.xf) generated with IMOD, named TS_01_binned.xf, '
-                          'TS_02_binned.xf, TS_03_binned.xf, located in the directory /home/aliExample/binnedTS.\n\n'
-                          'Let us consider that we have already the tilt-series imported in Scipion and we know that '
-                          'their tsIds are, respectively, TS_01, TS_02, TS_03. To import the alignment files we have '
-                          'obtaiend using IMOD before having installed Scipion, the\n'
-                          '\n\tFiles directory should be /home/aliExample/binnedTS, and the'
-                          '\n\tPattern {TS}_binned.xf.\n\n'
-                          'Thus, the transformation matrices would be imported with tsIds TS_01, TS_02, TS_03, that '
-                          'matches to the existing tsIds of the tilt-series we want to assign the imported alignments '
-                          'to.')
         self._defineAcquisitionParams(form)
 
     @staticmethod
@@ -257,6 +227,36 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
                            "NOTE: wildcards and special characters "
                            "('*', '?', '#', ':', '%') cannot appear in the "
                            "actual path.")
+        form.addLine('* NOTE: About files import in Scipion Tomo\n(click on the help icon to the right)',
+                     help='There are two modes that should be implemented to import files, based on the value of '
+                          'the Pattern parameter:\n'
+                          '\n1. *Empty* (a single file is imported if File directory parameter is the full path of a '
+                          'single file) or *using the classic wildcard patterns*, as in Scipion for SPA, and explain '
+                          'in the help of the parameter Pattern.\n'
+                          '\n*2. The pattern contains the label {TS}*, used to represent the part of the name desired '
+                          'to be considered as the tsId (Unique identifier of a tilt-series and its derived products, '
+                          'such as tomograms, ctfs, alignment, etc).\n\n'
+                          '*Examples*:\n\n'
+                          '*Example 1*: import only one tomogram named tomoAbc.mrc located if the directory '
+                          '/home/exampleDir.\n'
+                          '\n\tOption 1a: set Files directory to /home/exampleDir/tomoAbc.mrc and leave Pattern empty.\n'
+                          '\n\tOption 1b: set set Files directory to /home/exampleDir and Pattern to tomoAbc.mrc.\n'
+                          '\n\tOption 2: set set Files directory to /home/exampleDir and Pattern to the substring '
+                          'desired to be the tsId:\n\n'
+                          'If the tsId is desired to be tomoAbc, the pattern should be {TS}.mrc, while if the tsId we '
+                          'want, for example to match other objects in the project labelled with tsId based on what '
+                          'follows the word "tomo", it should be tomo{TS}.mrc. In the first case the tsId would be the '
+                          'whole basename, "tomoAbc", while in the second it would be only "Abc".\n\n'
+                          '*Example 2*: import alignment files (.xf) generated with IMOD, named TS_01_binned.xf, '
+                          'TS_02_binned.xf, TS_03_binned.xf, located in the directory /home/aliExample/binnedTS.\n\n'
+                          'Let us consider that we have already the tilt-series imported in Scipion and we know that '
+                          'their tsIds are, respectively, TS_01, TS_02, TS_03. To import the alignment files we have '
+                          'obtaiend using IMOD before having installed Scipion, the\n'
+                          '\n\tFiles directory should be /home/aliExample/binnedTS, and the'
+                          '\n\tPattern {TS}_binned.xf.\n\n'
+                          'Thus, the transformation matrices would be imported with tsIds TS_01, TS_02, TS_03, that '
+                          'matches to the existing tsIds of the tilt-series we want to assign the imported alignments '
+                          'to.')
         form.addParam('copyFiles', BooleanParam, default=False,
                       expertLevel=LEVEL_ADVANCED,
                       label="Copy files?",
