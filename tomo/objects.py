@@ -259,7 +259,7 @@ class TiltSeriesBase(data.SetOfImages):
         return self._acquisition is not None and self._acquisition.getMagnification() is not None
 
     def getAnglesCount(self):
-        return self._anglesCount
+        return self._anglesCount.get()
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -276,14 +276,9 @@ class TiltSeriesBase(data.SetOfImages):
         return self.extractFileName(firstItem.getEven())
 
     def setAnglesCount(self, value):
-
-        if isinstance(value, int):
-            self._anglesCount.set(value)
-        else:
-            self._anglesCount = value
+        self._anglesCount.set(value)
 
     def hasAlignment(self):
-
         return self._hasAlignment.get()
 
     def ctfCorrected(self):

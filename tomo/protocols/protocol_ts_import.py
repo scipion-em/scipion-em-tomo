@@ -300,6 +300,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
             # referred to the whole TS than when referred to a tilt image (such as the accumDose). Angle max, angle mix,
             # and step will be generated here as it will be the same for both the TS and the tilt images.
             tiltAngles, acummDoses = zip(*[(float(tiData[2]), float(tiData[3])) for tiData in tiltSeriesList])
+            acummDoses = list(acummDoses)
             tiltAngles = sorted(tiltAngles)
             tsAcq = tsObj.getAcquisition().clone()
             maxTilt = tiltAngles[-1]
@@ -342,6 +343,9 @@ class ProtImportTsBase(ProtTomoImportFiles):
                         dosePerFrame = self.dosePerFrame.get()
                         if not accDose:
                             accDose = to * dosePerFrame
+                            acummDoses.append(accDose)  # It may indicate that they all are 0 when parsed from
+                            # tiltSeriesList (no dose in the tlt case, for example). That way we cover all the cases,
+                            # even when a tlt file skips some angle
                         initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
                     # Initial dose in current ti
                     tiAcq.setDoseInitial(initialDose)
