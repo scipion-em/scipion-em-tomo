@@ -1,4 +1,4 @@
-v3.7.3:
+v3.8.0:
  Users:
   - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
     select the substring that will be considered as tsId.
