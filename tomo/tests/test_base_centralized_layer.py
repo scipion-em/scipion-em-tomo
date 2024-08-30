@@ -382,6 +382,7 @@ class TestBaseCentralizedLayer(BaseTest):
                     expectPsdFile = expectedPsdFile
                 self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
                 self.checkCtfTomo(ctfi, isExcludedView, expectPsdFile)
+                self.assertGreaterEqual(ctfi.getAcquisitionOrder(), 0)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
