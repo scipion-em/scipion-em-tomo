@@ -276,7 +276,10 @@ class TiltSeriesBase(data.SetOfImages):
         return self.extractFileName(firstItem.getEven())
 
     def setAnglesCount(self, value):
-        self._anglesCount.set(value)
+        if isinstance(value, int):
+            self._anglesCount.set(value)
+        else:
+            self._anglesCount = value
 
     def hasAlignment(self):
         return self._hasAlignment.get()
@@ -763,7 +766,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return self._anglesCount.get()
 
     def setAnglesCount(self, value):
-        self._anglesCount.set(value)
+        if isinstance(value, int):
+            self._anglesCount.set(value)
+        else:
+            self._anglesCount = value
 
     def ctfCorrected(self):
         """ Returns true if ctf has been corrected"""

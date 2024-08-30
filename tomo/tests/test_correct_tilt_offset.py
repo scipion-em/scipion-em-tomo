@@ -71,10 +71,9 @@ class TestCorrectTiltOffset(BaseTest):
                                              inputTiltSeries=getattr(protImport, 'outputTiltSeries'),
                                              tiltOffset=tiltOffset)
         self.launchProtocol(protCorrectOffset)
-        
-        acqInfo = protCorrectOffset.outputTiltSeries.getAcquisition()
-        newMin = acqInfo.getAngleMin()
-        newMax = acqInfo.getAngleMax()
+
+        outTsSet = getattr(protCorrectOffset, protCorrectOffset._possibleOutputs.tiltSeries.name)
+        acqInfo = outTsSet.getAcquisition()
         self.assertEqual(acqInfo.getAngleMin(), minAngle+tiltOffset)
         self.assertEqual(acqInfo.getAngleMax(), maxAngle+tiltOffset)
 

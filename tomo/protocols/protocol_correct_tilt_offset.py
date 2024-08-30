@@ -24,20 +24,20 @@
 # *
 # **************************************************************************
 import logging
-logger = logging.getLogger(__name__)
+from enum import Enum
 
-import math
-import numpy as np
-
-from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam, FloatParam, EnumParam
-from pyworkflow.object import Set, Float
-
+from pyworkflow.protocol.params import PointerParam, FloatParam
+from pyworkflow.object import Set
 from pwem.protocols import EMProtocol
-
 from tomo.objects import TiltSeries, TiltImage, SetOfTiltSeries
 from tomo.protocols import ProtTomoBase
+
+logger = logging.getLogger(__name__)
+
+
+class outputObjects(Enum):
+    tiltSeries = SetOfTiltSeries
 
 
 class ProtCorrectTiltOffset(EMProtocol, ProtTomoBase):
@@ -52,6 +52,7 @@ class ProtCorrectTiltOffset(EMProtocol, ProtTomoBase):
 
     _label = 'correct tilt offset'
     _devStatus = BETA
+    _possibleOutputs = outputObjects
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -113,7 +114,7 @@ class ProtCorrectTiltOffset(EMProtocol, ProtTomoBase):
         newSetTs.write()
         self._store()
 
-        self._defineOutputs(**{'TiltSeries': newSetTs})
+        self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: newSetTs})
         self._defineSourceRelation(inputData, newSetTs)
 
     def closeOutputSetsStep(self):

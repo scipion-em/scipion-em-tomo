@@ -129,10 +129,11 @@ class TestTomoProtFitVesicles(BaseTest):
                                                input=self.getCoordinates(),
                                                inputTomos=self.getTomograms())
             self.launchProtocol(protFitVesicles)
-            self.assertIsNotNone(protFitVesicles.outputMeshes, "There was a problem with output vesicles (SetOfMeshes)")
-            self.assertEqual(protFitVesicles.outputMeshes.getSize(), 292)
+            outputMeshes = getattr(protFitVesicles, protFitVesicles._possibleOutputs.meshes.name, None)
+            self.assertIsNotNone(outputMeshes, "There was a problem with output vesicles (SetOfMeshes)")
+            self.assertEqual(outputMeshes.getSize(), 292)
 
-            self.meshes = protFitVesicles.outputMeshes
+            self.meshes = outputMeshes
 
         return self.meshes
 
