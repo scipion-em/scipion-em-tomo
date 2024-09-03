@@ -16,6 +16,9 @@ v3.8.0:
     representation of both objects.
   - TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded
     views.
+  - Fix update method in Set of Tomos and Set of TS: It does not turn homogeneous sets into heterogeneous ones, nor
+    does it look at the X and Y dimensions because they are considered heterogeneous under the criteria used before.
+    Only the third dimension is checked for the heterogeneous set check.
   - TCL:
     * Attribute _isHetereogeneous checked in the corresponding sets.
     * Method checktomograms now is able to check the acquisition.
