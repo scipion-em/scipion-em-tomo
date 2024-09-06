@@ -161,8 +161,10 @@ class TiltSeriesTreeProvider(TreeProvider):
             if excludedTi == TiltImageStates.CHECK_UNMARK:
                 self.tree.item(parentItem, tags=(TiltSerieState.INCLUDED, TiltSerieState.INCLUDED))
                 parentObj.setEnabled(True)
+            # Checking the tiltserie if all tiltimages are checked
             elif obj._parentObject.getSize() == len(self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']]):
                 self.tree.item(self.tree.parent(selectedItem), tags=(TiltSerieState.EXCLUDED, TiltSerieState.EXCLUDED))
+                parentObj.setEnabled(False)
 
     def excludeTiltImage(self, obj,  selectedItem, itemValues, excluded):
         if isinstance(obj, tomo.objects.TiltImageM):
@@ -1562,7 +1564,7 @@ class CtfEstimationListDialog(ListDialog):
 
     def plotterParentItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
-        angList = []
+        angDict = {}
         defocusUList = []
         defocusVList = []
         phShList = []
@@ -1572,29 +1574,32 @@ class CtfEstimationListDialog(ListDialog):
             if ts.getTsId() == itemSelected:
                 for item in ts:
                     # Related to excluded views:
-                    # Only represent the enabled tilt images
-                    if item.isEnabled():
-                        angList.append(item.getTiltAngle())
+                    # We will initially save all the angles
+                    # and then, only exclude taking into account the defocus values.
+                    angDict[item.getAcquisitionOrder()] = item.getTiltAngle()
                 break
 
         for ctfSerie in self.provider.getCTFSeries():
             if ctfSerie.getTsId() == itemSelected:
+                angList = []
                 for item in ctfSerie.iterItems(orderBy='id'):
                     defocusU = item.getDefocusU()
                     # Related to excluded views:
-                    #   pwem method setWrongDefocus assigns:
-                    #   ctfModel.setDefocusU(-999)
-                    #   ctfModel.setDefocusV(-1)
-                    #   ctfModel.setDefocusAngle(-999)
-                    # If it's the case, the corresponding point won't be added to be plotted as
-                    # it will widen the representation range, what would make the represented region
-                    # of interest smaller
-
-                    defocusUList.append(defocusU)
-                    defocusVList.append(item.getDefocusV())
-                    phShList.append(
-                        item.getPhaseShift() if item.hasPhaseShift() else 0)
-                    resList.append(item.getResolution())
+                    # Add the angle corresponding to the defocus value
+                    if item.getAcquisitionOrder() in angDict:
+                        angList.append(angDict[item.getAcquisitionOrder()])
+                        #   pwem method setWrongDefocus assigns:
+                        #   ctfModel.setDefocusU(-999)
+                        #   ctfModel.setDefocusV(-1)
+                        #   ctfModel.setDefocusAngle(-999)
+                        # If it's the case, the corresponding point won't be added to be plotted as
+                        # it will widen the representation range, what would make the represented region
+                        # of interest smaller
+                        defocusUList.append(defocusU)
+                        defocusVList.append(item.getDefocusV())
+                        phShList.append(
+                            item.getPhaseShift() if item.hasPhaseShift() else 0)
+                        resList.append(item.getResolution())
 
                 fig = Figure(figsize=(7, 7), dpi=100)
                 defocusPlot = fig.add_subplot(111)
