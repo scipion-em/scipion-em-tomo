@@ -32,6 +32,7 @@ from tkinter import messagebox, BOTH, RAISED
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
 from pwem.viewers.mdviewer.readers import ScipionImageReader
 from pwem.viewers.showj import runJavaIJapp
@@ -456,7 +457,6 @@ class TiltSeriesDialog(ToolbarListDialog):
             outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
 
             if restack:  # Creating a new directory to write a new stack
-                imageReader = ScipionImageReader()
                 if not os.path.exists(outputPath):
                     os.mkdir(outputPath)
             hasOddEven = self._tiltSeries.hasOddEven()
@@ -476,9 +476,13 @@ class TiltSeriesDialog(ToolbarListDialog):
                     newTs = ts.clone()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
-                    stackImages = []
-                    oddFileNames = []
-                    evenFileNames = []
+
+                    # New Stacks
+                    properties ={"sr":obj.getSamplingRate()}
+                    newStack = ImageStack(properties=properties)
+                    oddFileNames = ImageStack(properties=properties)
+                    evenFileNames = ImageStack(properties=properties)
+
                     for ti in ts.iterItems():
                         included = False if ti.getObjId() in excludedViews[tsId] else True
                         if not restack or (included and restack):
@@ -488,22 +492,22 @@ class TiltSeriesDialog(ToolbarListDialog):
                             # For some reason .clone() does not clone the enabled nor the creation time
                             newTi.setEnabled(included)
                             if restack:
-                                stackImages.append(imageReader.open(str(index) + '@' + ti.getFileName()))
+                                newStack.append(ImageReadersRegistry.open(str(index) + '@' + ti.getFileName()))
                                 newTi.setLocation((index, newBinaryName))
                                 newTi.setObjId(index)
                                 if hasOddEven:
-                                    oddFileNames.append(imageReader.open(str(index) + '@' + oddFileName))
-                                    evenFileNames.append(imageReader.open(str(index) + '@' + evenFileName))
+                                    oddFileNames.append(ImageReadersRegistry.open(str(index) + '@' + oddFileName))
+                                    evenFileNames.append(ImageReadersRegistry.open(str(index) + '@' + evenFileName))
                                     newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
 
                                 index += 1
                             newTs.append(newTi)
 
                     if restack:
-                        imageReader.write(stackImages, newBinaryName, sr=obj.getSamplingRate(), isStack=True)
+                        ImageReadersRegistry.write(newStack, newBinaryName, isStack=True)
                         if hasOddEven:
-                            imageReader.write(oddFileNames, newOddBinaryName, sr=obj.getSamplingRate(), isStack=True)
-                            imageReader.write(evenFileNames, newEvenBinaryName, sr=obj.getSamplingRate(), isStack=True)
+                            ImageReadersRegistry.write(oddFileNames, newOddBinaryName, isStack=True)
+                            ImageReadersRegistry.write(evenFileNames, newEvenBinaryName, isStack=True)
 
                     if len(excludedViews[ts.getTsId()]) == ts.getSize():
                         newTs.setEnabled(False)
