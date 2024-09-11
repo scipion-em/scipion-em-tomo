@@ -1,7 +1,10 @@
 v3.8.0:
  Users:
+  - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
+    select the substring that will be considered as tsId.
   - Import TS: fix the heterogeneous set of TS validation using a range of angles.
   - Join heterogeneous sets are possible for tomography objects TS and tomograms.
+  - New protocol correct tilt offset: It allows to correct the tilt offset of a tilt series
   - Fix the protocol tomograms to micrographs. Helps enhanced. ImageHandler replaced by mrcfile.
   - Import from Mdoc: more precise error when calculating the dose. GUI log with more information.
   - TS viewer: Deleting excluded views and creating a new TS stack
@@ -11,11 +14,15 @@ v3.8.0:
   - Method hasAcquisition re-defined in TSBase for the same reason exposed in the previous line.
   - Attribute _isHetereogeneous and accessors added to SetOfTomograms and SetOfTiltSeries. Used in the string
     representation of both objects.
-  - TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded views.
+  - TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded
+    views.
   - TCL:
     * Attribute _isHetereogeneous checked in the corresponding sets.
     * Method checktomograms now is able to check the acquisition.
     * Method checkTsOriginMatrix added.
+  - TS viewer:
+    * Fix the list of tilt-series viewers
+    * Using ScipionImageReader to read tiltseries
 v3.7.2:
  Users:
    - Handling the matching in the ctf import(generalizing without the need to set patterns such as {TS}).

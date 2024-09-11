@@ -182,6 +182,7 @@ class TestBaseCentralizedLayer(BaseTest):
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
             tsId = ts.getTsId()
+            print(f'---> checking the TS tsId = {tsId}')
             # Check the dimensions
             if expectedDimensions:
                 x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
@@ -211,6 +212,7 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(ts.getAlignment(), alignment)
             # Interpolated
             self.assertEqual(ts.interpolated(), isInterpolated)
+            print('---> Done!')
 
             # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
             for ind, ti in enumerate(ts):
@@ -380,6 +382,7 @@ class TestBaseCentralizedLayer(BaseTest):
                     expectPsdFile = expectedPsdFile
                 self.checkObjectEnabled(ctfi, isExcludedView, tsId, ind)
                 self.checkCtfTomo(ctfi, isExcludedView, expectPsdFile)
+                self.assertGreaterEqual(ctfi.getAcquisitionOrder(), 0)
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
