@@ -244,7 +244,7 @@ DataViewer.registerConfig(tomo.objects.SetOfSubTomograms,
 
 DataViewer.registerConfig(tomo.objects.SetOfCoordinates3D,
                           config={MODE: MODE_MD,
-                                  VISIBLE: 'id _tomoId _x _y _z _groupId _eulerMatrix._matrix '})
+                                  VISIBLE: 'id _tomoId _x _y _z _groupId _eulerMatrix._matrix _score'})
 
 DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
 DataViewer.registerConfig(tomo.objects.SetOfMeshes)
