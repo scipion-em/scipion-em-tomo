@@ -40,6 +40,7 @@ from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
+from pyworkflow.object import String
 from pyworkflow.plugin import Domain
 
 import tomo.objects
@@ -466,15 +467,15 @@ class TiltSeriesDialog(ToolbarListDialog):
             for ts in self._tiltSeries:
                 tsId = ts.getTsId()
                 _, obj = self._provider.getTiltSerie(tsId)
-                newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
-                if hasOddEven:
-                    oddFileName = ts.getOddFileName()
-                    newOddBinaryName = os.path.join(outputPath, tsId + '_odd.mrcs')
-                    evenFileName = ts.getEvenFileName()
-                    newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
+                if obj.isEnabled():  # We will exclude the TS that are checked even if the restack option is not chosen.
+                    newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
+                    if hasOddEven:
+                        oddFileName = ts.getOddFileName()
+                        newOddBinaryName = os.path.join(outputPath, tsId + '_odd.mrcs')
+                        evenFileName = ts.getEvenFileName()
+                        newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
 
-                index = 1
-                if not restack or (obj.isEnabled() and restack):
+                    index = 1
                     newTs = ts.clone()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
@@ -1145,8 +1146,8 @@ class CTFSerieStates:
     CHECKED = 'checked'
     ODD = 'odd'
     EVEN = 'even'
-    FAILED = 'Failed'
-    OK = 'Ok'
+    EXCLUDED = "\u2611"  # ☑
+    INCLUDED = "\u2610"  # ☐
 
 
 class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
@@ -1155,6 +1156,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     """
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
+    COL_CTF_EXCLUDED = 'Excluded'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
     COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
     COL_CTF_EST_AST = 'Astigmatism (A)'
@@ -1213,6 +1215,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         cols = [
             (self.COL_CTF_SERIE, 100),
             (self.COL_TILT_ANG, 100),
+            (self.COL_CTF_EXCLUDED, 100),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
             (self.COL_CTF_EST_DEFOCUS_V, 100),
             (self.COL_CTF_EST_AST, 150),
@@ -1238,7 +1241,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             text = obj.getTsId()
             # TODO: show avg defocus for TomoSeries
             values = ['',
-                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED
+                      #CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED
                       ]
             opened = False
             selected = obj.isEnabled()
@@ -1251,7 +1254,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
             values = [str("%0.2f" % tiltAngle),
-                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED,
+                      CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
                       str("%d" % ast),
@@ -1278,9 +1281,9 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
                 tags = CTFSerieStates.CHECKED
                 self._checkedItems += 1
         else:
-            tags = CTFSerieStates.OK
+            tags = CTFSerieStates.INCLUDED
             if not obj.isEnabled():
-                tags = CTFSerieStates.FAILED
+                tags = CTFSerieStates.EXCLUDED
 
         item['tags'] = (tags, CTFSerieStates.ODD) if obj.getObjId() % 2 == 0 else (tags, CTFSerieStates.EVEN)
 
@@ -1291,34 +1294,60 @@ class CTFEstimationTree(BoundTree):
     def __init__(self, master, provider,  **opts):
         BoundTree.__init__(self, master, provider, **opts)
         self.selectedItem = None
+        self.provider = provider
         self._checkedItems = provider._checkedItems
 
-    def check_item(self, item):
+    def toogleExclusion(self, item, isCTFTomoSerie):
         """ check the box of item and change the state of the boxes of item's
             ancestors accordingly """
-        tags = CTFSerieStates.EVEN
-        if CTFSerieStates.ODD in self.item(item, 'tags'):
-            tags = CTFSerieStates.ODD
+        tags = CTFSerieStates.ODD if CTFSerieStates.ODD in self.item(item, 'tags') else CTFSerieStates.EVEN
+        self.selectedItem = item
+        if isCTFTomoSerie:
 
-        if CTFSerieStates.UNCHECKED in self.item(item, 'tags'):
-            self.item(item, tags=(CTFSerieStates.CHECKED, tags,))
-            self._checkedItems += 1
-            self.getSelectedObj().setEnabled(False)
+            if CTFSerieStates.UNCHECKED in self.item(item, 'tags'):
+                self.item(item, tags=(CTFSerieStates.CHECKED, tags,))
+                self._checkedItems += 1
+                self.getSelectedObj().setEnabled(False)
+                self.item(item)['selected'] = True
+                excluded = True
+            else:
+                self.item(item, tags=(CTFSerieStates.UNCHECKED, tags,))
+                self.getSelectedObj().setEnabled(True)
+                self._checkedItems -= 1
+                self.item(item)['selected'] = False
+                excluded = False
+
+            ctfTreeChildrenIds = list(self.get_children(item))
+            for ctfChildrenId in ctfTreeChildrenIds:
+                tags = CTFSerieStates.ODD if CTFSerieStates.ODD in self.item(ctfChildrenId, 'tags') else CTFSerieStates.EVEN
+                self.toogleCtf(ctfChildrenId, tags, excluded)
+        else:
+            self.toogleCtf(item, tags, CTFSerieStates.INCLUDED in self.item(item, 'tags'))
+
+    def toogleCtf(self, item, tags, excluded):
+        itemValues = self.item(item)
+        values = itemValues['values']
+        if excluded:
+            values[1] = CTFSerieStates.EXCLUDED
+            self.item(item, tags=(CTFSerieStates.EXCLUDED, tags,))
+            self.item(item, values=values)
+            self._objDict[item].setEnabled(False)
             self.item(item)['selected'] = True
         else:
-            self.item(item, tags=(CTFSerieStates.UNCHECKED, tags,))
-            self.getSelectedObj().setEnabled(True)
-            self._checkedItems -= 1
+            values[1] = CTFSerieStates.INCLUDED
+            self.item(item, tags=(CTFSerieStates.INCLUDED, tags,))
+            self.item(item, values=values)
+            self._objDict[item].setEnabled(True)
             self.item(item)['selected'] = False
 
-    def _onClick(self, event=None):
-        self._unpostMenu()
+    def _onItemClick(self, event=None):
         x, y, widget = event.x, event.y, event.widget
         elem = widget.identify("element", x, y)
         self.selectedItem = self.identify_row(y)
-        self.focus(self.selectedItem)
-        if "image" in elem:  # click on the checkbox
-            self.check_item(self.selectedItem)
+        if "image" in elem:  # click on the CTFTomoSerie checkbox
+            self.toogleExclusion(self.selectedItem, True)
+        elif x > 210 and x < 217:  # Position of exclude/include checkbox(CTFTomo)
+            self.toogleExclusion(self.selectedItem, False)
 
     def getSelectedItem(self):
         return self.selectedItem
@@ -1437,34 +1466,44 @@ class CtfEstimationListDialog(ListDialog):
 
     def _actionCreateSets(self, event=None):
         if self.generateSubsetButton['state'] == tk.NORMAL:
+            self.info('Processing...')
             protocol = self.provider.protocol
             ctfSeries = self.provider.getCTFSeries()
             suffix = self._getSuffix(protocol)
             goodCTFName = 'goodCtf%s' % suffix
-            badCTFName = 'badCtf%s' % suffix
 
             outputSetOfgoodCTFTomoSeries = ctfSeries.createCopy(protocol._getPath(),
                                                                 prefix=goodCTFName,
                                                                 copyInfo=True)
-            outputSetOfbadCTFTomoSeries = ctfSeries.createCopy(protocol._getPath(),
-                                                               prefix=badCTFName,
-                                                               copyInfo=True)
-            for ctfSerie in ctfSeries:
+            outputSetOfbadCTFTomoSeries = String()
+            outputSetOfbadCTFTomoSeries.set('')
+            ctfSerieSeek = 0
+            for ctfSerie in ctfSeries.iterItems():
                 ctfSerieClon = ctfSerie.clone()
-                if CTFSerieStates.UNCHECKED in self.tree.item(ctfSerie.getTsId(),
-                                                              'tags'):
+                ctfSerieClon.setEnabled(True)
+                goodCTF = CTFSerieStates.UNCHECKED in self.tree.item(ctfSerie.getTsId(), 'tags')
+                ctfSeek = 1
+                if goodCTF:
                     # Adding the ctfSerie to the good set of ctfTomoSeries
                     outputSetOfgoodCTFTomoSeries.append(ctfSerieClon)
                     outputSetOfgoodCTFTomoSeries.setSetOfTiltSeries(self._inputSetOfTiltSeries)
+                    objList = list(self.tree._objDict)
+                    for item in ctfSerie.iterItems():
+                        ctfEstItem = item.clone()
+                        obj = self.tree.getObjectFromId(objList[ctfSerieSeek + ctfSeek])
+                        ctfEstItem.setEnabled(obj.isEnabled())
+                        ctfSerieClon.append(ctfEstItem)
+                        ctfSeek += 1
 
+                    ctfSerieClon.write()
+                    outputSetOfgoodCTFTomoSeries.update(ctfSerieClon)
+                    outputSetOfgoodCTFTomoSeries.write()
                 else:
                     # Adding the ctfSerie to the bad set of ctfTomoSeries
-                    outputSetOfbadCTFTomoSeries.append(ctfSerieClon)
-                    outputSetOfbadCTFTomoSeries.setSetOfTiltSeries(self._inputSetOfTiltSeries)
+                    outputSetOfbadCTFTomoSeries.set(outputSetOfbadCTFTomoSeries.get() + ctfSerie.getTsId() + ' ')
+                    ctfSeek += ctfSerie.getSize()
 
-                for item in ctfSerie.iterItems():
-                    ctfEstItem = item.clone()
-                    ctfSerieClon.append(ctfEstItem)
+                ctfSerieSeek = ctfSeek
 
             outputgoodCTFSetName = 'goodSetOfCTFTomoSeries%s' % suffix
             outputbadCTFSetName = 'badSetOfCTFTomoSeries%s' % suffix
@@ -1472,34 +1511,36 @@ class CtfEstimationListDialog(ListDialog):
             if len(outputSetOfgoodCTFTomoSeries) > 0:
                 protocol._defineOutputs(**{outputgoodCTFSetName: outputSetOfgoodCTFTomoSeries})
 
-            if len(outputSetOfbadCTFTomoSeries) > 0:
+            if not outputSetOfbadCTFTomoSeries.empty() > 0:
+                outputSetOfbadCTFTomoSeries.set(", ".join(outputSetOfbadCTFTomoSeries.get().split()))
                 protocol._defineOutputs(**{outputbadCTFSetName: outputSetOfbadCTFTomoSeries})
 
             protocol._store()
-            self.cancel()
+            self.info('The output has been created successfully')
 
     def _showHelp(self, event=None):
         showInfo('CTFTomoSeries viewer help',
                  'This viewer allows you to create two '
                  'subsets of CTFTomoSeries which are called good '
                  'and bad respectively.\n\n'
-                 'Note: The series that are checked are the ones that '
-                 'represent the bad CTFTomoSeries', self.parent)
+                 'Note: The items that are excluded(checked) are the ones that '
+                 'represent the bad CTFTomoSeries', self)
 
     def _getSuffix(self, protocol):
         """
-        Return the number of the last output in order to complete the new
+        Return the index of the last output in order to complete the new
         output with a suffix
         """
         maxCounter = -1
-        pattern = 'goodSetOfCTFTomoSeries'
+        patterns = ['goodSetOfCTFTomoSeries', 'badSetOfCTFTomoSeries']
         for attrName, _ in protocol.iterOutputAttributes():
-            suffix = attrName.replace(pattern, '')
-            try:
-                counter = int(suffix)
-            except:
-                counter = 1  # when there is no number, assume 1
-            maxCounter = max(counter, maxCounter)
+            for pattern in patterns:
+                suffix = attrName.replace(pattern, '')
+                try:
+                    counter = int(suffix)
+                except:
+                    counter = 1  # when there is no number, assume 1
+                maxCounter = max(counter, maxCounter)
 
         return str(maxCounter + 1) if maxCounter > 0 else ''
 
@@ -1518,7 +1559,7 @@ class CtfEstimationListDialog(ListDialog):
         # Create a right panel to put the plotter
         self.bottomRightPanel = ttk.Frame(pw)
         self.bottomRightPanel.grid(row=0, column=1, padx=0, pady=0, sticky='news')
-        self._createPloter(self.bottomRightPanel)
+        self._createPlotter()
         pw.add(self.bottomRightPanel)
         pw.pack(fill=BOTH, expand=True)
         # This method is used to show sash
@@ -1530,7 +1571,7 @@ class CtfEstimationListDialog(ListDialog):
                                       selectmode=self._selectmode)
         item = self.tree.identify_row(0)
         self.tree.selection_set(item)
-        self.tree.focus(item)
+        self.tree.focus_force()
         self.tree.selectedItem = item
         self.im_checked = gui.getImage(Icon.CHECKED)
         self.im_unchecked = gui.getImage(Icon.UNCHECKED)
@@ -1540,9 +1581,48 @@ class CtfEstimationListDialog(ListDialog):
                                 image=self.im_checked)
         self.tree.tag_configure(CTFSerieStates.EVEN, background='#F2F2F2')
         self.tree.tag_configure(CTFSerieStates.ODD, background='#E6E6E6')
-        self.tree.tag_configure(CTFSerieStates.OK, background='#F2F2F2', foreground='black')
-        self.tree.tag_configure(CTFSerieStates.FAILED, background='#E6E6E6', foreground='red')
-        self.tree.bind("<Button-1>", self._createPloter, True)
+        self.tree.tag_configure(CTFSerieStates.CHECKED, foreground='red')
+        self.tree.tag_configure(CTFSerieStates.UNCHECKED, foreground='black')
+        self.tree.tag_configure(CTFSerieStates.INCLUDED, background='#F2F2F2', foreground='black')
+        self.tree.tag_configure(CTFSerieStates.EXCLUDED, background='#E6E6E6', foreground='red')
+        self.tree.bind("<ButtonRelease-1>", self._onItemClick)
+        self.tree.bind("<Up>", self._onUp)
+        self.tree.bind("<Down>", self._onDown)
+        self.tree.bind("<space>", self._onSpace)
+
+    def getTree(self):
+        return self.tree
+
+    def _onSpace(self, event):
+        selectedItem = self.tree.selectedItem
+        if selectedItem:
+            obj = self.tree._objDict[selectedItem]
+            isCTFTomoSerie = True if isinstance(obj, tomo.objects.CTFTomoSeries) else False
+            self.tree.toogleExclusion(selectedItem, isCTFTomoSerie)
+
+    def _onDown(self, event):
+        selectedItem = self.tree.selectedItem
+        if selectedItem:
+            nextItem = self.tree.next(selectedItem)
+            if nextItem:
+                self.tree.selectedItem = nextItem
+                self.tree.selectChild(nextItem)
+                self.tree.selection_set(nextItem)
+                self._createPlotter()
+
+    def _onUp(self, event):
+        selectedItem = self.tree.selectedItem
+        if selectedItem:
+            prevItem = self.tree.prev(selectedItem)
+            if prevItem:
+                self.tree.selectedItem = prevItem
+                self.tree.selectChild(prevItem)
+                self.tree.selection_set(prevItem)
+                self._createPlotter()
+
+    def _onItemClick(self, event):
+        self.tree._onItemClick(event)
+        self._createPlotter()
 
     def plotterChildItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
@@ -1559,6 +1639,9 @@ class CtfEstimationListDialog(ListDialog):
                     canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
                     canvas.draw()
                     canvas.get_tk_widget().pack(fill=BOTH, expand=0)
+                    canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
+                    canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
+                    canvas.get_tk_widget().bind("<space>", self._onKeyPress)
                     break
         plotterPanel.grid(row=0, column=1, sticky='news')
 
@@ -1631,16 +1714,24 @@ class CtfEstimationListDialog(ListDialog):
                 canvas.draw()
                 canvas.get_tk_widget().pack(fill=BOTH, expand=0)
                 plotterPanel.grid(row=0, column=1, sticky='news')
+                canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
+                canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
+                canvas.get_tk_widget().bind("<space>", self._onKeyPress)
                 break
 
-    def _createPloter(self, event):
+    def _onKeyPress(self, event):
+        if event.keysym == 'Up':
+            self._onUp(event)
+        elif event.keysym == 'Down':
+            self._onDown(event)
+        elif event.keysym == 'space':
+            self._onSpace(event)
+
+    def _createPlotter(self):
         itemSelected = self.tree.getSelectedItem()
         obj = self.tree.getSelectedObj()
         self._checkedItems = self.tree._checkedItems
-        if self._checkedItems and self._checkedItems != len(self.provider.getCTFSeries()):
-            self.generateSubsetButton['state'] = tk.NORMAL
-        else:
-            self.generateSubsetButton['state'] = tk.DISABLED
+        self.generateSubsetButton['state'] = tk.NORMAL
 
         if obj is not None:
             if self.tree.parent(itemSelected):  # child item
