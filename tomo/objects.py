@@ -878,8 +878,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def update(self, item: TiltSeriesBase):
         if not self._firstDim.isEmpty():
-            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
-            if currentDims != item.getDim() and not self.isHeterogeneousSet():
+            currentSetNAngles = self._firstDim[2]
+            addedTsNAngles = item.getAnglesCount()
+            if currentSetNAngles != addedTsNAngles and not self.isHeterogeneousSet():
                 self.setIsHeterogeneousSet(True)
         # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
         # in the case of operations that change the size of the elements, such as the binning.
@@ -1253,11 +1254,13 @@ class SetOfTomograms(data.SetOfVolumes):
 
     def update(self, item: Tomogram):
         if not self._firstDim.isEmpty():
-            currentDims = (self._firstDim[0], self._firstDim[1], self._firstDim[2])
-            if currentDims != item.getDim() and not self._isHeterogeneous.get():
+            currentSetThk = self._firstDim[2]
+            _, _, addedTomoThk = item.getDim()
+            if currentSetThk != addedTomoThk and not self._isHeterogeneous.get():
                 self._isHeterogeneous.set(True)
-        else:
-            self.setDim(item.getDim())
+        # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+        # in the case of operations that change the size of the elements, such as the binning.
+        self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
         super().update(item)

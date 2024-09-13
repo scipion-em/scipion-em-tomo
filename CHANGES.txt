@@ -10,7 +10,8 @@ v3.8.0:
   - TS viewer: Deleting excluded views and creating a new TS stack.
   - Fixing an error creating new outputs through the tiltserie viewer
   - Fixing an error plotting the defocus values in the ctfEstimation viewer
- Developers:
+
+Developers:
   - Attribute _acquisition is initialized as None in TSBase, so the coppyAttributes callen in protocol for joining.
     sets work properly. The same whith the attribute _origin.
   - Method hasAcquisition re-defined in TSBase for the same reason exposed in the previous line.
@@ -18,6 +19,9 @@ v3.8.0:
     representation of both objects.
   - TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded
     views.
+  - Fix update method in Set of Tomos and Set of TS: It does not turn homogeneous sets into heterogeneous ones, nor
+    does it look at the X and Y dimensions because they are considered heterogeneous under the criteria used before.
+    Only the third dimension is checked for the heterogeneous set check.
   - TCL:
     * Attribute _isHetereogeneous checked in the corresponding sets.
     * Method checktomograms now is able to check the acquisition.
