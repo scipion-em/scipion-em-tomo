@@ -2505,35 +2505,19 @@ class CTFTomo(data.CTFModel):
 
     def hasEstimationInfoAsList(self):
         """ This method checks if the CTFTomo object contains estimation information in the form of a list. """
-
-        if hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_defocusUList") or hasattr(self, "_defocusVList")
 
     def hasAstigmatismInfoAsList(self):
         """ This method checks if the CTFTomo object contains astigmatism information in the form of a list. """
-
-        if hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")
 
     def hasPhaseShiftInfoAsList(self):
         """ This method checks if the CTFTomo object contains phase shift information in the form of a list. """
-
-        if hasattr(self, "_phaseShiftList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_phaseShiftList")
 
     def hasCutOnFrequncyInfoAsList(self):
         """ This method checks if the CTFTomo object contains cut-on frequency information in the form of a list. """
-
-        if hasattr(self, "_cutOnFreqList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_cutOnFreqList")
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
