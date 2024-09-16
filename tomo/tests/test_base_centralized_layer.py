@@ -277,17 +277,19 @@ class TestBaseCentralizedLayer(BaseTest):
         else:
             size = 3 if is2d else 4
             transfMatrixShape = (size, size)
-            identityMatrix = np.eye(size)
             outMatrix = ti.getTransform().getMatrix()
             self.assertIsNotNone(outMatrix)
             if type(outMatrix) is not np.ndarray:
                 outMatrix = np.array(outMatrix)
             self.assertIsNotNone(outMatrix)
             self.assertEqual(outMatrix.shape, transfMatrixShape)
-            if isExcludedView:
-                self.assertTrue(np.array_equal(outMatrix, identityMatrix))
-            else:
-                self.assertFalse(np.array_equal(outMatrix, identityMatrix))
+            # The following lines are not always true anymore as any view can be disabled by the user at any point, so
+            # an excluded view can have a transformation matrix which is not the Identity.
+            # identityMatrix = np.eye(size)
+            # if isExcludedView:
+            #     self.assertTrue(np.array_equal(outMatrix, identityMatrix))
+            # else:
+            #     self.assertFalse(np.array_equal(outMatrix, identityMatrix))
 
     def checkTsOriginMatrix(self, ts: TiltSeries, expectedOrigin: List[float], originTol: float = 0.1) -> None:
         testOrigin = np.array(expectedOrigin)

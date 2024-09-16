@@ -2776,23 +2776,24 @@ class CTFTomoSeries(data.EMSet):
 
         estimationRange = 0
 
-        for ctfEstimation in self:
-            # Check that at least one list is provided
-            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(
-                    ctfEstimation, "_defocusUList")):
-                raise Exception(
-                    "CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
-                    "list information available.")
+        for ctfTomo in self:
+            if ctfTomo.isEnabled():
+                # Check that at least one list is provided
+                if not (hasattr(ctfTomo, "_defocusUList") or hasattr(
+                        ctfTomo, "_defocusUList")):
+                    raise Exception(
+                        "CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                        "list information available.")
 
-            providedList = ctfEstimation.getDefocusUList() if hasattr(
-                ctfEstimation, "_defocusUList") \
-                else ctfEstimation.getDefocusVList()
-            providedList = providedList.split(",")
+                providedList = ctfTomo.getDefocusUList() if hasattr(
+                    ctfTomo, "_defocusUList") \
+                    else ctfTomo.getDefocusVList()
+                providedList = providedList.split(",")
 
-            listLength = len(providedList) - 1
+                listLength = len(providedList) - 1
 
-            if listLength > estimationRange:
-                estimationRange = listLength
+                if listLength > estimationRange:
+                    estimationRange = listLength
 
         self.setNumberOfEstimationsInRange(estimationRange)
 
