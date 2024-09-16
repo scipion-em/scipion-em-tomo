@@ -19,6 +19,7 @@ v3.8.0:
   - Fix update method in Set of Tomos and Set of TS: It does not turn homogeneous sets into heterogeneous ones, nor
     does it look at the X and Y dimensions because they are considered heterogeneous under the criteria used before.
     Only the third dimension is checked for the heterogeneous set check.
+  - CTFTomoSeries: method setNumberOfEstimationsInRangeFromDefocusList can handle now the excluded views.
   - TCL:
     * Attribute _isHetereogeneous checked in the corresponding sets.
     * Method checktomograms now is able to check the acquisition.
