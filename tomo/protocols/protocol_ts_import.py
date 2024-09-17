@@ -40,6 +40,7 @@ import pyworkflow.utils as pwutils
 import tomo.objects
 from pwem.objects import Transform
 from pyworkflow.object import Integer
+from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
@@ -710,7 +711,10 @@ class ProtImportTsBase(ProtTomoImportFiles):
             We need to have tsId that starts with character, so
             let's add a prefix if it is not the case
             """
-            tsId = match.group('TS')
+            try:  # The pattern not always contain a {TS} label
+                tsId = match.group('TS')
+            except IndexError:  # {IndexError}IndexError('no such group')
+                tsId = removeBaseExt(match.string)
             return normalizeTSId(tsId)
 
         def _addOne(fileList, file, match):
