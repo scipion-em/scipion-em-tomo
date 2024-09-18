@@ -10,7 +10,10 @@ v3.8.0:
   - Fix the protocol tomograms to micrographs. Helps enhanced. ImageHandler replaced by mrcfile.
   - Import from Mdoc: more precise error when calculating the dose. GUI log with more information.
   - TS viewer: Deleting excluded views and creating a new TS stack.
- Developers:
+  - Fixing an error creating new outputs through the tiltserie viewer
+  - Fixing an error plotting the defocus values in the ctfEstimation viewer
+
+Developers:
   - Attribute _acquisition is initialized as None in TSBase, so the coppyAttributes callen in protocol for joining.
     sets work properly. The same whith the attribute _origin.
   - Method hasAcquisition re-defined in TSBase for the same reason exposed in the previous line.
