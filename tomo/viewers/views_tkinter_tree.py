@@ -448,7 +448,7 @@ class TiltSeriesDialog(ToolbarListDialog):
 
         result = d.result
         if result != RESULT_CANCEL:
-            self.info('Processing ...')
+
             self.update_idletasks()
             restack = result == RESULT_RESTACK
             outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
@@ -463,8 +463,10 @@ class TiltSeriesDialog(ToolbarListDialog):
                 if not os.path.exists(outputPath):
                     os.mkdir(outputPath)
             hasOddEven = self._tiltSeries.hasOddEven()
-
-            for ts in self._tiltSeries:
+            count = len(self._tiltSeries.getTSIds())
+            for tsIndex, ts in enumerate(self._tiltSeries):
+                self.info('Processing %s of %s tiltseries ...' % (tsIndex + 1, count))
+                self.update_idletasks()
                 tsId = ts.getTsId()
                 _, obj = self._provider.getTiltSerie(tsId)
                 if obj.isEnabled():  # We will exclude the TS that are checked even if the restack option is not chosen.
@@ -481,7 +483,7 @@ class TiltSeriesDialog(ToolbarListDialog):
                     outputSetOfTiltSeries.append(newTs)
 
                     # New Stacks
-                    properties ={"sr":obj.getSamplingRate()}
+                    properties = {"sr": obj.getSamplingRate()}
                     newStack = ImageStack(properties=properties)
                     oddFileNames = ImageStack(properties=properties)
                     evenFileNames = ImageStack(properties=properties)
@@ -495,12 +497,13 @@ class TiltSeriesDialog(ToolbarListDialog):
                             # For some reason .clone() does not clone the enabled nor the creation time
                             newTi.setEnabled(included)
                             if restack:
-                                newStack.append(ImageReadersRegistry.open(str(index) + '@' + ti.getFileName()))
+                                oldIndex = str(ti.getIndex())
+                                newStack.append(ImageReadersRegistry.open(oldIndex + '@' + ti.getFileName()))
                                 newTi.setLocation((index, newBinaryName))
-                                newTi.setObjId(index)
+
                                 if hasOddEven:
-                                    oddFileNames.append(ImageReadersRegistry.open(str(index) + '@' + oddFileName))
-                                    evenFileNames.append(ImageReadersRegistry.open(str(index) + '@' + evenFileName))
+                                    oddFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + oddFileName))
+                                    evenFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + evenFileName))
                                     newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
 
                                 index += 1
@@ -556,7 +559,7 @@ class TiltSeriesDialogView(pwviewer.View):
             previewCallback = None
 
         TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
-                         lockGui=True, previewCallback=previewCallback,
+                         lockGui=False, previewCallback=previewCallback,
                          itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True)
 
     def getPreviewWidget(self, frame):
