@@ -448,7 +448,7 @@ class TiltSeriesDialog(ToolbarListDialog):
 
         result = d.result
         if result != RESULT_CANCEL:
-            self.info('Processing ...')
+
             self.update_idletasks()
             restack = result == RESULT_RESTACK
             outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
@@ -463,8 +463,10 @@ class TiltSeriesDialog(ToolbarListDialog):
                 if not os.path.exists(outputPath):
                     os.mkdir(outputPath)
             hasOddEven = self._tiltSeries.hasOddEven()
-
-            for ts in self._tiltSeries:
+            count = len(self._tiltSeries.getTSIds())
+            for tsIndex, ts in enumerate(self._tiltSeries):
+                self.info('Processing %s of %s tiltseries ...' % (tsIndex + 1, count))
+                self.update_idletasks()
                 tsId = ts.getTsId()
                 _, obj = self._provider.getTiltSerie(tsId)
                 if obj.isEnabled():  # We will exclude the TS that are checked even if the restack option is not chosen.
