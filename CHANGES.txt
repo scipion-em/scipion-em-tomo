@@ -2,7 +2,9 @@ v3.8.0:
  Users:
   - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
     select the substring that will be considered as tsId.
-  - Import TS: fix the heterogeneous set of TS validation using a range of angles.
+  - Import TS:
+    * Fix the heterogeneous set of TS validation using a range of angles.
+    * Multiple TS can be imported without the label {TS}.
   - Join heterogeneous sets are possible for tomography objects TS and tomograms.
   - New protocol correct tilt offset: It allows to correct the tilt offset of a tilt series
   - Fix the protocol tomograms to micrographs. Helps enhanced. ImageHandler replaced by mrcfile.
@@ -22,6 +24,7 @@ Developers:
   - Fix update method in Set of Tomos and Set of TS: It does not turn homogeneous sets into heterogeneous ones, nor
     does it look at the X and Y dimensions because they are considered heterogeneous under the criteria used before.
     Only the third dimension is checked for the heterogeneous set check.
+  - CTFTomoSeries: method setNumberOfEstimationsInRangeFromDefocusList can handle now the excluded views.
   - TCL:
     * Attribute _isHetereogeneous checked in the corresponding sets.
     * Method checktomograms now is able to check the acquisition.
