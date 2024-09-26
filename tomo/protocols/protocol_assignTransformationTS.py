@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from enum import Enum
 
 import numpy as np
 from pyworkflow import BETA
@@ -30,7 +31,12 @@ import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
 
 import tomo.objects as tomoObj
+from pyworkflow.object import String
+from pyworkflow.utils import Message
 from tomo.protocols import ProtTomoBase
+
+class outputObjects(Enum):
+    tiltSeries = tomoObj.SetOfTiltSeries
 
 
 class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
@@ -40,15 +46,17 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
 
     _label = 'Tilt-series assign alignment'
     _devStatus = BETA
-    _possibleOutputs = {"assignedTransformSetOfTiltSeries": tomoObj.SetOfTiltSeries}
+    _possibleOutputs = outputObjects
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.outputAssignedTransformSetOfTiltSeries = None
+        self.fromTsDict = None
+        self.toTsDict = None
+        self.nonMatchingTsIdsMsg = String()
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
-        form.addSection('Input')
+        form.addSection(Message.LABEL_INPUT)
         form.addParam('getTMSetOfTiltSeries',
                       params.PointerParam,
                       pointerClass='SetOfTiltSeries',
@@ -63,127 +71,91 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                       help='Set of tilt-series on which transformation matrices will be assigned.',
                       label='Tilt-series to assign the alignment to')
 
-        form.addParam('combineAlignment',
-                      params.BooleanParam,
-                      default=0,
-                      label='Combine alignments',
-                      important=True,
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      help='If this option is selected and the the tilt-series to assign the alignment has a previous '
-                           'alignment, both precious and new alignment are combined.')
-
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
-        if self.combineAlignment.get():
-            self._insertFunctionStep(self.combineTransformationMatricesStep)
-        else:
-            self._insertFunctionStep(self.assignTransformationMatricesStep)
+        commonTsIds = self._initialize()
+        for tsId in commonTsIds:
+            self._insertFunctionStep(self.assignTrMat, tsId)
 
     # --------------------------- STEPS functions ----------------------------
-    def combineTransformationMatricesStep(self):
-        self.info("Combining alignments mode started...")
+    def _initialize(self):
+        fromTsSet = self.getTMSetOfTiltSeries.get()
+        toTsSet = self.setTMSetOfTiltSeries.get()
+        fromTsIds = fromTsSet.getTSIds()
+        toTsIds = toTsSet.getTSIds()
+        setCastedFromTsIds = set(fromTsIds)
+        setCastedToTsIds = set(toTsIds)
+        commonTsIds = setCastedFromTsIds & setCastedToTsIds   # Intersection, common elements
+        nonCommonTsIds = setCastedFromTsIds ^ setCastedToTsIds  # Symmetric difference, non-common elements
+        self.fromTsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in fromTsSet if ts.getTsId() in commonTsIds}
+        self.toTsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in toTsSet if ts.getTsId() in commonTsIds}
+        if nonCommonTsIds:
+            self.nonMatchingTsIdsMsg.set(f'Non-matching tsIds: *{nonCommonTsIds}*')
+        return commonTsIds
 
-        for getTS in self.getTMSetOfTiltSeries.get():
-            tsId = getTS.getTsId()
-
-            try:
-                setTS = self.setTMSetOfTiltSeries.get()[{'_tsId': tsId}]
-
-                self.getOutputAssignedTransformSetOfTiltSeries()
-
-                if getTS.getSize() != setTS.getSize():
-                    self.info(
-                        "Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
-                        "(will not appear in output set)." % tsId)
-
-                else:
-                    newTs = tomoObj.TiltSeries(tsId=tsId)
-                    newTs.copyInfo(setTS)
-                    self.outputAssignedTransformSetOfTiltSeries.append(newTs)
-
-                    for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
-                        newTi = tomoObj.TiltImage()
-                        newTi.copyInfo(tiltImageSetTM, copyId=True)
-                        newTi.setLocation(tiltImageSetTM.getLocation())
-
-                        if tiltImageSetTM.hasTransform():
-                            previousTransform = tiltImageSetTM.getTransform().getMatrix()
-                            newTransform = self.updateTM(tiltImageGetTM.getTransform())
-                            previousTransformArray = np.array(previousTransform)
-                            newTransformArray = np.array(newTransform.getMatrix())
-
-                            outputTransformMatrix = np.matmul(newTransformArray, previousTransformArray)
-                            newTransform.setMatrix(outputTransformMatrix)
-
-                        else:
-                            newTransform = self.updateTM(tiltImageGetTM.getTransform())
-
-                        newTi.setTransform(newTransform)
-                        newTs.append(newTi)
-
-                    newTs.setDim(setTS.getDim())
-                    newTs.write()
-
-                    self.outputAssignedTransformSetOfTiltSeries.update(newTs)
-                    self.outputAssignedTransformSetOfTiltSeries.write()
-                    self._store()
-
-            except:
-                self.info("Tilt-series %s not found in target set. Ignoring ts (will not appear in output set)." % tsId)
-
-    def assignTransformationMatricesStep(self):
+    def assignTrMat(self, tsId):
         self.info("Assigning alignments mode started...")
+        fromTs = self.fromTsDict[tsId]
+        toTs = self.toTsDict[tsId]
+        outTsSet = self.getOutTsSet()
 
-        for getTS in self.getTMSetOfTiltSeries.get():
-            tsId = getTS.getTsId()
+        if fromTs.getSize() != toTs.getSize():
+            self.warning("The number of tilt-images in source and target set differ for "
+                         "tilt-series %s. Ignoring ts (it will not appear in output set)." % tsId)
+        else:
+            newTs = tomoObj.TiltSeries(tsId=tsId)
+            newTs.copyInfo(toTs)
+            # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
+            # values of the transformation matrix assigned
+            fromTsTAx = fromTs.getAcquisition().getTiltAxisAngle()
+            newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
 
-            try:
-                setTS = self.setTMSetOfTiltSeries.get()[{'_tsId': tsId}]
+            outTsSet.append(newTs)
 
-                self.getOutputAssignedTransformSetOfTiltSeries()
+            for tiFrom, tiTo in zip(fromTs, toTs):
+                newTi = tomoObj.TiltImage()
+                newTi.copyInfo(tiTo, copyId=True)
+                newTi.setLocation(tiTo.getLocation())
 
-                if getTS.getSize() != setTS.getSize():
-                    self.info(
-                        "Number of tilt-images in source and target set differ for tilt-series %s. Ignoring ts "
-                        "(will not appear in output set)." % tsId)
+                # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
+                # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
+                # coherence with the values of the transformation matrix assigned
+                fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+                newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
 
-                else:
-                    newTs = tomoObj.TiltSeries(tsId=tsId)
-                    newTs.copyInfo(setTS)
-                    self.outputAssignedTransformSetOfTiltSeries.append(newTs)
+                newTransform = self.updateTM(tiFrom.getTransform())
+                newTi.setTransform(newTransform)
 
-                    for tiltImageGetTM, tiltImageSetTM in zip(getTS, setTS):
-                        newTi = tomoObj.TiltImage()
-                        newTi.copyInfo(tiltImageSetTM, copyId=True)
-                        newTi.setLocation(tiltImageSetTM.getLocation())
+                newTs.append(newTi)
 
-                        newTransform = self.updateTM(tiltImageGetTM.getTransform())
-                        newTi.setTransform(newTransform)
-
-                        newTs.append(newTi)
-
-                    newTs.setDim(setTS.getDim())
-                    newTs.write()
-
-                    self.outputAssignedTransformSetOfTiltSeries.update(newTs)
-                    self.outputAssignedTransformSetOfTiltSeries.write()
-                    self._store()
-
-            except:
-                self.info("Tilt-series %s not found in target set. Ignoring ts (will not appear in output set)." % tsId)
+            newTs.setDim(toTs.getDim())
+            newTs.write()
+            outTsSet.update(newTs)
+            outTsSet.write()
+            self._store()
 
     # --------------------------- UTILS functions ----------------------------
-    def getOutputAssignedTransformSetOfTiltSeries(self):
-        if self.outputAssignedTransformSetOfTiltSeries:
-            self.outputAssignedTransformSetOfTiltSeries.enableAppend()
+    def getOutTsSet(self):
+        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
+        if outTsSet:
+            outTsSet.enableAppend()
         else:
-            outputAssignedTransformSetOfTiltSeries = self._createSetOfTiltSeries(suffix='AssignedTransform')
-            outputAssignedTransformSetOfTiltSeries.copyInfo(self.setTMSetOfTiltSeries.get())
-            outputAssignedTransformSetOfTiltSeries.setDim(self.setTMSetOfTiltSeries.get().getDim())
+            outTsSet = tomoObj.SetOfTiltSeries.create(self._getPath(), 
+                                                      template='tiltseries', 
+                                                      suffix='AssignedTransform')
+            toTsSet = self.setTMSetOfTiltSeries.get()
+            fromTsSet = self.getTMSetOfTiltSeries.get()
+            outTsSet.copyInfo(toTsSet)
+            outTsSet.setDim(toTsSet.getDim())
+            # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
+            # values of the transformation matrix assigned
+            fromTsSetTAx = fromTsSet.getAcquisition().getTiltAxisAngle()
+            outTsSet.getAcquisition().setTiltAxisAngle(fromTsSetTAx)
 
-            self._defineOutputs(outputAssignedTransformSetOfTiltSeries=outputAssignedTransformSetOfTiltSeries)
-            self._defineSourceRelation(self.getTMSetOfTiltSeries, outputAssignedTransformSetOfTiltSeries)
-        return self.outputAssignedTransformSetOfTiltSeries
+            self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet})
+            self._defineSourceRelation(self.getTMSetOfTiltSeries, outTsSet)
+            self._defineSourceRelation(self.setTMSetOfTiltSeries, outTsSet)
+        return outTsSet
 
     def getSamplingRatio(self):
         return self.setTMSetOfTiltSeries.get().getSamplingRate() / self.getTMSetOfTiltSeries.get().getSamplingRate()
@@ -204,30 +176,34 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
         validateMsgs = []
-
         for tsGetTM in self.getTMSetOfTiltSeries.get():
             if not tsGetTM.hasAlignment():
                 validateMsgs.append("Tilt-series %s from the input set do not have a "
                                     "transformation matrix assigned." % tsGetTM.getTsId())
                 break
-
         return validateMsgs
 
     def _summary(self):
         summary = []
-        if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
-            summary.append("Input tilt-series: %d\nTransformation matrices assigned: %d\n"
-                           % (self.getTMSetOfTiltSeries.get().getSize(),
-                              self.outputAssignedTransformSetOfTiltSeries.getSize()))
+        nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
+        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name)
+        if nonMatchingTsIdsMsg:
+            summary.append(nonMatchingTsIdsMsg)
+        if hasattr(self, self._possibleOutputs.tiltSeries.name):
+            summary.append(f"Input tilt-series:"
+                           f"\n\t- Get Transform: {self.getTMSetOfTiltSeries.get().getSize()}"
+                           f"\n\t- Set Transform: {self.setTMSetOfTiltSeries.get().getSize()}"
+                           f"\nTransformation matrices assigned: {outTsSet.getSize()}\n")
         else:
             summary.append("Outputs are not ready yet.")
         return summary
 
     def _methods(self):
         methods = []
-        if hasattr(self, 'outputAssignedTransformSetOfTiltSeries'):
+        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name)
+        if outTsSet:
             methods.append("The transformation matrix has been assigned to %d tilt-series from the input set.\n"
-                           % (self.outputAssignedTransformSetOfTiltSeries.getSize()))
+                           % (outTsSet.getSize()))
         else:
             methods.append("Outputs are not ready yet.")
         return methods
