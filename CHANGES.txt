@@ -12,7 +12,7 @@ v3.8.0:
   - TS viewer: Deleting excluded views and creating a new TS stack.
   - Fixing an error creating new outputs through the tiltserie viewer
   - Fixing an error plotting the defocus values in the ctfEstimation viewer
-
+  - Import TS with mdoc: fix in the assignment of the initial dose.
 Developers:
   - Attribute _acquisition is initialized as None in TSBase, so the coppyAttributes callen in protocol for joining.
     sets work properly. The same whith the attribute _origin.

@@ -339,7 +339,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
                     if self.MDOC_DATA_SOURCE:
                         dosePerFrame = incomingDoseList[counter]
                         accDose = accumDoseList[counter]
-                        initialDose = self.doseInitial.get() if counter == 0 else sum(incomingDoseList[:counter + 1])
+                        initialDose = accDose - dosePerFrame
                     else:
                         dosePerFrame = self.dosePerFrame.get()
                         if not accDose:
