@@ -29,12 +29,12 @@ import os.path
 import threading
 from tkinter import messagebox, BOTH, RAISED
 
+import numpy
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
-from pwem.viewers.mdviewer.readers import ScipionImageReader
 from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
@@ -719,7 +719,9 @@ class TiltSeriesDialogView(pwviewer.View):
         elif isinstance(obj, tomo.objects.TiltImageBase):
             text = "Tilt image at %sº" % obj.getTiltAngle()
 
-        image = ScipionImageReader().open(str(obj.getIndex()) + '@' + obj.getFileName())
+        imageStk = ImageReadersRegistry.open(str(obj.getIndex()) + '@' + obj.getFileName())
+        npImage = imageStk.getImage()  # Pass this when scipion-em is released with this functionality: pilImage=True)
+        image = self._normalize(npImage)  # Delete this once pilImage is used
         # Get original size
         width, height = image.size
 
@@ -733,7 +735,12 @@ class TiltSeriesDialogView(pwviewer.View):
         data = np.array(newImage)
         preview._update(data)
         preview.setLabel(text)
-
+    
+    def _normalize(cls, npImage):
+        iMax = npImage.max()
+        iMin = npImage.min()
+        im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
+        return Image.fromarray(im255)
 
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """

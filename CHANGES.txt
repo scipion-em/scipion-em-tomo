@@ -10,7 +10,7 @@ v3.8.0:
   - Fix the protocol tomograms to micrographs. Helps enhanced. ImageHandler replaced by mrcfile.
   - Import from Mdoc: more precise error when calculating the dose. GUI log with more information.
   - TS viewer: Deleting excluded views and creating a new TS stack.
-  - Fixing an error creating new outputs through the tiltserie viewer
+  - Fixing an error creating new outputs through the tiltserie viewer and import error in absence of metadataviewer.
   - Fixing an error plotting the defocus values in the ctfEstimation viewer
   - Import TS with mdoc: fix in the assignment of the initial dose.
 Developers:
