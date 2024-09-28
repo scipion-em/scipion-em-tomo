@@ -492,7 +492,8 @@ class TiltSeriesDialog(ToolbarListDialog):
                         included = False if ti.getObjId() in excludedViews[tsId] else True
                         if not restack or (included and restack):
                             newTi = ti.clone()
-                            newTi.copyInfo(ti, copyId=True)
+                            newTi.copyInfo(ti, copyId=False)
+                            newTi.setObjId(None)
                             newTi.setAcquisition(ti.getAcquisition())
                             # For some reason .clone() does not clone the enabled nor the creation time
                             newTi.setEnabled(included)
@@ -518,6 +519,7 @@ class TiltSeriesDialog(ToolbarListDialog):
                     if len(excludedViews[ts.getTsId()]) == ts.getSize():
                         newTs.setEnabled(False)
                     newTs.setDim(ts.getDim())
+                    newTs.setAnglesCount(newTs.getSize())
                     newTs.write()
                     outputSetOfTiltSeries.update(newTs)
                     outputSetOfTiltSeries.write()
