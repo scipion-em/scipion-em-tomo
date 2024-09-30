@@ -54,7 +54,7 @@ class ProtTsCorrectMotion(ProtTsProcess):
     the frames range used for alignment and final sum, the binning factor
     or the cropping options (region of interest)
     """
-    _possibleOutputs = {'outputTiltSeries': SetOfTiltSeries,
+    _possibleOutputs = {'TiltSeries': SetOfTiltSeries,
                         OUTPUT_TILT_SERIES_DW: SetOfTiltSeries,
                         OUTPUT_TILT_SERIES_EVEN: SetOfTiltSeries,
                         OUTPUT_TILT_SERIES_ODD: SetOfTiltSeries}
