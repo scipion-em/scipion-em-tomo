@@ -23,6 +23,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
+import re
+from glob import glob
+from os.path import join, getmtime
 
 import pyworkflow as pw
 from pyworkflow.protocol.params import (PointerParam, EnumParam, PathParam,
@@ -33,6 +37,10 @@ from pyworkflow.utils.properties import Message
 from pwem.protocols import ProtImport, EMProtocol, ProtImportFiles
 
 import tomo.objects
+from tomo.constants import TS_LABEL
+from tomo.convert.mdoc import normalizeTSId
+
+logger = logging.getLogger(__name__)
 
 
 class ProtTomoBase:
@@ -48,7 +56,7 @@ class ProtTomoBase:
         setObj = SetClass(filename=setFn, **kwargs)
         return setObj
 
-    def _createSetOfTiltSeriesM(self, suffix='')->tomo.objects.SetOfTiltSeriesM:
+    def _createSetOfTiltSeriesM(self, suffix='') -> tomo.objects.SetOfTiltSeriesM:
         return self._createSet(tomo.objects.SetOfTiltSeriesM,
                                'tiltseriesM%s.sqlite', suffix)
 
@@ -57,14 +65,14 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfTiltSeries,
                                'tiltseries%s.sqlite', suffix)
 
-    def _createSetOfCoordinates3D(self, volSet, suffix='')->tomo.objects.SetOfCoordinates3D:
+    def _createSetOfCoordinates3D(self, volSet, suffix='') -> tomo.objects.SetOfCoordinates3D:
         coord3DSet = self._createSet(tomo.objects.SetOfCoordinates3D,
                                      'coordinates%s.sqlite', suffix,
                                      indexes=['_volId'])
         coord3DSet.setPrecedents(volSet)
         return coord3DSet
 
-    def _createSetOfTomograms(self, suffix='')->tomo.objects.SetOfTomograms:
+    def _createSetOfTomograms(self, suffix='') -> tomo.objects.SetOfTomograms:
         return self._createSet(tomo.objects.SetOfTomograms,
                                'tomograms%s.sqlite', suffix)
 
@@ -72,11 +80,11 @@ class ProtTomoBase:
         return self._createSet(tomo.objects.SetOfSubTomograms,
                                'subtomograms%s.sqlite', suffix)
 
-    def _createSetOfAverageSubTomograms(self, suffix='')-> tomo.objects.SetOfAverageSubTomograms:
+    def _createSetOfAverageSubTomograms(self, suffix='') -> tomo.objects.SetOfAverageSubTomograms:
         return self._createSet(tomo.objects.SetOfAverageSubTomograms,
                                'avgSubtomograms%s.sqlite', suffix)
 
-    def _createSetOfClassesSubTomograms(self, subTomograms, suffix='')->tomo.objects.SetOfClassesSubTomograms:
+    def _createSetOfClassesSubTomograms(self, subTomograms, suffix='') -> tomo.objects.SetOfClassesSubTomograms:
         classes = self._createSet(tomo.objects.SetOfClassesSubTomograms,
                                   'subtomogramClasses%s.sqlite', suffix)
         classes.setImages(subTomograms)
@@ -86,7 +94,7 @@ class ProtTomoBase:
     def _createSetOfLandmarkModels(self, suffix='') -> tomo.objects.SetOfLandmarkModels:
         return self._createSet(tomo.objects.SetOfLandmarkModels, 'setOfLandmarks%s.sqlite', suffix)
 
-    def _createSetOfMeshes(self, volSet, suffix='')->tomo.objects.SetOfMeshes:
+    def _createSetOfMeshes(self, volSet, suffix='') -> tomo.objects.SetOfMeshes:
         meshSet = self._createSet(tomo.objects.SetOfMeshes,
                                   'meshes%s.sqlite', suffix)
         meshSet.setPrecedents(volSet)
@@ -107,13 +115,14 @@ class ProtTomoBase:
                 counter = 1  # when there is not number assume 1
             maxCounter = max(counter, maxCounter)
 
-        return str(maxCounter+1) if maxCounter > 0 else ''  # empty if not output
+        return str(maxCounter + 1) if maxCounter > 0 else ''  # empty if not output
 
 
 class ProtTomoPicking(ProtImport, ProtTomoBase):
     OUTPUT_PREFIX = 'output3DCoordinates'
 
     """ Base class for Tomogram boxing protocols. """
+
     def _defineParams(self, form):
 
         form.addSection(label='Input')
@@ -132,11 +141,49 @@ class ProtTomoPicking(ProtImport, ProtTomoBase):
 
 
 class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
+    """Base protocol to import tomography files. There are two modes that should be implemented to import files,
+    based on the value of the filesPattern form parameter:
 
+    1. If empty (a single file is imported) or using the classic wildcard patterns.
+    2. If the pattern contains the label {TS}, to represent the part of the name desired to be considered as the tsId.
+
+    How to implement an import protocol in Scipion tomo:
+
+    * The method initializeParsing must be called before the steps are generated, directly or as part of an
+    initialization method. This method manages all the functionality required to deal with the {TS} pattern. If this
+    label is not present, it does nothing, and the files matching must be carried out with the method iterFiles.
+
+    * When processing the data, an if statement must be implemented, asking for a pattern {TS} introduced or not (it's
+    the value of the protocol attribute self.regEx, which is filled properly in the execution of the method
+    initializeParsing. Then:
+
+        > if self.regEx: the iterator is obtained by calling the method getMatchingFilesFromRegEx
+        > else: the iterator is obtained via the method iterFiles.
+
+    * With the iterators defined, the rest of the code to generate the corresponding scipion objects is common to both
+    modes.
+
+    A good example is the protocol ProtImportTomograms.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.regEx = None
+        self.regExPattern = None
+        self.globPattern = None
+
+    # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         self._defineImportParams(form)
-
         self._defineAcquisitionParams(form)
+
+    @staticmethod
+    def addExclusionWordsParam(form):
+        form.addParam('exclusionWords', StringParam,
+                      label='Exclusion words:',
+                      expertLevel=LEVEL_ADVANCED,
+                      help="List of words separated by a space that "
+                           "the path should not have.")
 
     def _defineImportParams(self, form):
         """ Override to add options related to the different types
@@ -180,6 +227,36 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
                            "NOTE: wildcards and special characters "
                            "('*', '?', '#', ':', '%') cannot appear in the "
                            "actual path.")
+        form.addLine('* NOTE: About files import in Scipion Tomo\n(click on the help icon to the right)',
+                     help='There are two modes that should be implemented to import files, based on the value of '
+                          'the Pattern parameter:\n'
+                          '\n1. *Empty* (a single file is imported if File directory parameter is the full path of a '
+                          'single file) or *using the classic wildcard patterns*, as in Scipion for SPA, and explain '
+                          'in the help of the parameter Pattern.\n'
+                          '\n*2. The pattern contains the label {TS}*, used to represent the part of the name desired '
+                          'to be considered as the tsId (Unique identifier of a tilt-series and its derived products, '
+                          'such as tomograms, ctfs, alignment, etc).\n\n'
+                          '*Examples*:\n\n'
+                          '*Example 1*: import only one tomogram named tomoAbc.mrc located if the directory '
+                          '/home/exampleDir.\n'
+                          '\n\tOption 1a: set Files directory to /home/exampleDir/tomoAbc.mrc and leave Pattern empty.\n'
+                          '\n\tOption 1b: set set Files directory to /home/exampleDir and Pattern to tomoAbc.mrc.\n'
+                          '\n\tOption 2: set set Files directory to /home/exampleDir and Pattern to the substring '
+                          'desired to be the tsId:\n\n'
+                          'If the tsId is desired to be tomoAbc, the pattern should be {TS}.mrc, while if the tsId we '
+                          'want, for example to match other objects in the project labelled with tsId based on what '
+                          'follows the word "tomo", it should be tomo{TS}.mrc. In the first case the tsId would be the '
+                          'whole basename, "tomoAbc", while in the second it would be only "Abc".\n\n'
+                          '*Example 2*: import alignment files (.xf) generated with IMOD, named TS_01_binned.xf, '
+                          'TS_02_binned.xf, TS_03_binned.xf, located in the directory /home/aliExample/binnedTS.\n\n'
+                          'Let us consider that we have already the tilt-series imported in Scipion and we know that '
+                          'their tsIds are, respectively, TS_01, TS_02, TS_03. To import the alignment files we have '
+                          'obtaiend using IMOD before having installed Scipion, the\n'
+                          '\n\tFiles directory should be /home/aliExample/binnedTS, and the'
+                          '\n\tPattern {TS}_binned.xf.\n\n'
+                          'Thus, the transformation matrices would be imported with tsIds TS_01, TS_02, TS_03, that '
+                          'matches to the existing tsIds of the tilt-series we want to assign the imported alignments '
+                          'to.')
         form.addParam('copyFiles', BooleanParam, default=False,
                       expertLevel=LEVEL_ADVANCED,
                       label="Copy files?",
@@ -196,6 +273,60 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
         form.addParam('samplingRate', FloatParam,
                       label=Message.LABEL_SAMP_RATE)
 
+    # --------------------------- UTILS functions -----------------------------
+    def initializeParsing(self):
+        pattern = self.filesPattern.get()
+        if pattern:
+            if TS_LABEL in pattern:
+                logger.info('Importing using a pattern.')
+                path = self.filesPath.get().strip()
+                pattern = pattern.strip()
+                pattern = join(path, pattern)
+                regExPattern = pattern.replace(TS_LABEL, r'(?P<TS>.*)')  # regex pattern for TS
+                self.regEx = re.compile(regExPattern)
+                self.regExPattern = regExPattern
+                globPattern = pattern.replace(TS_LABEL, '*')
+                # Glob module does not handle well the brackets (it does not list them)
+                self.globPattern = globPattern.replace('[', '*').replace(']', '*')
+            else:
+                logger.info(f'Direct import. Pattern {TS_LABEL} not introduced.')
+
+    def _excludeByWords(self, files):
+        exclusionWords = self.exclusionWords.get()
+
+        if exclusionWords is None:
+            return files
+
+        exclusionWordList = exclusionWords.split()
+
+        allowedFiles = []
+
+        for file in files:
+            if any(bannedWord in file for bannedWord in exclusionWordList):
+                logger.info("%s excluded. Contains any of %s" %
+                            (file, exclusionWords))
+                continue
+            allowedFiles.append(file)
+
+        return allowedFiles
+
+    def getMatchingFilesFromRegEx(self):
+        filePaths = glob(self.globPattern)
+        filePaths = self._excludeByWords(filePaths)
+        filePaths.sort(key=lambda fn: getmtime(fn))
+        matchingFilesDict = dict()
+        for f in filePaths:
+            matchRes = self.regEx.match(f)
+            if matchRes is not None:
+                tsId = matchRes.group('TS')  # Return the complete matched subgroup
+                logger.info("Raw tilt series id is %s." % tsId)
+                tsId = normalizeTSId(tsId)
+                logger.info("Normalized tilt series id is %s." % tsId)
+                matchingFilesDict[tsId] = f
+        return matchingFilesDict
+
+
+    # --------------------------- INFO functions ------------------------------
     def _validate(self):
         pass
 
@@ -206,7 +337,6 @@ class ProtTomoSubtomogramAveraging(EMProtocol, ProtTomoBase):
 
 
 class ProtTomoImportAcquisition:
-
     MANUAL_IMPORT = 0
     FROM_FILE_IMPORT = 1
 
@@ -266,23 +396,22 @@ class ProtTomoImportAcquisition:
                            "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
 
         form.addParam('voltage', FloatParam, default=300,
-                       label=Message.LABEL_VOLTAGE,
-                       allowsNull=True,
-                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                       help=Message.TEXT_VOLTAGE)
+                      label=Message.LABEL_VOLTAGE,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help=Message.TEXT_VOLTAGE)
 
         form.addParam('sphericalAberration', FloatParam, default=2.7,
-                       label=Message.LABEL_SPH_ABERRATION,
-                       allowsNull=True,
-                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                       help=Message.TEXT_SPH_ABERRATION)
+                      label=Message.LABEL_SPH_ABERRATION,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help=Message.TEXT_SPH_ABERRATION)
 
         form.addParam('amplitudeContrast', FloatParam, default=0.1,
-                       label=Message.LABEL_AMPLITUDE,
-                       allowsNull=True,
-                       condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                       help=Message.TEXT_AMPLITUDE)
-
+                      label=Message.LABEL_AMPLITUDE,
+                      allowsNull=True,
+                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
+                      help=Message.TEXT_AMPLITUDE)
 
     def _parseAcquisitionData(self):
         if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:

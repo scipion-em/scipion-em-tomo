@@ -25,8 +25,11 @@
 # *
 # **************************************************************************
 import logging
+from os.path import exists
 from sqlite3 import OperationalError
 from typing import Dict, Tuple, Any, Optional, Union
+
+import mrcfile
 
 from pwem import ALIGN_NONE
 
@@ -46,7 +49,7 @@ import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList, PointerList, Scalar
 
 
 class MATRIX_CONVERSION:
@@ -252,8 +255,11 @@ class TiltSeriesBase(data.SetOfImages):
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
 
+    def hasAcquisition(self):
+        return self._acquisition is not None and self._acquisition.getMagnification() is not None
+
     def getAnglesCount(self):
-        return self._anglesCount
+        return self._anglesCount.get()
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -270,14 +276,12 @@ class TiltSeriesBase(data.SetOfImages):
         return self.extractFileName(firstItem.getEven())
 
     def setAnglesCount(self, value):
-
         if isinstance(value, int):
             self._anglesCount.set(value)
         else:
             self._anglesCount = value
 
     def hasAlignment(self):
-
         return self._hasAlignment.get()
 
     def ctfCorrected(self):
@@ -431,6 +435,12 @@ class TiltSeriesBase(data.SetOfImages):
 
 def tiltSeriesToString(tiltSeries):
     s = []
+
+    # Heterogeneous set: only applies to the sets of TS, not to TS themselves, causing error the last in the viewers
+    if type(tiltSeries) is SetOfTiltSeries:
+        if tiltSeries.isHeterogeneousSet():
+            s.append('+het')
+
     # Matrix info
     if tiltSeries.hasAlignment():
         s.append('+ali')
@@ -462,43 +472,36 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False):
+    def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
-        newStack = True
-        # TODO: Handle output tilt-series datatype format
-        if self.getFirstItem().hasTransform():
-            for index, ti in enumerate(self):
-                if ti.hasTransform():
-                    if newStack:
-                        if swapXY:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getYDim(),
-                                                yDim=ti.getXDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                        else:
-                            ih.createEmptyImage(fnOut=outputFilePath,
-                                                xDim=ti.getXDim(),
-                                                yDim=ti.getYDim(),
-                                                nDim=self.getSize())
-                            newStack = False
-                    transform = ti.getTransform().getMatrix()
-                    transformArray = np.array(transform)
-                    if swapXY:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getXDim(), ti.getYDim()))
-                    else:
-                        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
-                                          outputFile=str(index + 1) + '@' + outputFilePath,
-                                          transformMatrix=transformArray,
-                                          shape=(ti.getYDim(), ti.getXDim()))
-                else:
-                    raise Exception('ERROR: Some tilt-image is missing from transform object associated.')
+        if self.hasAlignment():
+            firstImg = self.getFirstItem()
+            xDim, yDim, _ = firstImg.getDim()
+            if firstImg.hasTransform() and swapXY:
+                xDim, yDim = yDim, xDim
+            if excludeViews:
+                excludedViewsInd = self.getExcludedViewsIndex()
+                counter = 0
+                for index, ti in enumerate(self.iterItems()):
+                    if index + 1 not in excludedViewsInd:
+                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
+                        counter += 1
+            else:
+                for index, ti in enumerate(self.iterItems()):
+                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
         else:
             path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+
+    @staticmethod
+    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
+        transform = ti.getTransform().getMatrix()
+        transformArray = np.array(transform)
+        inputFilePath = ti.getFileName()
+        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+                          outputFile=str(index + 1) + '@' + outputFilePath,
+                          transformMatrix=transformArray,
+                          shape=(yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -517,9 +520,48 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
+    # TODO: deprecate this after IMOD is released. Jorge (07/07/2024)
     def _getExcludedViewsIndex(self):
-
         return self.getExcludedViewsIndex()
+
+    def reStack(self, outFileName: Union[str, None] = None) -> Union[str, None]:
+        """Re-stacks a tilt-series creating a new one without the excluded views obtained by calling the method
+        getExcludedViewsIndex(). If the re-stacked file already exists, no action is carried out (avoid creating
+        the same file multiple times, even more necessary if calling this method from the viewer).
+        :param outFileName: Filename of the re-stacked tilt-series. If None, the re-stacked tilt-series will be
+        generated in the same location as the current tilt-series, but adding the suffix _restacked.
+        :returns: None is the re-stacked file already exists or outFileName if not."""
+        tsFileName = self.getFirstItem().getFileName()
+        if not outFileName:
+            outFileName = path.removeExt(tsFileName) + '_restacked' + path.getExt(tsFileName)
+        if exists(outFileName):
+            return None
+        else:
+            excludedIndices = self.getExcludedViewsIndex()
+            if excludedIndices:
+                # Load the file
+                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                    tsData = tsMrc.data
+                # Create an empty array in which the re-stacked TS will be stored
+                nx, ny, nImgs = tsData.shape
+                finalNImgs = nImgs - len(excludedIndices)
+                newTsShape = (nx, ny, finalNImgs)
+                newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+                # Fill it with the non-excluded images
+                counter = 0
+                for i in range(nImgs):
+                    if i not in excludedIndices:
+                        newTsData[counter] = tsData[i]
+                        counter += 1
+                # Save the re-stacked TS
+                with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                    reStackedTsMrc.set_data(newTsData)
+                    reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_stats()
+                    reStackedTsMrc.voxel_size = self.getSamplingRate()
+                return outFileName
+            else:
+                return None
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -696,6 +738,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
     USE_CREATE_COPY_FOR_SUBSET = True
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     """ Base class for SetOfTiltImages and SetOfTiltImagesM.
     """
@@ -708,6 +753,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
+        # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
+        self._isHeterogeneous = Boolean(False)
 
     def getAcquisition(self):
         return self._acquisition
@@ -719,7 +766,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return self._anglesCount.get()
 
     def setAnglesCount(self, value):
-        self._anglesCount.set(value)
+        if isinstance(value, int):
+            self._anglesCount.set(value)
+        else:
+            self._anglesCount = value
 
     def ctfCorrected(self):
         """ Returns true if ctf has been corrected"""
@@ -729,6 +779,12 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Returns true if tilt series has been interpolated"""
         return self._interpolated.get()
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def hasAlignment(self):
         """ Returns true if at least one of its items has alignment information"""
         return self._hasAlignment.get()
@@ -737,7 +793,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Copy information (sampling rate and ctf)
         from other set of images to current one"""
         super().copyInfo(other)
-        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected', '_interpolated')
+        self.copyAttributes(other, '_anglesCount', '_hasAlignment', '_ctfCorrected',
+                            '_interpolated', '_isHeterogeneous')
 
     def iterClassItems(self, iterDisabled=False):
         """ Iterate over the images of a class.
@@ -820,8 +877,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 self.update(tsOut)
 
     def update(self, item: TiltSeriesBase):
-
+        if not self._firstDim.isEmpty():
+            currentSetNAngles = self._firstDim[2]
+            addedTsNAngles = item.getAnglesCount()
+            if currentSetNAngles != addedTsNAngles and not self.isHeterogeneousSet():
+                self.setIsHeterogeneousSet(True)
+        # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+        # in the case of operations that change the size of the elements, such as the binning.
         self.setDim(item.getDim())
+        self.setAlignment(item.getAlignment())
         self._anglesCount.set(item.getSize())
         self._hasAlignment.set(item.hasAlignment())
         self._interpolated.set(item.interpolated())
@@ -1147,12 +1211,17 @@ class Tomogram(data.Volume):
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = False
+    # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
+    # have TS with a different number of tilt-images in the same batch)
+    _compatibilityDict = {'sampling rates': 'getSamplingRate'}
 
     def __init__(self, *args, **kwargs):
         data.SetOfVolumes.__init__(self, **kwargs)
         self._acquisition = TomoAcquisition()
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
+        # Used to check if a set is composed of elements with different dimensions, suche as the thickness
+        self._isHeterogeneous = Boolean(False)
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -1161,12 +1230,17 @@ class SetOfTomograms(data.SetOfVolumes):
         """ Update dimensions of this set base on the first element. """
         self.setDim(self.getFirstItem().getDim())
 
+    def isHeterogeneousSet(self):
+        return self._isHeterogeneous.get()
+
+    def setIsHeterogeneousSet(self, value):
+        self._isHeterogeneous.set(value)
+
     def __str__(self):
         sampling = self.getSamplingRate()
-        tomoStr = "+oe," if self.hasOddEven() else ''
-        # CTF status
-        if self.ctfCorrected():
-            tomoStr += '+ctf,'
+        tomoStr = '+het,' if self._isHeterogeneous.get() else ''
+        tomoStr += "+oe," if self.hasOddEven() else ''
+        tomoStr += '+ctf,' if self.ctfCorrected() else ''
 
         if not sampling:
             logger.error("FATAL ERROR: Object %s has no sampling rate!!!"
@@ -1179,6 +1253,14 @@ class SetOfTomograms(data.SetOfVolumes):
         return s
 
     def update(self, item: Tomogram):
+        if not self._firstDim.isEmpty():
+            currentSetThk = self._firstDim[2]
+            _, _, addedTomoThk = item.getDim()
+            if currentSetThk != addedTomoThk and not self._isHeterogeneous.get():
+                self._isHeterogeneous.set(True)
+        # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
+        # in the case of operations that change the size of the elements, such as the binning.
+        self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
         super().update(item)
@@ -2423,35 +2505,19 @@ class CTFTomo(data.CTFModel):
 
     def hasEstimationInfoAsList(self):
         """ This method checks if the CTFTomo object contains estimation information in the form of a list. """
-
-        if hasattr(self, "_defocusUList") or hasattr(self, "_defocusUList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_defocusUList") or hasattr(self, "_defocusVList")
 
     def hasAstigmatismInfoAsList(self):
         """ This method checks if the CTFTomo object contains astigmatism information in the form of a list. """
-
-        if hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")
 
     def hasPhaseShiftInfoAsList(self):
         """ This method checks if the CTFTomo object contains phase shift information in the form of a list. """
-
-        if hasattr(self, "_phaseShiftList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_phaseShiftList")
 
     def hasCutOnFrequncyInfoAsList(self):
         """ This method checks if the CTFTomo object contains cut-on frequency information in the form of a list. """
-
-        if hasattr(self, "_cutOnFreqList"):
-            return True
-        else:
-            return False
+        return hasattr(self, "_cutOnFreqList")
 
     def completeInfoFromList(self):
         """ This method will set the _defocusU, _defocusV and _defocusAngle attributes from the provided CTF estimation
@@ -2710,23 +2776,24 @@ class CTFTomoSeries(data.EMSet):
 
         estimationRange = 0
 
-        for ctfEstimation in self:
-            # Check that at least one list is provided
-            if not (hasattr(ctfEstimation, "_defocusUList") or hasattr(
-                    ctfEstimation, "_defocusUList")):
-                raise Exception(
-                    "CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
-                    "list information available.")
+        for ctfTomo in self:
+            if ctfTomo.isEnabled():
+                # Check that at least one list is provided
+                if not (hasattr(ctfTomo, "_defocusUList") or hasattr(
+                        ctfTomo, "_defocusUList")):
+                    raise Exception(
+                        "CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
+                        "list information available.")
 
-            providedList = ctfEstimation.getDefocusUList() if hasattr(
-                ctfEstimation, "_defocusUList") \
-                else ctfEstimation.getDefocusVList()
-            providedList = providedList.split(",")
+                providedList = ctfTomo.getDefocusUList() if hasattr(
+                    ctfTomo, "_defocusUList") \
+                    else ctfTomo.getDefocusVList()
+                providedList = providedList.split(",")
 
-            listLength = len(providedList) - 1
+                listLength = len(providedList) - 1
 
-            if listLength > estimationRange:
-                estimationRange = listLength
+                if listLength > estimationRange:
+                    estimationRange = listLength
 
         self.setNumberOfEstimationsInRange(estimationRange)
 

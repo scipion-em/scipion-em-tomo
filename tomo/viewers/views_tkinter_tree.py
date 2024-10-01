@@ -25,12 +25,15 @@
 # **************************************************************************
 
 import glob
+import os.path
 import threading
 from tkinter import messagebox, BOTH, RAISED
 
+import numpy
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
 from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
@@ -38,19 +41,34 @@ from pyworkflow.gui.tree import TreeProvider
 from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
+from pyworkflow.object import String
 from pyworkflow.plugin import Domain
 
 import tomo.objects
+from . import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
-CONTRAST_STD = 0.5
+CONTRAST_STD = 2.0
+afterId = None  # Global variable to store the reference of the auto navigate task
+DIRECTION_DOWN = 0
+DIRECTION_UP = 1
+RESULT_CREATE_WITH = 0
+RESULT_RESTACK = 1
+THUMBNAIL_SIZE = 512
+
+class TiltSerieState:
+    EXCLUDED = 'excludedTs'
+    INCLUDED = 'includedTs'
+
 
 class TiltImageStates:
     EXCLUDED = 'excluded'
     INCLUDED = 'included'
     ODD = 'odd'
     EVEN = 'even'
+    CHECK_MARK = "\u2611"    # ☑
+    CHECK_UNMARK = "\u2610"  # ☐
 
 
 class TiltSeriesTreeProvider(TreeProvider):
@@ -62,7 +80,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ANGLE = 'Tilt angle'
     COL_TI_ENABLED = 'Excluded'
     COL_TI_ACQ_ORDER = 'Order'
-    COL_TI_DOSE = "Accum. dose"
+    COL_TI_DOSE = "Dose"
     COL_TI_TRANSFORM = "T. Matrix"
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_ACQ_ORDER: '_acqOrder',
@@ -82,23 +100,84 @@ class TiltSeriesTreeProvider(TreeProvider):
     def configureTags(self, tree):
         self.tree = tree
         standardFont = getDefaultFont()
+        self.tree.tag_configure(TiltSerieState.EXCLUDED, font=standardFont, foreground='red',
+                                image=getImage(Icon.CHECKED))
+        self.tree.tag_configure(TiltSerieState.INCLUDED, font=standardFont, foreground='black',
+                                image=getImage(Icon.UNCHECKED))
+
         self.tree.tag_configure(TiltImageStates.EXCLUDED,  font=standardFont, foreground='red')
         self.tree.tag_configure(TiltImageStates.INCLUDED,  font=standardFont, foreground='black')
         self.tree.tag_configure(TiltImageStates.EVEN, background='#F2F2F2', foreground='black')
         self.tree.tag_configure(TiltImageStates.ODD, background='#E6E6E6', foreground='black')
+        self.tree.bind('<space>', self.onSpace)
+
+    def getTree(self):
+        return self.tree
+
+    def onSpace(self, event):
+        selectedItem = self.tree.selection()[0]
+        if selectedItem:
+            obj = event.widget._objDict[selectedItem]
+            self._itemSelected(obj)
 
     def _itemSelected(self, obj):
-        excluded = 'True' if obj.isEnabled() else 'False'
-        obj.setEnabled(not obj.isEnabled())
         _, y, _, _ = self.tree.bbox(self.tree.selection()[0])
-        selectedItem = self.tree.identify_row(y+1)
+        selectedItem = self.tree.identify_row(y + 1)
         itemValues = self.tree.item(selectedItem, 'values')
-        newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
+
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
+            excludedTS = TiltSerieState.INCLUDED if obj.isEnabled() else TiltSerieState.EXCLUDED
+            obj.setEnabled(not obj.isEnabled())
+            tags = TiltSerieState.INCLUDED
+            if TiltSerieState.EXCLUDED in self.tree.item(selectedItem, 'tags'):
+                tags = TiltSerieState.INCLUDED
+
+            if excludedTS == TiltSerieState.INCLUDED:
+                self.tree.item(selectedItem, tags=(TiltSerieState.EXCLUDED, tags,))
+                excludedTi = TiltImageStates.CHECK_MARK
+            else:
+                self.tree.item(selectedItem, tags=(TiltSerieState.INCLUDED, tags,))
+                excludedTi = TiltImageStates.CHECK_UNMARK
+
+            children = self.tree.get_children(selectedItem)
+            index, ts = self.getTiltSerie(obj)
+            size = ts.getSize()
+            for tiIndex in range(size):
+                obj = self.objects[tiIndex + index + 1]
+                if excludedTS == TiltSerieState.INCLUDED:
+                    obj.setEnabled(False)
+                else:
+                    obj.setEnabled(True)
+                item = children[tiIndex]
+                itemValues = self.tree.item(item, 'values')
+                self.excludeTiltImage(obj, item, itemValues, excludedTi)
+
+        else:
+            excludedTi = TiltImageStates.CHECK_MARK if obj.isEnabled() else TiltImageStates.CHECK_UNMARK
+            obj.setEnabled(not obj.isEnabled())
+            self.excludeTiltImage(obj, selectedItem, itemValues, excludedTi)
+            # Verify if it is necessary to check or uncheck the tiltserie
+            parentItem = self.tree.parent(selectedItem)
+            parentObj = obj._parentObject
+
+            if excludedTi == TiltImageStates.CHECK_UNMARK:
+                self.tree.item(parentItem, tags=(TiltSerieState.INCLUDED, TiltSerieState.INCLUDED))
+                parentObj.setEnabled(True)
+            # Checking the tiltserie if all tiltimages are checked
+            elif obj._parentObject.getSize() == len(self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']]):
+                self.tree.item(self.tree.parent(selectedItem), tags=(TiltSerieState.EXCLUDED, TiltSerieState.EXCLUDED))
+                parentObj.setEnabled(False)
+
+    def excludeTiltImage(self, obj,  selectedItem, itemValues, excluded):
+        if isinstance(obj, tomo.objects.TiltImageM):
+            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4])
+        else:
+            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
         tags = TiltImageStates.EVEN
         if TiltImageStates.ODD in self.tree.item(selectedItem, 'tags'):
             tags = TiltImageStates.ODD
 
-        if excluded == 'True':
+        if excluded == TiltImageStates.CHECK_MARK:
             self.tree.item(selectedItem, tags=(TiltImageStates.EXCLUDED, tags,))
             self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']][obj.getObjId()] = True
             self.updatedCount += 1
@@ -109,6 +188,19 @@ class TiltSeriesTreeProvider(TreeProvider):
             self.updatedCount -= 1
             self.changes -= 1
         self.tree.item(selectedItem, values=newValues)
+
+    def _toggleExclusion(self):
+        itemSelected = self.tree.selection()
+        self.tree.focus(itemSelected)
+        self.tree.selectChild(itemSelected)
+        itemId = self.tree.item(itemSelected)['text']
+        itemParent = self.tree.parent(itemSelected)
+        if not itemParent:
+            _, obj = self.getTiltSerie(itemId)
+        else:
+            tsId = itemSelected[0].split('.')[0]
+            _, obj = self.getTiltImage(tsId, itemId)
+        self._itemSelected(obj)
 
     def getObjects(self):
         # Retrieve all objects of type className
@@ -124,6 +216,7 @@ class TiltSeriesTreeProvider(TreeProvider):
             tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
+            tsObj.setEnabled(ts.isEnabled())
             self.objects.append(tsObj)
             for ti in ts.iterItems(orderBy=orderBy, direction=direction):
                 tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
@@ -143,6 +236,25 @@ class TiltSeriesTreeProvider(TreeProvider):
         for index, obj in enumerate(objects):
             if obj == tiltSerie:
                 return self.objects[index + int(size/2)]
+
+    def getTiltSerie(self, tiltSerie):
+        objects = self.getObjects()
+        is_tsId = isinstance(tiltSerie, str)
+
+        for index, obj in enumerate(objects):
+            if isinstance(obj, tomo.objects.TiltSeriesBase):
+                if (is_tsId and obj.getTsId() == tiltSerie) or \
+                        (not is_tsId and obj.getObjId() == tiltSerie.getObjId()):
+                    return index, obj
+
+        return None, None
+
+    def getTiltImage(self, tsId, treeId):
+        objects = self.getObjects()
+        for index, obj in enumerate(objects):
+            if isinstance(obj, tomo.objects.TiltImageBase):
+                if obj.getTsId() == tsId and obj.getObjId() == treeId:
+                    return index, obj
 
     def getExcludedViews(self):
         return self.excludedDict
@@ -164,15 +276,15 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def getColumns(self):
         cols = [
-            (self.COL_TS, 100),
-            (self.COL_TI_ACQ_ORDER, 100),
-            (self.COL_TI_ANGLE, 100),
-            (self.COL_TI_ENABLED, 100),
-            (self.COL_TI_DOSE, 100),
+            (self.COL_TS, 80),
+            (self.COL_TI_ACQ_ORDER, 50),
+            (self.COL_TI_ANGLE, 70),
+            (self.COL_TI_ENABLED, 65),
+            (self.COL_TI_DOSE, 55),
             (self.COL_TI, 400),
         ]
         if not isinstance(self.tiltSeries, tomo.objects.SetOfTiltSeriesM):
-            cols.append((self.COL_TI_TRANSFORM, 300))
+            cols.append((self.COL_TI_TRANSFORM, 200))
 
         return cols
 
@@ -187,23 +299,28 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getObjectInfo(self, obj: tomo.objects.TiltImageBase):
         objId = obj.getObjId()
         tsId = obj.getTsId()
-        tags = None
 
         if isinstance(obj, tomo.objects.TiltSeriesBase):
             key = objId
             text = tsId
-            values = [str(obj)]
+            values = ['', '', '', '', str(obj)]
             opened = False
+            tags = TiltSerieState.INCLUDED
+            if not obj.isEnabled():
+                obj.setEnabled(False)
+                tags = TiltSerieState.EXCLUDED
+
         else:  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
             text = objId
 
             dose = obj.getAcquisition().getAccumDose() if hasattr(obj.getAcquisition(), '_accumDose') else None
             adqOrder = obj.getAcquisitionOrder() if hasattr(obj, '_acqOrder') else None
+            excluded = TiltImageStates.CHECK_UNMARK if obj.isEnabled() else TiltImageStates.CHECK_MARK
 
             values = [str("%d" % adqOrder) if adqOrder is not None else "",
                       str("%0.2f" % obj.getTiltAngle()),
-                      str(not obj.isEnabled()),
+                      excluded,
                       round(dose, 2) if dose is not None else "",
                       "%d@%s" % (obj.getIndex() or 1, obj.getFileName()),
                       ]
@@ -227,18 +344,17 @@ class TiltSeriesTreeProvider(TreeProvider):
             'parent': obj._parentObject
         }
 
-        if tags is not None:
-            if obj.getObjId() % 2 == 0:
-                item['tags'] = (tags, TiltImageStates.ODD)
-            else:
-                item['tags'] = (tags, TiltImageStates.EVEN)
+        if obj.getObjId() % 2 == 0:
+            item['tags'] = (tags, TiltImageStates.ODD)
+        else:
+            item['tags'] = (tags, TiltImageStates.EVEN)
 
         return item
 
     def getObjectActions(self, obj):
         actions = []
 
-        if isinstance(obj, tomo.objects.TiltSeries):
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
             viewers = Domain.findViewers(obj.getClassName(),
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
@@ -247,9 +363,9 @@ class TiltSeriesTreeProvider(TreeProvider):
                     item = self.tiltSeries[obj.getObjId()]  # to load mapper
                     return lambda: viewerClass(project=proj, protocol=self.protocol).visualize(item)
                 actions.append((viewerClass.getName(), createViewer(viewerClass, obj)))
-        else:
-            actionName = "Exclude" if obj.isEnabled() else "Include"
-            actions.append((actionName, lambda: self._itemSelected(obj)))
+
+        actionName = "Exclude" if obj.isEnabled() else "Include"
+        actions.append((actionName, lambda: self._itemSelected(obj)))
 
         return actions
 
@@ -263,27 +379,22 @@ class TiltSeriesDialog(ToolbarListDialog):
         self._applyContrastCallback = kwargs.get('applyContrastCallback', None)
 
 
-        toolbarButtons = [
-            dialog.ToolbarButton('Toggle exclusion', self._toggleExclusion, Icon.ACTION_CLOSE,
-                                 tooltip="Exclude or include the selected tiltimage", shortcut='<space>'),
-            dialog.ToolbarButton('Increase contrast', self._applyContrastCallback, Icon.ACTION_CONTRAST,
-                                 tooltip="Apply contrast to the selected tiltimage", shortcut='<Control-c>'),
-            dialog.ToolbarButton('Save', self._saveExcluded, Icon.ACTION_SAVE,
-                                 tooltip="Create a new output with excluded views marked", shortcut='<Control-s>'),
-            dialog.ToolbarButton('|', None)
-        ]
+        toolbarButtons = []
 
         if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
-            viewers = Domain.findViewers(tomo.objects.TiltSeries.getClassName(),
+            viewers = Domain.findViewers(tomo.objects.SetOfTiltSeries.getClassName(),
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
-                def launchViewer():
-                    proj = self._protocol.getProject()
-                    viewerInstance = viewerClass(project=proj, protocol=self._protocol)
-                    return lambda event: self.launchViewer(viewerInstance)
-                toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
+                if viewerClass is not TomoDataViewer:
+                    def launchViewer():
+                        proj = self._protocol.getProject()
+                        viewerInstance = viewerClass(project=proj, protocol=self._protocol)
+                        return lambda event: self.launchViewer(viewerInstance)
+                    toolbarButtons.append(dialog.ToolbarButton(viewerClass.getName(), launchViewer(), Icon.ACTION_RESULTS))
 
         toolbarButtons.append(dialog.ToolbarButton('|', None))
+        toolbarButtons.append(dialog.ToolbarButton('Save', self._saveExcluded, Icon.ACTION_SAVE,
+                              tooltip="Create a new output with excluded views marked", shortcut='<Control-s>'))
         toolbarButtons.append(dialog.ToolbarButton('Help', self._showHelp, Icon.ACTION_HELP))
 
         ToolbarListDialog.__init__(self, parent, title, provider, toolbarButtons=toolbarButtons, **kwargs)
@@ -310,47 +421,109 @@ class TiltSeriesDialog(ToolbarListDialog):
     def _showHelp(self, event=None):
         showInfo('TiltSeries viewer help',
                  'This viewer allows you to exclude or include TiltImages.\n\n'
-                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use right-click.\n'
+                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox or space over the item\n'
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
                  '3. Save button to create a new set with excluded views marked.', self)
-
-    def _toggleExclusion(self, event=None):
-        itemSelected = self.tree.selection()
-        obj = self.tree._objects[self.tree.index(itemSelected) + 1]
-        self._provider._itemSelected(obj)
 
     def _saveExcluded(self, event=None):
         updatedCount = self._provider.getUpdatedCount()
         changes = self._provider.getchanges()
-        msg = "Are you sure you want to create a new set of TiltSeries?" if updatedCount and changes \
-            else "This set of TiltSeries has already been saved previously or is the original one. Are you still sure you want to generate a new set?"
-        result = messagebox.askquestion("Confirmation", msg, icon='info', **{'parent': self})
-        if result == messagebox.YES:
+
+        msg = ("Are you going to create a new set of tiltseries with the excluded views?\n\n"
+               "What do you do ? \n\n"
+               "Yes: The set will be created with the excluded views. \n"
+               "Re-stack: Delete excluded views and create a new TS stack") if updatedCount and changes \
+            else ("This set of TiltSeries has already been saved previously or is the original one. \n\n"
+                  "Are you still sure you want to generate a new set?")
+
+        d = GenericDialog(self, "Create a new set of tiltseries", msg,
+                          Icon.ALERT,
+                          buttons=[('Yes', RESULT_CREATE_WITH),
+                                   ('Re-stack', RESULT_RESTACK),
+                                   ('Cancel', RESULT_CANCEL)],
+                          default='Yes',
+                          icons={RESULT_CANCEL: Icon.BUTTON_CANCEL,
+                                 RESULT_CREATE_WITH: Icon.BUTTON_SELECT,
+                                 RESULT_RESTACK: Icon.ACTION_EXECUTE})
+
+        result = d.result
+        if result != RESULT_CANCEL:
+
+            self.update_idletasks()
+            restack = result == RESULT_RESTACK
             outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
                                                                         suffix=str(self._protocol.getOutputsSize()))
             outputSetOfTiltSeries.copyInfo(self._tiltSeries)
             outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
             excludedViews = self._provider.getExcludedViews()
-            for ts in self._tiltSeries:
-                newTs = ts.clone()
-                newTs.copyInfo(ts)
-                outputSetOfTiltSeries.append(newTs)
-                for ti in ts.iterItems():
-                    newTi = ti.clone()
-                    newTi.copyInfo(ti, copyId=True)
-                    newTi.setAcquisition(ti.getAcquisition())
-                    newTi.setLocation(ti.getLocation())
-                    # For some reason .clone() does not clone the enabled nor the creation time
-                    included = False if ti.getObjId() in excludedViews[ts.getTsId()] else True
-                    newTi.setEnabled(included)
-                    newTs.append(newTi)
+            outputName = self._protocol.getNextOutputName('TiltSeries_')
+            outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
 
-                newTs.setDim(ts.getDim())
-                newTs.write()
+            if restack:  # Creating a new directory to write a new stack
+                if not os.path.exists(outputPath):
+                    os.mkdir(outputPath)
+            hasOddEven = self._tiltSeries.hasOddEven()
+            count = len(self._tiltSeries.getTSIds())
+            for tsIndex, ts in enumerate(self._tiltSeries):
+                self.info('Processing %s of %s tiltseries ...' % (tsIndex + 1, count))
+                self.update_idletasks()
+                tsId = ts.getTsId()
+                _, obj = self._provider.getTiltSerie(tsId)
+                if obj.isEnabled():  # We will exclude the TS that are checked even if the restack option is not chosen.
+                    newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
+                    if hasOddEven:
+                        oddFileName = ts.getOddFileName()
+                        newOddBinaryName = os.path.join(outputPath, tsId + '_odd.mrcs')
+                        evenFileName = ts.getEvenFileName()
+                        newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
 
-                outputSetOfTiltSeries.update(newTs)
-                outputSetOfTiltSeries.write()
-            outputName = 'TiltSeries_' + str(self._protocol.getOutputsSize()+1)
+                    index = 1
+                    newTs = ts.clone()
+                    newTs.copyInfo(ts)
+                    outputSetOfTiltSeries.append(newTs)
+
+                    # New Stacks
+                    properties = {"sr": obj.getSamplingRate()}
+                    newStack = ImageStack(properties=properties)
+                    oddFileNames = ImageStack(properties=properties)
+                    evenFileNames = ImageStack(properties=properties)
+
+                    for ti in ts.iterItems():
+                        included = False if ti.getObjId() in excludedViews[tsId] else True
+                        if not restack or (included and restack):
+                            newTi = ti.clone()
+                            newTi.copyInfo(ti, copyId=False)
+                            newTi.setObjId(None)
+                            newTi.setAcquisition(ti.getAcquisition())
+                            # For some reason .clone() does not clone the enabled nor the creation time
+                            newTi.setEnabled(included)
+                            if restack:
+                                oldIndex = str(ti.getIndex())
+                                newStack.append(ImageReadersRegistry.open(oldIndex + '@' + ti.getFileName()))
+                                newTi.setLocation((index, newBinaryName))
+
+                                if hasOddEven:
+                                    oddFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + oddFileName))
+                                    evenFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + evenFileName))
+                                    newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
+
+                                index += 1
+                            newTs.append(newTi)
+
+                    if restack:
+                        ImageReadersRegistry.write(newStack, newBinaryName, isStack=True)
+                        if hasOddEven:
+                            ImageReadersRegistry.write(oddFileNames, newOddBinaryName, isStack=True)
+                            ImageReadersRegistry.write(evenFileNames, newEvenBinaryName, isStack=True)
+
+                    if len(excludedViews[ts.getTsId()]) == ts.getSize():
+                        newTs.setEnabled(False)
+                    newTs.setDim(ts.getDim())
+                    newTs.setAnglesCount(newTs.getSize())
+                    newTs.write()
+                    outputSetOfTiltSeries.update(newTs)
+                    outputSetOfTiltSeries.write()
+
             self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
             self.info('The new set (%s) has been created successfully' % outputName)
             self._provider.resetChanges()
@@ -383,47 +556,193 @@ class TiltSeriesDialogView(pwviewer.View):
         self._preview = None  # To store preview widget
 
     def show(self):
+        previewCallback = self.previewTiltSeries
+        if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeriesM):
+            previewCallback = None
+
         TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
-                         lockGui=True, previewCallback=self.previewTiltSeries, allowSelect=False, cancelButton=True,
-                         applyContrastCallback=self.increaseContrast)
+                         lockGui=False, previewCallback=previewCallback,
+                         itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True)
 
     def getPreviewWidget(self, frame):
 
         if not self._preview:
+
+            actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
+            actionBar.grid(row=0, column=0, sticky='ns')
+
+            self.startButton = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTINUE), command=self.autoNavigate,
+                                         width=25, height=25, relief=tk.RAISED)
+            self.startButton.grid(row=0, column=0, sticky='ns')
+            ToolTip(self.startButton, text='Auto navigate', delay=0)
+
+            self.next = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_NEXT), command=lambda: self.navigate(DIRECTION_DOWN),
+                                         width=25, height=25, relief=tk.RAISED)
+            self.next.grid(row=0, column=1, sticky='ns')
+            ToolTip(self.next, text='Next', delay=0)
+
+            self.previous = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_PREVIOUS), command=lambda: self.navigate(DIRECTION_UP),
+                                  width=25, height=25, relief=tk.RAISED)
+            self.previous.grid(row=0, column=2, sticky='ns')
+            ToolTip(self.previous, text='Previous', delay=0)
+
+            self.stopButton = tk.Button(actionBar, image=getImage(Icon.ACTION_STOP), command=self.stopNavigate, width=25, height=25)
+            self.stopButton.grid(row=0, column=3, sticky='ne')
+            ToolTip(self.stopButton, text='Stop navigate', delay=0)
+
+            self.autoContrast = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTRAST),
+                                          command=self.increaseContrast,
+                                          width=25, height=25)
+            self.autoContrast.grid(row=0, column=4, sticky='ns')
+            ToolTip(self.autoContrast, text='Apply contrast to the selected tiltimage', delay=0)
+
+            self.toogleExclusion = tk.Button(actionBar, image=getImage(Icon.ACTION_CLOSE),
+                                             command=self._provider._toggleExclusion,
+                                             width=25, height=25)
+            self.toogleExclusion.grid(row=0, column=5, sticky='ns', command=None)
+            ToolTip(self.toogleExclusion, text='Exclude or include the selection', delay=0)
+
             from pyworkflow.gui.matplotlib_image import ImagePreview
-            self._preview = ImagePreview(frame, dim=500, label="Tilt series", listenersDict={"<Button-1>": self.increaseContrast})
-            self._preview.grid(row=0, column=0)
+            self._preview = ImagePreview(frame, dim=500, label="Tilt series")
+            self._preview.grid(row=2, column=0)
         return self._preview
 
-    def increaseContrast(self, event):
+    def stopNavigate(self):
+        global afterId
+        if afterId:
+            tree = self._provider.getTree()
+            tree.after_cancel(afterId)
+            afterId = None
+            self.startButton.configure(relief=tk.RAISED, state=tk.NORMAL)
+            self.autoContrast.configure(state=tk.NORMAL)
+            self.next.configure(state=tk.NORMAL)
+            self.previous.configure(state=tk.NORMAL)
+
+    def navigate(self, direction=DIRECTION_DOWN):
+        tree = self._provider.getTree()
+        itemSelected = tree.selection()
+        if itemSelected:
+            item = itemSelected[0]
+            if not tree.parent(item):
+                item = tree.get_children(item)[0]
+            if direction == DIRECTION_DOWN:
+                item = tree.next(item)
+            else:
+                item = tree.prev(item)
+            tree.selection_set(item)
+            tree.see(item)
+
+    def autoNavigate(self, item=None, direction=DIRECTION_DOWN):
+
+        # Making sure that we do not press the navigate button more than once.
+        global afterId
+        tree = self._provider.getTree()
+
+        if item is None:
+            item = tree.selection()[0]
+            if not tree.parent(item):
+                item = tree.get_children(item)[0]
+
+        self.startButton.configure(relief=tk.SUNKEN, state=tk.DISABLED)
+        self.autoContrast.configure(state=tk.DISABLED)
+        self.next.configure(state=tk.DISABLED)
+        self.previous.configure(state=tk.DISABLED)
+        tree.selection_set(item)
+        tree.see(item)
+        # Obtain the following element
+        if direction == DIRECTION_DOWN:
+            nextItem = tree.next(item)
+        else:
+            nextItem = tree.prev(item)
+
+        if nextItem:
+            afterId = tree.after(100, self.autoNavigate, nextItem, direction)
+        else:
+            # Continue with the following item after a short delay
+            children = tree.get_children(item)
+            if not children:
+                # Start navigating in the other direction
+                if direction == DIRECTION_DOWN:
+                    afterId = tree.after(100, self.autoNavigate, item, DIRECTION_UP)
+                else:
+                    afterId = tree.after(100, self.autoNavigate, item, DIRECTION_DOWN)
+
+    def increaseContrast(self):
 
         # Try to increase the contrast. TODO: Move this to somewhere more resusable
         try:
-            
             data = self._preview.figureimg.get_array()
             imgmean = data.mean()
             imgstd = data.std()
             low = imgmean - CONTRAST_STD * imgstd
             high = imgmean + CONTRAST_STD * imgstd
-            data[data < low] = low
-            data[data > high] = high
-
+            data = np.clip(data, low, high)
+            # Normalize data to the range [0, 255] if necessary
+            data = 255 * (data - low) / (high - low)
+            data = np.clip(data, 0, 255).astype(np.uint8)
             self._preview._update(data)
+
         except Exception as e:
             print(e)
 
+    def itemOnClick(self, e=None):
+        x, y, widget = e.x, e.y, e.widget
+        elem = widget.identify("element", x, y)
+
+        if not elem:
+            return
+
+        tree = self._provider.getTree()
+        selectedItem = widget.identify_row(y)
+        tree.focus(selectedItem)
+        tree.selectChild(selectedItem)
+        column = widget.identify_column(x)
+        colNumber = int(column.replace('#', '')) - 1
+        itemValue = tree.item(selectedItem, "values")[colNumber]
+
+        if "image" in elem:  # click on the checkbox
+            tsId = tree.item(selectedItem)['text']
+            _, obj = self._provider.getTiltSerie(tsId)
+        elif itemValue in [TiltImageStates.CHECK_UNMARK, TiltImageStates.CHECK_MARK]:
+            tsId = tree.item(tree.parent(selectedItem))['text']
+            tiId = tree.item(selectedItem)['text']
+            _, obj = self._provider.getTiltImage(tsId, tiId)
+        else:
+            return
+
+        self._provider._itemSelected(obj)
+
     def previewTiltSeries(self, obj, frame):
+
         preview = self.getPreviewWidget(frame)
-        if isinstance(obj, tomo.objects.TiltSeries):
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
             text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
             obj = self._provider.getTiltSerieRepresentative(obj)
-        else:
+        elif isinstance(obj, tomo.objects.TiltImageBase):
             text = "Tilt image at %sº" % obj.getTiltAngle()
 
-        image = obj.getImage()
-        data = image.getData()
+        imageStk = ImageReadersRegistry.open(str(obj.getIndex()) + '@' + obj.getFileName())
+        npImage = imageStk.getImage()  # Pass this when scipion-em is released with this functionality: pilImage=True)
+        image = self._normalize(npImage)  # Delete this once pilImage is used
+        # Get original size
+        width, height = image.size
+
+        # Calculate the new dimension keeping the proportion
+        newWidth, newHeight = (THUMBNAIL_SIZE, int(THUMBNAIL_SIZE * height / width)) \
+            if width > height else (int(THUMBNAIL_SIZE * width / height), THUMBNAIL_SIZE)
+
+        # Resize the image creating a thumbnail
+        newImage = image.copy()
+        newImage.thumbnail((newWidth, newHeight))
+        data = np.array(newImage)
         preview._update(data)
         preview.setLabel(text)
+    
+    def _normalize(cls, npImage):
+        iMax = npImage.max()
+        iMin = npImage.min()
+        im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
+        return Image.fromarray(im255)
 
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
@@ -843,8 +1162,8 @@ class CTFSerieStates:
     CHECKED = 'checked'
     ODD = 'odd'
     EVEN = 'even'
-    FAILED = 'Failed'
-    OK = 'Ok'
+    EXCLUDED = "\u2611"  # ☑
+    INCLUDED = "\u2610"  # ☐
 
 
 class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
@@ -853,6 +1172,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     """
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
+    COL_CTF_EXCLUDED = 'Excluded'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
     COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
     COL_CTF_EST_AST = 'Astigmatism (A)'
@@ -911,6 +1231,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         cols = [
             (self.COL_CTF_SERIE, 100),
             (self.COL_TILT_ANG, 100),
+            (self.COL_CTF_EXCLUDED, 100),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
             (self.COL_CTF_EST_DEFOCUS_V, 100),
             (self.COL_CTF_EST_AST, 150),
@@ -936,7 +1257,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             text = obj.getTsId()
             # TODO: show avg defocus for TomoSeries
             values = ['',
-                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED
+                      #CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED
                       ]
             opened = False
             selected = obj.isEnabled()
@@ -949,7 +1270,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
             values = [str("%0.2f" % tiltAngle),
-                      #CTFSerieStates.OK if obj.isEnabled() else CTFSerieStates.FAILED,
+                      CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
                       str("%d" % ast),
@@ -975,16 +1296,13 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
                 obj.setEnabled(True)
                 tags = CTFSerieStates.CHECKED
                 self._checkedItems += 1
-
-            if obj.getObjId() % 2 == 0:
-                item['tags'] = (tags, CTFSerieStates.ODD)
-            else:
-                item['tags'] = (tags,  CTFSerieStates.EVEN)
         else:
-            if obj.getObjId() % 2 == 0:
-                item['tags'] = (CTFSerieStates.ODD,)
-            else:
-                item['tags'] = (CTFSerieStates.EVEN,)
+            tags = CTFSerieStates.INCLUDED
+            if not obj.isEnabled():
+                tags = CTFSerieStates.EXCLUDED
+
+        item['tags'] = (tags, CTFSerieStates.ODD) if obj.getObjId() % 2 == 0 else (tags, CTFSerieStates.EVEN)
+
         return item
 
 
@@ -992,34 +1310,60 @@ class CTFEstimationTree(BoundTree):
     def __init__(self, master, provider,  **opts):
         BoundTree.__init__(self, master, provider, **opts)
         self.selectedItem = None
+        self.provider = provider
         self._checkedItems = provider._checkedItems
 
-    def check_item(self, item):
+    def toogleExclusion(self, item, isCTFTomoSerie):
         """ check the box of item and change the state of the boxes of item's
             ancestors accordingly """
-        tags = CTFSerieStates.EVEN
-        if CTFSerieStates.ODD in self.item(item, 'tags'):
-            tags = CTFSerieStates.ODD
+        tags = CTFSerieStates.ODD if CTFSerieStates.ODD in self.item(item, 'tags') else CTFSerieStates.EVEN
+        self.selectedItem = item
+        if isCTFTomoSerie:
 
-        if CTFSerieStates.UNCHECKED in self.item(item, 'tags'):
-            self.item(item, tags=(CTFSerieStates.CHECKED, tags,))
-            self._checkedItems += 1
-            self.getSelectedObj().setEnabled(False)
+            if CTFSerieStates.UNCHECKED in self.item(item, 'tags'):
+                self.item(item, tags=(CTFSerieStates.CHECKED, tags,))
+                self._checkedItems += 1
+                self.getSelectedObj().setEnabled(False)
+                self.item(item)['selected'] = True
+                excluded = True
+            else:
+                self.item(item, tags=(CTFSerieStates.UNCHECKED, tags,))
+                self.getSelectedObj().setEnabled(True)
+                self._checkedItems -= 1
+                self.item(item)['selected'] = False
+                excluded = False
+
+            ctfTreeChildrenIds = list(self.get_children(item))
+            for ctfChildrenId in ctfTreeChildrenIds:
+                tags = CTFSerieStates.ODD if CTFSerieStates.ODD in self.item(ctfChildrenId, 'tags') else CTFSerieStates.EVEN
+                self.toogleCtf(ctfChildrenId, tags, excluded)
+        else:
+            self.toogleCtf(item, tags, CTFSerieStates.INCLUDED in self.item(item, 'tags'))
+
+    def toogleCtf(self, item, tags, excluded):
+        itemValues = self.item(item)
+        values = itemValues['values']
+        if excluded:
+            values[1] = CTFSerieStates.EXCLUDED
+            self.item(item, tags=(CTFSerieStates.EXCLUDED, tags,))
+            self.item(item, values=values)
+            self._objDict[item].setEnabled(False)
             self.item(item)['selected'] = True
         else:
-            self.item(item, tags=(CTFSerieStates.UNCHECKED, tags,))
-            self.getSelectedObj().setEnabled(True)
-            self._checkedItems -= 1
+            values[1] = CTFSerieStates.INCLUDED
+            self.item(item, tags=(CTFSerieStates.INCLUDED, tags,))
+            self.item(item, values=values)
+            self._objDict[item].setEnabled(True)
             self.item(item)['selected'] = False
 
-    def _onClick(self, event=None):
-        self._unpostMenu()
+    def _onItemClick(self, event=None):
         x, y, widget = event.x, event.y, event.widget
         elem = widget.identify("element", x, y)
         self.selectedItem = self.identify_row(y)
-        self.focus(self.selectedItem)
-        if "image" in elem:  # click on the checkbox
-            self.check_item(self.selectedItem)
+        if "image" in elem:  # click on the CTFTomoSerie checkbox
+            self.toogleExclusion(self.selectedItem, True)
+        elif x > 210 and x < 217:  # Position of exclude/include checkbox(CTFTomo)
+            self.toogleExclusion(self.selectedItem, False)
 
     def getSelectedItem(self):
         return self.selectedItem
@@ -1138,34 +1482,44 @@ class CtfEstimationListDialog(ListDialog):
 
     def _actionCreateSets(self, event=None):
         if self.generateSubsetButton['state'] == tk.NORMAL:
+            self.info('Processing...')
             protocol = self.provider.protocol
             ctfSeries = self.provider.getCTFSeries()
             suffix = self._getSuffix(protocol)
             goodCTFName = 'goodCtf%s' % suffix
-            badCTFName = 'badCtf%s' % suffix
 
             outputSetOfgoodCTFTomoSeries = ctfSeries.createCopy(protocol._getPath(),
                                                                 prefix=goodCTFName,
                                                                 copyInfo=True)
-            outputSetOfbadCTFTomoSeries = ctfSeries.createCopy(protocol._getPath(),
-                                                               prefix=badCTFName,
-                                                               copyInfo=True)
-            for ctfSerie in ctfSeries:
+            outputSetOfbadCTFTomoSeries = String()
+            outputSetOfbadCTFTomoSeries.set('')
+            ctfSerieSeek = 0
+            for ctfSerie in ctfSeries.iterItems():
                 ctfSerieClon = ctfSerie.clone()
-                if CTFSerieStates.UNCHECKED in self.tree.item(ctfSerie.getTsId(),
-                                                              'tags'):
+                ctfSerieClon.setEnabled(True)
+                goodCTF = CTFSerieStates.UNCHECKED in self.tree.item(ctfSerie.getTsId(), 'tags')
+                ctfSeek = 1
+                if goodCTF:
                     # Adding the ctfSerie to the good set of ctfTomoSeries
                     outputSetOfgoodCTFTomoSeries.append(ctfSerieClon)
                     outputSetOfgoodCTFTomoSeries.setSetOfTiltSeries(self._inputSetOfTiltSeries)
+                    objList = list(self.tree._objDict)
+                    for item in ctfSerie.iterItems():
+                        ctfEstItem = item.clone()
+                        obj = self.tree.getObjectFromId(objList[ctfSerieSeek + ctfSeek])
+                        ctfEstItem.setEnabled(obj.isEnabled())
+                        ctfSerieClon.append(ctfEstItem)
+                        ctfSeek += 1
 
+                    ctfSerieClon.write()
+                    outputSetOfgoodCTFTomoSeries.update(ctfSerieClon)
+                    outputSetOfgoodCTFTomoSeries.write()
                 else:
                     # Adding the ctfSerie to the bad set of ctfTomoSeries
-                    outputSetOfbadCTFTomoSeries.append(ctfSerieClon)
-                    outputSetOfbadCTFTomoSeries.setSetOfTiltSeries(self._inputSetOfTiltSeries)
+                    outputSetOfbadCTFTomoSeries.set(outputSetOfbadCTFTomoSeries.get() + ctfSerie.getTsId() + ' ')
+                    ctfSeek += ctfSerie.getSize()
 
-                for item in ctfSerie.iterItems():
-                    ctfEstItem = item.clone()
-                    ctfSerieClon.append(ctfEstItem)
+                ctfSerieSeek = ctfSeek
 
             outputgoodCTFSetName = 'goodSetOfCTFTomoSeries%s' % suffix
             outputbadCTFSetName = 'badSetOfCTFTomoSeries%s' % suffix
@@ -1173,34 +1527,36 @@ class CtfEstimationListDialog(ListDialog):
             if len(outputSetOfgoodCTFTomoSeries) > 0:
                 protocol._defineOutputs(**{outputgoodCTFSetName: outputSetOfgoodCTFTomoSeries})
 
-            if len(outputSetOfbadCTFTomoSeries) > 0:
+            if not outputSetOfbadCTFTomoSeries.empty() > 0:
+                outputSetOfbadCTFTomoSeries.set(", ".join(outputSetOfbadCTFTomoSeries.get().split()))
                 protocol._defineOutputs(**{outputbadCTFSetName: outputSetOfbadCTFTomoSeries})
 
             protocol._store()
-            self.cancel()
+            self.info('The output has been created successfully')
 
     def _showHelp(self, event=None):
         showInfo('CTFTomoSeries viewer help',
                  'This viewer allows you to create two '
                  'subsets of CTFTomoSeries which are called good '
                  'and bad respectively.\n\n'
-                 'Note: The series that are checked are the ones that '
-                 'represent the bad CTFTomoSeries', self.parent)
+                 'Note: The items that are excluded(checked) are the ones that '
+                 'represent the bad CTFTomoSeries', self)
 
     def _getSuffix(self, protocol):
         """
-        Return the number of the last output in order to complete the new
+        Return the index of the last output in order to complete the new
         output with a suffix
         """
         maxCounter = -1
-        pattern = 'goodSetOfCTFTomoSeries'
+        patterns = ['goodSetOfCTFTomoSeries', 'badSetOfCTFTomoSeries']
         for attrName, _ in protocol.iterOutputAttributes():
-            suffix = attrName.replace(pattern, '')
-            try:
-                counter = int(suffix)
-            except:
-                counter = 1  # when there is no number, assume 1
-            maxCounter = max(counter, maxCounter)
+            for pattern in patterns:
+                suffix = attrName.replace(pattern, '')
+                try:
+                    counter = int(suffix)
+                except:
+                    counter = 1  # when there is no number, assume 1
+                maxCounter = max(counter, maxCounter)
 
         return str(maxCounter + 1) if maxCounter > 0 else ''
 
@@ -1219,7 +1575,7 @@ class CtfEstimationListDialog(ListDialog):
         # Create a right panel to put the plotter
         self.bottomRightPanel = ttk.Frame(pw)
         self.bottomRightPanel.grid(row=0, column=1, padx=0, pady=0, sticky='news')
-        self._createPloter(self.bottomRightPanel)
+        self._createPlotter()
         pw.add(self.bottomRightPanel)
         pw.pack(fill=BOTH, expand=True)
         # This method is used to show sash
@@ -1231,7 +1587,7 @@ class CtfEstimationListDialog(ListDialog):
                                       selectmode=self._selectmode)
         item = self.tree.identify_row(0)
         self.tree.selection_set(item)
-        self.tree.focus(item)
+        self.tree.focus_force()
         self.tree.selectedItem = item
         self.im_checked = gui.getImage(Icon.CHECKED)
         self.im_unchecked = gui.getImage(Icon.UNCHECKED)
@@ -1239,11 +1595,50 @@ class CtfEstimationListDialog(ListDialog):
                                 image=self.im_unchecked)
         self.tree.tag_configure(CTFSerieStates.CHECKED,
                                 image=self.im_checked)
-        self.tree.tag_configure(CTFSerieStates.EVEN, background='#F2F2F2',
-                                foreground='black')
-        self.tree.tag_configure(CTFSerieStates.ODD, background='#E6E6E6',
-                                foreground='black')
-        self.tree.bind("<Button-1>", self._createPloter, True)
+        self.tree.tag_configure(CTFSerieStates.EVEN, background='#F2F2F2')
+        self.tree.tag_configure(CTFSerieStates.ODD, background='#E6E6E6')
+        self.tree.tag_configure(CTFSerieStates.CHECKED, foreground='red')
+        self.tree.tag_configure(CTFSerieStates.UNCHECKED, foreground='black')
+        self.tree.tag_configure(CTFSerieStates.INCLUDED, background='#F2F2F2', foreground='black')
+        self.tree.tag_configure(CTFSerieStates.EXCLUDED, background='#E6E6E6', foreground='red')
+        self.tree.bind("<ButtonRelease-1>", self._onItemClick)
+        self.tree.bind("<Up>", self._onUp)
+        self.tree.bind("<Down>", self._onDown)
+        self.tree.bind("<space>", self._onSpace)
+
+    def getTree(self):
+        return self.tree
+
+    def _onSpace(self, event):
+        selectedItem = self.tree.selectedItem
+        if selectedItem:
+            obj = self.tree._objDict[selectedItem]
+            isCTFTomoSerie = True if isinstance(obj, tomo.objects.CTFTomoSeries) else False
+            self.tree.toogleExclusion(selectedItem, isCTFTomoSerie)
+
+    def _onDown(self, event):
+        selectedItem = self.tree.selectedItem
+        if selectedItem:
+            nextItem = self.tree.next(selectedItem)
+            if nextItem:
+                self.tree.selectedItem = nextItem
+                self.tree.selectChild(nextItem)
+                self.tree.selection_set(nextItem)
+                self._createPlotter()
+
+    def _onUp(self, event):
+        selectedItem = self.tree.selectedItem
+        if selectedItem:
+            prevItem = self.tree.prev(selectedItem)
+            if prevItem:
+                self.tree.selectedItem = prevItem
+                self.tree.selectChild(prevItem)
+                self.tree.selection_set(prevItem)
+                self._createPlotter()
+
+    def _onItemClick(self, event):
+        self.tree._onItemClick(event)
+        self._createPlotter()
 
     def plotterChildItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
@@ -1260,12 +1655,15 @@ class CtfEstimationListDialog(ListDialog):
                     canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
                     canvas.draw()
                     canvas.get_tk_widget().pack(fill=BOTH, expand=0)
+                    canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
+                    canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
+                    canvas.get_tk_widget().bind("<space>", self._onKeyPress)
                     break
         plotterPanel.grid(row=0, column=1, sticky='news')
 
     def plotterParentItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
-        angList = []
+        angDict = {}
         defocusUList = []
         defocusVList = []
         phShList = []
@@ -1275,24 +1673,27 @@ class CtfEstimationListDialog(ListDialog):
             if ts.getTsId() == itemSelected:
                 for item in ts:
                     # Related to excluded views:
-                    # Only represent the enabled tilt images
-                    if item.isEnabled():
-                        angList.append(item.getTiltAngle())
+                    # We will initially save all the angles
+                    # and then, only exclude taking into account the defocus values.
+                    angDict[item.getAcquisitionOrder()] = item.getTiltAngle()
                 break
 
         for ctfSerie in self.provider.getCTFSeries():
             if ctfSerie.getTsId() == itemSelected:
+                angList = []
                 for item in ctfSerie.iterItems(orderBy='id'):
                     defocusU = item.getDefocusU()
                     # Related to excluded views:
-                    #   pwem method setWrongDefocus assigns:
-                    #   ctfModel.setDefocusU(-999)
-                    #   ctfModel.setDefocusV(-1)
-                    #   ctfModel.setDefocusAngle(-999)
-                    # If it's the case, the corresponding point won't be added to be plotted as
-                    # it will widen the representation range, what would make the represented region
-                    # of interest smaller
-                    if item.isEnabled():
+                    # Add the angle corresponding to the defocus value
+                    if item.getAcquisitionOrder() in angDict:
+                        angList.append(angDict[item.getAcquisitionOrder()])
+                        #   pwem method setWrongDefocus assigns:
+                        #   ctfModel.setDefocusU(-999)
+                        #   ctfModel.setDefocusV(-1)
+                        #   ctfModel.setDefocusAngle(-999)
+                        # If it's the case, the corresponding point won't be added to be plotted as
+                        # it will widen the representation range, what would make the represented region
+                        # of interest smaller
                         defocusUList.append(defocusU)
                         defocusVList.append(item.getDefocusV())
                         phShList.append(
@@ -1329,16 +1730,24 @@ class CtfEstimationListDialog(ListDialog):
                 canvas.draw()
                 canvas.get_tk_widget().pack(fill=BOTH, expand=0)
                 plotterPanel.grid(row=0, column=1, sticky='news')
+                canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
+                canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
+                canvas.get_tk_widget().bind("<space>", self._onKeyPress)
                 break
 
-    def _createPloter(self, event):
+    def _onKeyPress(self, event):
+        if event.keysym == 'Up':
+            self._onUp(event)
+        elif event.keysym == 'Down':
+            self._onDown(event)
+        elif event.keysym == 'space':
+            self._onSpace(event)
+
+    def _createPlotter(self):
         itemSelected = self.tree.getSelectedItem()
         obj = self.tree.getSelectedObj()
         self._checkedItems = self.tree._checkedItems
-        if self._checkedItems and self._checkedItems != len(self.provider.getCTFSeries()):
-            self.generateSubsetButton['state'] = tk.NORMAL
-        else:
-            self.generateSubsetButton['state'] = tk.DISABLED
+        self.generateSubsetButton['state'] = tk.NORMAL
 
         if obj is not None:
             if self.tree.parent(itemSelected):  # child item

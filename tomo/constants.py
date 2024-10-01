@@ -78,3 +78,6 @@ V0_4_17 = '0.4.17'
 NAPARI_DEF_VER = V0_4_17
 NAPARI_ACTIVATION_CMD = 'conda activate %s' % getNaparyEnvName(NAPARI_DEF_VER)
 NAPARI_ENV_ACTIVATION = 'NAPARI_ENV_ACTIVATION'
+
+# --------------------------- Import variables --------------------------------
+TS_LABEL = '{TS}'

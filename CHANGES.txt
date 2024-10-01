@@ -1,6 +1,46 @@
+v3.8.0:
+ Users:
+  - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
+    select the substring that will be considered as tsId.
+  - Import TS:
+    * Fix the heterogeneous set of TS validation using a range of angles.
+    * Multiple TS can be imported without the label {TS}.
+  - Join heterogeneous sets are possible for tomography objects TS and tomograms.
+  - New protocol correct tilt offset: It allows to correct the tilt offset of a tilt series
+  - Fix the protocol tomograms to micrographs. Helps enhanced. ImageHandler replaced by mrcfile.
+  - Import from Mdoc: more precise error when calculating the dose. GUI log with more information.
+  - TS viewer: Deleting excluded views and creating a new TS stack.
+  - Fixing an error creating new outputs through the tiltserie viewer and import error in absence of metadataviewer.
+  - Fixing an error plotting the defocus values in the ctfEstimation viewer
+  - Import TS with mdoc: fix in the assignment of the initial dose.
+  - Assign Transformation Matrix: combine alignments removed. Some fixes at metadata level.
+Developers:
+  - Attribute _acquisition is initialized as None in TSBase, so the coppyAttributes callen in protocol for joining.
+    sets work properly. The same whith the attribute _origin.
+  - Method hasAcquisition re-defined in TSBase for the same reason exposed in the previous line.
+  - Attribute _isHetereogeneous and accessors added to SetOfTomograms and SetOfTiltSeries. Used in the string
+    representation of both objects.
+  - TiltSeries: method reStack added and applyTransforma refactored. Both related to the management of the excluded
+    views.
+  - Fix update method in Set of Tomos and Set of TS: It does not turn homogeneous sets into heterogeneous ones, nor
+    does it look at the X and Y dimensions because they are considered heterogeneous under the criteria used before.
+    Only the third dimension is checked for the heterogeneous set check.
+  - CTFTomoSeries: method setNumberOfEstimationsInRangeFromDefocusList can handle now the excluded views.
+  - TCL:
+    * Attribute _isHetereogeneous checked in the corresponding sets.
+    * Method checktomograms now is able to check the acquisition.
+    * Method checkTsOriginMatrix added.
+  - TS viewer:
+    * Fix the list of tilt-series viewers
+    * Using ScipionImageReader to read tiltseries
 v3.7.2:
  Users:
+   - Handling the matching in the ctf import(generalizing without the need to set patterns such as {TS}).
+   - Refactoring the tiltserie viewer
   - Import TS, TSM and tomos: remove double underscore from both the linked filenames and the tsIds.
+  - Import TS: add a validation for the case of heterogeneous sets of TS in the number of tilt images and providing the
+    angular data using a range. The cases avoided with this validation prevents erratic behavior in the subsequent
+    protocols.
  Developers:
   - Add to Tomogram and SetOfTomograms the attribute _ctfcorrected, the same way it was added to the tilt-series.
   - Update the TCL based on the previous point.
@@ -33,11 +73,11 @@ Developers:
     header for each file.
 
 v3.6.0:
- 
+
  Users:
   - Tilt series subsets and CTFTomoseries clone the enable flag
   - Acquisition data storage fixed when importing tilt series and tilt series movies (min angle, max angle, and step)
- 
+
  Developers:
   - Test dataset relion40_sta_tutorial_data expanded.
   - TCL: methods dor checking sets of TS and TsM improved.
