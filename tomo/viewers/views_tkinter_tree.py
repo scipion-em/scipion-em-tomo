@@ -1643,7 +1643,8 @@ class CtfEstimationListDialog(ListDialog):
     def plotterChildItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         if self._show2DPLot is None:
-            self.plotterParentItem(self.tree.parent(itemSelected))
+            self.plotterParentItem(self.tree.parent(itemSelected),
+                                   int(itemSelected.split('.')[-1]))
         else:
             for ctfSerie in self.provider.getCTFSeries():
                 if ctfSerie.getTsId() in itemSelected:
@@ -1661,7 +1662,7 @@ class CtfEstimationListDialog(ListDialog):
                     break
         plotterPanel.grid(row=0, column=1, sticky='news')
 
-    def plotterParentItem(self, itemSelected):
+    def plotterParentItem(self, itemSelected, tiltSelected=None):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         angDict = {}
         defocusUList = []
@@ -1704,13 +1705,22 @@ class CtfEstimationListDialog(ListDialog):
                 defocusPlot = fig.add_subplot(111)
                 defocusPlot.grid()
                 defocusPlot.set_title(itemSelected)
-                defocusPlot.set_xlabel('Tilt angle')
-                defocusPlot.set_ylabel('DefocusU', color='tab:red')
+                defocusPlot.set_xlabel('Tilt angle (deg)')
+                defocusPlot.set_ylabel('Defocus (A)')
                 defocusPlot.plot(angList, defocusUList, marker='.',
                                  color='tab:red', label='DefocusU (A)')
-                defocusPlot.set_ylabel('DefocusV', color='tab:blue')
                 defocusPlot.plot(angList, defocusVList, marker='.',
                                  color='tab:blue', label='DefocusV (A)')
+
+                if tiltSelected is not None:
+                    tomoCtf = ctfSerie[tiltSelected]
+                    angle = angDict[tomoCtf.getAcquisitionOrder()]
+                    defocusU = tomoCtf.getDefocusU()
+                    defocusV = tomoCtf.getDefocusV()
+                    defocusPlot.scatter(angle, defocusU, marker='o', facecolors='none',
+                                     edgecolors='tab:red', s=150)
+                    defocusPlot.scatter(angle, defocusV, marker='o', facecolors='none',
+                                     edgecolors='tab:blue', s=150)
 
                 if item.hasPhaseShift():
                     phShPlot = defocusPlot.twinx()
@@ -1721,7 +1731,7 @@ class CtfEstimationListDialog(ListDialog):
                 else:  # no phase shift, plot resolution instead
                     resPlot = defocusPlot.twinx()
                     resPlot.set_ylim(0, 30)
-                    resPlot.set_ylabel('Resolution', color='tab:green')
+                    resPlot.set_ylabel('Resolution (A)', color='tab:green')
                     resPlot.plot(angList, resList, marker='.',
                                  color='tab:green', label='Resolution (A)')
 
