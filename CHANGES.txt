@@ -1,7 +1,7 @@
 v3.8.1:
  Users:
   - TS viewer: Adding angles and the transformation matrix information
-
+  - update napari to v0.4.19
 v3.8.0:
  Users:
   - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
