@@ -217,7 +217,8 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltImageM):
             newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4])
         else:
-            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
+            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5],
+                         itemValues[6], itemValues[7], itemValues[8])
         tags = TiltImageStates.EVEN
         if TiltImageStates.ODD in self.tree.item(selectedItem, 'tags'):
             tags = TiltImageStates.ODD
