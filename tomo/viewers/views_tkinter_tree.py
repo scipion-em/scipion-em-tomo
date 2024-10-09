@@ -809,6 +809,7 @@ class TiltSeriesDialogView(pwviewer.View):
         im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
         return Image.fromarray(im255)
 
+
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
 
@@ -1238,10 +1239,10 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
     COL_CTF_EXCLUDED = 'Excluded'
-    COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
-    COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
-    COL_CTF_EST_AST = 'Astigmatism (A)'
-    COL_CTF_EST_RES = 'Resolution (A)'
+    COL_CTF_EST_DEFOCUS_U = 'DefocusU (Å)'
+    COL_CTF_EST_DEFOCUS_V = 'DefocusV (Å)'
+    COL_CTF_EST_AST = 'Astigmatism (Å)'
+    COL_CTF_EST_RES = 'Resolution (Å)'
     COL_CTF_EST_FIT = 'CC value'
     COL_CTF_EST_PHASE = 'Phase shift (deg)'
 
@@ -1708,7 +1709,8 @@ class CtfEstimationListDialog(ListDialog):
     def plotterChildItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         if self._show2DPLot is None:
-            self.plotterParentItem(self.tree.parent(itemSelected))
+            self.plotterParentItem(self.tree.parent(itemSelected),
+                                   int(itemSelected.split('.')[-1]))
         else:
             for ctfSerie in self.provider.getCTFSeries():
                 if ctfSerie.getTsId() in itemSelected:
@@ -1726,7 +1728,7 @@ class CtfEstimationListDialog(ListDialog):
                     break
         plotterPanel.grid(row=0, column=1, sticky='news')
 
-    def plotterParentItem(self, itemSelected):
+    def plotterParentItem(self, itemSelected, tiltSelected=None):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         angDict = {}
         defocusUList = []
@@ -1769,13 +1771,22 @@ class CtfEstimationListDialog(ListDialog):
                 defocusPlot = fig.add_subplot(111)
                 defocusPlot.grid()
                 defocusPlot.set_title(itemSelected)
-                defocusPlot.set_xlabel('Tilt angle')
-                defocusPlot.set_ylabel('DefocusU', color='tab:red')
+                defocusPlot.set_xlabel('Tilt angle (deg)')
+                defocusPlot.set_ylabel('Defocus (Å)')
                 defocusPlot.plot(angList, defocusUList, marker='.',
-                                 color='tab:red', label='DefocusU (A)')
-                defocusPlot.set_ylabel('DefocusV', color='tab:blue')
+                                 color='tab:red', label='DefocusU (Å)')
                 defocusPlot.plot(angList, defocusVList, marker='.',
-                                 color='tab:blue', label='DefocusV (A)')
+                                 color='tab:blue', label='DefocusV (Å)')
+
+                if tiltSelected is not None:
+                    tomoCtf = ctfSerie[tiltSelected]
+                    angle = angDict[tomoCtf.getAcquisitionOrder()]
+                    defocusU = tomoCtf.getDefocusU()
+                    defocusV = tomoCtf.getDefocusV()
+                    defocusPlot.scatter(angle, defocusU, marker='o', facecolors='none',
+                                     edgecolors='tab:red', s=150)
+                    defocusPlot.scatter(angle, defocusV, marker='o', facecolors='none',
+                                     edgecolors='tab:blue', s=150)
 
                 if item.hasPhaseShift():
                     phShPlot = defocusPlot.twinx()
@@ -1786,9 +1797,9 @@ class CtfEstimationListDialog(ListDialog):
                 else:  # no phase shift, plot resolution instead
                     resPlot = defocusPlot.twinx()
                     resPlot.set_ylim(0, 30)
-                    resPlot.set_ylabel('Resolution', color='tab:green')
+                    resPlot.set_ylabel('Resolution (A)', color='tab:green')
                     resPlot.plot(angList, resList, marker='.',
-                                 color='tab:green', label='Resolution (A)')
+                                 color='tab:green', label='Resolution (Å)')
 
                 fig.legend()
                 canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
