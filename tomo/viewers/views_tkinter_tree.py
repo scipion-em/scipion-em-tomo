@@ -744,6 +744,7 @@ class TiltSeriesDialogView(pwviewer.View):
         im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
         return Image.fromarray(im255)
 
+
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
 
@@ -1173,10 +1174,10 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     COL_CTF_SERIE = 'Tilt Series'
     COL_TILT_ANG = 'Tilt Angle'
     COL_CTF_EXCLUDED = 'Excluded'
-    COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
-    COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
-    COL_CTF_EST_AST = 'Astigmatism (A)'
-    COL_CTF_EST_RES = 'Resolution (A)'
+    COL_CTF_EST_DEFOCUS_U = 'DefocusU (Å)'
+    COL_CTF_EST_DEFOCUS_V = 'DefocusV (Å)'
+    COL_CTF_EST_AST = 'Astigmatism (Å)'
+    COL_CTF_EST_RES = 'Resolution (Å)'
     COL_CTF_EST_FIT = 'CC value'
     COL_CTF_EST_PHASE = 'Phase shift (deg)'
 
@@ -1706,11 +1707,11 @@ class CtfEstimationListDialog(ListDialog):
                 defocusPlot.grid()
                 defocusPlot.set_title(itemSelected)
                 defocusPlot.set_xlabel('Tilt angle (deg)')
-                defocusPlot.set_ylabel('Defocus (A)')
+                defocusPlot.set_ylabel('Defocus (Å)')
                 defocusPlot.plot(angList, defocusUList, marker='.',
-                                 color='tab:red', label='DefocusU (A)')
+                                 color='tab:red', label='DefocusU (Å)')
                 defocusPlot.plot(angList, defocusVList, marker='.',
-                                 color='tab:blue', label='DefocusV (A)')
+                                 color='tab:blue', label='DefocusV (Å)')
 
                 if tiltSelected is not None:
                     tomoCtf = ctfSerie[tiltSelected]
@@ -1733,7 +1734,7 @@ class CtfEstimationListDialog(ListDialog):
                     resPlot.set_ylim(0, 30)
                     resPlot.set_ylabel('Resolution (A)', color='tab:green')
                     resPlot.plot(angList, resList, marker='.',
-                                 color='tab:green', label='Resolution (A)')
+                                 color='tab:green', label='Resolution (Å)')
 
                 fig.legend()
                 canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
