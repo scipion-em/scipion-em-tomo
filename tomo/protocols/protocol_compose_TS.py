@@ -51,11 +51,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
     _devStatus = pw.BETA
     _label = 'Compose Tilt Series'
     _possibleOutputs = {OUT_STS: SetOfTiltSeries}
+    stepsExecutionMode = STEPS_PARALLEL  # Defining that the protocol contain parallel steps
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.MDOC_DATA_SOURCE = None
-        self.stepsExecutionMode = STEPS_PARALLEL  # Defining that the protocol contain parallel steps
         self.listMdocsRead = []
         self.list_reading = []
         self.TiltSeries = None
@@ -81,7 +81,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                       label="Mdoc pattern",
                       default="*.mdoc",
                       help="Pattern that should match for mdoc files."
-                            "Use of * will work for multiple characters or ? for a single one. Also [] can specify ranges.")
+                           "Use of * will work for multiple characters or ? for a single one. Also [] can specify ranges.")
         form.addParam('excludedWords', params.StringParam,
                       label="Exclusion words",
                       default="",
@@ -190,7 +190,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
             self.time4NextTS_current = time.time()
             self.list_reading.append(self.list_remain[0])
             self._insertFunctionStep('readMdoc', self.list_remain[0],
-                                                   prerequisites=[], wait=False)
+                                     prerequisites=[], wait=False)
             self.updateSteps()
 
 
@@ -256,7 +256,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 self.listMdocsRead.append(file2read)
 
                 self.info("Tilt serie ({} tilts) composed from mdoc file: {}\n".
-                    format(len(mdoc_order_angle_list), os.path.basename(file2read)))
+                          format(len(mdoc_order_angle_list), os.path.basename(file2read)))
 
 
         self.list_reading.remove(file2read)
@@ -281,7 +281,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                 filepath, tiltA = self.fixingMdocBug(filepath, tiltA)
 
             mdoc_order_angle_list.append((filepath,
-                '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
+                                          '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
         return True, mdoc_order_angle_list
 
 
@@ -410,7 +410,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         SOTS.append(ts_obj)
 
         self.settingTS(SOTS, ts_obj, file_ordered_angle_list,
-                      incoming_dose_list, accumulated_dose_list)
+                       incoming_dose_list, accumulated_dose_list)
 
         ts_obj.write(properties=False)
         SOTS.update(ts_obj)
@@ -419,7 +419,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
 
 
     def settingTS(self, SOTS, ts_obj, file_ordered_angle_list,
-                 incoming_dose_list, accumulated_dose_list):
+                  incoming_dose_list, accumulated_dose_list):
         """
         Set all the info in each tilt and set the ts_obj information with all
         the tilts

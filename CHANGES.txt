@@ -2,6 +2,9 @@ v3.8.1:
  Users:
   - TS viewer: Adding angles and the transformation matrix information
   - update napari to v0.4.19
+   - Steps more precise in GPU usage. Improved execution
+  Developers:
+   - executionmode at class level
 v3.8.0:
  Users:
   - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
