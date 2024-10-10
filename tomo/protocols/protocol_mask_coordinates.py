@@ -27,7 +27,7 @@ import numpy as np
 import scipy.ndimage
 
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam, IntParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, IntParam
 
 from pwem.protocols import EMProtocol
 from pwem.emlib.image import ImageHandler
@@ -39,12 +39,6 @@ from tomo.protocols import ProtTomoBase
 import tomo.constants as const
 
 COORDINATES = 'Coordinates'
-
-MORPHOLOGICAL_OP_NONE = 0
-MORPHOLOGICAL_OP_DILATION = 1
-MORPHOLOGICAL_OP_EROSION = 2
-MORPHOLOGICAL_OP_OPENING = 3
-MORPHOLOGICAL_OP_CLOSING = 4
 
 class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
     """ TODO
@@ -67,16 +61,7 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
                       default=-1,
                       help='Labels to consider. If negative, it will consider '
                            'all non-zero areas in the input segmentation')
-        form.addParam('morphologicalOperation', EnumParam, 
-                      label='Morphological operation',
-                      choices=['None', 'Dilation', 'Erosion', 'Opening', 'Closing'],
-                      help='Apply a morphological operation to the binarized mask')
-        form.addParam('morphologicalOperationSphRadius', IntParam,
-                      label='Sphere size', default = 10,
-                      condition='morphologicalOperation != MORPHOLOGICAL_OP_NONE',
-                      help='Radiuis of the sphere used for the morphological '
-                           'operation. In pixels')
-        
+
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
         coordinates = self._getInputCoordinates()
@@ -86,7 +71,7 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
         for tomogram in tomograms.iterItems():
             tsId = tomogram.getTsId()
             self._insertFunctionStep(self.filterTomogramCoordinatesStep, tsId)
-        self._insertFunctionStep(self.finalizeStep)
+        self._insertFunctionStep(self.closeOuputStep)
         
 
     # --------------------------- STEPS functions ------------------------------
@@ -102,14 +87,16 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
         self._defineSourceRelation(self.inputSegmentations, outputCoordinates)
     
     def filterTomogramCoordinatesStep(self, tsId: str):
-        mask = self._calculateMask(tsId)
-        inputCoordinates3d = self._getInputCoordinates()
-        outputCoordinates: SetOfCoordinates3D = self.outputCoordinates
-        tomogram: Tomogram = inputCoordinates3d.getPrecedent(tsId)
-        
-        for item in inputCoordinates3d.iterCoordinates(tomogram):
-            if self._checkCoordinate(item, mask):
-                outputCoordinates.append(item)
+        segmentation = self._getInputSegmentation(tsId)
+        if segmentation is not None:
+            mask = self._calculateMask(segmentation)
+            inputCoordinates3d = self._getInputCoordinates()
+            outputCoordinates: SetOfCoordinates3D = getattr(self, COORDINATES)
+            tomogram: Tomogram = inputCoordinates3d.getPrecedent(tsId)
+            
+            for item in inputCoordinates3d.iterCoordinates(tomogram):
+                if self._checkCoordinate(item, mask):
+                    outputCoordinates.append(item)
 
     def closeOuputStep(self):
         self._closeOutputSet()
@@ -123,53 +110,44 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
         for item in segmentations.iterItems():
             if item.getTsId() == tsId:
                 return item
-            
-        raise RuntimeError(f'No segmentation found for {tsId}')
+        return None
     
-    def _loadSegmentation(self, tsId) -> np.ndarray:
-        segmentation = self._getInputSegmentation(tsId)
+    def _loadSegmentation(self, segmentation: TomoMask) -> np.ndarray:
         ih = ImageHandler()
         image = ih.read(segmentation)
         return image.getData()
     
-    def _applyMorphologicalOperation(self, mask: np.ndarray) -> np.ndarray:
-        opCode = self.morphologicalOperation.get()
-        if opCode != MORPHOLOGICAL_OP_NONE:
-            radius: int = self.morphologicalOperationSphRadius.get()
-            struct = scipy.ndimage.generate_binary_structure(3, 1)
-            struct = scipy.ndimage.iterate_structure(struct, iterations=radius)
-            
-            if opCode == MORPHOLOGICAL_OP_DILATION:
-                mask = scipy.ndimage.binary_dilation(mask, struct)
-            elif opCode == MORPHOLOGICAL_OP_EROSION:
-                mask = scipy.ndimage.binary_erosion(mask, struct)
-            elif opCode == MORPHOLOGICAL_OP_OPENING:
-                mask = scipy.ndimage.binary_opening(mask, struct)
-            elif opCode == MORPHOLOGICAL_OP_CLOSING:
-                mask = scipy.ndimage.binary_closing(mask, struct)
-            else:
-                raise RuntimeError('Unknown morphological operation')
-            
-        return mask
-            
-    def _calculateMask(self, tsId: str) -> np.ndarray:
-        segmentation = self._loadSegmentation(tsId)
+    def _calculateMask(self, segmentation: TomoMask) -> np.ndarray:
+        segmentationData = self._loadSegmentation(segmentation)
         label: int = self.segmentationLabel.get()
         
         if label < 0:
-            mask = (segmentation > 0)
+            mask = (segmentationData > 0)
         else:
-            mask = (segmentation == label)
+            mask = (segmentationData == label)
             
-        return self._applyMorphologicalOperation(mask)
+        return mask
         
     def _checkCoordinate(self, coordinate: Coordinate3D, mask: np.ndarray) -> bool:
-        x, y, z = coordinate.getPosition(const.SCIPION)
-        x = round(x - mask.shape[-1]/2)
-        y = round(y - mask.shape[-2]/2)
-        z = round(z - mask.shape[-3]/2)
-        return bool(mask[z,y,x] == True)
+        position = coordinate.getPosition(const.BOTTOM_LEFT_CORNER)
+        position = tuple(map(round, position))
+        x, y, z = position
+        return bool(mask[z, y, x] == True)
     
-    # --------------------------- INFO functions --------------------------------------------
+    # --------------------------- INFO functions -------------------------------
     def _validate(self):
-        return [] # TODO
+        result = []
+        
+        coordinates = self._getInputCoordinates()
+        tomograms: SetOfTomograms = coordinates.getPrecedents()
+        segmentations: SetOfTomoMasks = self.inputSegmentations.get()
+
+        if coordinates.getSamplingRate() != segmentations.getSamplingRate():
+            result.append('Sampling rate of the segmentation does not '
+                          'match the sampling rate of the segmentation')
+        
+        if tomograms.getDim() != segmentations.getDim():
+            result.append('Dimensions of the segmentation does not match '
+                          'the dimensions of the tomogram used for picking')
+        
+        return result
