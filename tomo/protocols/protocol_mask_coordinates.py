@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 import numpy as np
-import scipy.ndimage
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
