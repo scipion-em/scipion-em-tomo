@@ -27,14 +27,14 @@ import numpy as np
 import scipy.ndimage
 
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam, IntParam
+from pyworkflow.protocol.params import PointerParam, IntParam, BooleanParam
 
 from pwem.protocols import EMProtocol
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Set
 
 from tomo.objects import (SetOfCoordinates3D, Coordinate3D, SetOfTomograms,
-                          SetOfTomoMasks, TomoMask, Tomogram )
+                          SetOfTomoMasks, TomoMask, Tomogram)
 from tomo.protocols import ProtTomoBase
 import tomo.constants as const
 
@@ -61,6 +61,12 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
                       default=-1,
                       help='Labels to consider. If negative, it will consider '
                            'all non-zero areas in the input segmentation')
+        form.addParam('excludeUnsegmented', BooleanParam, 
+                      label='Exclude unsegmented coordinates', default=True,
+                      help='Determines behaviour when encountering coordinates '
+                           'without a segmentation. When true, those coordintates ' 
+                           'are not outputed. If false, all coordintates from '
+                           'those coordinates are outputed.')
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
@@ -87,16 +93,21 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
         self._defineSourceRelation(self.inputSegmentations, outputCoordinates)
     
     def filterTomogramCoordinatesStep(self, tsId: str):
+        inputCoordinates3d = self._getInputCoordinates()
+        outputCoordinates: SetOfCoordinates3D = getattr(self, COORDINATES)
+        tomogram: Tomogram = inputCoordinates3d.getPrecedent(tsId)
         segmentation = self._getInputSegmentation(tsId)
+        
         if segmentation is not None:
             mask = self._calculateMask(segmentation)
-            inputCoordinates3d = self._getInputCoordinates()
-            outputCoordinates: SetOfCoordinates3D = getattr(self, COORDINATES)
-            tomogram: Tomogram = inputCoordinates3d.getPrecedent(tsId)
             
             for item in inputCoordinates3d.iterCoordinates(tomogram):
                 if self._checkCoordinate(item, mask):
                     outputCoordinates.append(item)
+        
+        elif not self.excludeUnsegmented:
+            for item in inputCoordinates3d.iterCoordinates(tomogram):
+                outputCoordinates.append(item)
 
     def closeOuputStep(self):
         self._closeOutputSet()
