@@ -78,7 +78,6 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
             self._insertFunctionStep(self.filterTomogramCoordinatesStep, tsId)
         self._insertFunctionStep(self.closeOuputStep)
         
-
     # --------------------------- STEPS functions ------------------------------
     def createOutputStep(self):
         inputCoordintates = self._getInputCoordinates()
@@ -161,3 +160,4 @@ class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
                           'the dimensions of the tomogram used for picking')
         
         return result
+    
