@@ -620,7 +620,7 @@ class TestTomoPreprocessing(BaseTest):
         # --------- CTF estimation with ctffind ------
         protCtffind = self.newProtocol(
             cistem.protocols.CistemProtTsCtffind,
-            inputTiltSeries=protMc.outputTiltSeries,
+            inputTiltSeries=protMc.TiltSeries,
             lowRes=50, minDefocus=30000,
             numberOfThreads=threads
         )
