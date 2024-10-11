@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     J.L. Vilas (jlvilas@cnb.csic.es)
+# *              Oier Lauzirika Zarrabeita (oierlauzi@bizkaia.eu)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -115,7 +116,7 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
         if mask is not None:
             tomogram = self._getInputTomogram(tsId)
             outputMeshes = getattr(self, self._OUTPUT_NAME)
-            maskData = None # TODO
+            maskData = self._loadMask(mask)
     
             if self.segmentation:
                 self._processSegmentation(
@@ -187,16 +188,16 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
                            mesh: SetOfMeshes,
                            tomogram: Tomogram,
                            mask: np.ndarray ):
-        probability = self.density.get / 100
+        probability = self.density.get() / 100.0
         coordinates = np.argwhere(mask)
         indices = np.arange(0, len(coordinates))
         nPoints = math.floor(probability*len(indices))
         selection = np.random.choice(indices, size=nPoints, replace=False)
         
-        point = MeshPoint()
-        point.setVolume(tomogram)
-        point.setGroupId(self.baseGroupId)
         for z, y, x in coordinates[selection,:]:
+            point = MeshPoint()
+            point.setVolume(tomogram)
+            point.setGroupId(self.baseGroupId)
             point.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
             mesh.append(point)
         
