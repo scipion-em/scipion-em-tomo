@@ -177,7 +177,7 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
                            mesh: SetOfMeshes,
                            tomogram: Tomogram,
                            mask: np.ndarray ) -> None:
-        mask = (self.lowLimit.get() <= mask) and (mask <= self.highLimit.get())
+        mask = (self.lowLimit.get() <= mask) & (mask <= self.highLimit.get())
         self._processBinaryMask(
             mesh=mesh,
             tomogram=tomogram,
