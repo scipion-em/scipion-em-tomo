@@ -40,9 +40,7 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
     functionality about the steps execution (also in streaming) and
     the output generation.
     """
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
+    stepsExecutionMode = STEPS_PARALLEL
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):

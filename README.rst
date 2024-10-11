@@ -4,8 +4,6 @@ Tomo plugin
 
 Base Scipion plugin for electron cryo-tomography and subtomogram averaging.
 
-This plugin is currently in **BETA** mode.
-
 Protocols
 ---------
 
@@ -70,7 +68,7 @@ Install the plugin in developer mode.
 **Configuration variables**
 ===========================
 
-**NAPARI_ENV_ACTIVATION** (default = conda activate napari-0.4.17):
+**NAPARI_ENV_ACTIVATION** (default = conda activate napari-0.4.19):
 Command to activate napari environment (used by other tomo plugins).
 
 
