@@ -1,3 +1,6 @@
+v3.9.0:
+ Users: 
+  - Add a protocol for filtering coordinates based on a mask.
 v3.8.0:
  Users:
   - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
