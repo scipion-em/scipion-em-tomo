@@ -98,75 +98,85 @@ def extractVesicles(coordinates, dictVesicles, tomoName):
     return dictVesicles
 
 
-def fit_ellipsoid(x, y, z):
+def fit_ellipsoid(points: np.ndarray):
     """ Fit ellipsoid in the form Ax^2 + By^2 + Cz^2 + 2Dxy + 2Exz + 2Fyz + 2Gx + 2Hy + 2Iz + J = 0
     and A + B + C = 3 constraint removing one extra parameter (from Matlab function "Fit Ellipsoid"). """
 
     # OUTPUT:
     # center: ellispoid center coordinates[xc, yc, zc]
     # radii: ellipsoid radii[a, b, c]
-    # evecs: the radii directions as columns of the 3x3 matrix
     # v: the 10 parameters describing the ellipsoid algebraically:
     #     Ax^2 + By^2 + Cz^2 + 2Dxy + 2Exz + 2Fyz + 2Gx + 2Hy + 2Iz + J = 0
+    # evecs: the radii directions as columns of the 3x3 matrix
     # chi2: residual sum of squared errors(chi^2), in the coordinate frame in which the ellipsoid is a unit sphere
 
-    D = np.array(
-        [x * x + y * y - 2 * z * z, x * x + z * z - 2 * y * y, 2 * x * y, 2 * x * z, 2 * y * z, 2 * x, 2 * y, 2 * z,
-         1 + 0 * x])
-    D = D.transpose()
+    x = points[:,0]
+    y = points[:,1]
+    z = points[:,2]
+    x2 = np.square(x)
+    y2 = np.square(y)
+    z2 = np.square(z)
+    
+    # Algebraic expression for the ellipsoid
+    d = np.empty((len(points), 9))
+    d[:,0] = x2 + y2 - 2*z2
+    d[:,1] = x2 + z2 - 2*y2
+    d[:,2] = 2*x*y
+    d[:,3] = 2*x*z
+    d[:,4] = 2*y*z
+    d[:,5:8] = 2*points 
+    d[:,8] = 1
+    
+    # Right hand side of the 
+    b = x2 + y2 + z2
 
-    # Solve the normal system of equations
-    d2 = x * x + y * y + z * z  # The RHS of the llsq problem (y's)
-    cD = D.conj().transpose()
-    a = cD @ D
-    b = cD @ d2
-    u = np.linalg.lstsq(a, b, rcond=None)[0]  # Solution to the normal equations
+    # Solve for the Leas
+    u, chi2, _, _ = np.linalg.lstsq(d, b, rcond=None)
 
-    # Find the ellipsoid parameters
-    # Convert back to the conventional algebraic form
-    v = np.zeros(10)
+    # Convert back to the algebraic form
+    v = np.empty(10)
     v[0] = u[0] + u[1] - 1
     v[1] = u[0] - 2 * u[1] - 1
     v[2] = u[1] - 2 * u[0] - 1
     v[3:10] = u[2:9]
 
-    # Form the algebraic form of the ellipsoid
-    A = np.array([[v[0], v[3], v[4], v[6]],
+    # Convert to the quadratic form
+    q = np.array([[v[0], v[3], v[4], v[6]],
                   [v[3], v[1], v[5], v[7]],
                   [v[4], v[5], v[2], v[8]],
                   [v[6], v[7], v[8], v[9]]])
 
-    # Find the center of the ellipsoid
-    center = np.linalg.lstsq(-A[0:3, 0:3], v[6:9], rcond=None)[0]
+    # Find the centre of the elipsoid
+    centre = np.linalg.solve(-q[0:3, 0:3], v[6:9])
 
-    # Form the corresponding translation matrix
-    T = np.eye(4)
-    T[3, 0:3] = center.conj().transpose()
+    # Translate to the centre
+    t = np.eye(4)
+    t[3, 0:3] = centre
+    r = t @ q @ t.T
 
-    # Translate to the center
-    R = T * A * T.conj().transpose()
+    # Obtain the rotation
+    evals, evecs = np.linalg.eigh(r[0:3, 0:3] / -r[3, 3])
 
-    # Solve the eigenproblem
-    [evals, evecs] = np.linalg.eig(R[0:3, 0:3] / -R[3, 3])
+    # Calculate the scales
     radii = np.sqrt(1 / abs(evals))
     sgns = np.sign(evals)
-    radii = radii * sgns
+    radii *= sgns
 
-    # Calculate difference of the fitted points from the actual data normalized by the conic radii
-    d = np.array([x - center[0], y - center[1], z - center[2]])  # shift data to origin
-    d = d.transpose() @ evecs  # Rotate to cardinal axes of the conic
-    d = d.transpose()
-    d = np.array([d[:, 0] / radii[0], d[:, 1] / radii[1], d[:, 2] / radii[2]])  # normalize to the conic radii
-    chi2 = np.sum(
-        np.abs(1 - np.sum(np.dot((d ** 2), np.tile(sgns.conj().transpose(), (d.shape[0], 1)).transpose()), 1)))
+    return centre, radii, v, evecs, chi2
 
-    if np.abs(v[-1]) > 1e-6:
-        v = -v / v[-1]  # Normalize to the more conventional form with constant term = -1
-    else:
-        v = -np.sign(v[-1]) * v
-
-    return center, radii, v, evecs, chi2
-
+def fit_sphere(points: np.ndarray):
+    # Coefficient matrix and values
+    d = np.column_stack((2*points, np.ones(len(points))))
+    b = (points**2).sum(axis=1)
+    
+    # Solve A x = b
+    x, chi2, _, _ = np.linalg.lstsq(d, b, rcond=None)
+    
+    # Sphere parameters
+    center = x[:3]
+    radius = np.sqrt(np.dot(center, center) + x[3])
+    
+    return center, radius, chi2
 
 def generatePointCloud(v, tomoDim):
     ygrid = np.linspace(0, 1, 100, dtype=float)
