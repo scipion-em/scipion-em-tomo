@@ -32,10 +32,10 @@ from pyworkflow.protocol.params import (PointerParam, FloatParam, EnumParam,
 
 from pwem.protocols import EMProtocol
 
+import tomo.constants as const
 from tomo.objects import (SetOfCoordinates3D, Coordinate3D,
                           SetOfMeshes, MeshPoint, Transform)
 from tomo.protocols import ProtTomoBase
-import tomo.constants as const
 from tomo.utils import fit_ellipsoid, fit_sphere
 
 COORDINATES = 'Coordinates'
