@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Estrella Fernandez Gimenez (me.fernandez@cnb.csic.es)
+# * Authors: Oier Lauzirika Zarrabeitia
 # *
 # *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
