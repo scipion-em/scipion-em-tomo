@@ -122,7 +122,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                 # coherence with the values of the transformation matrix assigned
                 fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
                 newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-
+                newTi.setTiltAngle(tiFrom.getTiltAngle())
                 newTransform = self.updateTM(tiFrom.getTransform())
                 newTi.setTransform(newTransform)
 
