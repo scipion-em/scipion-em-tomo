@@ -57,16 +57,17 @@ class GeometricPickingViewer(EmProtocolViewer):
         
         positions = []
         normals = []
-        query = '%s=%s' % (Coordinate3D.TOMO_ID_ATTR, tsId)
+        query = "%s='%s'" % (Coordinate3D.TOMO_ID_ATTR, tsId)
         for coordinate in coordinates.iterItems(where=query):
             matrix = coordinate.getMatrix()
-            normal = matrix[3,0:3]
+            normal = matrix[2,:3]
             position = coordinate.getPosition(const.SCIPION)
             positions.append(position)
             normals.append(normal)
             
         positions = np.array(positions)
         normals = np.array(normals)
+        normals *= coordinates.getBoxSize() / 2
         
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
@@ -74,5 +75,10 @@ class GeometricPickingViewer(EmProtocolViewer):
             positions[:,0], positions[:,1], positions[:,2],
             normals[:,0], normals[:,1], normals[:,2]
         )
+        
+        lim = np.max(abs(positions))
+        ax.set_xlim(-lim, lim)
+        ax.set_ylim(-lim, lim)
+        ax.set_zlim(-lim, lim)
         
         return [fig]

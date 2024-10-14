@@ -133,17 +133,29 @@ class ProtGeometricPicking(EMProtocol, ProtTomoBase):
         return np.array(points)
     
     def _computeTransformMatricesFromNormals(self, normals: np.ndarray) -> np.ndarray:
+        # https://math.stackexchange.com/a/1957132
         result = np.zeros((len(normals), 4, 4))
+        
         l = np.linalg.norm(normals[...,0:2], axis=-1)
-        r = 1.0 / l
-        result[...,0,0] = normals[...,1]*r
-        result[...,0,1] = -normals[...,0]*r
-        result[...,0,2] = 0.0
-        result[...,1,0] = normals[...,0]*normals[...,2]*r
-        result[...,1,1] = normals[...,1]*normals[...,2]*r
-        result[...,1,2] = -l
+        lockMask = np.isclose(l, 0.0)
+        sideMask = ~lockMask # Elements that are subjected to gimbal lock
+        
+        # Process side normals
+        r = 1.0 / l[sideMask]
+        result[sideMask,0,0] = normals[sideMask,1]*r
+        result[sideMask,0,1] = -normals[sideMask,0]*r
+        #result[sideMask,0,2] = 0.0 Already set in initialization
+        result[sideMask,1,0] = normals[sideMask,0]*normals[sideMask,2]*r
+        result[sideMask,1,1] = normals[sideMask,1]*normals[sideMask,2]*r
+        result[sideMask,1,2] = -l[sideMask]
+        
+        # Process gimbal locked normals
+        result[lockMask,0,0] = 1.0
+        result[lockMask,1,1] = normals[lockMask,2]
+        
         result[...,2,:3] = normals
         result[...,3,3] = 1 # Affine
+        
         return result
     
     def _pointsToCoordinates(self,
@@ -152,14 +164,13 @@ class ProtGeometricPicking(EMProtocol, ProtTomoBase):
                              points: np.ndarray,
                              normals: np.ndarray,
                              rms: float):
-        
         matrices = self._computeTransformMatricesFromNormals(normals)
         for (x, y, z), matrix in zip(points, matrices):
             coordinate = Coordinate3D()
             coordinate.copy(precedent, copyId=False)
             coordinate.setPosition(x, y, z, const.SCIPION)
             coordinate.setScore(rms)
-            coordinate.setMatrix(matrix) # TODO convention
+            coordinate.setMatrix(matrix)
             outputCoordinates.append(coordinate)
     
     def _getSampleCoundForArea(self, area) -> int:
@@ -174,11 +185,13 @@ class ProtGeometricPicking(EMProtocol, ProtTomoBase):
         return 4*np.pi*(((a*b)**P + (a*c)**P + (b*c)**P)/3)**(1/P)
     
     def _sampleUnitSphere(self, nPoints: int):
-        theta = 2*np.pi*np.random.rand(nPoints)
-        phi = np.arccos(2*np.random.rand(nPoints)-1)
-        x = np.cos(theta)*np.sin(phi)
-        y = np.sin(theta)*np.sin(phi)
-        z = np.cos(phi)
+        GOLDEN_RATIO = (1 + math.sqrt(5)) / 2
+        n = np.arange(nPoints)
+        theta = (2*math.pi/GOLDEN_RATIO) * n
+        z = 1 - (2/nPoints)*n
+        r = np.sqrt(1.0 - np.square(z))
+        x = r*np.cos(theta)
+        y = r*np.sin(theta)
         return np.stack((x,y,z), axis=1)
     
     def _processSphere(self, points: np.ndarray) -> np.ndarray:
@@ -196,10 +209,11 @@ class ProtGeometricPicking(EMProtocol, ProtTomoBase):
             nPoints = self._getSampleCoundForArea(area)
             
             sphere = self._sampleUnitSphere(nPoints)
+            normals = sphere
             coordinates = radius*sphere
             coordinates += center
 
-        return coordinates, sphere, rms
+        return coordinates, normals, rms
     
     def _processEllipsoid(self, points: np.ndarray) -> np.ndarray:
         center, radii, _, evecs, chi2 = fit_ellipsoid(points)
