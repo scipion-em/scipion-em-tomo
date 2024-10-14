@@ -234,12 +234,10 @@ class TiltImage(data.Image, TiltImageBase):
         return fileName + suffix + fileExtension
 
 
-TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
-
-
 class TiltSeriesBase(data.SetOfImages):
     TS_ID_FIELD = '_tsId'
     ACQ_ORDER_FIELD = '_acqOrder'
+    TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
@@ -313,7 +311,7 @@ class TiltSeriesBase(data.SetOfImages):
         """ Copy basic information (id and other properties) but
         not _mapperPath or _size from other set of tilt series to current one.
         """
-        self.copy(other, copyId=copyId, ignoreAttrs=TS_IGNORE_ATTRS)
+        self.copy(other, copyId=copyId, ignoreAttrs=self.TS_IGNORE_ATTRS)
         # self.copyAttributes(other, '_tsId', '_anglesCount')
 
     def write(self, properties=True):
@@ -329,7 +327,8 @@ class TiltSeriesBase(data.SetOfImages):
         self._hasAlignment.set(tiltImage.hasTransform())
         self._hasOddEven.set(tiltImage.hasOddEven())
 
-    def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
+    def clone(self, ignoreAttrs=()):
+        # TODO: check if ignoreAttrs not empty is required somewhere in the code. If not, this method can be removed
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
@@ -1027,7 +1026,9 @@ class TiltSeriesDict:
 
     def addTs(self, ts, includeTi=False):
         """ Add a clone of the tiltseries. """
-        self.__dict[ts.getTsId()] = (ts.clone(), OrderedDict())
+        newTs = TiltSeries()
+        newTs.copyInfo(ts)
+        self.__dict[ts.getTsId()] = (newTs, OrderedDict())
         if includeTi:
             for ti in ts:
                 self.addTi(ti)
