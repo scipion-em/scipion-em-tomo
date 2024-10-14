@@ -100,6 +100,10 @@ class ProtTomoBase:
         meshSet.setPrecedents(volSet)
         return meshSet
 
+    def _createSetOfTomoMasks(self, suffix='') -> tomo.objects.SetOfTomoMasks:
+        return self._createSet(tomo.objects.SetOfTomoMasks,
+                               'tomomasks%s.sqlite', suffix)
+    
     def _getOutputSuffix(self, cls):
         """ Get the name to be used for a new output.
         For example: output3DCoordinates7.

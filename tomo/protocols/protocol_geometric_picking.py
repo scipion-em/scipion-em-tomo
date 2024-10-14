@@ -34,7 +34,7 @@ from pwem.protocols import EMProtocol
 
 import tomo.constants as const
 from tomo.objects import (SetOfCoordinates3D, Coordinate3D,
-                          SetOfMeshes, MeshPoint, Transform)
+                          SetOfMeshes, MeshPoint)
 from tomo.protocols import ProtTomoBase
 from tomo.utils import fit_ellipsoid, fit_sphere
 
@@ -55,7 +55,7 @@ class ProtGeometricPicking(EMProtocol, ProtTomoBase):
         form.addParam('inputMeshes', 
                       PointerParam, pointerClass=SetOfMeshes,
                       label='Input meshes', important=True,
-                      help='Select the Coordinates3D to be filtered')
+                      help='Select the meshes to be used as template')
         
         form.addParam('shape', EnumParam, label='Shape',
                       choices=['Sphere', 'Ellipsoid'],
@@ -155,7 +155,6 @@ class ProtGeometricPicking(EMProtocol, ProtTomoBase):
         
         result[...,2,:3] = normals
         result[...,3,3] = 1 # Affine
-        
         return result
     
     def _pointsToCoordinates(self,
