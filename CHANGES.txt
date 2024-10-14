@@ -1,3 +1,6 @@
+v3.9.1:
+ Developers: 
+  - Fixing a bug in the assignment of the tilt angle.
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.
