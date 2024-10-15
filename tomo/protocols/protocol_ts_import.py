@@ -376,7 +376,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
                              0)
 
             if self.MDOC_DATA_SOURCE:
-                tsAcq.setAccumDose(accumDoseList[-1])
+                tsAcq.setAccumDose(max(accumDoseList))
                 # Tilt series object dose per frame has been updated each
                 # time the tilt image dose per frame has
                 # been updated before, so the mean value is used to be the
