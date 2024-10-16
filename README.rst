@@ -27,6 +27,7 @@ Protocols
 * **consensus classes subtomo** : Compare several SetOfClassesSubTomograms. Return the intersection of the input classes.
 * **ctf validate** : Validate a set of CTF tomo series and separate into two sets (good and bad tomo series )
 * **extract 3D coordinates** : Extract the coordinates information from a set of subtomograms. This protocol is useful when we want to re-extract the subtomograms (maybe resulting from classification) with the original dimensions. It can be also handy to visualize the resulting subtomograms in their location on the tomograms.
+* **export 3D coordinates**: Export 3D subtomogram coordinates to be used outside Scipion.
 * **split even/odd tomos/subtomos** : Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
 * **tomograms to micrographs** : Turns tomograms into set of micrographs to apply SPA picking methods.
 
