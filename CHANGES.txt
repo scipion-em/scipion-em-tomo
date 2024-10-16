@@ -2,6 +2,7 @@ v3.9.1:
  Developers:
   - Protocol assign transformation to TS: fix a bug in the assignment of the tilt angle to each new tilt image.
   - Fix TS clone --> now the a literal clone is expected by default instead of ignoring some attributes.
+  - TS: improve methods for excluded views management.
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.

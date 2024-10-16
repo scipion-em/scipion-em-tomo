@@ -27,11 +27,12 @@
 import logging
 from os.path import exists
 from sqlite3 import OperationalError
-from typing import Dict, Tuple, Any, Optional, Union
+from typing import Optional, Union, List
 
 import mrcfile
 
 from pwem import ALIGN_NONE
+from pyworkflow.gui import openTextFile
 
 logger = logging.getLogger(__name__)
 
@@ -341,35 +342,6 @@ class TiltSeriesBase(data.SetOfImages):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
 
-    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False, presentAcqOrders=None):
-        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order.
-        :param tltFilePath: String containing the path where the file is created.
-        :param reverse: Boolean indicating if the angle list must be reversed.
-        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
-        the non-excluded views (True) or all of them (False).
-        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
-        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
-        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
-        (see tomo > utils > getCommonTsAndCtfElements)
-        """
-
-        if presentAcqOrders:
-            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
-                         ti.getAcquisitionOrder() in presentAcqOrders]
-        else:
-            angleList = []
-            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                if excludeViews and not ti.isEnabled():
-                    continue
-                angleList.append(ti.getTiltAngle())
-        if reverse:
-            angleList.reverse()
-
-        with open(tltFilePath, 'w') as f:
-            f.writelines("%.3f\n" % angle for angle in angleList)
-
-
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
 
@@ -473,6 +445,7 @@ class TiltSeries(TiltSeriesBase):
 
     def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
         ih = ImageHandler()
+        excludeViews = self.getExcludedViewsIndex()
         inputFilePath = self.getFirstItem().getFileName()
         if self.hasAlignment():
             firstImg = self.getFirstItem()
@@ -480,17 +453,19 @@ class TiltSeries(TiltSeriesBase):
             if firstImg.hasTransform() and swapXY:
                 xDim, yDim = yDim, xDim
             if excludeViews:
-                excludedViewsInd = self.getExcludedViewsIndex()
                 counter = 0
                 for index, ti in enumerate(self.iterItems()):
-                    if index + 1 not in excludedViewsInd:
+                    if index + 1 not in excludeViews:
                         self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
                         counter += 1
             else:
                 for index, ti in enumerate(self.iterItems()):
                     self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
         else:
-            path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+            if excludeViews:
+                self.reStack(outputFilePath, excludeViews)
+            else:
+                path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
 
     @staticmethod
     def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
@@ -519,48 +494,56 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
-    # TODO: deprecate this after IMOD is released. Jorge (07/07/2024)
-    def _getExcludedViewsIndex(self):
-        return self.getExcludedViewsIndex()
-
-    def reStack(self, outFileName: Union[str, None] = None) -> Union[str, None]:
-        """Re-stacks a tilt-series creating a new one without the excluded views obtained by calling the method
+    def reStack(self, outFileName: str, excludedIndices: List[int]) -> None:
+        """If there aren't any excluded views, it does nothing. In the opposite case, it se-stacks a tilt-series
+        creating a new one without the excluded views obtained by calling the method
         getExcludedViewsIndex(). If the re-stacked file already exists, no action is carried out (avoid creating
         the same file multiple times, even more necessary if calling this method from the viewer).
-        :param outFileName: Filename of the re-stacked tilt-series. If None, the re-stacked tilt-series will be
-        generated in the same location as the current tilt-series, but adding the suffix _restacked.
-        :returns: None is the re-stacked file already exists or outFileName if not."""
+        :param outFileName: Filename of the re-stacked tilt-series.
+        :param excludedIndices: list if the indices of the excluded views
+        """
+        # excludedIndices = self.getExcludedViewsIndex()
         tsFileName = self.getFirstItem().getFileName()
-        if not outFileName:
-            outFileName = path.removeExt(tsFileName) + '_restacked' + path.getExt(tsFileName)
         if exists(outFileName):
-            return None
+            logger.info(f'manageReStack: file {outFileName} was skipped. It already exists')
+        if exists(tsFileName):
+            # Load the file
+            with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                tsData = tsMrc.data
+            # Create an empty array in which the re-stacked TS will be stored
+            nx, ny, nImgs = tsData.shape
+            finalNImgs = nImgs - len(excludedIndices)
+            newTsShape = (nx, ny, finalNImgs)
+            newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+            # Fill it with the non-excluded images
+            counter = 0
+            for i in range(nImgs):
+                if i not in excludedIndices:
+                    newTsData[counter] = tsData[i]
+                    counter += 1
+            # Save the re-stacked TS
+            with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                reStackedTsMrc.set_data(newTsData)
+                reStackedTsMrc.update_header_from_data()
+                reStackedTsMrc.update_header_stats()
+                reStackedTsMrc.voxel_size = self.getSamplingRate()
         else:
-            excludedIndices = self.getExcludedViewsIndex()
-            if excludedIndices:
-                # Load the file
-                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
-                    tsData = tsMrc.data
-                # Create an empty array in which the re-stacked TS will be stored
-                nx, ny, nImgs = tsData.shape
-                finalNImgs = nImgs - len(excludedIndices)
-                newTsShape = (nx, ny, finalNImgs)
-                newTsData = np.empty(newTsShape, dtype=tsData.dtype)
-                # Fill it with the non-excluded images
-                counter = 0
-                for i in range(nImgs):
-                    if i not in excludedIndices:
-                        newTsData[counter] = tsData[i]
-                        counter += 1
-                # Save the re-stacked TS
-                with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
-                    reStackedTsMrc.set_data(newTsData)
-                    reStackedTsMrc.update_header_from_data()
-                    reStackedTsMrc.update_header_stats()
-                    reStackedTsMrc.voxel_size = self.getSamplingRate()
-                return outFileName
-            else:
-                return None
+            logger.warning(f'manageReStack: file {tsFileName} was skipped. It does not exist.')
+
+    def generateTltFile(self, tltFilePath, reverse=False):
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param tltFilePath: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        """
+        angleList = []
+        for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+            if ti.isEnabled():
+                angleList.append(ti.getTiltAngle())
+        if reverse:
+            angleList.reverse()
+        with open(tltFilePath, 'w') as f:
+            f.writelines("%.3f\n" % angle for angle in angleList)
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
