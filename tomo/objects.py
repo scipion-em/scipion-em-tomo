@@ -443,7 +443,7 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
+    def applyTransform(self, outputFilePath, swapXY=False):
         ih = ImageHandler()
         excludeViews = self.getExcludedViewsIndex()
         inputFilePath = self.getFirstItem().getFileName()
@@ -511,18 +511,18 @@ class TiltSeries(TiltSeriesBase):
             with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
                 tsData = tsMrc.data
             # Create an empty array in which the re-stacked TS will be stored
-            nx, ny, nImgs = tsData.shape
+            nImgs, nx, ny = tsData.shape
             finalNImgs = nImgs - len(excludedIndices)
-            newTsShape = (nx, ny, finalNImgs)
+            newTsShape = (finalNImgs, nx, ny)
             newTsData = np.empty(newTsShape, dtype=tsData.dtype)
             # Fill it with the non-excluded images
             counter = 0
-            for i in range(nImgs):
+            for i in range(1, nImgs + 1):
                 if i not in excludedIndices:
                     newTsData[counter] = tsData[i]
                     counter += 1
             # Save the re-stacked TS
-            with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+            with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
                 reStackedTsMrc.set_data(newTsData)
                 reStackedTsMrc.update_header_from_data()
                 reStackedTsMrc.update_header_stats()
