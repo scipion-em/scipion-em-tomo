@@ -146,11 +146,14 @@ class TiltSeriesTreeProvider(TreeProvider):
                 tsTooltip.hide(event)
                 item_id = tsTree.identify_row(event.y)
                 if item_id and len(tsTree.item(item_id)['values']) > 5:
-                    mlist = ast.literal_eval(tsTree.item(item_id)['values'][8])
-                    matriz = [mlist[i:i+3] for i in range(0, len(mlist), 3)]
-                    formattedMatrix = "\nTransformation matrix:\n\n[ " + "\n".join(["  ".join(f"{num:.4f}" for num in fila) for fila in matriz]) + " ]\n"
-                    tsTooltip.text = f"{formattedMatrix}"
-                    tsTooltip.show(event)
+                    tMatrix = tsTree.item(item_id)['values'][8]
+                    if tMatrix:
+                        mlist = ast.literal_eval(tMatrix)
+                        matriz = [mlist[i:i + 3] for i in range(0, len(mlist), 3)]
+                        formattedMatrix = "\nTransformation matrix:\n\n[ " + "\n".join(
+                            ["  ".join(f"{num:.4f}" for num in fila) for fila in matriz]) + " ]\n"
+                        tsTooltip.text = f"{formattedMatrix}"
+                        tsTooltip.show(event)
             else:
                 tsTooltip.hide(event)
         else:
