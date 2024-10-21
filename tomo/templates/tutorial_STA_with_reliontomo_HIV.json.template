@@ -54,7 +54,7 @@ You'll need to download its dataset -> scipion3 testdata --download reliontomo_S
         "hostName": "localhost",
         "numberOfThreads": 1,
         "numberOfMpi": 1,
-        "gpuList": "3",
+        "gpuList": "0",
         "patchX": 0,
         "patchY": 0,
         "patchOverlap": 0,
