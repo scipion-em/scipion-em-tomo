@@ -70,6 +70,7 @@ DataSet(name='tomoMask', folder='tomoMask',
 
 ########################################################################################################################
 EMD_10439 = 'emd_10439'
+EMPIAR_10491 = 'empiar_10491'
 
 
 class DataSetEmd10439(Enum):
@@ -307,3 +308,6 @@ class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
 
 
 DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
+
+
+DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
