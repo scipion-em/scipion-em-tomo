@@ -48,6 +48,7 @@ from pyworkflow.plugin import Domain
 import tomo.objects
 from . import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
+from ..objects import CTFTomo
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
 CONTRAST_STD = 2.0
@@ -1241,6 +1242,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     prepare the columns/rows models required by the TreeDialog GUI.
     """
     COL_CTF_SERIE = 'Tilt Series'
+    COL_ACQ_ORDER = 'Acq. Order'
     COL_TILT_ANG = 'Tilt Angle'
     COL_CTF_EXCLUDED = 'Excluded'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (Å)'
@@ -1300,6 +1302,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     def getColumns(self):
         cols = [
             (self.COL_CTF_SERIE, 100),
+            (self.COL_ACQ_ORDER, 100),
             (self.COL_TILT_ANG, 100),
             (self.COL_CTF_EXCLUDED, 100),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
@@ -1333,13 +1336,15 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             selected = obj.isEnabled()
         else:  # CTFTomo
             key = "%s.%s" % (obj._parentObject.getTsId(), str(obj.getObjId()))
-            text = obj.getIndex()
+            text = obj.getObjId()
+            acqOrder = obj.getAcquisitionOrder()
             ts = obj._parentObject.getTiltSeries()
-            tiltAngle = ts[int(text)].getTiltAngle()
+            tiltAngle = ts.getItem(CTFTomo.ACQ_ORDER_FIELD, acqOrder).getTiltAngle()
             ast = obj.getDefocusU() - obj.getDefocusV()
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
-            values = [str("%0.2f" % tiltAngle),
+            values = [str(acqOrder),
+                      str("%0.2f" % tiltAngle),
                       CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
@@ -1414,13 +1419,13 @@ class CTFEstimationTree(BoundTree):
         itemValues = self.item(item)
         values = itemValues['values']
         if excluded:
-            values[1] = CTFSerieStates.EXCLUDED
+            values[2] = CTFSerieStates.EXCLUDED
             self.item(item, tags=(CTFSerieStates.EXCLUDED, tags,))
             self.item(item, values=values)
             self._objDict[item].setEnabled(False)
             self.item(item)['selected'] = True
         else:
-            values[1] = CTFSerieStates.INCLUDED
+            values[2] = CTFSerieStates.INCLUDED
             self.item(item, tags=(CTFSerieStates.INCLUDED, tags,))
             self.item(item, values=values)
             self._objDict[item].setEnabled(True)
@@ -1432,7 +1437,7 @@ class CTFEstimationTree(BoundTree):
         self.selectedItem = self.identify_row(y)
         if "image" in elem:  # click on the CTFTomoSerie checkbox
             self.toogleExclusion(self.selectedItem, True)
-        elif x > 210 and x < 217:  # Position of exclude/include checkbox(CTFTomo)
+        elif x > 308 and x < 317:  # Position of exclude/include checkbox(CTFTomo)
             self.toogleExclusion(self.selectedItem, False)
 
     def getSelectedItem(self):
