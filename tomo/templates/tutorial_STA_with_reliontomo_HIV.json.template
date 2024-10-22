@@ -411,7 +411,7 @@ You'll need to download its dataset -> scipion3 testdata --download reliontomo_S
         "object.label": "reliontomo - 3D auto-refine",
         "object.comment": "",
         "_useQueue": false,
-        "_prerequisites": "3979",
+        "_prerequisites": "",
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
