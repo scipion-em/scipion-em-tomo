@@ -187,4 +187,5 @@ class ProtImportTomomasks(ProtTomoImportFiles):
 
     @staticmethod
     def getTomoMaskName(maskFileName):
-        return removeBaseExt(maskFileName).replace('_materials', '')  # This suffix is added by the memb. annotator
+        # These suffixes are added by the memb. annotator and membrain, respectively
+        return removeBaseExt(maskFileName).replace('_materials', '').replace('_segmented', '')
