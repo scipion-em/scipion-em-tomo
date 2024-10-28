@@ -443,7 +443,8 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False):
+    def applyTransform(self, outputFilePath, swapXY=False,
+                       excludeViews=False):  # TODO (Jorge 28/10/2024): remove this in the next version
         ih = ImageHandler()
         excludeViews = self.getExcludedViewsIndex()
         inputFilePath = self.getFirstItem().getFileName()
