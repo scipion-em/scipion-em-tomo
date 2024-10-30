@@ -1,3 +1,7 @@
+
+v3.9.1:
+ Users:
+  - Protocol import tomo masks now admits {TS} pattern.
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.
