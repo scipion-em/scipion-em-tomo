@@ -1,7 +1,15 @@
-
 v3.9.1:
  Users:
-  - Protocol import tomo masks now admits {TS} pattern.
+  - Import TomoMasks: it now admits {TS} pattern.
+  - Import TS: Improve TS accumulated dose determination when using mdoc.
+  - Import Tomograms: exclusion words fixed in import tomograms when not using a pattern.
+ Developers:
+  - Tilt Series class:
+     * Fix the clone method --> now it is a literal clone is expected by default instead
+       of ignoring some attributes.
+     * Fix TS reStack method.
+     * Methods applyTSTransform and generateTltFile updated to work with presentAcqOrders.
+  - Import TomoMasks refactored.
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.
