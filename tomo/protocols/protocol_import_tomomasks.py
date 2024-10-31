@@ -23,10 +23,9 @@
 # *
 # **************************************************************************
 import logging
+from enum import Enum
 from os.path import abspath, join
-
 from pwem.emlib.image import ImageHandler
-from pyworkflow import BETA
 from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam
 from pyworkflow.utils import yellowStr
@@ -40,16 +39,19 @@ from ..objects import TomoMask, SetOfTomoMasks
 logger = logging.getLogger(__name__)
 
 
+class importTomoMasksOutputs(Enum):
+    tomomasks = SetOfTomoMasks
+
+
 class ProtImportTomomasks(ProtTomoImportFiles):
     """Protocol to import a set of tomomasks (segmentations) to the project"""
 
-    _outputClassName = 'SetOfTomoMasks'
     _label = 'import tomomasks (segmentations)'
-    _devStatus = BETA
+    _possibleOutputs = importTomoMasksOutputs
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.warnMsg = ''
+        self.warnMsg = String('')
         self.matchingTomoMaskDict = None  # keys = filenames of matching tomomasks, values = matching Tomogram
 
     def _defineParams(self, form):
@@ -79,8 +81,6 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             logger.info("Using regex pattern: '%s'" % self.regExPattern)
             logger.info("Generated glob pattern: '%s'" % self.globPattern)
             filesDict = self.getMatchingFilesFromRegEx()
-            # for tsId, fileName in self.getMatchingFilesFromRegEx().items():
-            #     self.addTomoMaskToSet(fileName, tsId, tomoMask, tomoMaskSet)
         else:
             inPattern = self.filesPattern.get()
             pattern = inPattern.strip() if inPattern else ''
@@ -91,24 +91,23 @@ class ProtImportTomomasks(ProtTomoImportFiles):
             for fileName in fileList:
                 tsId = normalizeTSId(self.getTomoMaskName(fileName))
                 filesDict[tsId] = fileName
-                # self.addTomoMaskToSet(fileName, tsId, tomoMask, tomoMaskSet)
 
         tomoDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos}
         tomoMaskSet = self._genOutputSetOfTomoMasks(filesDict, tomoDict)
 
-        if self.warnMsg:
-            self._store(self.warnMsg)
-            print(yellowStr('WARNING!') + '\n' + self.warnMsg)
-            self.warnMsg = String(self.warnMsg)
-        if not tomoMaskSet:
+        warnMsg = self.warnMsg
+        if warnMsg.get():
+            self._store(warnMsg)
+            print(yellowStr('WARNING!') + '\n' + warnMsg.get())
+        if len(tomoMaskSet) == 0:
             raise Exception(ERR_NO_TOMOMASKS_GEN)
 
-        self._defineOutputs(outputTomoMasks=tomoMaskSet)
-        self._defineSourceRelation(self.inputTomos.get(), tomoMaskSet)
+        self._defineOutputs(**{self._possibleOutputs.tomomasks.name: tomoMaskSet})
+        self._defineSourceRelation(self.inputTomos, tomoMaskSet)
 
     # --------------------------- INFO functions ------------------------------
     def _getTomMessage(self):
-        return "Tomomasks %s" % self.getObjectTag('outputTomoMasks')
+        return "Tomomasks %s" % self.getObjectTag(self._possibleOutputs.tomomasks.name)
 
     def _summary(self):
         try:
@@ -222,7 +221,7 @@ class ProtImportTomomasks(ProtTomoImportFiles):
                                             nonMatchingDims[1],
                                             nonMatchingDims[2])
 
-            self.warnMsg += msgNonMatchingDimsMasks + '\n\n'
+            self.warnMsg.set(self.warnMsg.get() + msgNonMatchingDimsMasks + '\n\n')
 
         return tomoMaskSet
 

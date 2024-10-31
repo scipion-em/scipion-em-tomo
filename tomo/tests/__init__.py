@@ -74,12 +74,14 @@ EMPIAR_10491 = 'empiar_10491'
 
 
 class DataSetEmd10439(Enum):
+    tomogramsDir = 'tomograms'
     tomoEmd10439 = 'tomograms/emd_10439.mrc'
     coords3dStarFile = 'importFromStarFiles/picking_001_parts.star'
     coords3dStarFileWithSRate = 'importFromStarFiles/picking_001_parts_with_sRate.star'
     subtomogramsStarFile = 'importFromStarFiles/class_ap_r_ali_k1_split.star'
     scipionSqlite3dCoords = 'importFromScipionSqlite/coordinates.sqlite'
     scipionSqlite3dCoordsSomeBad = 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
+    tomomasksAnnotatedDir = 'tomomasksAnnotated'
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
     coords39Sqlite = 'coordinates/coordinates39.sqlite'
     nParticles = 39
