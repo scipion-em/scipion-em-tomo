@@ -563,7 +563,8 @@ class TiltSeries(TiltSeriesBase):
         else:
             logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
 
-    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False, presentAcqOrders=None):
+    def generateTltFile(self, tltFilePath: str, reverse: bool=False, excludeViews: bool=False,
+                        presentAcqOrders: typing.Set[int]=set, includeDose: bool=False) -> None:
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
@@ -574,22 +575,36 @@ class TiltSeries(TiltSeriesBase):
         filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
         if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
         (see tomo > utils > getCommonTsAndCtfElements)
+        :param includeDose: boolean used to indicate if the tlt file created must contain an additional column with
+        the dose or not (default).
         """
-
+        angleList = []
+        doseList = []
         if presentAcqOrders:
             angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
                          ti.getAcquisitionOrder() in presentAcqOrders]
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                if ti.getAcquisitionOrder() in presentAcqOrders:
+                    angleList.append(ti.getTiltAngle())
+                    if includeDose:
+                        doseList.append(ti.getAcquisition().getAccumDose())
         else:
-            angleList = []
             for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 if excludeViews and not ti.isEnabled():
                     continue
                 angleList.append(ti.getTiltAngle())
+                if includeDose:
+                    doseList.append(ti.getAcquisition().getAccumDose())
         if reverse:
             angleList.reverse()
+            if includeDose:
+                doseList.reverse()
 
         with open(tltFilePath, 'w') as f:
-            f.writelines("%.3f\n" % angle for angle in angleList)
+            if includeDose:
+                f.writelines(f"{angle:0.3f} {dose:0.4f}\n" for angle, dose in zip(angleList, doseList))
+            else:
+                f.writelines(f"{angle:0.3f}\n" for angle in angleList)
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -1281,6 +1296,10 @@ class SetOfTomograms(data.SetOfVolumes):
             (self.getClassName(), self.getSize(),
              self._dimStr(), tomoStr, sampling, self._appendStreamState())
         return s
+
+    def append(self, item: Tomogram):
+        super().append(item)
+        self.update(item)
 
     def update(self, item: Tomogram):
         if not self._firstDim.isEmpty():
