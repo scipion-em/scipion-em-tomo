@@ -27,9 +27,9 @@
 import os
 import pwem
 from .constants import (NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD,
-                        getNaparyEnvName, NAPARI_DEF_VER)
+                        getNaparyEnvName, NAPARI_DEF_VER, V0_4_17, V0_4_19)
 
-__version__ = '3.8.0'
+__version__ = '3.9.0'
 _logo = "icon.png"
 _references = []
 
@@ -65,7 +65,7 @@ class Plugin(pwem.Plugin):
                       f'python=3.10 napari={version} pyqt pip &&',
                       f'conda activate {ENV_NAME} &&',
                       'pip install napari-tomotwin napari-boxmanager',
-                      'napari-clusters-plotter@git+https://github.com/BiAPoL/napari-clusters-plotter.git@095d9e8']
+                      'napari-clusters-plotter']
 
         # Flag installation finished
         installCmd.append(f'&& touch {NAPARI_INSTALLED}')
@@ -84,4 +84,6 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        cls.addNapariPackage(env, NAPARI_DEF_VER, default=True)
+        for version in [V0_4_17, V0_4_19]:
+            cls.addNapariPackage(env, version,
+                                 default=version == NAPARI_DEF_VER)

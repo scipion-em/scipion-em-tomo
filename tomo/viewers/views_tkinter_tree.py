@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import ast
 import glob
 import os.path
 import threading
@@ -33,6 +33,7 @@ import numpy
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from pwem.convert.transformations import euler_from_matrix
 from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
 from pwem.viewers.showj import runJavaIJapp
@@ -47,6 +48,7 @@ from pyworkflow.plugin import Domain
 import tomo.objects
 from . import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
+from ..objects import CTFTomo
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
 CONTRAST_STD = 2.0
@@ -56,6 +58,27 @@ DIRECTION_UP = 1
 RESULT_CREATE_WITH = 0
 RESULT_RESTACK = 1
 THUMBNAIL_SIZE = 512
+
+
+class TSTreeToolTip:
+    def __init__(self, widget, text=""):
+        self.widget = widget
+        self.text = text
+        self.tooltip = None
+
+    def show(self, event):
+        if self.tooltip is None:
+            self.tooltip = tk.Toplevel(self.widget)
+            self.tooltip.wm_overrideredirect(True)
+            self.tooltip.wm_geometry(f"+{event.x_root+20}+{event.y_root+20}")
+            label = tk.Label(self.tooltip, text=self.text, relief="solid", borderwidth=1)
+            label.pack()
+
+    def hide(self, event):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+
 
 class TiltSerieState:
     EXCLUDED = 'excludedTs'
@@ -82,6 +105,9 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ACQ_ORDER = 'Order'
     COL_TI_DOSE = "Dose"
     COL_TI_TRANSFORM = "T. Matrix"
+    COL_TI_ROT_ANGLE = "Rot"
+    COL_TI_SHIFTX = 'ShiftX'
+    COL_TI_SHIFTY = 'ShiftY'
     ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
                   COL_TI_ACQ_ORDER: '_acqOrder',
                   COL_TI_DOSE: '_acquisition._accumDose'}
@@ -110,6 +136,29 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.tree.tag_configure(TiltImageStates.EVEN, background='#F2F2F2', foreground='black')
         self.tree.tag_configure(TiltImageStates.ODD, background='#E6E6E6', foreground='black')
         self.tree.bind('<space>', self.onSpace)
+        tsTooltip = TSTreeToolTip(self.tree)
+        self.tree.bind("<Motion>", lambda event: self.onMouseMotion(event, self.tree, tsTooltip))
+
+    def onMouseMotion(self, event, tsTree, tsTooltip):
+        region = tsTree.identify_region(event.x, event.y)
+        if region == "cell":
+            column = tsTree.identify_column(event.x)
+            if column == "#6" or column == "#7" or column == "#8":  # Display the matrix transformation
+                tsTooltip.hide(event)
+                item_id = tsTree.identify_row(event.y)
+                if item_id and len(tsTree.item(item_id)['values']) > 5:
+                    tMatrix = tsTree.item(item_id)['values'][8]
+                    if tMatrix:
+                        mlist = ast.literal_eval(tMatrix)
+                        matriz = [mlist[i:i + 3] for i in range(0, len(mlist), 3)]
+                        formattedMatrix = "\nTransformation matrix:\n\n[ " + "\n".join(
+                            ["  ".join(f"{num:.4f}" for num in fila) for fila in matriz]) + " ]\n"
+                        tsTooltip.text = f"{formattedMatrix}"
+                        tsTooltip.show(event)
+            else:
+                tsTooltip.hide(event)
+        else:
+            tsTooltip.hide(event)
 
     def getTree(self):
         return self.tree
@@ -172,7 +221,8 @@ class TiltSeriesTreeProvider(TreeProvider):
         if isinstance(obj, tomo.objects.TiltImageM):
             newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4])
         else:
-            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5])
+            newValues = (itemValues[0], itemValues[1], excluded, itemValues[3], itemValues[4], itemValues[5],
+                         itemValues[6], itemValues[7], itemValues[8])
         tags = TiltImageStates.EVEN
         if TiltImageStates.ODD in self.tree.item(selectedItem, 'tags'):
             tags = TiltImageStates.ODD
@@ -284,7 +334,11 @@ class TiltSeriesTreeProvider(TreeProvider):
             (self.COL_TI, 400),
         ]
         if not isinstance(self.tiltSeries, tomo.objects.SetOfTiltSeriesM):
-            cols.append((self.COL_TI_TRANSFORM, 200))
+            cols.append((self.COL_TI_ROT_ANGLE, 100))
+            cols.append((self.COL_TI_SHIFTX, 100))
+            cols.append((self.COL_TI_SHIFTY, 100))
+            # cols.append((self.COL_TI_TRANSFORM, 200))
+
 
         return cols
 
@@ -326,7 +380,23 @@ class TiltSeriesTreeProvider(TreeProvider):
                       ]
 
             if not isinstance(obj, tomo.objects.TiltImageM):
-                matrix = "" if not obj.hasTransform() else obj.getTransform().getMatrixAsList()
+                matrix = ''
+                angle = ''
+                shiftX = ''
+                shiftY = ''
+                if obj.hasTransform():
+                    transform = obj.getTransform()
+                    # TODO These lines will be removed when transform.getEulerAngles is released
+                    rotation = transform.getRotationMatrix()
+                    _, _, rot = euler_from_matrix(rotation)
+                    angle = str("%0.2f" % numpy.rad2deg(rot))
+                    matrixList = transform.getMatrixAsList()
+                    shiftX = str("%0.2f" % matrixList[2])
+                    shiftY = str("%0.2f" % matrixList[5])
+                    matrix = str([round(num, 4) for num in matrixList])
+                values.append(angle)
+                values.append(shiftX)
+                values.append(shiftY)
                 values.append(matrix)
 
             opened = False
@@ -743,6 +813,7 @@ class TiltSeriesDialogView(pwviewer.View):
         iMin = npImage.min()
         im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
         return Image.fromarray(im255)
+
 
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
@@ -1171,12 +1242,13 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     prepare the columns/rows models required by the TreeDialog GUI.
     """
     COL_CTF_SERIE = 'Tilt Series'
+    COL_ACQ_ORDER = 'Acq. Order'
     COL_TILT_ANG = 'Tilt Angle'
     COL_CTF_EXCLUDED = 'Excluded'
-    COL_CTF_EST_DEFOCUS_U = 'DefocusU (A)'
-    COL_CTF_EST_DEFOCUS_V = 'DefocusV (A)'
-    COL_CTF_EST_AST = 'Astigmatism (A)'
-    COL_CTF_EST_RES = 'Resolution (A)'
+    COL_CTF_EST_DEFOCUS_U = 'DefocusU (Å)'
+    COL_CTF_EST_DEFOCUS_V = 'DefocusV (Å)'
+    COL_CTF_EST_AST = 'Astigmatism (Å)'
+    COL_CTF_EST_RES = 'Resolution (Å)'
     COL_CTF_EST_FIT = 'CC value'
     COL_CTF_EST_PHASE = 'Phase shift (deg)'
 
@@ -1230,6 +1302,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     def getColumns(self):
         cols = [
             (self.COL_CTF_SERIE, 100),
+            (self.COL_ACQ_ORDER, 100),
             (self.COL_TILT_ANG, 100),
             (self.COL_CTF_EXCLUDED, 100),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
@@ -1263,13 +1336,15 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             selected = obj.isEnabled()
         else:  # CTFTomo
             key = "%s.%s" % (obj._parentObject.getTsId(), str(obj.getObjId()))
-            text = obj.getIndex()
+            text = obj.getObjId()
+            acqOrder = obj.getAcquisitionOrder()
             ts = obj._parentObject.getTiltSeries()
-            tiltAngle = ts[int(text)].getTiltAngle()
+            tiltAngle = ts.getItem(CTFTomo.ACQ_ORDER_FIELD, acqOrder).getTiltAngle()
             ast = obj.getDefocusU() - obj.getDefocusV()
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
-            values = [str("%0.2f" % tiltAngle),
+            values = [str(acqOrder),
+                      str("%0.2f" % tiltAngle),
                       CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
@@ -1344,13 +1419,13 @@ class CTFEstimationTree(BoundTree):
         itemValues = self.item(item)
         values = itemValues['values']
         if excluded:
-            values[1] = CTFSerieStates.EXCLUDED
+            values[2] = CTFSerieStates.EXCLUDED
             self.item(item, tags=(CTFSerieStates.EXCLUDED, tags,))
             self.item(item, values=values)
             self._objDict[item].setEnabled(False)
             self.item(item)['selected'] = True
         else:
-            values[1] = CTFSerieStates.INCLUDED
+            values[2] = CTFSerieStates.INCLUDED
             self.item(item, tags=(CTFSerieStates.INCLUDED, tags,))
             self.item(item, values=values)
             self._objDict[item].setEnabled(True)
@@ -1362,7 +1437,7 @@ class CTFEstimationTree(BoundTree):
         self.selectedItem = self.identify_row(y)
         if "image" in elem:  # click on the CTFTomoSerie checkbox
             self.toogleExclusion(self.selectedItem, True)
-        elif x > 210 and x < 217:  # Position of exclude/include checkbox(CTFTomo)
+        elif x > 308 and x < 317:  # Position of exclude/include checkbox(CTFTomo)
             self.toogleExclusion(self.selectedItem, False)
 
     def getSelectedItem(self):
@@ -1643,7 +1718,8 @@ class CtfEstimationListDialog(ListDialog):
     def plotterChildItem(self, itemSelected):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         if self._show2DPLot is None:
-            self.plotterParentItem(self.tree.parent(itemSelected))
+            self.plotterParentItem(self.tree.parent(itemSelected),
+                                   int(itemSelected.split('.')[-1]))
         else:
             for ctfSerie in self.provider.getCTFSeries():
                 if ctfSerie.getTsId() in itemSelected:
@@ -1661,7 +1737,7 @@ class CtfEstimationListDialog(ListDialog):
                     break
         plotterPanel.grid(row=0, column=1, sticky='news')
 
-    def plotterParentItem(self, itemSelected):
+    def plotterParentItem(self, itemSelected, tiltSelected=None):
         plotterPanel = tk.Frame(self.bottomRightPanel)
         angDict = {}
         defocusUList = []
@@ -1704,13 +1780,22 @@ class CtfEstimationListDialog(ListDialog):
                 defocusPlot = fig.add_subplot(111)
                 defocusPlot.grid()
                 defocusPlot.set_title(itemSelected)
-                defocusPlot.set_xlabel('Tilt angle')
-                defocusPlot.set_ylabel('DefocusU', color='tab:red')
+                defocusPlot.set_xlabel('Tilt angle (deg)')
+                defocusPlot.set_ylabel('Defocus (Å)')
                 defocusPlot.plot(angList, defocusUList, marker='.',
-                                 color='tab:red', label='DefocusU (A)')
-                defocusPlot.set_ylabel('DefocusV', color='tab:blue')
+                                 color='tab:red', label='DefocusU (Å)')
                 defocusPlot.plot(angList, defocusVList, marker='.',
-                                 color='tab:blue', label='DefocusV (A)')
+                                 color='tab:blue', label='DefocusV (Å)')
+
+                if tiltSelected is not None:
+                    tomoCtf = ctfSerie[tiltSelected]
+                    angle = angDict[tomoCtf.getAcquisitionOrder()]
+                    defocusU = tomoCtf.getDefocusU()
+                    defocusV = tomoCtf.getDefocusV()
+                    defocusPlot.scatter(angle, defocusU, marker='o', facecolors='none',
+                                     edgecolors='tab:red', s=150)
+                    defocusPlot.scatter(angle, defocusV, marker='o', facecolors='none',
+                                     edgecolors='tab:blue', s=150)
 
                 if item.hasPhaseShift():
                     phShPlot = defocusPlot.twinx()
@@ -1721,9 +1806,9 @@ class CtfEstimationListDialog(ListDialog):
                 else:  # no phase shift, plot resolution instead
                     resPlot = defocusPlot.twinx()
                     resPlot.set_ylim(0, 30)
-                    resPlot.set_ylabel('Resolution', color='tab:green')
+                    resPlot.set_ylabel('Resolution (A)', color='tab:green')
                     resPlot.plot(angList, resList, marker='.',
-                                 color='tab:green', label='Resolution (A)')
+                                 color='tab:green', label='Resolution (Å)')
 
                 fig.legend()
                 canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
