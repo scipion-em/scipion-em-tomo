@@ -1,6 +1,3 @@
-v3.9.1:
- Developers: 
-  - Protocol assign transformation to TS: fix a bug in the assignment of the tilt angle to each new tilt image.
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.
@@ -9,6 +6,7 @@ v3.9.0:
   - Steps more precise in GPU usage. Improved execution
  Developers:
   - Execution mode at class level
+  - Protocol assign transformation to TS: fix a bug in the assignment of the tilt angle to each new tilt image.
 v3.8.0:
  Users:
   - Import tomograms, CTFs and Transformation matrices (IMOD): added import functionality using the pattern {TS} to
