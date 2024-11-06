@@ -581,8 +581,6 @@ class TiltSeries(TiltSeriesBase):
         angleList = []
         doseList = []
         if presentAcqOrders:
-            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
-                         ti.getAcquisitionOrder() in presentAcqOrders]
             for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 if ti.getAcquisitionOrder() in presentAcqOrders:
                     angleList.append(ti.getTiltAngle())
