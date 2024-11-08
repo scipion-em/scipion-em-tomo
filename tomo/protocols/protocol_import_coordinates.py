@@ -262,7 +262,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             return readDynCoord
 
         elif importFrom == IMPORT_FROM_CBOX:
-            return EmTableCoordImport("cryolo", "CoordinateX", "CoordinateY", "CoordinateZ")
+            return EmTableCoordImport("cryolo", "CoordinateX", "CoordinateY", "CoordinateZ", "Width", "Height")
 
         elif importFrom == IMPORT_FROM_TXT:
             return TomoImport(self)
