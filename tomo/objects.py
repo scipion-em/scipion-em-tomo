@@ -1297,9 +1297,6 @@ class SetOfTomograms(data.SetOfVolumes):
 
     def append(self, item: Tomogram):
         super().append(item)
-        self.update(item)
-
-    def update(self, item: Tomogram):
         if not self._firstDim.isEmpty():
             currentSetThk = self._firstDim[2]
             _, _, addedTomoThk = item.getDim()
@@ -1310,7 +1307,6 @@ class SetOfTomograms(data.SetOfVolumes):
         self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
-        super().update(item)
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
