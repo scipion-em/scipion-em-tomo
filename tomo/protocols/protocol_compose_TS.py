@@ -26,6 +26,8 @@
 import time
 import os
 from glob import glob
+
+from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.protocols.protocol_import.base import ProtImport
 import pyworkflow as pw
 from pyworkflow.protocol import params, STEPS_PARALLEL
@@ -396,8 +398,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                                          key=lambda angle: float(angle[2]))
         # Tilt series object
         ts_obj = tomoObj.TiltSeries()
-        len_ac = Integer(len(file_ordered_angle_list))
-        ts_obj.setAnglesCount(len_ac)
+        # len_ac = Integer(len(file_ordered_angle_list))
+        # ts_obj.setAnglesCount(len_ac)
         ts_obj.setTsId(mdoc_obj.getTsId())
         acq = ts_obj.getAcquisition()
         acq.setVoltage(mdoc_obj.getVoltage())
@@ -407,16 +409,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         ts_obj.getAcquisition().setTiltAxisAngle(mdoc_obj.getTiltAxisAngle())
         origin = Transform()
         ts_obj.setOrigin(origin)
+        SOTS.setAcquisition(acq)
         SOTS.append(ts_obj)
 
         self.settingTS(SOTS, ts_obj, file_ordered_angle_list,
                        incoming_dose_list, accumulated_dose_list)
 
-        ts_obj.write(properties=False)
-        SOTS.update(ts_obj)
         SOTS.write()
         self._store(SOTS)
-
 
     def settingTS(self, SOTS, ts_obj, file_ordered_angle_list,
                   incoming_dose_list, accumulated_dose_list):
@@ -432,7 +432,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :return:
         """
         ts_fn = self._getOutputTiltSeriesPath(ts_obj)
-        ts_fn_dw = self._getOutputTiltSeriesPath(ts_obj, '_DW')
+        # ts_fn_dw = self._getOutputTiltSeriesPath(ts_obj, '_DW')
         counter_ti = 0
 
         TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts_obj.getTsId()))
@@ -440,40 +440,40 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         for n in file_ordered_angle_list:
             TSAngleFile.write('{}\n'.format(str(n[2])))
         TSAngleFile.close()
-
+        sr = self.listOfMics[0].getSamplingRate()
+        properties = {"sr": sr}
+        newStack = ImageStack(properties=properties)
+        ti = None
         for f, to, ta in file_ordered_angle_list:
             try:
                 for mic in self.listOfMics:
                     if ts_obj.getSamplingRate() is None:
-                        ts_obj.setSamplingRate(mic.getSamplingRate())
+                        ts_obj.setSamplingRate(sr)
                     if SOTS.getSamplingRate() is None:
-                        SOTS.setSamplingRate(mic.getSamplingRate())
+                        SOTS.setSamplingRate(sr)
                     if os.path.basename(f) in mic.getMicName():
                         ti = tomoObj.TiltImage()
-                        ti.setLocation(mic.getFileName())
-                        ti.setTsId(ts_obj.getObjId())
+                        ti.setTsId(ts_obj.getTsId())
+                        new_location = (counter_ti, ts_fn)
+                        ti.setLocation(new_location)
                         ti.setObjId(counter_ti + 1)
                         ti.setIndex(counter_ti + 1)
+                        ti.setAcquisition(ts_obj.getAcquisition())
                         ti.setAcquisitionOrder(int(to))
                         ti.setTiltAngle(ta)
-                        ti.setSamplingRate(mic.getSamplingRate())
+                        ti.setSamplingRate(sr)
                         ti.setAcquisition(ts_obj.getAcquisition().clone())
-                        ti.getAcquisition().setDosePerFrame(
-                            incoming_dose_list[int(to) - 1])
-                        ti.getAcquisition().setAccumDose(
-                            accumulated_dose_list[int(to) - 1])
-                        ti_fn, ti_fn_dw = self._getOutputTiltImagePaths(ti)
-                        new_location = (counter_ti + 1, ts_fn)
-
-                        self.ih.convert(mic.getFileName(), new_location)
-                        ti.setLocation(new_location)
-                        if os.path.exists(ti_fn_dw):
-                            self.ih.convert(ti_fn_dw, (counter_ti, ts_fn_dw))
-                            pw.utils.cleanPath(ti_fn_dw)
+                        ti.getAcquisition().setDosePerFrame(incoming_dose_list[int(to) - 1])
+                        ti.getAcquisition().setAccumDose(int(to)*mic.getAcquisition().getDosePerFrame())
+                        newStack.append(ImageReadersRegistry.open(mic.getFileName()))
                         ts_obj.append(ti)
                         counter_ti += 1
             except Exception as e:
                 self.error(e)
+                return
+        ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
+        ts_obj._setFirstDim(ti)
+        SOTS.update(ts_obj)
 
     # -------------------------- AUXILIARY FUNCTIONS -----------------------
     def _getOutputTiltSeriesPath(self, ts, suffix=''):
