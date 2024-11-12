@@ -398,8 +398,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
                                          key=lambda angle: float(angle[2]))
         # Tilt series object
         ts_obj = tomoObj.TiltSeries()
-        # len_ac = Integer(len(file_ordered_angle_list))
-        # ts_obj.setAnglesCount(len_ac)
         ts_obj.setTsId(mdoc_obj.getTsId())
         acq = ts_obj.getAcquisition()
         acq.setVoltage(mdoc_obj.getVoltage())
@@ -432,7 +430,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase):
         :return:
         """
         ts_fn = self._getOutputTiltSeriesPath(ts_obj)
-        # ts_fn_dw = self._getOutputTiltSeriesPath(ts_obj, '_DW')
         counter_ti = 0
 
         TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts_obj.getTsId()))
