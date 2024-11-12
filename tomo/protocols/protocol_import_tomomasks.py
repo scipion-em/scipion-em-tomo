@@ -138,44 +138,6 @@ class ProtImportTomomasks(ProtTomoImportFiles):
         return errors
 
     # --------------------------- UTILS functions ------------------------------
-
-    # def _checkMatchingFiles(self, filesDict):
-    #     nonMatchingTomoMaskNames = []
-    #     matchingTomoMaskDict = {}
-    #     inTomoSet = self.inputTomos.get()
-    #
-    #     for file, _ in self.iterFiles():
-    #         tomoMaskName = self.getTomoMaskName(file)
-    #         matches = [True if tomo == tomoMaskName else False for tomo in list(list2check)]
-    #         if any(matches):
-    #             matchingTomoMaskDict[file] = inTomoSet[matches.index(True) + 1].clone()
-    #         else:
-    #             nonMatchingTomoMaskNames.append(tomoMaskName)
-    #
-    #     # Check if there are non-matching tomograms
-    #     matchingIds = matchingTomoMaskDict.keys()
-    #     pattern = '\t- {}\n'
-    #     if matchingIds:
-    #         uniqueMatchingIds = set([self.getTomoMaskName(matchingId) for matchingId in matchingIds])
-    #         set2check = set(list2check)
-    #         nonMatchingTomogramIds = set2check ^ uniqueMatchingIds  # ^ is (a | b) - (a & b) inverse intersection
-    #         if nonMatchingTomogramIds:
-    #             nOfNonMatchingTomos = len(nonMatchingTomogramIds)
-    #             headMsg = yellowStr('[%i] tomograms did not match to any of the tomomasks introduced:' % nOfNonMatchingTomos)
-    #             msgNonMatchingTomos = ('%s\n%s' % (headMsg, pattern * nOfNonMatchingTomos)).format(*nonMatchingTomogramIds)
-    #             self.warnMsg += msgNonMatchingTomos + '\n\n'
-    #     else:
-    #         raise Exception(ERR_NON_MATCHING_TOMOS)
-    #
-    #     # The same for the non-matching tomomasks
-    #     if nonMatchingTomoMaskNames:
-    #         nOfNonMatchingTomomasks = len(nonMatchingTomoMaskNames)
-    #         headMsg = yellowStr('[%i] tomomasks did not match to any of the tomograms introduced:' % nOfNonMatchingTomomasks)
-    #         msgNonMatchingTomoMasks = ('%s\n%s' % (headMsg, pattern * nOfNonMatchingTomomasks)).format(*nonMatchingTomoMaskNames)
-    #         self.warnMsg += msgNonMatchingTomoMasks + '\n\n'
-    #
-    #     self.matchingTomoMaskDict = matchingTomoMaskDict
-
     @staticmethod
     def _tomoHasValidTsId(tomo):
         return True if getattr(tomo, '_tsId', None) else False
