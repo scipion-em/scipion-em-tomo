@@ -250,11 +250,13 @@ DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
 DataViewer.registerConfig(tomo.objects.SetOfMeshes)
 DataViewer.registerConfig(tomo.objects.SetOfLandmarkModels)
 DataViewer.registerConfig(tomo.objects.SetOfCTFTomoSeries)
+
+labels = ('id %s _filename _samplingRate _ctfCorrected _halfMapFiles %s' %
+          (tomo.objects.Tomogram.TS_ID_FIELD, tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD))
 DataViewer.registerConfig(tomo.objects.SetOfTomograms,
                           config={MODE:MODE_MD,
-                                  VISIBLE:'id _filename %s %s' %
-                                          (tomo.objects.Tomogram.TS_ID_FIELD,
-                                           tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD)})
+                                  ORDER: labels,
+                                  VISIBLE: labels,})
 
 # Register Tilt series sets
 labels = ('id enabled _tsId _samplingRate _anglesCount _acquisition._tiltAxisAngle _hastCtf _hasOddEven _ctfCorrected'
@@ -262,6 +264,13 @@ labels = ('id enabled _tsId _samplingRate _anglesCount _acquisition._tiltAxisAng
           ' _acquisition._step _size _acquisition._accumDose'
 )
 DataViewer.registerConfig(tomo.objects.SetOfTiltSeries,
+                          config={MODE: MODE_MD,
+                                  ORDER: labels,
+                                  VISIBLE: labels})
+
+# TomoMasks
+labels = 'id _tsId _filename _volName _samplingRate'
+DataViewer.registerConfig(tomo.objects.SetOfTomoMasks,
                           config={MODE: MODE_MD,
                                   ORDER: labels,
                                   VISIBLE: labels})
