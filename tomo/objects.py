@@ -255,7 +255,7 @@ class TiltSeriesBase(data.SetOfImages):
         return self._acquisition is not None and self._acquisition.getMagnification() is not None
 
     def getAnglesCount(self):
-        return self._anglesCount.get()
+        return self.getSize()
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -919,8 +919,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def update(self, item: TiltSeriesBase):
         if not self._firstDim.isEmpty():
-            currentSetNAngles = self._firstDim[2]
-            addedTsNAngles = item.getAnglesCount()
+            currentSetNAngles = self.getAnglesCount()
+            addedTsNAngles = item.getSize()
             if currentSetNAngles != addedTsNAngles and not self.isHeterogeneousSet():
                 self.setIsHeterogeneousSet(True)
         # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
