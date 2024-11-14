@@ -57,11 +57,13 @@ class TomoImport:
 
 class EmTableCoordImport:
 
-    def __init__(self, block, xField, yField, zField):
+    def __init__(self, block, xField, yField, zField, wField=None,hField=None):
         self.block = block
         self.xField = xField
         self.yField = yField
         self.zField = zField
+        self.hField = hField
+        self.wField = wField
     def importCoordinates3D(self, fileName, addCoordinate):
         from tomo.objects import Coordinate3D
 
@@ -72,8 +74,12 @@ class EmTableCoordImport:
         for row in md:
             print(row)
             x = row.get(self.xField)
+            if self.wField is not None:
+                x += row.get(self.wField)/2
             print(x)
             y = row.get(self.yField)
+            if self.hField is not None:
+                y += row.get(self.hField)/2
             z = row.get(self.zField)
             coord = Coordinate3D()
             addCoordinate(coord, x, y, z)
