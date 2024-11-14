@@ -564,7 +564,7 @@ class TiltSeries(TiltSeriesBase):
             logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
 
     def generateTltFile(self, tltFilePath: str, reverse: bool=False, excludeViews: bool=False,
-                        presentAcqOrders: typing.Set[int]=set, includeDose: bool=False) -> None:
+                        presentAcqOrders: typing.Set[int]=(), includeDose: bool=False) -> None:
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
