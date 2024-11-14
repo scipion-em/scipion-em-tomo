@@ -1,5 +1,16 @@
 v3.9.1:
-Developers:
+ Users:
+  - Import TomoMasks: it now admits {TS} pattern.
+  - Import TS: Improve TS accumulated dose determination when using mdoc.
+  - Import Tomograms: exclusion words fixed in import tomograms when not using a pattern.
+  - Scipion metadata viewer for SetOfTomograms and SetOfTomoMasks: updated the visible fields and order.
+ Developers:
+  - Tilt Series class:
+     * Fix the clone method --> now it is a literal clone is expected by default instead
+       of ignoring some attributes.
+     * Fix TS reStack method.
+     * Methods applyTSTransform and generateTltFile updated to work with presentAcqOrders.
+  - Import TomoMasks refactored.
   - Fixing an error in the compose_TS protocol creating the TS
   - Using the getSize method to get the anglesCount
 v3.9.0:

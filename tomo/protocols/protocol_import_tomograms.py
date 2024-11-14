@@ -146,7 +146,9 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             inPattern = self.filesPattern.get()
             pattern = inPattern.strip() if inPattern else ''
             logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(), pattern))
-            for fileName, _ in self.iterFiles():
+            filePaths = [fileName[0] for fileName in self.iterFiles()]
+            fileList = self._excludeByWords(filePaths)
+            for fileName in fileList:
                 tsId = normalizeTSId(removeBaseExt(fileName))
                 self.addTomoToSet(fileName, tsId, tomo, tomoSet)
 

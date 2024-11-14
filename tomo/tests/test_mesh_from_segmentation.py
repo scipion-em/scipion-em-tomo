@@ -30,7 +30,6 @@ from tomo.protocols.protocol_import_tomograms import ProtImportTomograms, OUTPUT
 from tomo.protocols.protocol_import_tomomasks import ProtImportTomomasks
 
 
-
 class TestMeshFromSegmentation(BaseTest):
 
     @classmethod
@@ -38,7 +37,6 @@ class TestMeshFromSegmentation(BaseTest):
         setupTestProject(cls)
         cls.inputDataSet = DataSet.getDataSet('tomoMask')
         #cls.pattern = '*.mrc'
-
 
     def testCreateMesh(self):
         # Import tomograms
@@ -51,23 +49,25 @@ class TestMeshFromSegmentation(BaseTest):
         outputTomograms = getattr(protTomograms, OUTPUT_NAME, None)
         self.assertIsNotNone(outputTomograms, "There was a problem with tomogram output")
 
-
         # Import tomoMask
         protTomoMask = self.newProtocol(ProtImportTomomasks,
-                                           objLabel='Import tomoMaks',
-                                           inputTomos=outputTomograms,
-                                           filesPath=self.inputDataSet.getPath(),
-                                           filesPattern='vTomo*_flt.mrc')
+                                        objLabel='Import tomoMaks',
+                                        inputTomos=outputTomograms,
+                                        filesPath=self.inputDataSet.getPath(),
+                                        filesPattern='vTomo*_flt.mrc')
         self.launchProtocol(protTomoMask)
-        self.assertIsNotNone(protTomoMask.outputTomoMasks, 'tomoMasks not imported')
+        outputTomoMasks = getattr(protTomoMask, protTomoMask._possibleOutputs.tomomasks.name, None)
+        self.assertIsNotNone(outputTomoMasks, 'tomoMasks not imported')
 
         # Create Mesh
         protMesh = self.newProtocol(ProtMeshFromSegmentation,
-                                       objLabel='mesh fromsegmentation',
-                                       tomoMasks=protTomoMask.outputTomoMasks,
-                                       lowLimit=0.1,
-                                       highLimit=1.0,
-                                       density=5)
+                                    objLabel='mesh fromsegmentation',
+                                    inputMasks=outputTomoMasks,
+                                    inputTomograms=outputTomograms,
+                                    lowLimit=0.1,
+                                    highLimit=1.0,
+                                    density=5)
 
         self.launchProtocol(protMesh)
-        self.assertSetSize(getattr(protMesh, ProtMeshFromSegmentation._OUTPUT_NAME), size=3892, msg='mesh from segmentation failed')
+        self.assertSetSize(getattr(protMesh, ProtMeshFromSegmentation._OUTPUT_NAME), size=3892,
+                           msg='mesh from segmentation failed')

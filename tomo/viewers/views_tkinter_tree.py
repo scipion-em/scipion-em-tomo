@@ -548,7 +548,7 @@ class TiltSeriesDialog(ToolbarListDialog):
                         newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
 
                     index = 1
-                    newTs = ts.clone()
+                    newTs = tomo.objects.TiltSeries()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
 
