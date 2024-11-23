@@ -13,6 +13,7 @@ v3.9.1:
   - Import TomoMasks refactored.
   - Fixing an error in the compose_TS protocol creating the TS
   - Using the getSize method to get the anglesCount
+  - Fix TS motioncor viewer
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.
