@@ -305,7 +305,7 @@ class DataSetRe4STATuto(Enum):
         return dims + [nImgs]
 
     @classmethod
-    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54)):
+    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54)):
         testAcqObjDict = dict()
         expectedDimensionsDict = dict()
         if TS_01 in tsIdList:
