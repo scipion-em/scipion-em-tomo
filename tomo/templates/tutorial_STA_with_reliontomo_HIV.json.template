@@ -201,7 +201,7 @@ You'll need to download its dataset -> scipion3 testdata --download reliontomo_S
         "filterRadius2": 0.125,
         "filterSigma2": 0.03,
         "fiducialDiameter": 10.0,
-        "twoSurfaces": true,
+        "twoSurfaces": false,
         "numberFiducial": 25,
         "doTrackWithModel": true,
         "refineSobelFilter": true,

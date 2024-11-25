@@ -186,10 +186,11 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def _summary(self):
         summary = []
         nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name)
+        outputTSName = self._possibleOutputs.tiltSeries.name
         if nonMatchingTsIdsMsg:
             summary.append(nonMatchingTsIdsMsg)
-        if hasattr(self, self._possibleOutputs.tiltSeries.name):
+        if hasattr(self, outputTSName):
+            outTsSet = getattr(self, outputTSName)
             summary.append(f"Input tilt-series:"
                            f"\n\t- Get Transform: {self.getTMSetOfTiltSeries.get().getSize()}"
                            f"\n\t- Set Transform: {self.setTMSetOfTiltSeries.get().getSize()}"
