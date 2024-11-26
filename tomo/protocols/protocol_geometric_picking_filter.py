@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 import numpy as np
-import math
 
 from pyworkflow import BETA
 from pyworkflow.protocol.params import (PointerParam, FloatParam, EnumParam, 
