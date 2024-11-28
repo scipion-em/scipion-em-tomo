@@ -120,7 +120,11 @@ class TestBaseCentralizedLayer(BaseTest):
                         isInterpolated: bool = False,
                         excludedViewsDict: dict = None,
                         isHeterogeneousSet: Union[bool, None] = None,
-                        expectedOrigin: Union[Union[List[float], np.ndarray], dict] = None) -> None:
+                        expectedOrigin: Union[Union[List[float], np.ndarray], dict] = None,
+                        tiltAnglesTolDeg: float = 0.01,
+                        rotAngleTolDeg: float = 0.01,
+                        originTolAngst: float = 0.1,
+                        sRateAngsPix: float = 0.001) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -158,17 +162,21 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedOrigin: list containing the expected originX,originY, in angstroms, to check. A dict of
         structure {key --> tsId: value: expectedOrigin} is also admitted in the case of heterogeneous sets, e.g.
         TS with different dimensions in the same set and. consequently, different origin.
+        :param tiltAnglesTolDeg: angular tolerance, in degrees, of the acquisition min and max tilt angles.
+        :param rotAngleTolDeg: angular tolerance, in degrees, of the acquisition rotation angle.
+        :param originTolAngst: tolerance, in angstroms, of the shifts from the origin matrix.
+        :param sRateAngsPix: tolerance, in angtroms/pixel, of the sampling rate.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
-        originTol = 0.1  # in angstroms
-        sRateTol = 0.001  # in angstroms/pixel
         # CHECK THE SET ------------------------------------------------------------------------------------------------
         self.checkSetGeneralProps(inTsSet,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
                                   isHeterogeneous=isHeterogeneousSet)
         if testSetAcqObj:
-            self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition())
+            self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition(),
+                                      tiltAnglesTolDeg=tiltAnglesTolDeg,
+                                      rotAngleTolDeg=rotAngleTolDeg)
         self.assertEqual(inTsSet.hasAlignment(), hasAlignment)
         self.assertEqual(inTsSet.getAlignment(), alignment)
         self.assertEqual(inTsSet.isPhaseFlipped(), isPhaseFlipped)
@@ -194,7 +202,10 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the acquisition
             if testAcqObj:
                 tsAcq = ts.getAcquisition()
-                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId)
+                self.checkTomoAcquisition(testAcqObj, tsAcq,
+                                          tsId=tsId,
+                                          tiltAnglesTolDeg=tiltAnglesTolDeg,
+                                          rotAngleTolDeg=rotAngleTolDeg)
             # Check the angles count
             if anglesCount:
                 self.checkAnglesCount(ts, anglesCount, tsId=tsId)
@@ -204,9 +215,9 @@ class TestBaseCentralizedLayer(BaseTest):
                     testOrigin = expectedOrigin[tsId]
                 else:
                     testOrigin = expectedOrigin
-                self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTol=originTol)
+                self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTolAngst=originTolAngst)
             # Sampling rate
-            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateTol)
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
             # Alignment
             self.assertEqual(ts.hasAlignment(), hasAlignment)
             self.assertEqual(ts.getAlignment(), alignment)
@@ -233,12 +244,11 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.checkTiTransformMatrix(ti,
                                             isImported=imported,
                                             isInterpolated=isInterpolated,
-                                            is2d=True,
-                                            isExcludedView=isExcludedView)
+                                            is2d=True)
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
-                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateTol)
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
 
     def checkAnglesCount(self,
                          inSet: Union[SetOfTiltSeries, TiltSeries],
@@ -256,7 +266,6 @@ class TestBaseCentralizedLayer(BaseTest):
     def checkTiTransformMatrix(self, ti: TiltImage,
                                isImported: bool = False,
                                isInterpolated: bool = False,
-                               isExcludedView: bool = False,
                                is2d: bool = False):
         """Checks the shape and coarsely the contents of the transformation matrix provided. Expected behavior is:
         -> If interpolated, no matrix is associated.
@@ -270,7 +279,6 @@ class TestBaseCentralizedLayer(BaseTest):
         :param is2d: False by default. Used to indicate if the expected transformation matrix should be of size 3 x 3
         (True) or 4 x 4 (False).
         :param isInterpolated: if True, the expected transformation matrix is the Identity
-        :param isExcludedView: it behaves the same as param isInterpolated
         """
         if isImported or isInterpolated:
             self.assertIsNone(ti.getTransform())
@@ -283,15 +291,10 @@ class TestBaseCentralizedLayer(BaseTest):
                 outMatrix = np.array(outMatrix)
             self.assertIsNotNone(outMatrix)
             self.assertEqual(outMatrix.shape, transfMatrixShape)
-            # The following lines are not always true anymore as any view can be disabled by the user at any point, so
-            # an excluded view can have a transformation matrix which is not the Identity.
-            # identityMatrix = np.eye(size)
-            # if isExcludedView:
-            #     self.assertTrue(np.array_equal(outMatrix, identityMatrix))
-            # else:
-            #     self.assertFalse(np.array_equal(outMatrix, identityMatrix))
 
-    def checkTsOriginMatrix(self, ts: TiltSeries, expectedOrigin: List[float], originTol: float = 0.1) -> None:
+    def checkTsOriginMatrix(self, ts: TiltSeries,
+                            expectedOrigin: List[float],
+                            originTolAngst: float = 0.1) -> None:
         testOrigin = np.array(expectedOrigin)
         testOrigin = np.append(testOrigin, 0)  # Z shift must be 0 for images
         # Get the generated/stored origin matrix and check it
@@ -303,13 +306,16 @@ class TestBaseCentralizedLayer(BaseTest):
         origY = originMatrix[1, -1]
         origZ = originMatrix[2, -1]
         origin = np.array([origX, origY, origZ])
-        self.assertTrue(np.allclose(testOrigin, origin, rtol=originTol),
+        self.assertTrue(np.allclose(testOrigin, origin, rtol=originTolAngst),
                         msg=f'Tilt-series {ts.getTsId()}: origin values [originX, originY, originZ] are different than '
-                            f'the expected within tolerance {originTol} Å.\n{testOrigin} != \n{origin}')
+                            f'the expected within tolerance {originTolAngst} Å.\n{testOrigin} != \n{origin}')
 
     # TOMO ACQUISITION #################################################################################################
-    def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict], currentAcq: TomoAcquisition,
+    def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict],
+                             currentAcq: TomoAcquisition,
                              tsId: Union[str, None] = None,
+                             tiltAnglesTolDeg: float = 0.01,
+                             rotAngleTolDeg: float = 0.01,
                              isTomogramAcq: bool = False) -> None:
         """It compares two TomoAcquisition objects, considering the following attributes:
 
@@ -329,6 +335,8 @@ class TestBaseCentralizedLayer(BaseTest):
         TomoAcquisition object} is also accepted if the set is heterogeneous.
         :param currentAcq: TomoAcquisition to be tested.
         :param tsId: tilt series identifier. Used to get the corresponding testAcq in case it's a dict.
+        :param tiltAnglesTolDeg: angular tolerance, in degrees, of the min and max tilt angles.
+        :param rotAngleTolDeg: angular tolerance, in degrees, of the rotation angle.
         :param isTomogramAcq: boolean used to indicate if the acquisitoon introduced corresponds to a tomogram instead
         of a tilt-series. In that case, the attributes checked will be:
 
@@ -344,9 +352,9 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertAlmostEqual(testAcq.getAmplitudeContrast(), currentAcq.getAmplitudeContrast(), delta=0.01)
         if not isTomogramAcq:
             self.assertAlmostEqual(testAcq.getMagnification(), currentAcq.getMagnification(), delta=1)
-            self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=0.5)
-            self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=0.01)
-            self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=0.01)
+            self.assertAlmostEqual(testAcq.getTiltAxisAngle(), currentAcq.getTiltAxisAngle(), delta=rotAngleTolDeg)
+            self.assertAlmostEqual(testAcq.getAngleMin(), currentAcq.getAngleMin(), delta=tiltAnglesTolDeg)
+            self.assertAlmostEqual(testAcq.getAngleMax(), currentAcq.getAngleMax(), delta=tiltAnglesTolDeg)
             self.assertAlmostEqual(testAcq.getStep(), currentAcq.getStep(), delta=0.1)
             self.assertAlmostEqual(testAcq.getDoseInitial(), currentAcq.getDoseInitial(), delta=0.01)
             self.assertAlmostEqual(testAcq.getDosePerFrame(), currentAcq.getDosePerFrame(), delta=0.01)
