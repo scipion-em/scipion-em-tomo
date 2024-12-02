@@ -38,9 +38,9 @@ from ..convert.convert import setOfMeshes2Files
 import tomo.objects
 from tomo.protocols import ProtTsCorrectMotion
 
-SERIES_EVEN = "outputTiltSeriesEven"
-SERIES_ODD = "outputTiltSeriesOdd"
-SERIES_DW = "outputTiltSeriesDW"
+SERIES_EVEN = "TiltSeriesEven"
+SERIES_ODD = "TiltSeriesOdd"
+SERIES_DW = "TiltSeriesDW"
 
 
 class TomoDataViewer(pwviewer.Viewer):
@@ -116,42 +116,35 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
             form.addParam('displayFullTiltSeriesDW', LabelParam,
                           label='Display full frame aligned tilt series (dose-weighted)',
                           help='Shows full frames aligned set of tilt series')
-        if self.hasEvenSet():
+        if self.hasOddEvenSet():
             form.addParam('displayEvenTiltSeries', LabelParam,
                           label='Display even frames aligned tilt series',
                           help='Shows even frames aligned set of tilt series')
 
-            if self.hasOddSet():
-                form.addParam('displayOddTiltSeries', LabelParam,
-                              label='Display odd frames aligned tilt series',
-                              help='Shows even frames aligned set of tilt series')
+            form.addParam('displayOddTiltSeries', LabelParam,
+                          label='Display odd frames aligned tilt series',
+                          help='Shows even frames aligned set of tilt series')
+
+    def getOutputSet(self, attrName):
+        return getattr(self.protocol, attrName)
 
     def hasDWSet(self):
-        return hasattr(self.protocol, SERIES_DW)
+        return self.getOutputSet(SERIES_DW) is not None
 
-    def hasEvenSet(self):
-        return hasattr(self.protocol, SERIES_EVEN)
-
-    def hasOddSet(self):
-        return hasattr(self.protocol, SERIES_ODD)
-
-    def getEvenSet(self):
-        return getattr(self.protocol, SERIES_EVEN)
-
-    def getOddSet(self):
-        return getattr(self.protocol, SERIES_ODD)
+    def hasOddEvenSet(self):
+        return self.getOutputSet(SERIES_ODD) is not None
 
     def _displayEvenTiltSeries(self, param=None):
-        return self._visualize(self.getEvenSet())
+        return self._visualize(self.getOutputSet(SERIES_EVEN))
 
     def _displayOddTiltSeries(self, param=None):
-        return self._visualize(self.getOddSet())
+        return self._visualize(self.getOutputSet(SERIES_ODD))
 
     def _displayFullTiltSeries(self, param=None):
-        return self._visualize(self.protocol.outputTiltSeries)
+        return self._visualize(self.protocol.TiltSeries)
 
     def _displayFullTiltSeriesDW(self, param=None):
-        return self._visualize(self.protocol.outputTiltSeriesDW)
+        return self._visualize(self.getOutputSet(SERIES_DW))
 
     def _getVisualizeDict(self):
         return {
@@ -250,11 +243,13 @@ DataViewer.registerConfig(tomo.objects.SetOfTiltSeriesCoordinates)
 DataViewer.registerConfig(tomo.objects.SetOfMeshes)
 DataViewer.registerConfig(tomo.objects.SetOfLandmarkModels)
 DataViewer.registerConfig(tomo.objects.SetOfCTFTomoSeries)
+
+labels = ('id %s _filename _samplingRate _ctfCorrected _halfMapFiles %s' %
+          (tomo.objects.Tomogram.TS_ID_FIELD, tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD))
 DataViewer.registerConfig(tomo.objects.SetOfTomograms,
                           config={MODE:MODE_MD,
-                                  VISIBLE:'id _filename %s %s' %
-                                          (tomo.objects.Tomogram.TS_ID_FIELD,
-                                           tomo.objects.Tomogram.ORIGIN_MATRIX_FIELD)})
+                                  ORDER: labels,
+                                  VISIBLE: labels,})
 
 # Register Tilt series sets
 labels = ('id enabled _tsId _samplingRate _anglesCount _acquisition._tiltAxisAngle _hastCtf _hasOddEven _ctfCorrected'
@@ -262,6 +257,13 @@ labels = ('id enabled _tsId _samplingRate _anglesCount _acquisition._tiltAxisAng
           ' _acquisition._step _size _acquisition._accumDose'
 )
 DataViewer.registerConfig(tomo.objects.SetOfTiltSeries,
+                          config={MODE: MODE_MD,
+                                  ORDER: labels,
+                                  VISIBLE: labels})
+
+# TomoMasks
+labels = 'id _tsId _filename _volName _samplingRate'
+DataViewer.registerConfig(tomo.objects.SetOfTomoMasks,
                           config={MODE: MODE_MD,
                                   ORDER: labels,
                                   VISIBLE: labels})

@@ -23,13 +23,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import logging
 import emtable
 import numpy as np
 from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
 import pyworkflow.utils as pwutils
-
 import tomo.constants as const
 
+logger = logging.getLogger(__name__)
 
 class TomoImport:
 
@@ -57,23 +58,30 @@ class TomoImport:
 
 class EmTableCoordImport:
 
-    def __init__(self, block, xField, yField, zField):
+    def __init__(self, block, xField, yField, zField, wField=None,hField=None):
         self.block = block
         self.xField = xField
         self.yField = yField
         self.zField = zField
+        self.hField = hField
+        self.wField = wField
     def importCoordinates3D(self, fileName, addCoordinate):
         from tomo.objects import Coordinate3D
 
         # Read starfile
         md = emtable.Table(fileName=fileName, tableName=self.block)
 
-        print([col.getName() for col in md.getColumns()])
+        logger.info([col.getName() for col in md.getColumns()])
         for row in md:
-            print(row)
-            x = row.get(self.xField)
-            print(x)
-            y = row.get(self.yField)
+            logger.info(row)
+            x = row.get(self.xField, None)
+            w = row.get(self.wField, None)
+            if w and w != '<NA>':
+                x += w/2
+            y = row.get(self.yField, None)
+            h = row.get(self.hField, None)
+            if h and h != '<NA>':
+                y += h/2
             z = row.get(self.zField)
             coord = Coordinate3D()
             addCoordinate(coord, x, y, z)

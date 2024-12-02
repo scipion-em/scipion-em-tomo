@@ -138,6 +138,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.tree.bind('<space>', self.onSpace)
         tsTooltip = TSTreeToolTip(self.tree)
         self.tree.bind("<Motion>", lambda event: self.onMouseMotion(event, self.tree, tsTooltip))
+        self.tree.bind("<Leave>", lambda event: tsTooltip.hide(event))
 
     def onMouseMotion(self, event, tsTree, tsTooltip):
         region = tsTree.identify_region(event.x, event.y)
@@ -548,7 +549,7 @@ class TiltSeriesDialog(ToolbarListDialog):
                         newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
 
                     index = 1
-                    newTs = ts.clone()
+                    newTs = tomo.objects.TiltSeries()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
 

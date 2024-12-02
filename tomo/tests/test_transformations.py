@@ -26,7 +26,6 @@ from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import weakImport
 from tomo.protocols import ProtTomoMisalignTiltSeries
 
-
 with weakImport("xmipptomo"):
     from xmipptomo.protocols.protocol_phantom_subtomo import XmippProtPhantomSubtomo, OutputPhantomSubtomos
 
@@ -41,16 +40,16 @@ with weakImport("xmipptomo"):
 
         def testOnlyShifts(self):
             # Angles =1 cancels the rotation
-            self._runPhantomSubtomo(angles=1)
+            self._runPhantomSubtomo(angles=1, labelMsg='Only shifts')
 
         def testOnlyAngles(self):
             # Shifts =1 cancels the shifts
-            self._runPhantomSubtomo(shifts=1)
+            self._runPhantomSubtomo(shifts=1, labelMsg='Only angles')
 
         def testAll(self):
-            self._runPhantomSubtomo(expected=(51,14,71,4,4,1))
+            self._runPhantomSubtomo(expected=(51, 14, 71, 4, 4, 1), labelMsg='Shitfs and angles')
 
-        def _runPhantomSubtomo(self, shifts=5, angles=90, expected=None):
+        def _runPhantomSubtomo(self, shifts=5, angles=90, expected=None, labelMsg=''):
             """ Creates a phantom subtomo protocol with shift and rotation by default
 
             :param shifts: value for the 3 shifts, to cancel shifts use 1
@@ -83,7 +82,7 @@ with weakImport("xmipptomo"):
                                            create=PHANTOM_DESC,
                                            sampling=4,
                                            nsubtomos=10,
-                                           randomseed=True, # Force random function to return the same values.
+                                           randomseed=True,  # Force random function to return the same values.
                                            rotate=True,
                                            uniformAngularDistribution=False,
                                            rotmin=0,
@@ -100,8 +99,8 @@ with weakImport("xmipptomo"):
                                            zmin=0,
                                            zmax=shifts)
 
+            protPhantom.setObjLabel(f'Phantom {labelMsg}')
             self.launchProtocol(protPhantom)
-
 
             output = getattr(protPhantom, OutputPhantomSubtomos.outputSubtomograms.name)
             if expected:
@@ -109,21 +108,20 @@ with weakImport("xmipptomo"):
                     expected = [expected]
 
                 for index, expectedvalues in enumerate(expected):
-
                     rot, tilt, psi, x, y, z = expectedvalues
 
-                    item = output[index+1]
+                    item = output[index + 1]
 
-                    self.assertEquals(rot,item.phantom_rot.get(), "Rot value not expected fot item %s" % index )
+                    self.assertEquals(rot, item.phantom_rot.get(), "Rot value not expected fot item %s" % index)
                     self.assertEquals(tilt, item.phantom_tilt.get(), "Tilt value not expected fot item %s" % index)
                     self.assertEquals(psi, item.phantom_psi.get(), "Psi value not expected fot item %s" % index)
                     self.assertEquals(x, item.phantom_shiftX.get(), "Shift X value not expected fot item %s" % index)
                     self.assertEquals(y, item.phantom_shiftY.get(), "Shift Y value not expected fot item %s" % index)
                     self.assertEquals(z, item.phantom_shiftZ.get(), "Shift Z value not expected fot item %s" % index)
 
-
             # Add the averagers
-            addAveragers(self, protPhantom, XmippProtPhantomSubtomo._possibleOutputs.outputSubtomograms.name, label4Averagers)
+            addAveragers(self, protPhantom, XmippProtPhantomSubtomo._possibleOutputs.outputSubtomograms.name,
+                         label4Averagers)
 
 
     # Testing phantoms in tomograms, going through coordinates, extraction and average
@@ -250,8 +248,6 @@ with weakImport("xmipptomo"):
             :param kwargs: params to pass to the misalign protocol
             """
 
-
-
             missAligner = self.newProtocol(ProtTomoMisalignTiltSeries,
                                            objLabel=label,
                                            inputSetOfTiltSeries=inputTs,
@@ -270,26 +266,35 @@ def addAveragers(test, inputProt, outputName, label):
         from reliontomo import Plugin
         if Plugin.isRe40():
             from reliontomo.protocols import ProtRelionSubTomoReconstructAvg
-            relionAve = test.newProtocol(ProtRelionSubTomoReconstructAvg,
-                                         objLabel="Relion rec. - %s" % label)
-            relionAve.inputSubtomos.set(inputProt)
-            relionAve.inputSubtomos.setExtended(outputName)
-            test.launchProtocol(relionAve)
+            relionAvgProt = test.newProtocol(ProtRelionSubTomoReconstructAvg)
+            relionAvgProt.inputSubtomos.set(inputProt)
+            relionAvgProt.inputSubtomos.setExtended(outputName)
+            relionAvgProt.setObjLabel("Relion rec. - %s" % label)
+            test.launchProtocol(relionAvgProt)
 
     # Add eman average method
     with weakImport("emantomo"):
         from emantomo.protocols import EmanProtSubTomoAverage
-        emanAve = test.newProtocol(EmanProtSubTomoAverage,
-                                   msWedge=0,
-                                   objLabel = "Eman rec. - %s" % label)
-        emanAve.inputSetOfSubTomogram.set(inputProt)
-        emanAve.inputSetOfSubTomogram.setExtended(outputName)
-        test.launchProtocol(emanAve)
+        emanAvgProt = test.newProtocol(EmanProtSubTomoAverage,
+                                       msWedge=0)
+        emanAvgProt.inputSetOfSubTomogram.set(inputProt)
+        emanAvgProt.inputSetOfSubTomogram.setExtended(outputName)
+        emanAvgProt.setObjLabel("Eman avg. - %s" % label)
+        test.launchProtocol(emanAvgProt)
+
+    # Add dynamo average method
+    with weakImport("dynamo"):
+        from dynamo.protocols import DynamoProtAvgSubtomograms
+        dynamoAvgProt = test.newProtocol(DynamoProtAvgSubtomograms)
+        dynamoAvgProt.inSubtomos.set(inputProt)
+        dynamoAvgProt.inSubtomos.setExtended(outputName)
+        dynamoAvgProt.setObjLabel("Dynamo avg. - %s" % label)
+        test.launchProtocol(dynamoAvgProt)
 
     # Add xmipp tomo averager. In this case we do not need the weak import since this test will only run if xmipptomo is available
     from xmipptomo.protocols import XmippProtApplyTransformSubtomo
-    xmippAve = test.newProtocol(XmippProtApplyTransformSubtomo,
-                                objLabel="Xmipp rec. - %s" % label)
-    xmippAve.inputSubtomograms.set(inputProt)
-    xmippAve.inputSubtomograms.setExtended(outputName)
-    test.launchProtocol(xmippAve)
+    xmippAvgProt = test.newProtocol(XmippProtApplyTransformSubtomo)
+    xmippAvgProt.inputSubtomograms.set(inputProt)
+    xmippAvgProt.inputSubtomograms.setExtended(outputName)
+    xmippAvgProt.setObjLabel("Xmipp avg. - %s" % label)
+    test.launchProtocol(xmippAvgProt)

@@ -1,9 +1,26 @@
+v3.9.1:
+ Users:
+  - Import TomoMasks: it now admits {TS} pattern.
+  - Import TS: Improve TS accumulated dose determination when using mdoc.
+  - Import Tomograms: exclusion words fixed in import tomograms when not using a pattern.
+  - Scipion metadata viewer for SetOfTomograms and SetOfTomoMasks: updated the visible fields and order.
+ Developers:
+  - Tilt Series class:
+     * Fix the clone method --> now it is a literal clone is expected by default instead
+       of ignoring some attributes.
+     * Fix TS reStack method.
+     * Methods applyTSTransform and generateTltFile updated to work with presentAcqOrders.
+  - Import TomoMasks refactored.
+  - Fixing an error in the compose_TS protocol creating the TS
+  - Using the getSize method to get the anglesCount
+  - Fix TS motioncor viewer
 v3.9.0:
  Users: 
   - Add a protocol for filtering coordinates based on a mask.
   - TS viewer: Adding angles and the transformation matrix information
   - Update napari to v0.4.19
   - Steps more precise in GPU usage. Improved execution
+  - add export coordinates 3D protocol
  Developers:
   - Execution mode at class level
   - Protocol assign transformation to TS: fix a bug in the assignment of the tilt angle to each new tilt image.
