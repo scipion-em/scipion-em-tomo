@@ -174,13 +174,13 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
     def _runImportSetOfCoordinates(self, pattern, program, ext, importTomograms=None, coordsSRate=None,
                                    boxSize=None, extraText=''):
         protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
-                                                   objLabel='Import from %s - %s ' % (program, ext) + extraText,
                                                    auto=IMPORT_FROM_AUTO,
                                                    filesPath=self.tomoDs.getPath(),
                                                    importTomograms=importTomograms,
                                                    filesPattern=pattern,
                                                    boxSize=boxSize,
                                                    samplingRate=coordsSRate)
+        protImportCoordinates3d.setObjLabel('Import from %s - %s ' % (program, ext) + extraText)
         self.launchProtocol(protImportCoordinates3d)
         return protImportCoordinates3d
 
@@ -331,10 +331,11 @@ class TestTomoImportSetOfCoordinates3D(BaseTest):
         checkCoordinates(expectedValues, output)
 
         # From cbox ----------------------------------------------------------------------------------------------------
+        # Cryolo's test data cbox file provides a box of [20, 20, 1] --> expected coords = coords + boxSize/2
         expectedCoords = [
-            [-512, -512, -256],
-            [0, 0, 0],
-            [512, 512, 256],
+            [-502, -502, -256],
+            [10, 10, 0],
+            [522, 522, 256],
         ]
         protCoordinates = self._runImportSetOfCoordinates('*.cbox', 'CRYOLO', 'CBOX',
                                                           importTomograms=importedTomos,
