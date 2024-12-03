@@ -1,3 +1,6 @@
+v3.9.2:
+ Users:
+  - sort items in the TS viewer by tsId
 v3.9.1:
  Users:
   - Import TomoMasks: it now admits {TS} pattern.
