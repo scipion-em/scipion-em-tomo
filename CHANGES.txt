@@ -1,3 +1,4 @@
+v3.9.2: add tomo course 2024 template --> HIV processing workflow.
 v3.9.1:
  Users:
   - Import TomoMasks: it now admits {TS} pattern.
