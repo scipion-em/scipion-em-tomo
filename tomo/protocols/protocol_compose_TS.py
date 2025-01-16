@@ -155,67 +155,19 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 self.info('The set of micrographs is closed')
                 whileRunning = False
 
-            time.sleep(60)
+            time.sleep(30)
 
         self.debug('Happy EMProcessing')
         # self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
         # self.closeSet()
 
-    #
-    # def _stepsCheck(self):
-    #     """
-    #     Read all available mdoc files, sort them by date and runs 'readMdoc'
-    #
-    #     """
-    #     current_time = time.time()
-    #     delay = int(current_time - self.time4NextTS_current)
-    #     if self.waitingMdoc:
-    #         self.debug('Timeout for next tilt series (.mdoc file) ' +
-    #                    str(self.time4NextTS.get()) + ' secs ...')
-    #     self.waitingMdoc = False
-    #     self.list_current = self.findMdocs()
-    #
-    #     self.list_remain = []
-    #
-    #     for x in self.list_current:
-    #         # Exclusion
-    #         if self.isMdocBanned(x):
-    #             continue
-    #
-    #         if x not in self.listMdocsRead and x not in self.list_reading:
-    #             self.list_remain.append(x)
-    #
-    #     # STREAMING CHECKPOINT
-    #     if delay > int(self.time4NextTS.get()):
-    #         self.info('Time waiting next Tilt series has expired. ({}s)'.format(
-    #             str(self.time4NextTS.get())))
-    #         output_step = self._getFirstJoinStep()
-    #         self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
-    #         if output_step and output_step.isWaiting():
-    #             output_step.setStatus(cons.STATUS_NEW)
-    #
-    #     elif self.list_remain == [] and self._loadInputList()[1] == False:
-    #         self.info('There is no more mdoc file to read and the set of micrographs is closed')
-    #         output_step = self._getFirstJoinStep()
-    #         self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
-    #         if output_step and output_step.isWaiting():
-    #             output_step.setStatus(cons.STATUS_NEW)
-    #
-    #     elif self.list_remain:
-    #         self.waitingMdoc = True
-    #         self.time4NextTS_current = time.time()
-    #         self.list_reading.append(self.list_remain[0])
-    #         self._insertFunctionStep('readMdoc', self.list_remain[0],
-    #                                  prerequisites=[], wait=False)
-    #         self.updateSteps()
-    #
 
-    def closeSet(self):
-        self.info('Closing sets')
-        for _, output_set in self.iterOutputAttributes():
-            output_set.setStreamState(Set.STREAM_CLOSED)
-
-        self._store()
+    # def closeSet(self):
+    #     self.info('Closing sets')
+    #     for _, output_set in self.iterOutputAttributes():
+    #         output_set.setStreamState(Set.STREAM_CLOSED)
+	#
+    #     self._store()
 
 
     # -------------------------- MAIN FUNCTIONS -----------------------
@@ -341,8 +293,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         Create the SetOfTiltSeries and each tilt series
         :param mdoc_obj: mdoc object to manage
         """
-    
+
         self.info('Tilt series {} being composed...'.format(mdoc_obj.getTsId()))
+        time.sleep(10)
         if self.TiltSeries is None:
             SOTS = self._createSetOfTiltSeries(suffix='')
             SOTS.setStreamState(SOTS.STREAM_OPEN)
@@ -391,14 +344,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         SOTS.setAcquisition(acq)
         SOTS.append(ts_obj)
 
-        self.settingTS(SOTS, ts_obj, file_ordered_angle_list,
-                       incoming_dose_list, accumulated_dose_list)
+        self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list)
 
         SOTS.write()
         self._store(SOTS)
 
-    def settingTS(self, SOTS, ts_obj, file_ordered_angle_list,
-                  incoming_dose_list, accumulated_dose_list):
+    def settingTS(self, SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
         """
         Set all the info in each tilt and set the ts_obj information with all
         the tilts
@@ -407,9 +358,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         :param ts_obj: Tilt series object to add tilts too.
         :param file_ordered_angle_list: list of files sorted by angle.
         :param incoming_dose_list: list of dose per tilt.
-        :param accumulated_dose_list: list of accumulated dose
         :return:
         """
+
         ts_fn = self._getOutputTiltSeriesPath(ts_obj)
         counter_ti = 0
 
@@ -441,8 +392,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                         ti.setTiltAngle(ta)
                         ti.setSamplingRate(sr)
                         ti.setAcquisition(ts_obj.getAcquisition().clone())
-                        ti.getAcquisition().setDosePerFrame(incoming_dose_list[int(to) - 1])
-                        ti.getAcquisition().setAccumDose(int(to)*mic.getAcquisition().getDosePerFrame())
+                        dosePerFrame = incoming_dose_list[int(to) - 1]
+                        ti.getAcquisition().setDosePerFrame(dosePerFrame)
+                        ti.getAcquisition().setAccumDose(int(to)*dosePerFrame)
                         newStack.append(ImageReadersRegistry.open(mic.getFileName()))
                         ts_obj.append(ti)
                         counter_ti += 1
@@ -451,6 +403,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 return
         ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
         ts_obj._setFirstDim(ti)
+
         SOTS.update(ts_obj)
 
     # -------------------------- AUXILIARY FUNCTIONS -----------------------
