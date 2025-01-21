@@ -43,6 +43,7 @@ import pyworkflow.utils.path as path
 import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
+from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 
@@ -2715,6 +2716,147 @@ class CTFTomo(data.CTFModel):
 
         " Standardize the input values "
         self.standardize()
+
+    def computePsd(self, tiltImage):
+        """Compute the psd associated to the tiltimage"""
+        import numpy as np
+        import numpy.lib.stride_tricks
+        from scipy import constants as C
+        import matplotlib.pyplot as plt
+
+        def electronWavelength(energy: float):
+            h = C.Planck
+            c = C.speed_of_light
+            m0 = C.electron_mass
+            e = C.elementary_charge
+            V = energy
+            eV = e * V
+
+            lamda = h * c / np.sqrt(eV * (2 * m0 * c ** 2 + eV))
+
+            return lamda
+
+        def extract_moving_window_2d(image: np.ndarray,
+                                     x_window_size: int,
+                                     y_window_size: int,
+                                     x_step: int,
+                                     y_step: int) -> np.ndarray:
+            if image.ndim != 2:
+                raise ValueError("Input array must be 2D")
+
+            shape = image.shape
+            strides = image.strides
+
+            n_y = (shape[0] - y_window_size) // y_step
+            n_x = (shape[1] - x_window_size) // x_step
+            new_shape = (n_y, n_x) + (y_window_size, x_window_size)
+            new_strides = (strides[0] * y_step, strides[1] * x_step) + strides
+
+            return numpy.lib.stride_tricks.as_strided(
+                image,
+                shape=new_shape,
+                strides=new_strides
+            )
+
+        def compute_psd(image: np.ndarray,
+                        window_size: int,
+                        step: int) -> np.ndarray:
+            patches = extract_moving_window_2d(
+                image,
+                window_size,
+                window_size,
+                step,
+                step
+            )
+
+            result = np.zeros((window_size, window_size // 2 + 1))
+            for patch_row in patches:
+                spectra = np.fft.rfft2(patch_row)
+                result += np.square(np.linalg.norm(spectra, axis=0))
+
+            result /= np.prod(patches.shape[:2])
+            np.sqrt(result, out=result)
+            return result
+
+        def plotHalfCTF(defocusU: float, defocusV: float, defAng: float, cs: float, lamda: float, sampling: float,
+                        n: int):
+            kx, ky = np.meshgrid(np.linspace(-0.5, 0, n // 2 + 1), np.linspace(-0.5, 0.5, n))
+
+            defocus_average = (defocusU + defocusV) * 0.5
+            defocus_deviation = np.abs((defocusU - defocusV)) * 0.5
+            freqAngle = np.arctan2(ky, kx) - defAng
+
+            defocus = defocus_average + defocus_deviation * np.cos(2 * freqAngle)
+
+            k2 = (np.square(kx) + np.square(ky)) / np.square(sampling)
+            lamda2 = np.square(lamda)
+
+            w = defocus * k2 + 0.5 * cs * lamda2 * np.square(k2)
+            ctf2 = np.square(np.sin(np.pi * lamda * w))
+            return ctf2
+
+        def scaleFactor(defocus: float, cs: float, lamda: float, sampling: float):
+            lamda2 = np.square(lamda)
+            # k2 =  np.sqrt((-efocus + np.sqrt(np.square(defocus) +2*cs*lamda*m))/(cs*lamda2))
+            firstZero = np.sqrt((-defocus + np.sqrt(np.square(defocus) + 2.0 * cs * lamda * 1.0)) / (cs * lamda2))
+            digFreqFirstZero = sampling * firstZero if firstZero else 0.02
+            print('digFreq %f' % digFreqFirstZero)
+
+            boxsize = round(1.0 / (0.15 * digFreqFirstZero))
+            print(boxsize)
+
+            return boxsize
+
+        def halfFourierCircle(radius: float, n: int):
+            kx, ky = np.meshgrid(np.arange(n // 2 + 1), np.linspace(-n // 2, n // 2, n))
+            k = np.sqrt(np.square(kx) + np.square(ky))
+            return k < radius
+
+        def plotPSD(psd, boxSize):
+            plt.figure(figsize=(10, 5))
+            plt.title('Original Image')
+            xdim, ydim = psd.shape
+            xinit = (xdim - boxSize) // 2
+            xend = xdim - xinit
+            yinit = (ydim - boxSize) // 2
+            yend = ydim - yinit
+            plt.imshow(psd[xinit:xend, yinit:yend], cmap='gray')
+            plt.title('PSD')
+
+            plt.show()
+
+        index = self.getIndex()
+        stackFileName = tiltImage.getFileName()
+        img = ImageReadersRegistry.open(str(index) + '@' + stackFileName).getImage(0)
+        sampling = tiltImage.getSamplingRate()
+        step = 200
+        boxsize = 512
+        acqInfo = tiltImage.getAcquisition()
+        defocusU = self.getDefocusU()
+        defocusV = self.getDefocusV()
+        defAng = np.deg2rad(self.getDefocusAngle())
+
+        energy = acqInfo.getVoltage()
+        cs = acqInfo.getSphericalAberration()
+
+        lamda = electronWavelength(energy)
+
+        avgPSD = compute_psd(img, boxsize, step)
+
+        ctfSimulated = plotHalfCTF(defocusU, defocusV, defAng, cs, lamda, sampling, boxsize)
+
+        defocus = 0.5 * (defocusU + defocusV)
+        plotBoxsize = scaleFactor(defocus, cs, lamda, sampling)
+
+        mask = halfFourierCircle(8, boxsize)
+        experimentalCTF = np.fft.fftshift(avgPSD, axes=0)
+        experimentalCTF[mask] = 0.0
+        experimentalCTF /= experimentalCTF.max()
+        finalCTF = np.concatenate((ctfSimulated, experimentalCTF), axis=1)
+
+        plotPSD(finalCTF, plotBoxsize)
+
+        return finalCTF
 
 
 class CTFTomoSeries(data.EMSet):
