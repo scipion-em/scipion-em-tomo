@@ -112,9 +112,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                       label="Time for next Tilt (secs)",
                       help="Delay (in seconds) until the next tilt is "
                            "registered in the mdoc file. After "
-                           "timeout, if there is no new tilt, the tilt series "
+                           "timeout, the mdoc file is not updated, the tilt series "
                            "is considered as completed."
-                           "Minimum time recommended 20 secs")
+                           "Minimum time recommended 20 secs. For PACEtomo propose, please increase this time acording your acquisition.")
 
         form.addParallelSection(threads=3, mpi=1)
 
