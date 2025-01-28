@@ -26,6 +26,7 @@
 import time
 import os
 from glob import glob
+import re
 
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.protocols.protocol_import.base import ProtImport
@@ -107,14 +108,18 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                            "update the output Set, which can "
                            "be used right away by next steps.")
 
-        form.addParam('time4NextTilt', params.IntParam, default=180,
+        form.addParam('time4NextTilt', params.StringParam, default="3m",
                       condition='dataStreaming',
-                      label="Time for next Tilt (secs)",
-                      help="Delay (in seconds) until the next tilt is "
+                      label="Time for next Tilt",
+                      help="Delay until the next tilt is "
                            "registered in the mdoc file. After "
                            "timeout, the mdoc file is not updated, the tilt series "
                            "is considered as completed."
-                           "Minimum time recommended 20 secs. For PACEtomo propose, please increase this time acording your acquisition.")
+                           "Minimum time recommended 20 secs (20s). For PACEtomo propose, please increase this time acording your acquisition."
+                           "A correct format is an integer number in "
+                           "seconds or the following syntax: {days}d {hours}h "
+                           "{minutes}m {seconds}s separated by spaces "
+                           "e.g: 1d 2h 20m 15s,  10m 3s, 1h, 20s or 25")
 
         form.addParallelSection(threads=3, mpi=1)
 
@@ -190,9 +195,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         self.info('Reading mdoc file: {}'.format(file2read))
         # STREAMING CHECKPOINT
-        while time.time() - self.readDateFile(file2read) < self.time4NextTilt.get():
+        time4NextTilt = self.getTimeOutInSeconds(self.time4NextTilt.get())
+        while time.time() - self.readDateFile(file2read) < time4NextTilt:
             self.debug('Waiting next tilt...)')
-            time.sleep(self.time4NextTilt.get() / 2)
+            time.sleep(time4NextTilt / 2)
 
         statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
         self.info('mdoc file {} is considered closed'.format(os.path.basename(file2read)))
@@ -416,9 +422,24 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         base = self._getExtraPath(self._getTiltImageMRoot(tilt_image))
         return base + '.mrc', base + '_Out.mrc'
 
+
     @staticmethod
     def _getTiltImageMRoot(ti):
         return '%s_%02d' % (ti.getTsId(), ti.getObjId())
+
+    def getTimeOutInSeconds(self, timeOut):
+        timeOutFormatRegexList = {r'\d+s': 1, r'\d+m': 60, r'\d+h': 3600,
+                                  r'\d+d': 72000}
+        try:
+            return int(timeOut)
+        except Exception:
+            seconds = 0
+        for regex, secondsUnit in timeOutFormatRegexList.items():
+            matchingTimes = re.findall(regex, timeOut)
+            for matchTime in matchingTimes:
+                seconds += int(matchTime[:-1]) * secondsUnit
+        return seconds
+
 
     def _validate(self):
         pass
