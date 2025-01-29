@@ -56,11 +56,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.MDOC_DATA_SOURCE = None
-        self.listMdocsRead = []
         self.TiltSeries = None
         self.waitingMdoc = True
         self.time4NextMic = 10
         self.time4NextTS_current = time.time()
+        self.timeNextLoop = 30
 
     # -------------------------- DEFINES AND STEPS -----------------------
     def _defineParams(self, form):
@@ -114,7 +114,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                       help="Delay until the next tilt is "
                            "registered in the mdoc file. After "
                            "timeout, the mdoc file is not updated, the tilt series "
-                           "is considered as completed."
+                           "is considered as proccessed."
                            "Minimum time recommended 20 secs (20s). For PACEtomo propose, please increase this time acording your acquisition."
                            "A correct format is an integer number in "
                            "seconds or the following syntax: {days}d {hours}h "
@@ -160,7 +160,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 self.info('The set of micrographs is closed')
                 whileRunning = False
 
-            time.sleep(30)
+            time.sleep(self.timeNextLoop)
 
         self.debug('Happy EMProcessing')
         # self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
@@ -194,14 +194,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
         """
         self.info('Reading mdoc file: {}'.format(file2read))
-        # STREAMING CHECKPOINT
-        time4NextTilt = self.getTimeOutInSeconds(self.time4NextTilt.get())
+        # checking time after last mdoc file update to consider it closed
+        time4NextTilt = self.time4NextTilt.get().toSeconds()
         while time.time() - self.readDateFile(file2read) < time4NextTilt:
             self.debug('Waiting next tilt...)')
             time.sleep(time4NextTilt / 2)
 
         statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
-        self.info('mdoc file {} is considered closed'.format(os.path.basename(file2read)))
+        self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts considered closed')
 
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
@@ -261,28 +261,26 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         :param file2read: mdoc file to read
 
         """
-        streamOpen = self.inputMicrographs.get().isStreamOpen()
-        self.info('Tilts on the mdoc file: {}\n'
-                  'Micrographs available: {}'.format(
-            len(mdoc_order_angle_list), len(self.listOfMics)))
+        while self.inputMicrographs.get().isStreamOpen():
+            #Each self.timeNextLoop secs the self.listOfMics is updated (in stepsGeneratorStep)
+            self.info(f'Tilts on the mdoc file: {len(mdoc_order_angle_list)}\n'
+                      f'Micrographs available: {len(self.listOfMics)}')
 
-        #MATCH
-        list_mdoc_files = [os.path.splitext(os.path.basename(fp[0]))[0] for fp in mdoc_order_angle_list]
-        list_mics_matched = []
-        for x, mic in enumerate(self.listOfMics):
-            if os.path.splitext(mic.getMicName())[0] in list_mdoc_files:
-                list_mics_matched.append(mic)
+            #MATCH
+            list_mdoc_files = [os.path.splitext(os.path.basename(fp[0]))[0] for fp in mdoc_order_angle_list]
+            list_mics_matched = []
+            for x, mic in enumerate(self.listOfMics):
+                if os.path.splitext(mic.getMicName())[0] in list_mdoc_files:
+                    list_mics_matched.append(mic)
 
-        if len(list_mics_matched) != len(mdoc_order_angle_list):
-                self.info(f"{len(self.listOfMics) - len(mdoc_order_angle_list)} micrographs are not abailable to compose the Tilt Serie"
-                          "The Tilt serie will not be generated until all mirographs are available."
-                          "The mdoc file {file2read} will be read in future")
-                self.listMdocsRead.append(file2read)
-                return False
-        else:
-            self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
-
-        return True
+            if len(list_mics_matched) < len(mdoc_order_angle_list):
+                    self.info(f"{len(self.listOfMics) - len(mdoc_order_angle_list)} micrographs are not abailable to compose the Tilt Serie"
+                              "The Tilt serie will not be generated until all mirographs are available."
+                              f"The mdoc file {file2read} will be read in future")
+                    time.sleep(self.timeNextLoop) #time until next check is run.
+            else:
+                self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
+                return True
 
     def _loadInputList(self):
         """ Load the input set of mics and create a list. """
