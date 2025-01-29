@@ -1651,6 +1651,20 @@ class CtfEstimationListDialog(ListDialog):
         # Create a right panel to put the plotter
         self.bottomRightPanel = ttk.Frame(pw)
         self.bottomRightPanel.grid(row=0, column=1, padx=0, pady=0, sticky='news')
+        self.bottomRightPanel.grid_rowconfigure(0, weight=1)
+        self.bottomRightPanel.grid_columnconfigure(0, weight=1)
+
+        self.tabControl = ttk.Notebook(self.bottomRightPanel)
+        self.tabControl.grid(row=0, column=1, padx=0, pady=0, sticky='nsew')
+
+        # Create the tabs
+        self.graphTab = ttk.Frame(self.bottomRightPanel)
+        self.psdTab = ttk.Frame(self.bottomRightPanel)
+
+        # Adding tabs
+        self.tabControl.add(self.graphTab, text="Graph")
+        self.tabControl.add(self.psdTab, text="PSD")
+
         self._createPlotter()
         pw.add(self.bottomRightPanel)
         pw.pack(fill=BOTH, expand=True)
@@ -1717,11 +1731,15 @@ class CtfEstimationListDialog(ListDialog):
         self._createPlotter()
 
     def plotterChildItem(self, itemSelected):
-        plotterPanel = tk.Frame(self.bottomRightPanel)
+        plotterPanel = tk.Frame(self.psdTab)
+        clearPSD = True
         if self._show2DPLot is None:
-            self.plotterParentItem(self.tree.parent(itemSelected),
-                                   int(itemSelected.split('.')[-1]))
+            self.tabControl.tab(1, state="disabled")
+            self.clearTab(self.psdTab)
+            self.psdTab.update()
         else:
+            self.tabControl.tab(1, state="normal")
+            clearPSD = False
             for ctfSerie in self.provider.getCTFSeries():
                 if ctfSerie.getTsId() in itemSelected:
                     ctfId = int(itemSelected.split('.')[-1])
@@ -1736,15 +1754,23 @@ class CtfEstimationListDialog(ListDialog):
                     canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
                     canvas.get_tk_widget().bind("<space>", self._onKeyPress)
                     break
-        plotterPanel.grid(row=0, column=1, sticky='news')
+            plotterPanel.grid(row=0, column=1, sticky='news')
+        self.plotterParentItem(self.tree.parent(itemSelected),
+                               int(itemSelected.split('.')[-1]),
+                               clearPSD=clearPSD)
 
-    def plotterParentItem(self, itemSelected, tiltSelected=None):
-        plotterPanel = tk.Frame(self.bottomRightPanel)
+    def plotterParentItem(self, itemSelected, tiltSelected=None, clearPSD=True):
+        plotterPanel = tk.Frame(self.graphTab)
         angDict = {}
         defocusUList = []
         defocusVList = []
         phShList = []
         resList = []
+
+        if clearPSD:
+            self.tabControl.tab(1, state="disabled")
+            self.clearTab(self.psdTab)
+            self.psdTab.update()
 
         for ts in self._inputSetOfTiltSeries:
             if ts.getTsId() == itemSelected:
@@ -1807,7 +1833,7 @@ class CtfEstimationListDialog(ListDialog):
                 else:  # no phase shift, plot resolution instead
                     resPlot = defocusPlot.twinx()
                     resPlot.set_ylim(0, 30)
-                    resPlot.set_ylabel('Resolution (A)', color='tab:green')
+                    resPlot.set_ylabel('Resolution (Å)', color='tab:green')
                     resPlot.plot(angList, resList, marker='.',
                                  color='tab:green', label='Resolution (Å)')
 
@@ -1850,3 +1876,7 @@ class CtfEstimationListDialog(ListDialog):
                     self.createShowFitButton['state'] = tk.DISABLED
 
                 self.plotterParentItem(itemSelected)
+
+    def clearTab(self, tab):
+        for widget in tab.winfo_children():
+            widget.destroy()
