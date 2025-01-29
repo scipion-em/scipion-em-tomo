@@ -278,8 +278,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
             if len(list_mics_matched) < len(mdoc_order_angle_list):
                     self.info(f"{len(self.listOfMics) - len(mdoc_order_angle_list)} micrographs are not abailable to compose the Tilt Serie"
-                              "The Tilt serie will not be generated until all mirographs are available."
-                              f"The mdoc file {file2read} will be read in future")
+                              "The Tilt serie will not be generated because not all mirographs are available."
+                              f"The mdoc file {file2read} will not provide a TiltSerie")
                     time.sleep(self.timeNextLoop) #time until next check is run.
             else:
                 self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
