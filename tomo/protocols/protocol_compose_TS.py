@@ -195,7 +195,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         self.info('Reading mdoc file: {}'.format(file2read))
         # checking time after last mdoc file update to consider it closed
-        time4NextTilt = self.time4NextTilt.get().toSeconds()
+        time4NextTilt = self.time4NextTilt.toSeconds()
+        self.info(f'TIME!!!{time4NextTilt}')
         while time.time() - self.readDateFile(file2read) < time4NextTilt:
             self.debug('Waiting next tilt...)')
             time.sleep(time4NextTilt / 2)
@@ -261,7 +262,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         :param file2read: mdoc file to read
 
         """
-        while self.inputMicrographs.get().isStreamOpen():
+        streameState = True
+        while streameState:
+            streameState = self.inputMicrographs.get().isStreamOpen()
             #Each self.timeNextLoop secs the self.listOfMics is updated (in stepsGeneratorStep)
             self.info(f'Tilts on the mdoc file: {len(mdoc_order_angle_list)}\n'
                       f'Micrographs available: {len(self.listOfMics)}')
