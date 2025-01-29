@@ -427,19 +427,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     def _getTiltImageMRoot(ti):
         return '%s_%02d' % (ti.getTsId(), ti.getObjId())
 
-    def getTimeOutInSeconds(self, timeOut):
-        timeOutFormatRegexList = {r'\d+s': 1, r'\d+m': 60, r'\d+h': 3600,
-                                  r'\d+d': 72000}
-        try:
-            return int(timeOut)
-        except Exception:
-            seconds = 0
-        for regex, secondsUnit in timeOutFormatRegexList.items():
-            matchingTimes = re.findall(regex, timeOut)
-            for matchTime in matchingTimes:
-                seconds += int(matchTime[:-1]) * secondsUnit
-        return seconds
-
 
     def _validate(self):
         pass
