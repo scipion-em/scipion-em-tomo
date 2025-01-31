@@ -143,6 +143,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         self._initialize()
         list_reading = []
+        inputSet = self.inputMicrographs.get()
+        closeSetStepDeps = []
 
         whileRunning = True
         while whileRunning:
@@ -153,26 +155,19 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 if self.isMdocBanned(mdocFile):
                     continue
                 if mdocFile not in list_reading:
-                    self._insertFunctionStep('readMdoc', mdocFile, prerequisites=[], wait=False, needsGPU=False)
+                    stepId = self._insertFunctionStep(self.readMdoc, mdocFile, prerequisites=[], wait=False, needsGPU=False)
                     list_reading.append(mdocFile)
+                    closeSetStepDeps.append(stepId)
 
-            if self.inputMicrographs.get().isStreamOpen() == False: #TODO maybe update the set
+            if inputSet.isStreamOpen():
+                time.sleep(self.timeNextLoop)
+                inputSet.loadAllProperties()
+            else:
                 self.info('The set of micrographs is closed')
-                whileRunning = False
-
-            time.sleep(self.timeNextLoop)
-
-        self.debug('Happy EMProcessing')
-        # self.TiltSeries.setStreamState(Set.STREAM_CLOSED)
-        # self.closeSet()
-
-
-    # def closeSet(self):
-    #     self.info('Closing sets')
-    #     for _, output_set in self.iterOutputAttributes():
-    #         output_set.setStreamState(Set.STREAM_CLOSED)
-	#
-    #     self._store()
+                self._insertFunctionStep(self._closeOutputSet,
+                                         prerequisites=closeSetStepDeps,
+                                         needsGPU=False)
+                return
 
 
     # -------------------------- MAIN FUNCTIONS -----------------------
@@ -197,17 +192,18 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         # checking time after last mdoc file update to consider it closed
         time4NextTilt = self.time4NextTilt.toSeconds()
         while time.time() - self.readDateFile(file2read) < time4NextTilt:
-            self.debug('Waiting next tilt...)')
-            time.sleep(time4NextTilt / 2)
+            self.info('Waiting next tilt...(%s)' % file2read)
+            time.sleep(60)
 
-        statusMdoc, mdoc_order_angle_list = self.readingMdocTiltInfo(file2read)
+        statusMdoc, mdoc_order_angle_list, mdoc_obj = self.readingMdocTiltInfo(file2read)
         self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts considered closed')
 
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
-                self.info('Mdoc error. Less than 3 tilts on the series')
+                self.info('Mdoc error. Less than 3 tilts (%s) on the mdoc %s' % (len(mdoc_order_angle_list), file2read))
             elif self.matchTS(mdoc_order_angle_list, file2read):
-                self.createTS(self.mdoc_obj)
+                with self._lock:
+                    self.createTS(mdoc_obj)
                 self.info("Tilt serie ({} tilts) composed from mdoc file: {}\n".
                           format(len(mdoc_order_angle_list), os.path.basename(file2read)))
         else:
@@ -222,12 +218,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                     file, acquisition order and tilt Angle
         """
         mdoc_order_angle_list = []
-        self.mdoc_obj = MDoc(file2read)
-        validation_error = self.mdoc_obj.read(ignoreFilesValidation=True)
+        mdoc_obj = MDoc(file2read)
+        validation_error = mdoc_obj.read(ignoreFilesValidation=True)
         if validation_error:
-            self.debug(validation_error)
-            return False, mdoc_order_angle_list
-        for tilt_metadata in self.mdoc_obj.getTiltsMetadata():
+            self.info(validation_error)
+            return False, mdoc_order_angle_list, mdoc_obj
+        for tilt_metadata in mdoc_obj.getTiltsMetadata():
             filepath = tilt_metadata.getAngleMovieFile()
             tiltA = tilt_metadata.getTiltAngle()
             if self.mdoc_bug_Correction.get():
@@ -235,7 +231,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
             mdoc_order_angle_list.append((filepath,
                                           '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
-        return True, mdoc_order_angle_list
+
+        return True, mdoc_order_angle_list, mdoc_obj
 
 
     @staticmethod
@@ -276,9 +273,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                     list_mics_matched.append(mic)
 
             if len(list_mics_matched) < len(mdoc_order_angle_list):
-                    self.info(f"{len(self.listOfMics) - len(mdoc_order_angle_list)} micrographs are not abailable to compose the Tilt Serie"
-                              "The Tilt serie will not be generated because not all mirographs are available."
-                              f"The mdoc file {file2read} will not provide a TiltSerie")
+                    self.info(f"{len(self.listOfMics) - len(mdoc_order_angle_list)} micrographs are not available to compose the TiltSeries. "
+                              "It will not be generated because not all micrographs are available. "
+                              f"The mdoc file {file2read} will not provide a TiltSeries.")
                     time.sleep(self.timeNextLoop) #time until next check is run.
             else:
                 self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
@@ -301,7 +298,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
 
         self.info('Tilt series {} being composed...'.format(mdoc_obj.getTsId()))
-        time.sleep(10)
         if self.TiltSeries is None:
             SOTS = self._createSetOfTiltSeries(suffix='')
             SOTS.setStreamState(SOTS.STREAM_OPEN)
