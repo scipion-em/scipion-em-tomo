@@ -193,14 +193,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         time4NextTilt = self.time4NextTilt.toSeconds()
         while time.time() - self.readDateFile(file2read) < time4NextTilt:
             self.info('Waiting next tilt...(%s)' % file2read)
-            time.sleep(60)
+            time.sleep(time4NextTilt / 2)
 
         statusMdoc, mdoc_order_angle_list, mdoc_obj = self.readingMdocTiltInfo(file2read)
         self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts considered closed')
 
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
-                self.info('Mdoc error. Less than 3 tilts (%s) on the mdoc %s' % (len(mdoc_order_angle_list), file2read))
+                self.info(f'Mdoc error. Less than 3 tilts {len(mdoc_order_angle_list)} on the mdoc {file2read}')
             elif self.matchTS(mdoc_order_angle_list, file2read):
                 with self._lock:
                     self.createTS(mdoc_obj)
@@ -221,7 +221,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         mdoc_obj = MDoc(file2read)
         validation_error = mdoc_obj.read(ignoreFilesValidation=True)
         if validation_error:
-            self.info(validation_error)
+            self.error(validation_error)
             return False, mdoc_order_angle_list, mdoc_obj
         for tilt_metadata in mdoc_obj.getTiltsMetadata():
             filepath = tilt_metadata.getAngleMovieFile()
@@ -275,7 +275,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             if len(list_mics_matched) < len(mdoc_order_angle_list):
                     self.info(f"{len(self.listOfMics) - len(mdoc_order_angle_list)} micrographs are not available to compose the TiltSeries. "
                               "It will not be generated because not all micrographs are available. "
-                              f"The mdoc file {file2read} will not provide a TiltSeries.")
+                              f"The mdoc file {file2read} will not provide a TiltSerie.")
                     time.sleep(self.timeNextLoop) #time until next check is run.
             else:
                 self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
