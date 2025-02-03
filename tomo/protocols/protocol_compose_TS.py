@@ -26,13 +26,11 @@
 import time
 import os
 from glob import glob
-import re
 
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.protocols.protocol_import.base import ProtImport
 import pyworkflow as pw
 from pyworkflow.protocol import params, STEPS_PARALLEL, ProtStreamingBase
-from pyworkflow.object import Set
 from tomo.convert.mdoc import MDoc
 import pwem.objects as emobj
 import tomo.objects as tomoObj
@@ -213,6 +211,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 with self._lock:
                     self.createTS(mdoc_obj)
                 self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n")
+                summaryF = self._getExtraPath("summary.txt")
+                summaryF = open(summaryF, "w")
+                summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
+
         else:
             self.info('Mdoc file did not pass the format validation')
 
@@ -286,11 +288,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
                 return True
-
-        percentTiltsAvailable = ((100 * len(list_mics_matched)) / len(mdoc_order_angle_list))
-        if percentTiltsAvailable < self.percentTiltsRequired.get():
-            self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(self.listOfMics)}'
-		          f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries.'
+        percentTiltsAvailable = int((100 * len(list_mics_matched)) / len(mdoc_order_angle_list))
+        self.info(f'percentTiltsAvailable: {percentTiltsAvailable}\n self.percentTiltsRequired.get(): {self.percentsTilts[self.percentTiltsRequired.get()]}')
+        if percentTiltsAvailable < int(self.percentsTilts[self.percentTiltsRequired.get()]):
+            self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(list_mics_matched)}'
+		          f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries. '
 		          'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated')
         else:
             self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
@@ -445,15 +447,19 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
 
     def _summary(self):
+
         summary = []
-        summary.append('Path with the *.mdoc files for each tilt serie:{}\n'.format(self.filesPath.get()))
-        if not hasattr(self, 'TiltSeries'):
-            summary.append("Output SetOfTiltSeries not ready yet.")
+        summary.append(f'Path with the *.mdoc files for each tilt serie:{self.filesPath.get()}\n')
+
+        summaryF = self._getExtraPath("summary.txt")
+        if not os.path.exists(summaryF):
+            summary.append("No summary file yet.")
         else:
-            try:
-                summary.append("{} tilt series added".format(self.TiltSeries.getSize()))
-            except Exception as e:
-                print(e)
+            summaryF = open(summaryF, "r")
+            for line in summaryF.readlines():
+                summary.append(line.rstrip())
+            summaryF.close()
         return summary
+
 
 
