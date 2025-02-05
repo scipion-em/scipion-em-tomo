@@ -50,7 +50,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     _label = 'Compose Tilt Series'
     _possibleOutputs = {OUT_STS: SetOfTiltSeries}
     percentsTilts = ['50', '60', '70', '80', '90', '100']
-
+    separator  = '-----------------'
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.MDOC_DATA_SOURCE = None
@@ -188,31 +188,32 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         :param streamOpen: Bool for the setOfMics status (open or closed)
 
         """
-        self.info('\n-----------------\nReading mdoc file: {}'.format(file2read))
+        self.info(f'\n{self.separator}\nReading mdoc file: {file2read}')
         # checking time after last mdoc file update to consider it closed
         time4NextTilt = self.time4NextTilt.toSeconds()
         if time.time() - self.readDateFile(file2read) < time4NextTilt:
             self.info('Waiting next tilt...(%s)' % file2read)
+            self.info(f'{self.separator}\n')
             return
 
         statusMdoc, mdoc_order_angle_list, mdoc_obj = self.readingMdocTiltInfo(file2read)
         self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts considered closed')
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
-                self.info(f'Mdoc error. Less than 3 tilts {len(mdoc_order_angle_list)} on the mdoc {file2read}')
+                self.info(f'Mdoc error. Less than 3 tilts {len(mdoc_order_angle_list)} on the mdoc {file2read}\n{self.separator}\n')
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     with self._lock:
                         self.createTS(mdoc_obj)
                     self.listTSComposed.append(file2read)
                     self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n")
-                    self.info(f'-------------\n')
+                    self.info(f'{self.separator}\n')
                     summaryF = self._getExtraPath("summary.txt")
                     summaryF = open(summaryF, "w")
                     summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
 
         else:
-            self.info('Mdoc file did not pass the format validation')
+            self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
 
     def readingMdocTiltInfo(self, file2read):
@@ -277,7 +278,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         if streamOpen:
             if len(list_mics_matched) < len(mdoc_order_angle_list):
                     self.info(f"{len(mdoc_order_angle_list) - len(list_mics_matched)} micrographs are not available to compose the TiltSeries. "
-                              "Waitting for the tilts to compose...\n-----------------")
+                              f'Waitting for the tilts to compose...\n{self.separator}')
                     return False
             else:
                 self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
