@@ -206,8 +206,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                     with self._lock:
                         self.createTS(mdoc_obj)
                     self.listTSComposed.append(file2read)
-                    self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n")
-                    self.info(f'{self.separator}\n')
+                    self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}{self.separator}\n")
                     summaryF = self._getExtraPath("summary.txt")
                     summaryF = open(summaryF, "w")
                     summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
@@ -289,7 +288,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             if percentTiltsAvailable < int(self.percentsTilts[self.percentTiltsRequired.get()]):
                 self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(list_mics_matched)}'
                       f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries. '
-                      'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated')
+                      f'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated{self.separator}\n')
                 return False
             else:
                 self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
