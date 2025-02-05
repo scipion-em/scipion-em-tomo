@@ -282,7 +282,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             percentTiltsAvailable = int((100 * len(list_mics_matched)) / len(mdoc_order_angle_list))
             self.info(f'Percent tilts available: {percentTiltsAvailable}%\nPercent tilts required: {self.percentsTilts[self.percentTiltsRequired.get()]}%')
             if percentTiltsAvailable < int(self.percentsTilts[self.percentTiltsRequired.get()]):
-                self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(list_mics_matched)}'
+                self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(list_mics_matched)} '
                       f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries. '
                       f'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated\n{self.separator}\n')
                 return False
