@@ -153,13 +153,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         while streamOpen:
             streamOpen = inputSet.isStreamOpen()
             list_current = self.findMdocs()
-            self.info(f'list_current: {list_current}')
-            self.len_mics_input_1, _ = self._loadInputList()
+            self._loadInputList()
             list_current = [f for f in list_current if f not in self.listTSComposed]
+            self.info(f'List of mdocs available to compose: {list_current}')
             for mdocFile in list_current:
                 # Exclusion
                 if self.isMdocBanned(mdocFile):
-                    self.info(f'banned!: {mdocFile}')
+                    self.info(f'Mdoc banned: {mdocFile}')
                     continue
                 self.readMdoc(mdocFile, streamOpen)
             if streamOpen:
@@ -191,13 +191,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         self.info(f'\n{self.separator}\nReading mdoc file: {file2read}')
         # checking time after last mdoc file update to consider it closed
         time4NextTilt = self.time4NextTilt.toSeconds()
-        if time.time() - self.readDateFile(file2read) < time4NextTilt:
-            self.info('Waiting next tilt...(%s)' % file2read)
-            self.info(f'{self.separator}\n')
+        if streamOpen and time.time() - self.readDateFile(file2read) < time4NextTilt:
+            self.info(f'Waiting next tilt of {file2read}\n{self.separator}')
             return
 
         statusMdoc, mdoc_order_angle_list, mdoc_obj = self.readingMdocTiltInfo(file2read)
-        self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts considered closed')
+        self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts is considered closed')
         if statusMdoc:
             if len(mdoc_order_angle_list) < 3:
                 self.info(f'Mdoc error. Less than 3 tilts {len(mdoc_order_angle_list)} on the mdoc {file2read}\n{self.separator}\n')
@@ -277,11 +276,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         if streamOpen:
             if len(list_mics_matched) < len(mdoc_order_angle_list):
                     self.info(f"{len(mdoc_order_angle_list) - len(list_mics_matched)} micrographs are not available to compose the TiltSeries. "
-                              f'Waitting for the tilts to compose...\n{self.separator}')
+                              f'Waitting for the tilts to compose...\n{self.separator}\n')
                     return False
-            else:
-                self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
-                return True
         else:
             percentTiltsAvailable = int((100 * len(list_mics_matched)) / len(mdoc_order_angle_list))
             self.info(f'Percent tilts available: {percentTiltsAvailable}%\nPercent tilts required: {self.percentsTilts[self.percentTiltsRequired.get()]}%')
@@ -290,9 +286,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                       f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries. '
                       f'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated{self.separator}\n')
                 return False
-            else:
-                self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
-                return True
+
+        self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
+        return True
 
 
     def _loadInputList(self):
@@ -303,7 +299,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         mic_set.loadAllProperties()
         self.listOfMics = [m.clone() for m in mic_set]
         mic_set.close()
-        return len(self.listOfMics), self.inputMicrographs.get().isStreamOpen()
+
 
     def createTS(self, mdoc_obj):
         """
