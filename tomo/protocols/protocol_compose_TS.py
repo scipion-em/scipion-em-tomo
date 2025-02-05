@@ -205,7 +205,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                     with self._lock:
                         self.createTS(mdoc_obj)
                     self.listTSComposed.append(file2read)
-                    self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}{self.separator}\n")
+                    self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
                     summaryF = self._getExtraPath("summary.txt")
                     summaryF = open(summaryF, "w")
                     summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
