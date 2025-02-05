@@ -191,9 +191,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         self.info('\n-----------------\nReading mdoc file: {}'.format(file2read))
         # checking time after last mdoc file update to consider it closed
         time4NextTilt = self.time4NextTilt.toSeconds()
-        while time.time() - self.readDateFile(file2read) < time4NextTilt:
+        if time.time() - self.readDateFile(file2read) < time4NextTilt:
             self.info('Waiting next tilt...(%s)' % file2read)
-            time.sleep(time4NextTilt / 2)
+            return
 
         statusMdoc, mdoc_order_angle_list, mdoc_obj = self.readingMdocTiltInfo(file2read)
         self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts considered closed')
