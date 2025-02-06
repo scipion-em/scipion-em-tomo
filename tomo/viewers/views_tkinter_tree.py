@@ -1730,34 +1730,45 @@ class CtfEstimationListDialog(ListDialog):
         self.tree._onItemClick(event)
         self._createPlotter()
 
-    def plotterChildItem(self, itemSelected):
+    def plotterChildItem(self, itemSelected, obj):
         plotterPanel = tk.Frame(self.psdTab)
         clearPSD = True
+        state = 'normal'
         if self._show2DPLot is None:
-            self.tabControl.tab(1, state="disabled")
-            self.clearTab(self.psdTab)
+            if obj.getPsdFile() is None:
+                self.clearTab(self.psdTab)
+                state = "disable"
+            else:
+                fig = self.plot2D(itemSelected, obj)
+                self.drawCanvas(plotterPanel, fig)
+                clearPSD = False
             self.psdTab.update()
+            self.tabControl.tab(1, state=state)
+            plotterPanel.grid(row=0, column=1, sticky='news')
         else:
-            self.tabControl.tab(1, state="normal")
+            self.tabControl.tab(1, state=state)
             clearPSD = False
+            tsId, ctfId = itemSelected.split('.')
             for ctfSerie in self.provider.getCTFSeries():
-                if ctfSerie.getTsId() in itemSelected:
-                    ctfId = int(itemSelected.split('.')[-1])
+                if ctfSerie.getTsId() == tsId:
                     # TODO: sort ctfSerie by id
-                    fig = self._show2DPLot(ctfSerie, ctfId)
+                    fig = self._show2DPLot(ctfSerie, int(ctfId))
                     if fig is None:
                         return
-                    canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
-                    canvas.draw()
-                    canvas.get_tk_widget().pack(fill=BOTH, expand=0)
-                    canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
-                    canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
-                    canvas.get_tk_widget().bind("<space>", self._onKeyPress)
+                    self.drawCanvas(plotterPanel, fig)
                     break
             plotterPanel.grid(row=0, column=1, sticky='news')
         self.plotterParentItem(self.tree.parent(itemSelected),
                                int(itemSelected.split('.')[-1]),
                                clearPSD=clearPSD)
+
+    def drawCanvas(self, master, fig):
+        canvas = FigureCanvasTkAgg(fig, master=master)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=BOTH, expand=0)
+        canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
+        canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
+        canvas.get_tk_widget().bind("<space>", self._onKeyPress)
 
     def plotterParentItem(self, itemSelected, tiltSelected=None, clearPSD=True):
         plotterPanel = tk.Frame(self.graphTab)
@@ -1838,14 +1849,44 @@ class CtfEstimationListDialog(ListDialog):
                                  color='tab:green', label='Resolution (Å)')
 
                 fig.legend()
-                canvas = FigureCanvasTkAgg(fig, master=plotterPanel)
-                canvas.draw()
-                canvas.get_tk_widget().pack(fill=BOTH, expand=0)
+                self.drawCanvas(plotterPanel, fig)
                 plotterPanel.grid(row=0, column=1, sticky='news')
-                canvas.get_tk_widget().bind("<Up>", self._onKeyPress)
-                canvas.get_tk_widget().bind("<Down>", self._onKeyPress)
-                canvas.get_tk_widget().bind("<space>", self._onKeyPress)
                 break
+
+    def plot2D(self, itemSelected, ctfModel):
+        psdFn = ctfModel.getPsdFile()
+        index, psdFn = psdFn.split("@")
+        tsId = itemSelected.split('.')[0]
+        if not os.path.exists(psdFn):
+            return None
+        img = ImageReadersRegistry.open(psdFn)
+        fig = Figure(figsize=(7, 7), dpi=100)
+        psdPlot = fig.add_subplot(111)
+        psdPlot.get_xaxis().set_visible(False)
+        psdPlot.get_yaxis().set_visible(False)
+        psdPlot.set_title('%s # %d\n' % (tsId, ctfModel.getIndex()) + self.getPlotSubtitle(ctfModel))
+        psdPlot.imshow(img.getImage(), cmap='gray')
+
+        return fig
+
+    def getPlotSubtitle(self, ctf):
+        """ Create plot subtitle using CTF values. """
+        ang = u"\u212B"
+        deg = u"\u00b0"
+        def1, def2, angle = ctf.getDefocus()
+        phSh = ctf.getPhaseShift()
+        score = ctf.getFitQuality()
+        res = ctf.getResolution()
+
+        title = "Def1: %d %s | Def2: %d %s | Angle: %0.1f%s | " % (
+            def1, ang, def2, ang, angle, deg)
+
+        if phSh is not None:
+            title += "Phase shift: %0.2f %s | " % (phSh, deg)
+
+        title += "Fit: %0.1f %s | Score: %0.3f" % (res, ang, score)
+
+        return title
 
     def _onKeyPress(self, event):
         if event.keysym == 'Up':
@@ -1867,7 +1908,7 @@ class CtfEstimationListDialog(ListDialog):
                     self.createShowFitButton['state'] = tk.NORMAL
                 if self._showExtraPlot is not None:
                     self.createShowFitButton['state'] = tk.NORMAL
-                self.plotterChildItem(itemSelected)
+                self.plotterChildItem(itemSelected, obj)
 
             else:  # parent item
                 if self._show1DPLot is not None:
