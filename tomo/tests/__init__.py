@@ -239,6 +239,9 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For gapStopTM testing
+    tomogramsNoFidPath = 'tomograms_no_fiducials'
+
     @classmethod
     def genTestTsDicts(cls,
                        tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
