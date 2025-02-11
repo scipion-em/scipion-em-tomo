@@ -240,7 +240,7 @@ class DataSetRe4STATuto(Enum):
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
     # For gapStopTM testing
-    tomogramsNoFidPath = 'tomograms_no_fiducials'
+    tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
 
     @classmethod
     def genTestTsDicts(cls,
