@@ -104,20 +104,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                       help="Percentage of tilts in a TiltSeries required to compose the TiltSeries. With this parameter, it is possible to generate a TiltSeries without certain tilts, caused by a faulty movie or a failure in alignment.")
 
         form.addSection('Streaming')
-
-        form.addParam('dataStreaming', params.BooleanParam, default=True,
-                      label="Process data in streaming?",
-                      help="Select this option if you want import data as it "
-                           "is generated and process on the fly by next "
-                           "protocols. In this case the protocol will "
-                           "keep running to check new files and will "
-                           "update the output Set, which can "
-                           "be used right away by next steps.")
-
         form.addParam('time4NextTilt', params.StringParam, default="3m",
-                      condition='dataStreaming',
                       label="Time for next Tilt",
-                      help="Delay until the next tilt is "
+                      help="When the protocol runs in streaming; this parameter determine the delay until the next tilt is "
                            "registered in the mdoc file. After "
                            "timeout, the mdoc file is not updated, the tilt series "
                            "is considered as proccessed. "
@@ -161,12 +150,18 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 if self.isMdocBanned(mdocFile):
                     self.info(f'Mdoc banned: {mdocFile}')
                     continue
-                self.readMdoc(mdocFile, streamOpen)
+                stepId = self._insertFunctionStep(self.readMdoc, mdocFile, streamOpen,
+                                                  prerequisites=[], wait=False,
+                                                  needsGPU=False)
+                closeSetStepDeps.append(stepId)
             if streamOpen:
                 time.sleep(self.timeNextLoop)
                 inputSet.loadAllProperties()
             else:
                 self.info('The set of micrographs is closed')
+                self._insertFunctionStep(self._closeOutputSet,
+                                         prerequisites=closeSetStepDeps,
+                                         needsGPU=False)
 
 
     # -------------------------- MAIN FUNCTIONS -----------------------
@@ -203,6 +198,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     with self._lock:
+                        
                         self.createTS(mdoc_obj)
                     self.listTSComposed.append(file2read)
                     self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
