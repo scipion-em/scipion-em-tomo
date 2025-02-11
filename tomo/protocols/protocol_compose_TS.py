@@ -51,6 +51,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     _possibleOutputs = {OUT_STS: SetOfTiltSeries}
     percentsTilts = ['50', '60', '70', '80', '90', '100']
     separator  = '-----------------'
+    separator2 = '#################'
+
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
         self.MDOC_DATA_SOURCE = None
@@ -137,30 +139,27 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         self._initialize()
         inputSet = self.inputMicrographs.get()
-        closeSetStepDeps = []
+        self.closeSetStepDeps = []
         streamOpen = True
         while streamOpen:
             streamOpen = inputSet.isStreamOpen()
             list_current = self.findMdocs()
             self._loadInputList()
             list_current = [f for f in list_current if f not in self.listTSComposed]
-            self.info(f'List of mdocs available to compose: {list_current}')
+            self.info(f'\n{self.separator2}\nList of mdocs available to compose: {list_current}')
             for mdocFile in list_current:
                 # Exclusion
                 if self.isMdocBanned(mdocFile):
                     self.info(f'Mdoc banned: {mdocFile}')
                     continue
-                stepId = self._insertFunctionStep(self.readMdoc, mdocFile, streamOpen,
-                                                  prerequisites=[], wait=False,
-                                                  needsGPU=False)
-                closeSetStepDeps.append(stepId)
+                self.readMdoc(mdocFile, streamOpen)
             if streamOpen:
                 time.sleep(self.timeNextLoop)
                 inputSet.loadAllProperties()
             else:
                 self.info('The set of micrographs is closed')
                 self._insertFunctionStep(self._closeOutputSet,
-                                         prerequisites=closeSetStepDeps,
+                                         prerequisites=self.closeSetStepDeps,
                                          needsGPU=False)
 
 
@@ -198,14 +197,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     with self._lock:
-                        
-                        self.createTS(mdoc_obj)
-                    self.listTSComposed.append(file2read)
-                    self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
-                    summaryF = self._getExtraPath("summary.txt")
-                    summaryF = open(summaryF, "w")
-                    summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
-
+                        stepId = self._insertFunctionStep(self.createTS,
+                                                          mdoc_obj,
+                                                          mdoc_order_angle_list,
+                                                          file2read,
+                                                          prerequisites=[],
+                                                          wait=False,
+                                                          needsGPU=False)
+                        self.closeSetStepDeps.append(stepId)
         else:
             self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
@@ -297,7 +296,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         mic_set.close()
 
 
-    def createTS(self, mdoc_obj):
+    def createTS(self, mdoc_obj, mdoc_order_angle_list, file2read):
         """
         Create the SetOfTiltSeries and each tilt series
         :param mdoc_obj: mdoc object to manage
@@ -356,6 +355,14 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
         SOTS.write()
         self._store(SOTS)
+
+        self.info(
+            f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
+        summaryF = self._getExtraPath("summary.txt")
+        summaryF = open(summaryF, "w")
+        summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
+        self.listTSComposed.append(file2read)
+
 
     def settingTS(self, SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
         """
