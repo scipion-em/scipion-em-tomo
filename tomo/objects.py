@@ -441,12 +441,13 @@ class TiltSeries(TiltSeriesBase):
         return s
 
     def applyTransform(self, outputFilePath: str, swapXY: bool=False,
-                       presentAcqOrders: typing.Set[int]=()) -> None:
+                       outputBinning: int = 1, presentAcqOrders: typing.Set[int]=()) -> None:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
         tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
         :param outputFilePath: String containing the path where the file is created.
         :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
+        :param outputBinning: binning factor applied tothe interpolated tilt-series generated.
         :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
         of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
         it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
@@ -463,6 +464,8 @@ class TiltSeries(TiltSeriesBase):
         if self.hasAlignment():
             firstImg = self.getFirstItem()
             xDim, yDim, _ = firstImg.getDim()
+            xDim = round(xDim / outputBinning)
+            yDim = round(yDim / outputBinning)
             if firstImg.hasTransform() and swapXY:
                 xDim, yDim = yDim, xDim
             if excludedViews:
