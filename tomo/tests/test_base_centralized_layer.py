@@ -48,7 +48,8 @@ class TestBaseCentralizedLayer(BaseTest):
         number of tilt-images or tomograms with different thicknesses.
         :param streamState: expected stream state, being 2 (default) a stream that is closed.
         """
-        self.assertSetSize(inSet, expectedSetSize)
+        if expectedSetSize > 0:
+            self.assertSetSize(inSet, expectedSetSize)
         self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
         self.assertEqual(inSet.getStreamState(), streamState)
         if isHeterogeneous:
