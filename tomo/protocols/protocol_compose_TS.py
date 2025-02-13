@@ -142,6 +142,18 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         self.closeSetStepDeps = []
         streamOpen = True
 
+
+        #DYNAMIC TEMPLATE STARTS
+        fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+        time.sleep(15)
+        #DYNAMIC TEMPLATE ENDS
+
         while streamOpen:
             streamOpen = inputSet.isStreamOpen()
             list_current = self.findMdocs()
@@ -159,10 +171,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 inputSet.loadAllProperties()
 
         self.info('The set of micrographs is closed')
-        # self._insertFunctionStep(self._closeOutputSet,
-        #                          prerequisites=self.closeSetStepDeps,
-        #                          needsGPU=False,
-        #                          wait=True)
+        self._insertFunctionStep(self._closeOutputSet,
+                                 prerequisites=self.closeSetStepDeps,
+                                 needsGPU=False,
+                                 wait=True)
 
 
     # -------------------------- MAIN FUNCTIONS -----------------------
@@ -198,13 +210,17 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 self.info(f'Mdoc error. Less than 3 tilts {len(mdoc_order_angle_list)} on the mdoc {file2read}\n{self.separator}\n')
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
-                    with self._lock:
-                        if self.createTS(mdoc_obj):
-                            self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
-                            summaryF = self._getExtraPath("summary.txt")
-                            summaryF = open(summaryF, "w")
-                            summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
-                            self.listTSComposed.append(file2read)
+                    self._insertFunctionStep(self.createTS,
+                                             mdoc_obj,
+                                             prerequisites=[],
+                                             needsGPU=False,
+                                             wait=True)
+
+                    self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
+                    summaryF = self._getExtraPath("summary.txt")
+                    summaryF = open(summaryF, "w")
+                    summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
+                    self.listTSComposed.append(file2read)
         else:
             self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
@@ -302,70 +318,69 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         :param mdoc_obj: mdoc object to manage
         """
         self.info('Tilt series {} being composed...'.format(mdoc_obj.getTsId()))
-        if self.TiltSeries is None:
-            SOTS = self._createSetOfTiltSeries(suffix='')
-            SOTS.setStreamState(SOTS.STREAM_OPEN)
-            SOTS.enableAppend()
-            self._defineOutputs(TiltSeries=SOTS)
-            self._defineSourceRelation(self.inputMicrographs, SOTS)
+        with self._lock:
+            if self.TiltSeries is None:
+                SOTS = self._createSetOfTiltSeries()
+                SOTS.setStreamState(SOTS.STREAM_OPEN)
+                SOTS.enableAppend()
+                self._defineOutputs(TiltSeries=SOTS)
+                self._defineSourceRelation(self.inputMicrographs, SOTS)
+                self._store(SOTS)
+            else:
+                SOTS = self.TiltSeries
+                SOTS.setStreamState(SOTS.STREAM_OPEN)
+                SOTS.enableAppend()
+                self._store(SOTS)
+
+            # #DYNAMIC TEMPLATE STARTS
+            # fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
+            # if os.path.exists(fname):
+            #     os.remove(fname)
+            # fjj = open(fname, "a+")
+            # fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+            # fjj.close()
+            # print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+            # time.sleep(10)
+            # #DYNAMIC TEMPLATE ENDS
+
+            file_order_angle_list = []
+            accumulated_dose_list = []
+            incoming_dose_list = []
+            for tilt_metadata in mdoc_obj.getTiltsMetadata():
+                filepath = tilt_metadata.getAngleMovieFile()
+                tiltAngle = tilt_metadata.getTiltAngle()
+                if self.mdoc_bug_Correction.get():
+                    filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
+
+                file_order_angle_list.append((filepath,  # Filename
+                                              '{:03d}'.format(tilt_metadata.getAcqOrder()),  # Acquisition
+                                              tiltAngle))
+                accumulated_dose_list.append(tilt_metadata.getAccumDose())
+                incoming_dose_list.append(tilt_metadata.getIncomingDose())
+
+            file_ordered_angle_list = sorted(file_order_angle_list,
+                                             key=lambda angle: float(angle[2]))
+            # Tilt series object
+            ts_obj = tomoObj.TiltSeries()
+            ts_obj.setTsId(mdoc_obj.getTsId())
+            acq = ts_obj.getAcquisition()
+            acq.setVoltage(mdoc_obj.getVoltage())
+            acq.setMagnification(mdoc_obj.getMagnification())
+            acq.setSphericalAberration(self.listOfMics[0].getAcquisition().getSphericalAberration())
+            acq.setAmplitudeContrast(self.listOfMics[0].getAcquisition().getAmplitudeContrast())
+            if self.isTomo5.get():
+                ts_obj.getAcquisition().setTiltAxisAngle(-1 * mdoc_obj.getTiltAxisAngle() - 90)
+            else:
+                ts_obj.getAcquisition().setTiltAxisAngle(mdoc_obj.getTiltAxisAngle())
+
+            origin = Transform()
+            ts_obj.setOrigin(origin)
+            SOTS.setAcquisition(acq)
+            SOTS.append(ts_obj)
+
+            self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
+            SOTS.write()
             self._store(SOTS)
-        else:
-            SOTS = self.TiltSeries
-            SOTS.setStreamState(SOTS.STREAM_OPEN)
-            SOTS.enableAppend()
-            self._store(SOTS)
-
-        #DYNAMIC TEMPLATE STARTS
-        fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        time.sleep(10)
-        #DYNAMIC TEMPLATE ENDS
-
-        file_order_angle_list = []
-        accumulated_dose_list = []
-        incoming_dose_list = []
-        for tilt_metadata in mdoc_obj.getTiltsMetadata():
-            filepath = tilt_metadata.getAngleMovieFile()
-            tiltAngle = tilt_metadata.getTiltAngle()
-            if self.mdoc_bug_Correction.get():
-                filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
-
-            file_order_angle_list.append((filepath,  # Filename
-                                          '{:03d}'.format(tilt_metadata.getAcqOrder()),  # Acquisition
-                                          tiltAngle))
-            accumulated_dose_list.append(tilt_metadata.getAccumDose())
-            incoming_dose_list.append(tilt_metadata.getIncomingDose())
-
-        file_ordered_angle_list = sorted(file_order_angle_list,
-                                         key=lambda angle: float(angle[2]))
-        # Tilt series object
-        ts_obj = tomoObj.TiltSeries()
-        ts_obj.setTsId(mdoc_obj.getTsId())
-        acq = ts_obj.getAcquisition()
-        acq.setVoltage(mdoc_obj.getVoltage())
-        acq.setMagnification(mdoc_obj.getMagnification())
-        acq.setSphericalAberration(self.listOfMics[0].getAcquisition().getSphericalAberration())
-        acq.setAmplitudeContrast(self.listOfMics[0].getAcquisition().getAmplitudeContrast())
-        if self.isTomo5.get():
-            ts_obj.getAcquisition().setTiltAxisAngle(-1 * mdoc_obj.getTiltAxisAngle() - 90)
-        else:
-            ts_obj.getAcquisition().setTiltAxisAngle(mdoc_obj.getTiltAxisAngle())
-
-        origin = Transform()
-        ts_obj.setOrigin(origin)
-        SOTS.setAcquisition(acq)
-        SOTS.append(ts_obj)
-
-        if not self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
-            return False
-        SOTS.write()
-        self._store(SOTS)
-        return True
 
 
     def settingTS(self, SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
@@ -390,7 +405,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             TSAngleFile.close()
             sr = self.listOfMics[0].getSamplingRate()
             properties = {"sr": sr}
-            newStack = ImageStack(properties=properties)
+            #newStack = ImageStack(properties=properties)
             ti = None
             for f, to, ta in file_ordered_angle_list:
                 try:
@@ -414,23 +429,18 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                             dosePerFrame = incoming_dose_list[int(to) - 1]
                             ti.getAcquisition().setDosePerFrame(dosePerFrame)
                             ti.getAcquisition().setAccumDose(int(to)*dosePerFrame)
-                            newStack.append(ImageReadersRegistry.open(mic.getFileName()))
+                            #newStack.append(ImageReadersRegistry.open(mic.getFileName()))
                             ts_obj.append(ti)
                             counter_ti += 1
                 except Exception as e:
                     self.error(e)
                     return
-
-            self.info('HOLAAA')
-            ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
+            #ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
 
             ts_obj._setFirstDim(ti)
-
             SOTS.update(ts_obj)
-            return True
         except Exception as e:
             self.error(e)
-            return False
 
     # -------------------------- AUXILIARY FUNCTIONS -----------------------
     def _getOutputTiltSeriesPath(self, ts, suffix=''):
