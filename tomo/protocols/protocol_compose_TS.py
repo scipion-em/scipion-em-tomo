@@ -378,7 +378,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             SOTS.setAcquisition(acq)
             SOTS.append(ts_obj)
 
-            self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
+            self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list)
             SOTS.write()
             self._store(SOTS)
 
