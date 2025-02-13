@@ -141,19 +141,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         inputSet = self.inputMicrographs.get()
         self.closeSetStepDeps = []
         streamOpen = True
-
-
-        #DYNAMIC TEMPLATE STARTS
-        fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        time.sleep(15)
-        #DYNAMIC TEMPLATE ENDS
-
         while streamOpen:
             streamOpen = inputSet.isStreamOpen()
             list_current = self.findMdocs()
