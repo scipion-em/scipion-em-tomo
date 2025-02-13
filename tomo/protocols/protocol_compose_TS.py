@@ -141,6 +141,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         inputSet = self.inputMicrographs.get()
         self.closeSetStepDeps = []
         streamOpen = True
+
         while streamOpen:
             streamOpen = inputSet.isStreamOpen()
             list_current = self.findMdocs()
@@ -156,11 +157,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             if streamOpen:
                 time.sleep(self.timeNextLoop)
                 inputSet.loadAllProperties()
-            else:
-                self.info('The set of micrographs is closed')
-                self._insertFunctionStep(self._closeOutputSet,
-                                         prerequisites=self.closeSetStepDeps,
-                                         needsGPU=False)
+
+        self.info('The set of micrographs is closed')
+        # self._insertFunctionStep(self._closeOutputSet,
+        #                          prerequisites=self.closeSetStepDeps,
+        #                          needsGPU=False,
+        #                          wait=True)
 
 
     # -------------------------- MAIN FUNCTIONS -----------------------
@@ -197,14 +199,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     with self._lock:
-                        stepId = self._insertFunctionStep(self.createTS,
-                                                          mdoc_obj,
-                                                          mdoc_order_angle_list,
-                                                          file2read,
-                                                          prerequisites=[],
-                                                          wait=False,
-                                                          needsGPU=False)
-                        self.closeSetStepDeps.append(stepId)
+                        if self.createTS(mdoc_obj):
+                            self.info(f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
+                            summaryF = self._getExtraPath("summary.txt")
+                            summaryF = open(summaryF, "w")
+                            summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
+                            self.listTSComposed.append(file2read)
         else:
             self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
@@ -296,12 +296,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         mic_set.close()
 
 
-    def createTS(self, mdoc_obj, mdoc_order_angle_list, file2read):
+    def createTS(self, mdoc_obj):
         """
         Create the SetOfTiltSeries and each tilt series
         :param mdoc_obj: mdoc object to manage
         """
-
         self.info('Tilt series {} being composed...'.format(mdoc_obj.getTsId()))
         if self.TiltSeries is None:
             SOTS = self._createSetOfTiltSeries(suffix='')
@@ -315,6 +314,17 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             SOTS.setStreamState(SOTS.STREAM_OPEN)
             SOTS.enableAppend()
             self._store(SOTS)
+
+        #DYNAMIC TEMPLATE STARTS
+        fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+        time.sleep(10)
+        #DYNAMIC TEMPLATE ENDS
 
         file_order_angle_list = []
         accumulated_dose_list = []
@@ -351,17 +361,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         SOTS.setAcquisition(acq)
         SOTS.append(ts_obj)
 
-        self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list)
-
+        if not self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
+            return False
         SOTS.write()
         self._store(SOTS)
-
-        self.info(
-            f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
-        summaryF = self._getExtraPath("summary.txt")
-        summaryF = open(summaryF, "w")
-        summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
-        self.listTSComposed.append(file2read)
+        return True
 
 
     def settingTS(self, SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
@@ -375,51 +379,58 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         :param incoming_dose_list: list of dose per tilt.
         :return:
         """
+        try:
+            ts_fn = self._getOutputTiltSeriesPath(ts_obj)
+            counter_ti = 0
 
-        ts_fn = self._getOutputTiltSeriesPath(ts_obj)
-        counter_ti = 0
+            TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts_obj.getTsId()))
+            TSAngleFile = open(TSAngleFile, "a")
+            for n in file_ordered_angle_list:
+                TSAngleFile.write('{}\n'.format(str(n[2])))
+            TSAngleFile.close()
+            sr = self.listOfMics[0].getSamplingRate()
+            properties = {"sr": sr}
+            newStack = ImageStack(properties=properties)
+            ti = None
+            for f, to, ta in file_ordered_angle_list:
+                try:
+                    for mic in self.listOfMics:
+                        if ts_obj.getSamplingRate() is None:
+                            ts_obj.setSamplingRate(sr)
+                        if SOTS.getSamplingRate() is None:
+                            SOTS.setSamplingRate(sr)
+                        if os.path.basename(f) in mic.getMicName():
+                            ti = tomoObj.TiltImage()
+                            ti.setTsId(ts_obj.getTsId())
+                            new_location = (counter_ti, ts_fn)
+                            ti.setLocation(new_location)
+                            ti.setObjId(counter_ti + 1)
+                            ti.setIndex(counter_ti + 1)
+                            ti.setAcquisition(ts_obj.getAcquisition())
+                            ti.setAcquisitionOrder(int(to))
+                            ti.setTiltAngle(ta)
+                            ti.setSamplingRate(sr)
+                            ti.setAcquisition(ts_obj.getAcquisition().clone())
+                            dosePerFrame = incoming_dose_list[int(to) - 1]
+                            ti.getAcquisition().setDosePerFrame(dosePerFrame)
+                            ti.getAcquisition().setAccumDose(int(to)*dosePerFrame)
+                            newStack.append(ImageReadersRegistry.open(mic.getFileName()))
+                            ts_obj.append(ti)
+                            counter_ti += 1
+                except Exception as e:
+                    self.error(e)
+                    return
 
-        TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts_obj.getTsId()))
-        TSAngleFile = open(TSAngleFile, "a")
-        for n in file_ordered_angle_list:
-            TSAngleFile.write('{}\n'.format(str(n[2])))
-        TSAngleFile.close()
-        sr = self.listOfMics[0].getSamplingRate()
-        properties = {"sr": sr}
-        newStack = ImageStack(properties=properties)
-        ti = None
-        for f, to, ta in file_ordered_angle_list:
-            try:
-                for mic in self.listOfMics:
-                    if ts_obj.getSamplingRate() is None:
-                        ts_obj.setSamplingRate(sr)
-                    if SOTS.getSamplingRate() is None:
-                        SOTS.setSamplingRate(sr)
-                    if os.path.basename(f) in mic.getMicName():
-                        ti = tomoObj.TiltImage()
-                        ti.setTsId(ts_obj.getTsId())
-                        new_location = (counter_ti, ts_fn)
-                        ti.setLocation(new_location)
-                        ti.setObjId(counter_ti + 1)
-                        ti.setIndex(counter_ti + 1)
-                        ti.setAcquisition(ts_obj.getAcquisition())
-                        ti.setAcquisitionOrder(int(to))
-                        ti.setTiltAngle(ta)
-                        ti.setSamplingRate(sr)
-                        ti.setAcquisition(ts_obj.getAcquisition().clone())
-                        dosePerFrame = incoming_dose_list[int(to) - 1]
-                        ti.getAcquisition().setDosePerFrame(dosePerFrame)
-                        ti.getAcquisition().setAccumDose(int(to)*dosePerFrame)
-                        newStack.append(ImageReadersRegistry.open(mic.getFileName()))
-                        ts_obj.append(ti)
-                        counter_ti += 1
-            except Exception as e:
-                self.error(e)
-                return
-        ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
-        ts_obj._setFirstDim(ti)
+            self.info('HOLAAA')
+            ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
 
-        SOTS.update(ts_obj)
+            ts_obj._setFirstDim(ti)
+
+            SOTS.update(ts_obj)
+            return True
+        except Exception as e:
+            self.error(e)
+            return False
 
     # -------------------------- AUXILIARY FUNCTIONS -----------------------
     def _getOutputTiltSeriesPath(self, ts, suffix=''):
