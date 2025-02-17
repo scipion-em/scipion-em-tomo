@@ -105,7 +105,7 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
                     landmarkModel.addLandmark(
                         xCoor=position2d[0],
                         yCoor=position2d[1],
-                        tiltIm=tiltImage.getObjId(),
+                        tiltIm=tiltImage.getObjId(), # TODO check if getIndex would be better
                         chainId=chainId,
                         xResid=0,
                         yResid=0
@@ -127,7 +127,6 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
     def _projectCoordinate(self,
                            tiltImage: TiltImage,
                            position3d: np.ndarray ) -> np.ndarray:
-        
         projection = self._getProjectionMatrix(tiltImage)
         projected = projection @ position3d
         
