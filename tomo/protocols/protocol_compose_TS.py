@@ -118,7 +118,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                            "{minutes}m {seconds}s separated by spaces "
                            "e.g: 1d 2h 20m 15s,  10m 3s, 1h, 20s or 25")
 
-        form.addParallelSection(threads=3, mpi=1)
+        #form.addParallelSection(threads=3, mpi=1)
 
     def _initialize(self):
         self.ih = ImageHandler()
@@ -141,17 +141,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         inputSet = self.inputMicrographs.get()
         self.closeSetStepDeps = []
         streamOpen = True
-
-        # #DYNAMIC TEMPLATE STARTS
-        # fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
-        # if os.path.exists(fname):
-        #     os.remove(fname)
-        # fjj = open(fname, "a+")
-        # fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        # fjj.close()
-        # print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-        # time.sleep(15)
-        # #DYNAMIC TEMPLATE ENDS
 
         while streamOpen:
             streamOpen = inputSet.isStreamOpen()
