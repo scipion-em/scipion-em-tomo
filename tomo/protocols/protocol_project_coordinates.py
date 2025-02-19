@@ -82,7 +82,7 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
         
         outputSetOfLandmarkModels: SetOfLandmarkModels = self._createSetOfLandmarkModels()
         outputSetOfLandmarkModels.copyInfo(inputTiltSeries)
-        outputSetOfLandmarkModels.setSetOfTiltSeries(self.inputTiltSeries)
+        outputSetOfLandmarkModels.setSetOfTiltSeries(inputTiltSeries)
         
         for tiltSeries in inputTiltSeries:
             tsId = tiltSeries.getTsId()
@@ -118,7 +118,8 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
                     
         self._defineOutputs(**{OutputProjectCoordinates.landmarkModels.name: outputSetOfLandmarkModels})
         self._defineSourceRelation(self.inputCoordinates, outputSetOfLandmarkModels)
-        self._defineSourceRelation(self.inputTiltSeries, outputSetOfLandmarkModels)
+        if self.inputTiltSeries.get() is not None:
+            self._defineSourceRelation(self.inputTiltSeries, outputSetOfLandmarkModels)
     
     # --------------------------- UTILS functions ----------------------------
     def _getInputSetOfCoordinates3d(self) -> SetOfCoordinates3D:
