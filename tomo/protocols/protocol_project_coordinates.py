@@ -166,3 +166,4 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
             )
         
         return result
+    
