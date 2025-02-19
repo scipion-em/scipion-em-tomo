@@ -33,6 +33,7 @@ from tomo.objects import (SetOfTiltSeries, TiltImage,
                           SetOfLandmarkModels, LandmarkModel )
 from tomo.protocols import ProtTomoBase
 import tomo.constants as constants
+from tomo.utils import getObjFromRelation
 
 import enum
 import numpy as np
@@ -63,8 +64,9 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
                       params.PointerParam,
                       label="Tilt-series",
                       pointerClass=SetOfTiltSeries,
-                      important=True,
-                      help='Tilt series on which coordinates are projected.')
+                      allowsNull=True,
+                      help='Tilt series on which coordinates are projected. '
+                      'If not specified, it will be deduced from the coordinates.')
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
@@ -123,7 +125,12 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
         return self.inputCoordinates.get()
 
     def _getInputSetOfTiltSeries(self) -> SetOfTiltSeries:
-        return self.inputTiltSeries.get()
+        result = self.inputTiltSeries.get()
+        if result is None:
+            coordinates = self._getInputSetOfCoordinates3d()
+            result = getObjFromRelation(coordinates, self, SetOfTiltSeries) 
+            
+        return result
 
     def _projectCoordinate(self,
                            tiltImage: TiltImage,
@@ -146,3 +153,15 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
             [0,                 0, 0,                 1]
         ])
         
+    # --------------------------- INFO functions ----------------------------
+    def _validate(self):
+        result = []
+        
+        tiltSeries = self._getInputSetOfTiltSeries()
+        if tiltSeries is None:
+            result.append(
+                'Could not deduce tilt series from the coordinates. '
+                'Please, specify the tilt series manually. '
+            )
+        
+        return result
