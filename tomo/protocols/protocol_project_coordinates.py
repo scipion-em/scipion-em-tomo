@@ -74,9 +74,9 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         inputTiltSeries = self._getInputSetOfTiltSeries()
         inputCoodinates = self._getInputSetOfCoordinates3d()
-        landmarkSize = inputCoodinates.getBoxSize() * inputCoodinates.getSamplingRate() / 10
-        scale =  inputCoodinates.getSamplingRate() / inputTiltSeries.getSamplingRate()
+        landmarkSize = inputCoodinates.getBoxSize() * inputTiltSeries.getSamplingRate()
         offset = np.array(inputTiltSeries.getDim()[:2]) / 2
+        scale = inputCoodinates.getSamplingRate() / inputTiltSeries.getSamplingRate()
         
         outputSetOfLandmarkModels: SetOfLandmarkModels = self._createSetOfLandmarkModels()
         outputSetOfLandmarkModels.copyInfo(inputTiltSeries)
@@ -95,17 +95,18 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
             
             for coordinate3d in inputCoodinates.iterItems(where=where):
                 position3d = np.array(coordinate3d.getPosition(constants.SCIPION) + (1, ))
+                position3d[:3] *= scale # Scale to match the binning of the TS
                 chainId = coordinate3d.getObjId()
                 
                 for tiltImage in tiltSeries:
                     position2d = self._projectCoordinate(tiltImage, position3d)
                     position2d = position2d[:2]
-                    position2d *= scale
                     position2d += offset
+                    
                     landmarkModel.addLandmark(
                         xCoor=position2d[0],
                         yCoor=position2d[1],
-                        tiltIm=tiltImage.getObjId(), # TODO check if getIndex would be better
+                        tiltIm=tiltImage.getIndex(),
                         chainId=chainId,
                         xResid=0,
                         yResid=0
