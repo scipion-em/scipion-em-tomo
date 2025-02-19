@@ -146,4 +146,3 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
             [0,                 0, 0,                 1]
         ])
         
-    # --------------------------- INFO functions ----------------------------
