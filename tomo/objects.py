@@ -881,7 +881,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def copyItems(self, inputTs,
                   orderByTs='id', updateTsCallback=None,
                   orderByTi='id', updateTiCallback=None,
-                  itemSelectedCallback=None):
+                  itemSelectedCallback=None, rowFilter=None):
         """ Copy items (TiltSeries and TiltImages) from the input Set.
          Params:
             inputTs: input TiltSeries (or movies) from where to copy elements.
@@ -896,7 +896,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         if itemSelectedCallback is None:
             itemSelectedCallback = data.SetOfImages.isItemEnabled
 
-        for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
+        for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs, rowFilter=rowFilter)):
             if itemSelectedCallback(ts):
                 tsOut = self.ITEM_TYPE()
                 tsOut.copyInfo(ts)
@@ -904,7 +904,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 if updateTsCallback:
                     updateTsCallback(i, ts, tsOut)
                 self.append(tsOut)
-                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
+                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi, rowFilter=rowFilter)):
                     tiOut = tsOut.ITEM_TYPE()
                     tiOut.copyInfo(ti)
                     tiOut.setAcquisition(ti.getAcquisition())
