@@ -44,7 +44,7 @@ OUT_STS = "TiltSeries"
 
 class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     """ Compose in streaming a set of tilt series based on a set of micrographs and mdoc files.
-    One time parameters are available for the streaming behaviour: Time to next tilt
+    A time parameter is available for the streaming behaviour: Time to next tilt
     """
     _devStatus = pw.BETA
     _label = 'Compose Tilt Series'
@@ -57,8 +57,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         ProtImport.__init__(self, **args)
         self.MDOC_DATA_SOURCE = None
         self.TiltSeries = None
-        self.waitingMdoc = True
-        self.time4NextMic = 10
         self.time4NextTS_current = time.time()
         self.timeNextLoop = 30
         self.listTSComposed = []
@@ -118,7 +116,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                            "{minutes}m {seconds}s separated by spaces "
                            "e.g: 1d 2h 20m 15s,  10m 3s, 1h, 20s or 25")
 
-        #form.addParallelSection(threads=3, mpi=1)
+        form.addParallelSection(threads=3, mpi=1)
 
     def _initialize(self):
         self.ih = ImageHandler()
