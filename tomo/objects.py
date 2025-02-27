@@ -440,8 +440,10 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath: str, swapXY: bool=False,
-                       presentAcqOrders: typing.Set[int]=()) -> None:
+    def applyTransform(self, outputFilePath: str,
+                       swapXY: bool = False,
+                       presentAcqOrders: typing.Set[int] = (),
+                       even: bool = None) -> None:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
         tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
@@ -454,7 +456,10 @@ class TiltSeries(TiltSeriesBase):
         list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
         be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
         ascending order beginning in 1.
+        :param even: boolean used to idicate which file should be processed: None will apply to the main tilt-series,
+        True to the even one and False to the odd one.
         """
+        # TODO: JORGE
         ih = ImageHandler()
         inputFilePath = self.getFirstItem().getFileName()
         excludedViews = len(presentAcqOrders) > 0
@@ -481,6 +486,15 @@ class TiltSeries(TiltSeriesBase):
             else:
                 path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
 
+    def applyTransformToAll(self,
+                            outFilePath: str,
+                            swapXY: bool = False,
+                            presentAcqOrders: typing.Set[int] = ()) -> typing.Tuple[str]:
+        """Applies a transform to the main tilt-series, the even and the odd ones."""
+        outMainTs, outEvenTs, outOddTs = None
+        # TODO: JORGE
+        return outMainTs, outEvenTs, outOddTs
+
     @staticmethod
     def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
         transform = ti.getTransform().getMatrix()
@@ -489,7 +503,8 @@ class TiltSeries(TiltSeriesBase):
         ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
                           outputFile=str(index + 1) + '@' + outputFilePath,
                           transformMatrix=transformArray,
-                          shape=(yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
+                          shape=(
+                          yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -514,7 +529,7 @@ class TiltSeries(TiltSeriesBase):
         presentAcqOrders = set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
         return () if len(presentAcqOrders) == len(self) else presentAcqOrders
 
-    def getTsExcludedViewsIndices(self, presentAcqOrders: typing.Set[int]=())  -> typing.Set[int]:
+    def getTsExcludedViewsIndices(self, presentAcqOrders: typing.Set[int] = ()) -> typing.Set[int]:
         """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is
         not contained in a given set of acquisition orders. If presentAcqOrders is empty, it returns an empty set."""
         excludedViewsInds = []
@@ -563,8 +578,8 @@ class TiltSeries(TiltSeriesBase):
         else:
             logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
 
-    def generateTltFile(self, tltFilePath: str, reverse: bool=False, excludeViews: bool=False,
-                        presentAcqOrders: typing.Set[int]=(), includeDose: bool=False) -> None:
+    def generateTltFile(self, tltFilePath: str, reverse: bool = False, excludeViews: bool = False,
+                        presentAcqOrders: typing.Set[int] = (), includeDose: bool = False) -> None:
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
@@ -2911,7 +2926,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         """ Copy items (CTFTomoSeries and CTFTomo) from the other Set.
          Params:
             other:  SetOfCTFTomoSeries from where to copy elements.
-            
+
             itemSelectedCallback: Optional, callback receiving an item and
                 returning true if it has to be copied
         """
