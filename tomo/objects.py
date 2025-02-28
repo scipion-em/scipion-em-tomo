@@ -904,7 +904,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 if updateTsCallback:
                     updateTsCallback(i, ts, tsOut)
                 self.append(tsOut)
-                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi, rowFilter=rowFilter)):
+                for j, ti in enumerate(ts.iterItems(orderBy=orderByTi)):
                     tiOut = tsOut.ITEM_TYPE()
                     tiOut.copyInfo(ti)
                     tiOut.setAcquisition(ti.getAcquisition())
