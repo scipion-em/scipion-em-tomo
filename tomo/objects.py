@@ -443,7 +443,7 @@ class TiltSeries(TiltSeriesBase):
     def applyTransform(self, outputFilePath: str,
                        swapXY: bool = False,
                        presentAcqOrders: typing.Set[int] = (),
-                       even: bool = None) -> None:
+                       even: bool = None) -> str:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
         tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
@@ -456,12 +456,15 @@ class TiltSeries(TiltSeriesBase):
         list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
         be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
         ascending order beginning in 1.
-        :param even: boolean used to idicate which file should be processed: None will apply to the main tilt-series,
+        :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
         True to the even one and False to the odd one.
         """
-        # TODO: JORGE
-        ih = ImageHandler()
-        inputFilePath = self.getFirstItem().getFileName()
+        if even is None:
+            inImgFileName = self.getFirstItem().getFileName()
+        elif even:
+            inImgFileName = self.getEvenFileName()
+        else:
+            inImgFileName = self.getOddFileName()
         excludedViews = len(presentAcqOrders) > 0
         if excludedViews:
             logger.info(f'{self.getTsId()}: excluded views detected {self.getTsExcludedViewsIndices(presentAcqOrders)}')
@@ -474,37 +477,50 @@ class TiltSeries(TiltSeriesBase):
                 counter = 0
                 for ti in self.iterItems(orderBy=self.INDEX):
                     acqOrder = ti.getAcquisitionOrder()
+                    trMatrix = ti.getTransform().getMatrix()
                     if acqOrder in presentAcqOrders:
-                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
+                        self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outputFilePath, counter)
                         counter += 1
             else:
                 for index, ti in enumerate(self.iterItems()):
-                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
+                    trMatrix = ti.getTransform().getMatrix()
+                    self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outputFilePath, index)
         else:
             if excludedViews:
                 self.reStack(outputFilePath, presentAcqOrders)
             else:
-                path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+                path.createAbsLink(os.path.abspath(inImgFileName), outputFilePath)
+        return outputFilePath
 
     def applyTransformToAll(self,
                             outFilePath: str,
                             swapXY: bool = False,
-                            presentAcqOrders: typing.Set[int] = ()) -> typing.Tuple[str]:
+                            presentAcqOrders: typing.Set[int] = ()) -> typing.Tuple[str, str, str]:
         """Applies a transform to the main tilt-series, the even and the odd ones."""
-        outMainTs, outEvenTs, outOddTs = None
-        # TODO: JORGE
+        outMainTs = self.applyTransform(outFilePath,
+                                        swapXY=swapXY,
+                                        presentAcqOrders=presentAcqOrders,
+                                        even=None)
+        outEvenTs = self.applyTransform(outFilePath,
+                                        swapXY=swapXY,
+                                        presentAcqOrders=presentAcqOrders,
+                                        even=True)
+        outOddTs = self.applyTransform(outFilePath,
+                                        swapXY=swapXY,
+                                        presentAcqOrders=presentAcqOrders,
+                                        even=False)
         return outMainTs, outEvenTs, outOddTs
 
     @staticmethod
-    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
-        transform = ti.getTransform().getMatrix()
-        transformArray = np.array(transform)
-        inputFilePath = ti.getFileName()
-        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+    def _applyTransformToTi(imgFileName, trMatrix, xDim, yDim, outputFilePath, index):
+        ih = ImageHandler()
+        transformArray = np.array(trMatrix)
+        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + imgFileName,
                           outputFile=str(index + 1) + '@' + outputFilePath,
                           transformMatrix=transformArray,
                           shape=(
-                          yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
+                              yDim,
+                              xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
