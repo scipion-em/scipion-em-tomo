@@ -158,8 +158,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 try:
                     self.readMdoc(mdocFile, streamOpen)
                 except Exception as e:
-                    print("Couldn't get binaries definition of %s plugin: %s" %
-                          (f'mdocFile = {mdocFile} reading failed! Skipping...', e))
+                    print(f'mdocFile = {mdocFile} reading failed! Error message {e} Skipping...')
                     continue
             if streamOpen:
                 time.sleep(self.timeNextLoop)
@@ -167,7 +166,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
         self.info('The set of micrographs is closed')
         self._insertFunctionStep(self._closeOutputSet,
-                                 #prerequisites=self.closeSetStepDeps,
                                  needsGPU=False,
                                  wait=False)
 
@@ -206,13 +204,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     self.createTS(mdoc_obj, mdoc_order_angle_list, file2read)
-                    # self._insertFunctionStep(self.createTS,
-                    #                          mdoc_obj,
-                    #                          mdoc_order_angle_list,
-                    #                          file2read,
-                    #                          prerequisites=[],
-                    #                          needsGPU=False,
-                    #                          wait=False)
         else:
             self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
@@ -226,10 +217,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         mdoc_order_angle_list = []
         mdoc_obj = MDoc(file2read)
-        validation_error = mdoc_obj.read(ignoreFilesValidation=True)
-        # if validation_error:
-        #     self.error(validation_error)
-        #     return False, mdoc_order_angle_list, mdoc_obj
+        mdoc_obj.read(ignoreFilesValidation=True)
         for tilt_metadata in mdoc_obj.getTiltsMetadata():
             filepath = tilt_metadata.getAngleMovieFile()
             tiltA = tilt_metadata.getTiltAngle()
