@@ -25,7 +25,9 @@
 
 import time
 import os
+from dbm.dumb import error
 from glob import glob
+from logging import exception
 
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.protocols.protocol_import.base import ProtImport
@@ -60,6 +62,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         self.time4NextTS_current = time.time()
         self.timeNextLoop = 30
         self.listTSComposed = []
+        self.ih = None
+        self.inMicsAcq = None
 
     # -------------------------- DEFINES AND STEPS -----------------------
     def _defineParams(self, form):
@@ -120,6 +124,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
     def _initialize(self):
         self.ih = ImageHandler()
+        self.inMicsAcq = self.inputMicrographs.get().getAcquisition()
 
 
     def isMdocBanned(self, mdoc):
@@ -137,7 +142,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         self._initialize()
         inputSet = self.inputMicrographs.get()
-        self.closeSetStepDeps = []
         streamOpen = True
 
         while streamOpen:
@@ -151,14 +155,17 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 if self.isMdocBanned(mdocFile):
                     self.info(f'Mdoc banned: {mdocFile}')
                     continue
-                self.readMdoc(mdocFile, streamOpen)
+                try:
+                    self.readMdoc(mdocFile, streamOpen)
+                except Exception as e:
+                    print(f'mdocFile = {mdocFile} reading failed! Error message {e} Skipping...')
+                    continue
             if streamOpen:
                 time.sleep(self.timeNextLoop)
                 inputSet.loadAllProperties()
 
         self.info('The set of micrographs is closed')
         self._insertFunctionStep(self._closeOutputSet,
-                                 #prerequisites=self.closeSetStepDeps,
                                  needsGPU=False,
                                  wait=False)
 
@@ -197,13 +204,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     self.createTS(mdoc_obj, mdoc_order_angle_list, file2read)
-                    # self._insertFunctionStep(self.createTS,
-                    #                          mdoc_obj,
-                    #                          mdoc_order_angle_list,
-                    #                          file2read,
-                    #                          prerequisites=[],
-                    #                          needsGPU=False,
-                    #                          wait=False)
         else:
             self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
@@ -217,10 +217,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         """
         mdoc_order_angle_list = []
         mdoc_obj = MDoc(file2read)
-        validation_error = mdoc_obj.read(ignoreFilesValidation=True)
-        if validation_error:
-            self.error(validation_error)
-            return False, mdoc_order_angle_list, mdoc_obj
+        mdoc_obj.read(ignoreFilesValidation=True)
         for tilt_metadata in mdoc_obj.getTiltsMetadata():
             filepath = tilt_metadata.getAngleMovieFile()
             tiltA = tilt_metadata.getTiltAngle()
@@ -300,8 +297,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         Create the SetOfTiltSeries and each tilt series
         :param mdoc_obj: mdoc object to manage
         """
-
-        self.info('Tilt series {} being composed...'.format(mdoc_obj.getTsId()))
+        tsId = mdoc_obj.getTsId()
+        tiltAxisAngle = mdoc_obj.getTiltAxisAngle()
+        dosePerFrame = self.inMicsAcq.getDosePerFrame()
+        if not tiltAxisAngle:
+            raise Exception(f'tsId = {tsId} --> Unable to read the tilt axis angle!')
+        self.info('Tilt series {} being composed...'.format(tsId))
         with self._lock:
             if self.TiltSeries is None:
                 SOTS = self._createSetOfTiltSeries(suffix='_composed')
@@ -321,30 +322,41 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             incoming_dose_list = []
             for tilt_metadata in mdoc_obj.getTiltsMetadata():
                 filepath = tilt_metadata.getAngleMovieFile()
+                acqOrder = tilt_metadata.getAcqOrder()
                 tiltAngle = tilt_metadata.getTiltAngle()
+                accumDose = tilt_metadata.getAccumDose()
+                incomingDose = tilt_metadata.getIncomingDose()
+                if not accumDose:
+                    accumDose = dosePerFrame * (acqOrder + 1)  # Usually starts in 0
+                if not incomingDose:
+                    incomingDose = dosePerFrame * acqOrder
                 if self.mdoc_bug_Correction.get():
                     filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
 
                 file_order_angle_list.append((filepath,  # Filename
-                                              '{:03d}'.format(tilt_metadata.getAcqOrder()),  # Acquisition
+                                              '{:03d}'.format(acqOrder),  # Acquisition
                                               tiltAngle))
-                accumulated_dose_list.append(tilt_metadata.getAccumDose())
-                incoming_dose_list.append(tilt_metadata.getIncomingDose())
+                accumulated_dose_list.append(accumDose)
+                incoming_dose_list.append(incomingDose)
 
             file_ordered_angle_list = sorted(file_order_angle_list,
                                              key=lambda angle: float(angle[2]))
             # Tilt series object
             ts_obj = tomoObj.TiltSeries()
-            ts_obj.setTsId(mdoc_obj.getTsId())
+            ts_obj.setTsId(tsId)
             acq = ts_obj.getAcquisition()
-            acq.setVoltage(mdoc_obj.getVoltage())
-            acq.setMagnification(mdoc_obj.getMagnification())
-            acq.setSphericalAberration(self.listOfMics[0].getAcquisition().getSphericalAberration())
-            acq.setAmplitudeContrast(self.listOfMics[0].getAcquisition().getAmplitudeContrast())
+            mdocVoltage = mdoc_obj.getVoltage()
+            mdocMaginfication = mdoc_obj.getMagnification()
+            voltage = mdocVoltage if mdocVoltage else self.inMicsAcq.getVoltage()
+            magnification = mdocMaginfication if mdocMaginfication else self.inMicsAcq.getMagnification()
+            acq.setVoltage(voltage)
+            acq.setMagnification(magnification)
+            acq.setSphericalAberration(self.inMicsAcq.getSphericalAberration())
+            acq.setAmplitudeContrast(self.inMicsAcq.getAmplitudeContrast())
             if self.isTomo5.get():
-                ts_obj.getAcquisition().setTiltAxisAngle(-1 * mdoc_obj.getTiltAxisAngle() - 90)
+                acq.setTiltAxisAngle(-1 * tiltAxisAngle - 90)
             else:
-                ts_obj.getAcquisition().setTiltAxisAngle(mdoc_obj.getTiltAxisAngle())
+                acq.setTiltAxisAngle(tiltAxisAngle)
 
             origin = Transform()
             ts_obj.setOrigin(origin)
@@ -358,7 +370,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 self.error(e)
             self._store(SOTS)
             self.info(
-                f"Tilt serie ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
+                f"Tilt series ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
             summaryF = self._getExtraPath("summary.txt")
             summaryF = open(summaryF, "w")
             summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
