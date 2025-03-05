@@ -1,6 +1,9 @@
 v3.10.0:
+ Users:
+  - sort items in the TS viewer by tsId
  Developers:
   - Update TCL and some test data description.
+
 v3.9.2: add tomo course 2024 template --> HIV processing workflow.
 v3.9.1:
  Users:
