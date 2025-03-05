@@ -25,10 +25,10 @@
 # **************************************************************************
 
 
-from pyworkflow.tests import BaseTest, setupTestProject
-from pyworkflow.utils import magentaStr, createLink, makePath, copyFile
+from pyworkflow.tests import setupTestProject
+from pyworkflow.utils import magentaStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_01, TS_43, TS_45, TS_03, TS_54
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, tsAcqDict, testAcq03, testAcq54, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from pyworkflow.plugin import Domain
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
@@ -40,6 +40,8 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 	@classmethod
 	def setUpClass(cls):
 		setupTestProject(cls)
+		#cls.ds = DataSet(RE_STA_TUTO_MOVIES, 'frames', '')
+		cls.dataset = DataSet.getDataSet('tomo-em')
 		cls.ds = DataSet.getDataSet(RE_STA_TUTO_MOVIES)
 
 
@@ -50,7 +52,7 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		protMovieImport = cls.newProtocol(ProtImportMovies,
 		                                   objLabel='Import movies (SPA)',
 		                                   importFrom=ProtImportMovies.IMPORT_FROM_FILES,
-		                                   filesPath=cls.ds.getFile('frames'),
+		                                   filesPath=cls.ds,
 		                                   filesPattern='*.mrc',
 										   blacklistSet=blackList,
 										   voltage=DataSetRe4STATuto.voltage.value,
@@ -101,6 +103,8 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 
 		outputMovies = self._runImportMovies()
 		outputMicrographs = self._runAlignMovies(outputMovies)
+		mdocPattern = '*.mdoc'
+		filesPath = self.ds
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern)
 
 		#TEST VALUES
@@ -129,10 +133,10 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		reg_TS54_04 = 'TS_54_004_6.0.mrc'
 
 		with open(self.proj.getTmpPath('blacklist_regex.txt'), 'w') as f:
-		    f.write(reg_TS03_03)
-		    f.write(reg_TS03_04)
-		    f.write(reg_TS54_05)
-		    f.write(reg_TS54_04)
+			f.write(reg_TS03_03)
+			f.write(reg_TS03_04)
+			f.write(reg_TS54_05)
+			f.write(reg_TS54_04)
 
 		outputMovies = self._runImportMovies(blackList='blacklist_regex.txt')
 

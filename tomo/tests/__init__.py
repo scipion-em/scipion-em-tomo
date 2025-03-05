@@ -354,3 +354,9 @@ DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSet
 
 
 DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
+
+
+########################################################################################################################
+RE_STA_TUTO_MOVIES = 'relion_sta_tutorial_movies'
+
+DataSet(name=RE_STA_TUTO_MOVIES, folder='frames', files={})
