@@ -71,7 +71,6 @@ DataSet(name='tomoMask', folder='tomoMask',
 
 ########################################################################################################################
 EMD_10439 = 'emd_10439'
-EMPIAR_10491 = 'empiar_10491'
 
 
 class DataSetEmd10439(Enum):
@@ -84,7 +83,8 @@ class DataSetEmd10439(Enum):
     scipionSqlite3dCoordsSomeBad = 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
     tomomasksAnnotatedDir = 'tomomasksAnnotated'
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
-    coords39Sqlite = 'coordinates/coordinates39.sqlite'
+    coords39Sqlite = 'coordinates/coordinates39_bin8.sqlite'
+    coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
@@ -239,6 +239,9 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For gapStopTM testing
+    tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
+
     @classmethod
     def genTestTsDicts(cls,
                        tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
@@ -349,5 +352,6 @@ class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
 
 DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
 
-
+########################################################################################################################
+EMPIAR_10491 = 'empiar_10491'
 DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
