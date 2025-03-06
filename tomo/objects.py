@@ -441,14 +441,15 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath: str,
+    def applyTransform(self,
+                       outFileName: str,
                        swapXY: bool = False,
                        presentAcqOrders: typing.Set[int] = (),
-                       even: bool = None) -> str:
+                       even: bool = None) -> None:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
         tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
-        :param outputFilePath: String containing the path where the file is created.
+        :param outFileName: String containing the path of the output file that is created.
         :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
         :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
         of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
@@ -480,42 +481,59 @@ class TiltSeries(TiltSeriesBase):
                     acqOrder = ti.getAcquisitionOrder()
                     trMatrix = ti.getTransform().getMatrix()
                     if acqOrder in presentAcqOrders:
-                        self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outputFilePath, counter)
+                        self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outFileName, counter)
                         counter += 1
             else:
                 for index, ti in enumerate(self.iterItems()):
                     trMatrix = ti.getTransform().getMatrix()
-                    self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outputFilePath, index)
+                    self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outFileName, index)
         else:
             if excludedViews:
-                self.reStack(outputFilePath, presentAcqOrders)
+                self.reStack(outFileName, presentAcqOrders)
             else:
-                path.createAbsLink(os.path.abspath(inImgFileName), outputFilePath)
-        return outputFilePath
+                path.createAbsLink(os.path.abspath(inImgFileName), outFileName)
 
     def applyTransformToAll(self,
-                            outFilePath: str,
+                            outFileName: str,
+                            outFileNamesEvenOdd: typing.List[str] = None,
                             swapXY: bool = False,
-                            presentAcqOrders: typing.Set[int] = ()) -> typing.Tuple[str, str, str]:
-        """Applies a transform to the main tilt-series, the even and the odd ones."""
-        fPath = dirname(outFilePath)
-        bName = removeBaseExt(outFilePath)
-        ext = path.getExt(outFilePath)
-        evenFName = join(fPath, bName + '_even' + ext)
-        oddFName = join(fPath, bName + '_odd' + ext)
-        outMainTs = self.applyTransform(outFilePath,
-                                        swapXY=swapXY,
-                                        presentAcqOrders=presentAcqOrders,
-                                        even=None)
-        outEvenTs = self.applyTransform(evenFName,
-                                        swapXY=swapXY,
-                                        presentAcqOrders=presentAcqOrders,
-                                        even=True)
-        outOddTs = self.applyTransform(oddFName,
-                                        swapXY=swapXY,
-                                        presentAcqOrders=presentAcqOrders,
-                                        even=False)
-        return outMainTs, outEvenTs, outOddTs
+                            presentAcqOrders: typing.Set[int] = ()) -> None:
+        """Applies a transform to the main tilt-series, the even and the odd ones. Inputs:
+        :param outFileName: String containing the path of the output file that is created.
+        :param outFileNamesEvenOdd: List containing the file names of the output tilt-series even and
+        odd files that are created. The expected order is [even, odd]. If not provided, these names will be
+        generated in the same location as outFileName and with the same base name and extension but with the
+        corresponding suffixes _even, _odd.
+        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        """
+        fPath = dirname(outFileName)
+        if outFileNamesEvenOdd:
+            evenFName = outFileNamesEvenOdd[0]
+            oddFName = outFileNamesEvenOdd[1]
+        else:
+            bName = removeBaseExt(outFileName)
+            ext = path.getExt(outFileName)
+            evenFName = join(fPath, bName + '_even' + ext)
+            oddFName = join(fPath, bName + '_odd' + ext)
+        self.applyTransform(outFileName,
+                            swapXY=swapXY,
+                            presentAcqOrders=presentAcqOrders,
+                            even=None)
+        self.applyTransform(evenFName,
+                            swapXY=swapXY,
+                            presentAcqOrders=presentAcqOrders,
+                            even=True)
+        self.applyTransform(oddFName,
+                            swapXY=swapXY,
+                            presentAcqOrders=presentAcqOrders,
+                            even=False)
 
     @staticmethod
     def _applyTransformToTi(imgFileName, trMatrix, xDim, yDim, outputFilePath, index):
