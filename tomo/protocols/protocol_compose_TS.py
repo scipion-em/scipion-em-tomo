@@ -310,12 +310,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 SOTS.enableAppend()
                 self._defineOutputs(TiltSeries=SOTS)
                 self._defineSourceRelation(self.inputMicrographs, SOTS)
-                self._store(SOTS)
             else:
                 SOTS = self.TiltSeries
                 SOTS.setStreamState(SOTS.STREAM_OPEN)
                 SOTS.enableAppend()
-                self._store(SOTS)
 
             file_order_angle_list = []
             accumulated_dose_list = []
@@ -411,10 +409,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                         if os.path.basename(f) in mic.getMicName():
                             ti = tomoObj.TiltImage()
                             ti.setTsId(ts_obj.getTsId())
-                            new_location = (counter_ti, ts_fn)
+                            new_location = (counter_ti + 1, ts_fn)
                             ti.setLocation(new_location)
-                            ti.setObjId(counter_ti + 1)
-                            ti.setIndex(counter_ti + 1)
+                            # ti.setObjId(counter_ti + 1)
                             ti.setAcquisition(ts_obj.getAcquisition())
                             ti.setAcquisitionOrder(int(to))
                             ti.setTiltAngle(ta)
