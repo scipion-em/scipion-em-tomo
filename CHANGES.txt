@@ -1,7 +1,6 @@
-v3.10.1:
+v3.10.0:
  Users:
   - Removing unused and old templates
-v3.10.0:
  Developers:
   - Update TCL and some test data description.
 v3.9.2: add tomo course 2024 template --> HIV processing workflow.
