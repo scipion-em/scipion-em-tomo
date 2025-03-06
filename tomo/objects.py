@@ -26,7 +26,7 @@
 # **************************************************************************
 import logging
 import typing
-from os.path import exists
+from os.path import exists, dirname, basename, join
 from sqlite3 import OperationalError
 from typing import Optional
 import mrcfile
@@ -45,6 +45,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+from pyworkflow.utils import removeBaseExt
 
 logger = logging.getLogger(__name__)
 
@@ -497,15 +498,20 @@ class TiltSeries(TiltSeriesBase):
                             swapXY: bool = False,
                             presentAcqOrders: typing.Set[int] = ()) -> typing.Tuple[str, str, str]:
         """Applies a transform to the main tilt-series, the even and the odd ones."""
+        fPath = dirname(outFilePath)
+        bName = removeBaseExt(outFilePath)
+        ext = path.getExt(outFilePath)
+        evenFName = join(fPath, bName + '_even' + ext)
+        oddFName = join(fPath, bName + '_odd' + ext)
         outMainTs = self.applyTransform(outFilePath,
                                         swapXY=swapXY,
                                         presentAcqOrders=presentAcqOrders,
                                         even=None)
-        outEvenTs = self.applyTransform(outFilePath,
+        outEvenTs = self.applyTransform(evenFName,
                                         swapXY=swapXY,
                                         presentAcqOrders=presentAcqOrders,
                                         even=True)
-        outOddTs = self.applyTransform(outFilePath,
+        outOddTs = self.applyTransform(oddFName,
                                         swapXY=swapXY,
                                         presentAcqOrders=presentAcqOrders,
                                         even=False)
