@@ -100,12 +100,6 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 
 	def test_composeTSBasic(self):
 		print(magentaStr(f"\n==> Running the basic Test: \n"))
-
-		outputMovies = self._runImportMovies()
-		outputMicrographs = self._runAlignMovies(outputMovies)
-		mdocPattern = '*.mdoc'
-		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
-
 		#DYNAMIC TEMPLATE STARTS
 		import os
 		fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
@@ -117,7 +111,14 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
 		import time
 		time.sleep(10)
+
 		#DYNAMIC TEMPLATE ENDS
+		outputMovies = self._runImportMovies()
+		outputMicrographs = self._runAlignMovies(outputMovies)
+		mdocPattern = '*.mdoc'
+		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
+
+
 
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern)
 
@@ -126,15 +127,16 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		testAcq54.setAngleMin(-6.0)
 		expectedSetSize = 2
 		dimsTsBin1Dict = {TS_03: [3710, 3838, 5], TS_54: [3710, 3838, 6]}
-		sampligRate = DataSetRe4STATuto.unbinnedPixSize
+		sampligRate = DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value
 		anglesCount = {TS_03: 5, TS_54: 6}
 
+		print(f'testSetAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value: {DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value}')
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
 		                     expectedSRate=sampligRate,
 		                     imported=True,
 		                     expectedDimensions=dimsTsBin1Dict,
-		                     testSetAcqObj=tsAcqDict,
+		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value,
 		                     anglesCount=anglesCount)
 
 
@@ -152,6 +154,6 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 			f.write(reg_TS54_05)
 			f.write(reg_TS54_04)
 
-		outputMovies = self._runImportMovies(blackList='blacklist_regex.txt')
+		#outputMovies = self._runImportMovies(blackList='blacklist_regex.txt')
 
 
