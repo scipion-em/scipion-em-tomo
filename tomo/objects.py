@@ -445,7 +445,7 @@ class TiltSeries(TiltSeriesBase):
                        outFileName: str,
                        swapXY: bool = False,
                        presentAcqOrders: typing.Set[int] = (),
-                       even: bool = None) -> None:
+                       even: typing.Union[bool, None] = None) -> None:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
         tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
@@ -461,37 +461,82 @@ class TiltSeries(TiltSeriesBase):
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
         True to the even one and False to the odd one.
         """
+        inImgFileName= self.__getTsFileName(even=even)
+        excludedViews = len(presentAcqOrders) > 0
+        if excludedViews:
+            logger.info(f'{self.getTsId()}: excluded views detected {self.getTsExcludedViewsIndices(presentAcqOrders)}')
+        if self.hasAlignment():
+            self.__applyTransformAli(inImgFileName, outFileName, swapXY, presentAcqOrders)
+        else:
+            self.__applyTransformNoAli(inImgFileName, outFileName, presentAcqOrders)
+
+    def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
+        """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
+        :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
+        True to the even one and False to the odd one."""
         if even is None:
             inImgFileName = self.getFirstItem().getFileName()
         elif even:
             inImgFileName = self.getEvenFileName()
         else:
             inImgFileName = self.getOddFileName()
+        return inImgFileName
+
+    def __applyTransformNoAli(self,
+                              inFileName: str,
+                              outFileName: str,
+                              presentAcqOrders: typing.Set[int] = ()) -> None:
+        """Apply transform to a tilt-series without alignment.
+                :param inFileName: String containing the path of the image to which the transformation is going to be applied.
+        :param outFileName: String containing the path of the output file that is created.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        """
         excludedViews = len(presentAcqOrders) > 0
         if excludedViews:
-            logger.info(f'{self.getTsId()}: excluded views detected {self.getTsExcludedViewsIndices(presentAcqOrders)}')
-        if self.hasAlignment():
-            firstImg = self.getFirstItem()
-            xDim, yDim, _ = firstImg.getDim()
-            if firstImg.hasTransform() and swapXY:
-                xDim, yDim = yDim, xDim
-            if excludedViews:
-                counter = 0
-                for ti in self.iterItems(orderBy=self.INDEX):
-                    acqOrder = ti.getAcquisitionOrder()
-                    trMatrix = ti.getTransform().getMatrix()
-                    if acqOrder in presentAcqOrders:
-                        self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outFileName, counter)
-                        counter += 1
-            else:
-                for index, ti in enumerate(self.iterItems()):
-                    trMatrix = ti.getTransform().getMatrix()
-                    self._applyTransformToTi(inImgFileName, trMatrix, xDim, yDim, outFileName, index)
+            self.reStack(outFileName, presentAcqOrders)
         else:
-            if excludedViews:
-                self.reStack(outFileName, presentAcqOrders)
-            else:
-                path.createAbsLink(os.path.abspath(inImgFileName), outFileName)
+            path.createAbsLink(os.path.abspath(inFileName), outFileName)
+
+    def __applyTransformAli(self,
+                            inFileName: str,
+                            outFileName: str,
+                            swapXY: bool = False,
+                            presentAcqOrders: typing.Set[int] = ()) -> None:
+        """Apply transform to a tilt-series with alignment.
+        :param inFileName: String containing the path of the image to which the transformation is going to be applied.
+        :param outFileName: String containing the path of the output file that is created.
+        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        """
+        excludedViews = len(presentAcqOrders) > 0
+        firstImg = self.getFirstItem()
+        xDim, yDim, _ = firstImg.getDim()
+        if firstImg.hasTransform() and swapXY:
+            xDim, yDim = yDim, xDim
+        if excludedViews:
+            counter = 0
+            for ti in self.iterItems(orderBy=self.INDEX):
+                acqOrder = ti.getAcquisitionOrder()
+                trMatrix = ti.getTransform().getMatrix()
+                if acqOrder in presentAcqOrders:
+                    self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, counter)
+                    counter += 1
+        else:
+            for index, ti in enumerate(self.iterItems()):
+                trMatrix = ti.getTransform().getMatrix()
+                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index)
 
     def applyTransformToAll(self,
                             outFileName: str,
