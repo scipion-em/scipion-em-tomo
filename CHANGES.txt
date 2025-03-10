@@ -1,5 +1,6 @@
 v3.10.0:
  Users:
+  - Removing unused and old templates
   - sort items in the TS viewer by tsId
  Developers:
   - Update TiltSeries data model to manage properly the even/odd tilt-series as metadata instead of
