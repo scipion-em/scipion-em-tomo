@@ -28,10 +28,11 @@
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, tsAcqDict, testAcq03, testAcq54, TS_03, TS_54
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRE_STA_TUTO_MOVIES, DataSetRe4STATuto, tsAcqDict, testAcq03, testAcq54, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from pyworkflow.plugin import Domain
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
+
 
 import numpy as np
 
@@ -40,8 +41,6 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 	@classmethod
 	def setUpClass(cls):
 		setupTestProject(cls)
-		#cls.ds = DataSet(RE_STA_TUTO_MOVIES, 'frames', '')
-		cls.dataset = DataSet.getDataSet('tomo-em')
 		cls.ds = DataSet.getDataSet(RE_STA_TUTO_MOVIES)
 
 
@@ -52,7 +51,7 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		protMovieImport = cls.newProtocol(ProtImportMovies,
 		                                   objLabel='Import movies (SPA)',
 		                                   importFrom=ProtImportMovies.IMPORT_FROM_FILES,
-		                                   filesPath=cls.ds,
+		                                   filesPath=cls.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name),
 		                                   filesPattern='*.mrc',
 										   blacklistSet=blackList,
 										   voltage=DataSetRe4STATuto.voltage.value,
@@ -68,7 +67,7 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		return protMovieImport.outputMovies
 
 	def _runAlignMovies(cls, movies):
-		print(magentaStr(f"\n==> Running the import movies preprocessing: \n" ))
+		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
 
 		xmipp3 = Domain.importFromPlugin('xmipp3.protocols', doRaise=True)
 		protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
@@ -79,23 +78,24 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		                            doLocalAlignment=False)
 		protAlign.inputMovies.set(movies)
 		cls.launchProtocol(protAlign)
-		cls.assertIsNotNone(protAlign.outputMicrographs, 'Micrograph not generated')
+		cls.assertIsNotNone(protAlign.outputMovies, 'Micrograph not generated')
 		return getattr(protAlign, 'outputMicrographs', None)
 
-	def _runComposeTS(self, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
+	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
 		print(magentaStr(f"\n==> Running the composeTS: \n"))
 
-		protComposeTS = self.newProtocol(ProtComposeTS,
-	                                   objLabel='Import movies (SPA)',
-	                                   importFrom=outputMicrographs,
+		protComposeTS = cls.newProtocol(ProtComposeTS,
+	                                   objLabel='Compose TiltSeries',
+	                                   inputMicrographs=outputMicrographs,
 	                                   filesPath=filesPath,
 	                                   mdocPattern=mdocPattern,
 		                               isTomo5=isTomo5,
 		                               mdoc_bug_Correction=mdoc_bug_Correction,
 		                               percentTiltsRequired=percentTiltsRequired,
 		                               time4NextTilt=time4NextTilt)
-		protComposeTS.Micrographs.set(outputMicrographs)
-		return protComposeTS.TiltSeries
+
+		cls.launchProtocol(protComposeTS)
+		return getattr(protComposeTS, 'TiltSeries', None)
 
 
 	def test_composeTSBasic(self):
@@ -104,7 +104,21 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		outputMovies = self._runImportMovies()
 		outputMicrographs = self._runAlignMovies(outputMovies)
 		mdocPattern = '*.mdoc'
-		filesPath = self.ds
+		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
+
+		#DYNAMIC TEMPLATE STARTS
+		import os
+		fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
+		if os.path.exists(fname):
+		    os.remove(fname)
+		fjj = open(fname, "a+")
+		fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+		fjj.close()
+		print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
+		import time
+		time.sleep(10)
+		#DYNAMIC TEMPLATE ENDS
+
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern)
 
 		#TEST VALUES
@@ -125,7 +139,7 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 
 
 	def test_composeTS_TiltsRejected(self):
-		print(magentaStr(f"\n==> Running the basic Test: \n"))
+		print(magentaStr(f"\n==> Running the rejected mics Test: \n"))
 
 		reg_TS03_03= 'TS_03_003_-6.0.mrc'
 		reg_TS03_04 = 'TS_03_004_6.0.mrc'

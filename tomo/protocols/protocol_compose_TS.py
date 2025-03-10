@@ -218,6 +218,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         mdoc_order_angle_list = []
         mdoc_obj = MDoc(file2read)
         mdoc_obj.read(ignoreFilesValidation=True)
+        print('readingMdocTiltInfo')
         for tilt_metadata in mdoc_obj.getTiltsMetadata():
             filepath = tilt_metadata.getAngleMovieFile()
             tiltA = tilt_metadata.getTiltAngle()
@@ -226,7 +227,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
             mdoc_order_angle_list.append((filepath,
                                           '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
-
+        print(f'mdoc_order_angle_list: {mdoc_order_angle_list}')
         return True, mdoc_order_angle_list, mdoc_obj
 
 
@@ -271,8 +272,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                     return False
         else:
             percentTiltsAvailable = int((100 * len(list_mics_matched)) / len(mdoc_order_angle_list))
-            self.info(f'Percent tilts available: {percentTiltsAvailable}%\nPercent tilts required: {self.percentsTilts[self.percentTiltsRequired.get()]}%')
-            if percentTiltsAvailable < int(self.percentsTilts[self.percentTiltsRequired.get()]):
+            self.info(f'Percent tilts available: {percentTiltsAvailable}%\nPercent tilts required: {self.percentTiltsRequired.get()}%')
+            if percentTiltsAvailable < self.percentTiltsRequired.get():
                 self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(list_mics_matched)} '
                       f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries. '
                       f'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated\n{self.separator}\n')
