@@ -114,46 +114,46 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 
 		#DYNAMIC TEMPLATE ENDS
 		outputMovies = self._runImportMovies()
-		outputMicrographs = self._runAlignMovies(outputMovies)
+		self.outputMicrographs = self._runAlignMovies(outputMovies)
 		mdocPattern = '*.mdoc'
 		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
-
-
-
-		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern)
+		TiltSeries = self._runComposeTS(self.outputMicrographs, filesPath, mdocPattern)
 
 		#TEST VALUES
 		testAcq03.setAngleMin(-6.0)
 		testAcq54.setAngleMin(-6.0)
 		expectedSetSize = 2
-		dimsTsBin1Dict = {TS_03: [3710, 3838, 5], TS_54: [3710, 3838, 6]}
-		sampligRate = DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value
 		anglesCount = {TS_03: 5, TS_54: 6}
 
 		print(f'testSetAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value: {DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value}')
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=sampligRate,
+		                     expectedSRate=DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+		                     hasAlignment=False,
+		                     isHeterogeneousSet=False,
 		                     imported=True,
-		                     expectedDimensions=dimsTsBin1Dict,
+		                     expectedDimensions=DataSetRE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
 		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value,
 		                     anglesCount=anglesCount)
 
 
 	def test_composeTS_TiltsRejected(self):
 		print(magentaStr(f"\n==> Running the rejected mics Test: \n"))
+		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
+		mdocPattern = '*rejecting.mdoc'
+		TiltSeries = self._runComposeTS(self.outputMicrographs, filesPath, mdocPattern)
+		expectedSetSize = 2
+		anglesCount = {TS_03: 5}
 
-		reg_TS03_03= 'TS_03_003_-6.0.mrc'
-		reg_TS03_04 = 'TS_03_004_6.0.mrc'
-		reg_TS54_05 = 'TS_54_005_9.0.mrc'
-		reg_TS54_04 = 'TS_54_004_6.0.mrc'
+		self.checkTiltSeries(TiltSeries,
+		                     expectedSetSize=expectedSetSize,
+		                     expectedSRate=DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+		                     hasAlignment=False,
+		                     isHeterogeneousSet=False,
+		                     imported=True,
+		                     expectedDimensions=DataSetRE_STA_TUTO_MOVIES.dimsTs03Bin1Dict.value,
+		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcq03Dict.value,
+		                     anglesCount=anglesCount)
 
-		with open(self.proj.getTmpPath('blacklist_regex.txt'), 'w') as f:
-			f.write(reg_TS03_03)
-			f.write(reg_TS03_04)
-			f.write(reg_TS54_05)
-			f.write(reg_TS54_04)
-
-		#outputMovies = self._runImportMovies(blackList='blacklist_regex.txt')
 
 
