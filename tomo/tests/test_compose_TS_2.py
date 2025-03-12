@@ -115,7 +115,7 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		#DYNAMIC TEMPLATE ENDS
 		outputMovies = self._runImportMovies()
 		self.outputMicrographs = self._runAlignMovies(outputMovies)
-		mdocPattern = '*.mdoc'
+		mdocPattern = '*mrc.mdoc'
 		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
 		TiltSeries = self._runComposeTS(self.outputMicrographs, filesPath, mdocPattern)
 
@@ -142,9 +142,9 @@ class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
 		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
 		mdocPattern = '*rejecting.mdoc'
 		TiltSeries = self._runComposeTS(self.outputMicrographs, filesPath, mdocPattern)
-		expectedSetSize = 2
+		expectedSetSize = 1
 		anglesCount = {TS_03: 5}
-
+		self.assertSetSize(TiltSeries.getSize(), expectedSetSize)
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
 		                     expectedSRate=DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value,
