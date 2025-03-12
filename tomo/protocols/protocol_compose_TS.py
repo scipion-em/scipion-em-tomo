@@ -28,6 +28,7 @@ import os
 from dbm.dumb import error
 from glob import glob
 from logging import exception
+from statistics import mean
 
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.protocols.protocol_import.base import ProtImport
@@ -354,6 +355,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             acq.setMagnification(magnification)
             acq.setSphericalAberration(self.inMicsAcq.getSphericalAberration())
             acq.setAmplitudeContrast(self.inMicsAcq.getAmplitudeContrast())
+            acq.setDosePerFrame(dosePerFrame)
+            acq.setAngleMin(float(file_ordered_angle_list[0][2]))
+            acq.setAngleMax(float(file_ordered_angle_list[-1][2]))
+            step = round(mean([float(file_ordered_angle_list[i + 1][2]) - float(file_ordered_angle_list[i][2]) for i in range(len(file_ordered_angle_list) - 1)]))
+            acq.setStep(step)
+            acq.setAccumDose(accumDose)
             if self.isTomo5.get():
                 acq.setTiltAxisAngle(-1 * tiltAxisAngle - 90)
             else:
