@@ -36,7 +36,7 @@ from tomo.protocols.protocol_compose_TS import ProtComposeTS
 
 import numpy as np
 
-class TestTestTomoComposeTS2(TestBaseCentralizedLayer):
+class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 	""" This class check if the protocol to compose TiltSeries works properly."""
 	@classmethod
 	def setUpClass(cls):
