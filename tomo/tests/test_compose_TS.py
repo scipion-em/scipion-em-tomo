@@ -117,7 +117,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		outputMicrographs = self._runAlignMovies(outputMovies)
 		mdocPattern = '*mrc.mdoc'
 		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
-		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern)
+		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='100')
 
 		#TEST VALUES
 		expectedSetSize = 2
@@ -137,9 +137,9 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 		print(magentaStr(f"\n==> Running the rejected mics Test: \n"))
 		mdocPattern = '*rejecting.mdoc'
-		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern)
+		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='80')
 		expectedSetSize = 1
-		anglesCount = {TS_03: 5}
+		anglesCount = {TS_54: 5}
 
 		self.assertSetSize(TiltSeries, expectedSetSize)
 		self.checkTiltSeries(TiltSeries,
@@ -148,8 +148,8 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		                     hasAlignment=False,
 		                     isHeterogeneousSet=False,
 		                     imported=True,
-		                     expectedDimensions=DataSetRE_STA_TUTO_MOVIES.dimsTs03Bin1Dict.value,
-		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcq03Dict.value,
+		                     expectedDimensions=DataSetRE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
+		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcq54Dict.value,
 		                     anglesCount=anglesCount)
 
 
