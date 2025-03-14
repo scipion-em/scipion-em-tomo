@@ -294,7 +294,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
     def createTS(self, mdoc_obj, mdoc_order_angle_list, file2read):
         """
-        Create the SetOfTiltSeries and each tilt series
+        Create the SetOfTiltSeries and each tilt series. IMPORTANT: data from the import protocol is considered more
+        reliable than data from mdoc. Thus, in case both data sources provide valid data, the data from the import
+        will be used.
         :param mdoc_obj: mdoc object to manage
         """
         tsId = mdoc_obj.getTsId()
@@ -324,9 +326,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 tiltAngle = tilt_metadata.getTiltAngle()
                 accumDose = tilt_metadata.getAccumDose()
                 incomingDose = tilt_metadata.getIncomingDose()
-                if not accumDose:
-                    accumDose = dosePerFrame * (acqOrder + 1)  # Usually starts in 0
-                if not incomingDose:
+                if dosePerFrame:
+                    accumDose = dosePerFrame * (acqOrder + 1) # Usually starts in 0
                     incomingDose = dosePerFrame * acqOrder
                 if self.mdoc_bug_Correction.get():
                     filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
@@ -345,8 +346,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             acq = ts_obj.getAcquisition()
             mdocVoltage = mdoc_obj.getVoltage()
             mdocMaginfication = mdoc_obj.getMagnification()
-            voltage = mdocVoltage if mdocVoltage else self.inMicsAcq.getVoltage()
-            magnification = mdocMaginfication if mdocMaginfication else self.inMicsAcq.getMagnification()
+            inMicsVoltage = self.inMicsAcq.getVoltage()
+            inMicsMagnification = self.inMicsAcq.getMagnification()
+
+            voltage = inMicsVoltage if inMicsVoltage else mdocVoltage
+            magnification = inMicsMagnification if inMicsMagnification else mdocMaginfication
             acq.setVoltage(voltage)
             acq.setMagnification(magnification)
             acq.setSphericalAberration(self.inMicsAcq.getSphericalAberration())
