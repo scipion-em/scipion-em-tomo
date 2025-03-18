@@ -68,19 +68,28 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 	def _runAlignMovies(cls, movies):
 		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
-		protMc = cls.newProtocol(ProtMotionCorr,
-									objLabel='Movie Alignment (SPA)')
+		protMc = cls.newProtocol(ProtMotionCorr, objLabel='Movie Alignment (SPA)')
 		protMc.inputMovies.set(movies)
-		# protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
-		#                             objLabel='Movie Alignment (SPA)',
-		#                             alignFrame0=1,
-		#                             alignFrameN=0,
-		#                             useAlignToSum=True,
-		#                             doLocalAlignment=False)
-		#protAlign.inputMovies.set(movies)
 		cls.launchProtocol(protMc)
 		cls.assertIsNotNone(protMc.outputMovies, 'Micrograph not generated')
-		return getattr(protMc, 'outputMicrographs', None)
+		return getattr(protMc, 'outputMovies', None)
+
+
+	def _runAlignMoviesFlexAlign(cls, movies):
+		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
+
+		xmipp3 = Domain.importFromPlugin('xmipp3.protocols', doRaise=True)
+		protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
+		                            objLabel='Movie Alignment (SPA)',
+		                            alignFrame0=1,
+		                            alignFrameN=0,
+		                            useAlignToSum=True,
+		                            doLocalAlignment=False)
+		protAlign.inputMovies.set(movies)
+		cls.launchProtocol(protAlign)
+		cls.assertIsNotNone(protAlign.outputMovies, 'Micrograph not generated')
+		return getattr(protAlign, 'outputMicrographs', None)
+
 
 	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
 		print(magentaStr(f"\n==> Running the composeTS: \n"))
