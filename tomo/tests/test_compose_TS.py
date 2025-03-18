@@ -28,11 +28,11 @@
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRE_STA_TUTO_MOVIES, DataSetRe4STATuto, tsAcqDict, testAcq03, testAcq54, TS_03, TS_54
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from pyworkflow.plugin import Domain
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
-
+from motioncorr.protocols import ProtMotionCorr
 
 import numpy as np
 
@@ -68,18 +68,19 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 	def _runAlignMovies(cls, movies):
 		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
-
-		xmipp3 = Domain.importFromPlugin('xmipp3.protocols', doRaise=True)
-		protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
-		                            objLabel='Movie Alignment (SPA)',
-		                            alignFrame0=1,
-		                            alignFrameN=0,
-		                            useAlignToSum=True,
-		                            doLocalAlignment=False)
-		protAlign.inputMovies.set(movies)
-		cls.launchProtocol(protAlign)
-		cls.assertIsNotNone(protAlign.outputMovies, 'Micrograph not generated')
-		return getattr(protAlign, 'outputMicrographs', None)
+		protMc = cls.newProtocol(ProtMotionCorr,
+									objLabel='Movie Alignment (SPA)')
+		protMc.inputMovies.set(movies)
+		# protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
+		#                             objLabel='Movie Alignment (SPA)',
+		#                             alignFrame0=1,
+		#                             alignFrameN=0,
+		#                             useAlignToSum=True,
+		#                             doLocalAlignment=False)
+		#protAlign.inputMovies.set(movies)
+		cls.launchProtocol(protMc)
+		cls.assertIsNotNone(protMc.outputMovies, 'Micrograph not generated')
+		return getattr(protMc, 'outputMicrographs', None)
 
 	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
 		print(magentaStr(f"\n==> Running the composeTS: \n"))
@@ -100,19 +101,6 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 	def test_composeTSBasic(self):
 		print(magentaStr(f"\n==> Running the basic Test: \n"))
-		#DYNAMIC TEMPLATE STARTS
-		import os
-		fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
-		if os.path.exists(fname):
-		    os.remove(fname)
-		fjj = open(fname, "a+")
-		fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-		fjj.close()
-		print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-		import time
-		time.sleep(10)
-
-		#DYNAMIC TEMPLATE ENDS
 		outputMovies = self._runImportMovies()
 		outputMicrographs = self._runAlignMovies(outputMovies)
 		mdocPattern = '*mrc.mdoc'
