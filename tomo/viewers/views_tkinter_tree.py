@@ -108,9 +108,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ROT_ANGLE = "Rot"
     COL_TI_SHIFTX = 'ShiftX'
     COL_TI_SHIFTY = 'ShiftY'
-    ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
-                  COL_TI_ACQ_ORDER: '_acqOrder',
-                  COL_TI_DOSE: '_acquisition._accumDose'}
+    ORDER_DICT = {COL_TS: '_tsId'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
@@ -259,17 +257,16 @@ class TiltSeriesTreeProvider(TreeProvider):
         if self.objects:
             return self.objects
 
-        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
-        direction = 'ASC' if self.isSortingAscending() else 'DESC'
+        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), self.COL_TS)
 
-        for ts in self.tiltSeries:
+        for ts in self.tiltSeries.iterItems(orderBy=orderBy):
             self.excludedDict[ts.getTsId()] = {}
             tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             tsObj.setEnabled(ts.isEnabled())
             self.objects.append(tsObj)
-            for ti in ts.iterItems(orderBy=orderBy, direction=direction):
+            for ti in ts.iterItems(orderBy='id'):  # ti IDs are already sorted by tilt angle (TS) or acq. order (TSM)
                 tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
                 if not ti.isEnabled():
                     self.excludedDict[ts.getTsId()][ti.getObjId()] = True
@@ -478,8 +475,8 @@ class TiltSeriesDialog(ToolbarListDialog):
 
     def validateClose(self):
         if self._provider.getUpdatedCount() and self._provider.getchanges():
-            msg = "Do you want to exit and loose your changes ? "
-            result = messagebox.askquestion("Loosing changes", msg, icon='warning', **{'parent': self})
+            msg = "Do you want to exit and discard your changes ? "
+            result = messagebox.askquestion("Discard changes", msg, icon='warning', **{'parent': self})
             return result == messagebox.YES
         return True
 
@@ -1253,12 +1250,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     COL_CTF_EST_FIT = 'CC value'
     COL_CTF_EST_PHASE = 'Phase shift (deg)'
 
-    ORDER_DICT = {COL_CTF_EST_DEFOCUS_U: '_defocusU',
-                  COL_CTF_EST_DEFOCUS_V: '_defocusV',
-                  COL_CTF_EST_AST: '_defocusRatio',
-                  COL_CTF_EST_RES: '_resolution',
-                  COL_CTF_EST_PHASE: '_phaseShift',
-                  COL_CTF_EST_FIT: '_fitQuality'}
+    ORDER_DICT = {COL_CTF_SERIE: '_tsId'}
 
     def __init__(self, master, protocol, outputSetOfCTFTomoSeries, **kw):
         ttk.Treeview.__init__(self, master, **kw)
@@ -1274,15 +1266,14 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     def getObjects(self):
         objects = []
 
-        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
-        direction = 'ASC' if self.isSortingAscending() else 'DESC'
+        orderBy = self.ORDER_DICT.get(self.getSortingColumnName())
 
-        for ctfSerie in self.ctfSeries:
+        for ctfSerie in self.ctfSeries.iterItems(orderBy=orderBy):
             ctfEstObj = ctfSerie.clone()
             ctfEstObj._allowsSelection = True
             ctfEstObj._parentObject = None
             objects.append(ctfEstObj)
-            for item in ctfSerie.iterItems(orderBy=orderBy, direction=direction):
+            for item in ctfSerie.iterItems(orderBy='id'):
                 ctfEstItem = item.clone()
                 ctfEstItem._allowsSelection = False
                 ctfEstItem._parentObject = ctfEstObj

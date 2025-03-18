@@ -296,7 +296,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
     def createTS(self, mdoc_obj, mdoc_order_angle_list, file2read):
         """
-        Create the SetOfTiltSeries and each tilt series
+        Create the SetOfTiltSeries and each tilt series. IMPORTANT: data from the import protocol is considered more
+        reliable than data from mdoc. Thus, in case both data sources provide valid data, the data from the import
+        will be used.
         :param mdoc_obj: mdoc object to manage
         """
         tsId = mdoc_obj.getTsId()
@@ -312,12 +314,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 SOTS.enableAppend()
                 self._defineOutputs(TiltSeries=SOTS)
                 self._defineSourceRelation(self.inputMicrographs, SOTS)
-                self._store(SOTS)
             else:
                 SOTS = self.TiltSeries
                 SOTS.setStreamState(SOTS.STREAM_OPEN)
                 SOTS.enableAppend()
-                self._store(SOTS)
 
             file_order_angle_list = []
             accumulated_dose_list = []
@@ -328,9 +328,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 tiltAngle = tilt_metadata.getTiltAngle()
                 accumDose = tilt_metadata.getAccumDose()
                 incomingDose = tilt_metadata.getIncomingDose()
-                if not accumDose:
-                    accumDose = dosePerFrame * (acqOrder + 1)  # Usually starts in 0
-                if not incomingDose:
+                if dosePerFrame:
+                    accumDose = dosePerFrame * (acqOrder + 1) # Usually starts in 0
                     incomingDose = dosePerFrame * acqOrder
                 if self.mdoc_bug_Correction.get():
                     filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
@@ -349,8 +348,11 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             acq = ts_obj.getAcquisition()
             mdocVoltage = mdoc_obj.getVoltage()
             mdocMaginfication = mdoc_obj.getMagnification()
-            voltage = mdocVoltage if mdocVoltage else self.inMicsAcq.getVoltage()
-            magnification = mdocMaginfication if mdocMaginfication else self.inMicsAcq.getMagnification()
+            inMicsVoltage = self.inMicsAcq.getVoltage()
+            inMicsMagnification = self.inMicsAcq.getMagnification()
+
+            voltage = inMicsVoltage if inMicsVoltage else mdocVoltage
+            magnification = inMicsMagnification if inMicsMagnification else mdocMaginfication
             acq.setVoltage(voltage)
             acq.setMagnification(magnification)
             acq.setSphericalAberration(self.inMicsAcq.getSphericalAberration())
@@ -419,10 +421,9 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                         if os.path.basename(f) in mic.getMicName():
                             ti = tomoObj.TiltImage()
                             ti.setTsId(ts_obj.getTsId())
-                            new_location = (counter_ti, ts_fn)
+                            new_location = (counter_ti + 1, ts_fn)
                             ti.setLocation(new_location)
-                            ti.setObjId(counter_ti + 1)
-                            ti.setIndex(counter_ti + 1)
+                            # ti.setObjId(counter_ti + 1)
                             ti.setAcquisition(ts_obj.getAcquisition())
                             ti.setAcquisitionOrder(int(to))
                             ti.setTiltAngle(ta)
