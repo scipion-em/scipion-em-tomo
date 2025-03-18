@@ -411,6 +411,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             properties = {"sr": sr}
             newStack = ImageStack(properties=properties)
             ti = None
+            tsAcq = ts_obj.getAcquisition()
+            tsAccumDose = -999
+            tsInitialDose = 999
+            angleList = []
             for f, to, ta in file_ordered_angle_list:
                 try:
                     for mic in self.listOfMics:
@@ -425,21 +429,34 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                             ti.setLocation(new_location)
                             # ti.setObjId(counter_ti + 1)
                             ti.setAcquisition(ts_obj.getAcquisition())
-                            ti.setAcquisitionOrder(int(to))
+                            ti.setAcquisitionOrder(to)
                             ti.setTiltAngle(ta)
                             ti.setSamplingRate(sr)
                             ti.setAcquisition(ts_obj.getAcquisition().clone())
-                            dosePerFrame = incoming_dose_list[int(to) - 1]
+                            dosePerFrame = incoming_dose_list[to]
+                            accumDose = (to + 1) * dosePerFrame
+                            initialDose = to * dosePerFrame
                             ti.getAcquisition().setDosePerFrame(dosePerFrame)
-                            ti.getAcquisition().setAccumDose(int(to)*dosePerFrame)
+                            ti.getAcquisition().setAccumDose(accumDose)
+                            ti.getAcquisition().setDoseInitial(initialDose)
                             newStack.append(ImageReadersRegistry.open(mic.getFileName()))
                             ts_obj.append(ti)
+
+                            tsInitialDose = min(tsInitialDose, initialDose)
+                            tsAccumDose = max(tsAccumDose, accumDose)
+                            angleList.append(ta)
+
                             counter_ti += 1
                 except Exception as e:
                     self.error(e)
                     return
             ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
 
+            tsAcq.setAccumDose(tsAccumDose)
+            tsAcq.setDoseInitial(tsInitialDose)
+            tsAcq.setAngleMin(min(angleList))
+            tsAcq.setAngleMax(max(angleList))
+            ts_obj.setAcquisition(tsAcq)
             ts_obj._setFirstDim(ti)
             SOTS.update(ts_obj)
         except Exception as e:

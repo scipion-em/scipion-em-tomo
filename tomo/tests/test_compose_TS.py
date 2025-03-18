@@ -28,13 +28,11 @@
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRE_STA_TUTO_MOVIES, DataSetRe4STATuto, tsAcqDict, testAcq03, testAcq54, TS_03, TS_54
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from pyworkflow.plugin import Domain
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
 
-
-import numpy as np
 
 class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 	""" This class check if the protocol to compose TiltSeries works properly."""
@@ -51,7 +49,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		protMovieImport = cls.newProtocol(ProtImportMovies,
 		                                   objLabel='Import movies (SPA)',
 		                                   importFrom=ProtImportMovies.IMPORT_FROM_FILES,
-		                                   filesPath=cls.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name),
+		                                   filesPath=cls.ds.getFile(RE_STA_TUTO_MOVIES.framesDir.name),
 		                                   filesPattern='*.mrc',
 										   blacklistSet=blackList,
 										   voltage=DataSetRe4STATuto.voltage.value,
@@ -100,38 +98,25 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 	def test_composeTSBasic(self):
 		print(magentaStr(f"\n==> Running the basic Test: \n"))
-		#DYNAMIC TEMPLATE STARTS
-		import os
-		fname = "/home/agarcia/Documents/test_DEBUGALBERTO.txt"
-		if os.path.exists(fname):
-		    os.remove(fname)
-		fjj = open(fname, "a+")
-		fjj.write('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-		fjj.close()
-		print('ALBERTO--------->onDebugMode PID {}'.format(os.getpid()))
-		import time
-		time.sleep(10)
-
-		#DYNAMIC TEMPLATE ENDS
 		outputMovies = self._runImportMovies()
 		outputMicrographs = self._runAlignMovies(outputMovies)
 		mdocPattern = '*mrc.mdoc'
-		filesPath = self.ds.getFile(DataSetRE_STA_TUTO_MOVIES.framesDir.name)
+		filesPath = self.ds.getFile(RE_STA_TUTO_MOVIES.framesDir.name)
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='100')
 
 		#TEST VALUES
 		expectedSetSize = 2
 		anglesCount = {TS_03: 5, TS_54: 6}
 
-		print(f'testSetAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value: {DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value}')
+		print(f'testSetAcqObj=RE_STA_TUTO_MOVIES.tsAcqDict.value: {RE_STA_TUTO_MOVIES.tsAcqDict.value}')
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+		                     expectedSRate=RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
 		                     hasAlignment=False,
 		                     isHeterogeneousSet=False,
 		                     imported=True,
-		                     expectedDimensions=DataSetRE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
-		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcqDict.value,
+		                     expectedDimensions=RE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
+		                     testAcqObj=RE_STA_TUTO_MOVIES.tsAcqDict.value,
 		                     anglesCount=anglesCount)
 
 
@@ -144,12 +129,12 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		self.assertSetSize(TiltSeries, expectedSetSize)
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=DataSetRE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+		                     expectedSRate=RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
 		                     hasAlignment=False,
 		                     isHeterogeneousSet=False,
 		                     imported=True,
-		                     expectedDimensions=DataSetRE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
-		                     testAcqObj=DataSetRE_STA_TUTO_MOVIES.tsAcq54Dict.value,
+		                     expectedDimensions=RE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
+		                     testAcqObj=RE_STA_TUTO_MOVIES.tsAcq54Dict.value,
 		                     anglesCount=anglesCount)
 
 
