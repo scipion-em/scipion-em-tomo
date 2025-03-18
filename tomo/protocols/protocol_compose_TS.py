@@ -121,8 +121,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                            "{minutes}m {seconds}s separated by spaces "
                            "e.g: 1d 2h 20m 15s,  10m 3s, 1h, 20s or 25")
 
-        form.addParallelSection(threads=3, mpi=1)
-
     def _initialize(self):
         self.ih = ImageHandler()
         self.inMicsAcq = self.inputMicrographs.get().getAcquisition()
@@ -329,8 +327,8 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 accumDose = tilt_metadata.getAccumDose()
                 incomingDose = tilt_metadata.getIncomingDose()
                 if dosePerFrame:
-                    accumDose = dosePerFrame * (acqOrder + 1) # Usually starts in 0
-                    incomingDose = dosePerFrame * acqOrder
+                    accumDose = dosePerFrame * acqOrder # MDoc class makes it to start in 1
+                    incomingDose = dosePerFrame * (acqOrder - 1)
                 if self.mdoc_bug_Correction.get():
                     filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
 
@@ -411,8 +409,13 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             properties = {"sr": sr}
             newStack = ImageStack(properties=properties)
             ti = None
+            tsAcq = ts_obj.getAcquisition()
+            tsAccumDose = -999
+            tsInitialDose = 999
+            angleList = []
             for f, to, ta in file_ordered_angle_list:
                 try:
+                    to = int(to)
                     for mic in self.listOfMics:
                         if ts_obj.getSamplingRate() is None:
                             ts_obj.setSamplingRate(sr)
@@ -425,21 +428,34 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                             ti.setLocation(new_location)
                             # ti.setObjId(counter_ti + 1)
                             ti.setAcquisition(ts_obj.getAcquisition())
-                            ti.setAcquisitionOrder(int(to))
+                            ti.setAcquisitionOrder(to)
                             ti.setTiltAngle(ta)
                             ti.setSamplingRate(sr)
                             ti.setAcquisition(ts_obj.getAcquisition().clone())
-                            dosePerFrame = incoming_dose_list[int(to) - 1]
+                            dosePerFrame = incoming_dose_list[to - 1]  # To begins in 1 because of MDoc class
+                            accumDose = to * dosePerFrame
+                            initialDose = (to - 1) * dosePerFrame
                             ti.getAcquisition().setDosePerFrame(dosePerFrame)
-                            ti.getAcquisition().setAccumDose(int(to)*dosePerFrame)
+                            ti.getAcquisition().setAccumDose(accumDose)
+                            ti.getAcquisition().setDoseInitial(initialDose)
                             newStack.append(ImageReadersRegistry.open(mic.getFileName()))
                             ts_obj.append(ti)
+
+                            tsInitialDose = min(tsInitialDose, initialDose)
+                            tsAccumDose = max(tsAccumDose, accumDose)
+                            angleList.append(ta)
+
                             counter_ti += 1
                 except Exception as e:
                     self.error(e)
                     return
             ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
 
+            tsAcq.setAccumDose(tsAccumDose)
+            tsAcq.setDoseInitial(tsInitialDose)
+            tsAcq.setAngleMin(min(angleList))
+            tsAcq.setAngleMax(max(angleList))
+            ts_obj.setAcquisition(tsAcq)
             ts_obj._setFirstDim(ti)
             SOTS.update(ts_obj)
         except Exception as e:

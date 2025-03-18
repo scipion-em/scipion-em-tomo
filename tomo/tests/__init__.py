@@ -360,7 +360,7 @@ DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
 ########################################################################################################################
 RE_STA_TUTO_MOVIES = 'relion_sta_tutorial_movies'
 
-class DataSetRE_STA_TUTO_MOVIES(Enum):
+class DataSet_RE_STA_TUTO_MOVIES(Enum):
 	unbinnedPixSize = 1.35
 	framesDir = 'frames'
 	testAcq03.setAngleMin(-6)
@@ -382,4 +382,4 @@ class DataSetRE_STA_TUTO_MOVIES(Enum):
 	dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
 
 
-DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSetRE_STA_TUTO_MOVIES})
+DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
