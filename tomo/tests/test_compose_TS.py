@@ -28,7 +28,7 @@
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_03, TS_54
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_03, TS_54, DataSet_RE_STA_TUTO_MOVIES
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from pyworkflow.plugin import Domain
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
@@ -51,7 +51,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		protMovieImport = cls.newProtocol(ProtImportMovies,
 		                                   objLabel='Import movies (SPA)',
 		                                   importFrom=ProtImportMovies.IMPORT_FROM_FILES,
-		                                   filesPath=cls.ds.getFile(RE_STA_TUTO_MOVIES.framesDir.name),
+		                                   filesPath=cls.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name),
 		                                   filesPattern='*.mrc',
 										   blacklistSet=blackList,
 										   voltage=DataSetRe4STATuto.voltage.value,
@@ -73,7 +73,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		protMc.inputMovies.set(movies)
 		cls.launchProtocol(protMc)
 		cls.assertIsNotNone(protMc.outputMovies, 'Micrograph not generated')
-		return getattr(protMc, 'outputMicrographs', None)
+		return getattr(protMc, 'outputMovies', None)
 
 	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
 		print(magentaStr(f"\n==> Running the composeTS: \n"))
@@ -97,22 +97,22 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		outputMovies = self._runImportMovies()
 		outputMicrographs = self._runAlignMovies(outputMovies)
 		mdocPattern = '*mrc.mdoc'
-		filesPath = self.ds.getFile(RE_STA_TUTO_MOVIES.framesDir.name)
+		filesPath = self.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name)
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='100')
 
 		#TEST VALUES
 		expectedSetSize = 2
 		anglesCount = {TS_03: 5, TS_54: 6}
 
-		print(f'testSetAcqObj=RE_STA_TUTO_MOVIES.tsAcqDict.value: {RE_STA_TUTO_MOVIES.tsAcqDict.value}')
+		print(f'testSetAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value: {DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value}')
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+		                     expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
 		                     hasAlignment=False,
 		                     isHeterogeneousSet=False,
 		                     imported=True,
-		                     expectedDimensions=RE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
-		                     testAcqObj=RE_STA_TUTO_MOVIES.tsAcqDict.value,
+		                     expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
+		                     testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value,
 		                     anglesCount=anglesCount)
 
 
@@ -125,12 +125,12 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		self.assertSetSize(TiltSeries, expectedSetSize)
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+		                     expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
 		                     hasAlignment=False,
 		                     isHeterogeneousSet=False,
 		                     imported=True,
-		                     expectedDimensions=RE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
-		                     testAcqObj=RE_STA_TUTO_MOVIES.tsAcq54Dict.value,
+		                     expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
+		                     testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcq54Dict.value,
 		                     anglesCount=anglesCount)
 
 
