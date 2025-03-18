@@ -32,7 +32,9 @@ from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from pyworkflow.plugin import Domain
 from tomo.protocols.protocol_compose_TS import ProtComposeTS
+from motioncorr.protocols import ProtMotionCorr
 
+import numpy as np
 
 class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 	""" This class check if the protocol to compose TiltSeries works properly."""
@@ -66,18 +68,12 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 	def _runAlignMovies(cls, movies):
 		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
-
-		xmipp3 = Domain.importFromPlugin('xmipp3.protocols', doRaise=True)
-		protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
-		                            objLabel='Movie Alignment (SPA)',
-		                            alignFrame0=1,
-		                            alignFrameN=0,
-		                            useAlignToSum=True,
-		                            doLocalAlignment=False)
-		protAlign.inputMovies.set(movies)
-		cls.launchProtocol(protAlign)
-		cls.assertIsNotNone(protAlign.outputMovies, 'Micrograph not generated')
-		return getattr(protAlign, 'outputMicrographs', None)
+		protMc = cls.newProtocol(ProtMotionCorr,
+									objLabel='Movie Alignment (SPA)')
+		protMc.inputMovies.set(movies)
+		cls.launchProtocol(protMc)
+		cls.assertIsNotNone(protMc.outputMovies, 'Micrograph not generated')
+		return getattr(protMc, 'outputMicrographs', None)
 
 	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
 		print(magentaStr(f"\n==> Running the composeTS: \n"))
