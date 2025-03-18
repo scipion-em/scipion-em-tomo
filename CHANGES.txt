@@ -6,6 +6,7 @@ v3.10.0:
   - Update TiltSeries data model to manage properly the even/odd tilt-series as metadata instead of
     independent objects.
   - Update TCL and some test data description.
+  - SetoOfTiltSeries hides incomplete Tilt series until marked as completed (1st update)
 
 v3.9.2: add tomo course 2024 template --> HIV processing workflow.
 v3.9.1:

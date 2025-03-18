@@ -164,8 +164,17 @@ class TestTomoModel(BaseTest):
             ts = TiltSeries()
             ts.setTsId(tsId)
 
+            # get the count
+            size = tiltseries.getSize()
+
             # We need to append the tilt series before adding tilt images
+            # note: This does not persist the properties!. So, for a while
+            # there ar no properties but rows in objects?
+            # iterItems may render items but set has no properties.
             tiltseries.append(ts)
+
+            # Append should not increase the size?
+            self.assertEquals(tiltseries.getSize(),size, "Tilt series size increased on append!.")
 
             # Add tilt images
             ti = TiltImage()
@@ -173,8 +182,19 @@ class TestTomoModel(BaseTest):
             ti.setTsId(tsId)
             ts.append(ti)
 
+            self.checkSetOfTiltSeries(tiltseries)
+
             # Update properties
             tiltseries.update(ts)
+
+            # Update should increase the size
+            self.assertEquals(tiltseries.getSize(), size+1, "Tilt series size not increased on first update!.")
+
+            # A second update should not increase the size
+            tiltseries.update(ts)
+            self.assertEquals(tiltseries.getSize(), size + 1, "Tilt series size increased on second update!.")
+
+            self.checkSetOfTiltSeries(tiltseries)
 
             # This should not persist properties at all
             ts.write(properties=True)
@@ -209,6 +229,26 @@ class TestTomoModel(BaseTest):
 
         clonedTi = newTi.clone()
         self.assertFalse(clonedTi.isEnabled(), "Enabled not cloned for the tilt image")
+
+    def checkSetOfTiltSeries(self, tiltseries):
+
+        # tiltSerieFromFile = SetOfTiltSeries(filename=fileName)
+        # Properties are not persisted at this point. No need to load the properties
+        # tiltSerieFromFile.loadAllProperties()
+
+        # IMPORTANT!: Just connecting to the sqlite sets the size attribute of the set
+        # Regardless what is in the properties table. It makes a select count!!.
+        # So it will be one more!!
+        # self.assertEquals(size+1, tiltSerieFromFile.getSize(), "Size persisted in sqlite is not expected.")
+        # This closes the connection that is shared with the other mapper used to add images
+        # tiltSerieFromFile._mapper = None
+        #tiltSerieFromFile.close()
+        count = 0
+        for ts in tiltseries.iterItems():
+            count+=1
+
+        self.assertEqual(count, tiltseries.getSize(), "Iterator is iterating over incomplete tilt series")
+
 
     def test_landmarks(self):
         """ Test the Landmark model"""

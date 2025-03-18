@@ -251,6 +251,7 @@ class TiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
+        self._complete = Boolean(True)
 
     def hasAcquisition(self):
         return self._acquisition is not None and self._acquisition.getMagnification() is not None
@@ -973,10 +974,23 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._setItemMapperPath(classItem)
         return classItem
 
+    def append(self, tiltSerie:TiltSeriesBase):
+        """ Append id Tilt series should not increase the size.
+        Due to the way we work with these objects (double level objects) we need to append the TiltSeries object
+        before storing its tilt images. This may expose for a while title series without tilt images in Streaming
+        scenario. To avoid this, size should not be increased and iterator should not offer these uncompleted tilt
+        series
+        """
+        # Mark the tilt series to increase the count on the next update
+        tiltSerie._complete.set(False)
+        super().append(tiltSerie)
+        self._size.set(self.getSize() - 1)
+
     def iterItems(self, **kwargs) -> TiltSeriesBase:
         for item in data.EMSet.iterItems(self, **kwargs):
-            self._setItemMapperPath(item)
-            yield item
+            if item._complete:
+                self._setItemMapperPath(item)
+                yield item
 
     def copyItems(self, inputTs,
                   orderByTs='id', updateTsCallback=None,
@@ -1032,6 +1046,11 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
         self._hasOddEven.set(item.hasOddEven())
+
+        # Assume first update occurs when ts is completed
+        if not item._complete:
+            self._size.increment()
+            item._complete.set(True)
 
         super().update(item)
 
@@ -2023,7 +2042,7 @@ class SubTomogram(data.Volume):
             return self._transform
 
 
-class SetOfSubTomograms(data.SetOfVolumes):
+class SetOfSubTomogramsBase(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
     EXPOSE_ITEMS = False
@@ -2171,6 +2190,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
 
         return self._tomos
 
+class SetOfSubTomograms(SetOfSubTomogramsBase):
+    """ All code is moved to Base. This way RelionPseudoST and EMAN can use Base and not be Subtomograms which make them
+    now available to any protocol that inputs SetOfSubtomograms which is not realistic."""
+    pass
 
 class AverageSubTomogram(SubTomogram):
     """Represents a Average SubTomogram.
