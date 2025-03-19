@@ -326,7 +326,7 @@ You'll need to download this dataset -> scipion3 testdata --download reliontomo_
         "finSlice": 0,
         "Hamming": 0.0,
         "hostName": "localhost",
-        "numberOfThreads": 1
+        "numberOfThreads": 2
     },
     {
         "object.className": "ProtTomo3dProtDenoiseTomogram",
@@ -348,7 +348,7 @@ You'll need to download this dataset -> scipion3 testdata --download reliontomo_
         "TimeStep": 0.1,
         "TimeStepBflow": 0.15,
         "hostName": "localhost",
-        "numberOfThreads": 1
+        "numberOfThreads": 2
     },
     {
         "object.className": "DynamoBoxing",
