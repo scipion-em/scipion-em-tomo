@@ -360,26 +360,30 @@ DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
 ########################################################################################################################
 RE_STA_TUTO_MOVIES = 'relion_sta_tutorial_movies'
 
-class DataSet_RE_STA_TUTO_MOVIES(Enum):
-	unbinnedPixSize = 1.35
-	framesDir = 'frames'
-	testAcq03.setAngleMin(-6)
-	testAcq03.setAngleMax(6)
-	testAcq54.setAngleMin(-6)
-	testAcq54.setAngleMax(9)
-	DosePerFrame = 3.05
-	testAcq03.setAccumDose(18.29)
-	testAcq54.setAccumDose(21.34)
-	testAcq03.setDosePerFrame(DosePerFrame)
-	testAcq54.setDosePerFrame(DosePerFrame)
-	tsAcqDict = {TS_03: testAcq03,
-	             TS_54: testAcq54}
-	tsAcq03Dict = {TS_03: testAcq03}
-	tsAcq54Dict = {TS_54: testAcq54}
+DosePerFrame = 3.05
+testAcq03 = testAcq03.clone()
+testAcq54 = testAcq54.clone()
+testAcq03.setAngleMin(-6)
+testAcq03.setAngleMax(6)
+testAcq54.setAngleMin(-6)
+testAcq54.setAngleMax(9)
+testAcq03.setAccumDose(18.29)
+testAcq54.setAccumDose(21.34)
+testAcq03.setDosePerFrame(DosePerFrame)
+testAcq54.setDosePerFrame(DosePerFrame)
 
-	dimsTsBin1Dict = {TS_03: [7420, 7676, 5], TS_54: [7420, 7676, 6]}
-	dimsTs03Bin1Dict = {TS_03: [7420, 7676, 5]}
-	dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
+class DataSet_RE_STA_TUTO_MOVIES(Enum):
+    unbinnedPixSize = 1.35
+    framesDir = 'frames'
+    DosePerFrame = DosePerFrame
+    tsAcqDict = {TS_03: testAcq03,
+                 TS_54: testAcq54}
+    tsAcq03Dict = {TS_03: testAcq03}
+    tsAcq54Dict = {TS_54: testAcq54}
+
+    dimsTsBin1Dict = {TS_03: [7420, 7676, 5], TS_54: [7420, 7676, 6]}
+    dimsTs03Bin1Dict = {TS_03: [7420, 7676, 5]}
+    dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
 
 
 DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
