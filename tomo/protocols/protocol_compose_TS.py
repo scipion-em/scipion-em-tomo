@@ -443,7 +443,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
 
                             tsInitialDose = min(tsInitialDose, initialDose)
                             tsAccumDose = max(tsAccumDose, accumDose)
-                            angleList.append(ta)
+                            angleList.append(float(ta))
 
                             counter_ti += 1
                 except Exception as e:

@@ -91,7 +91,6 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
 	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
 		print(magentaStr(f"\n==> Running the composeTS: \n"))
-
 		protComposeTS = cls.newProtocol(ProtComposeTS,
 	                                   objLabel='Compose TiltSeries',
 	                                   inputMicrographs=outputMicrographs,
@@ -109,7 +108,9 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 	def test_composeTSBasic(self):
 		print(magentaStr(f"\n==> Running the basic Test: \n"))
 		outputMovies = self._runImportMovies()
+		#outputMicrographs = self._runAlignMoviesFlexAlign(outputMovies)
 		outputMicrographs = self._runAlignMovies(outputMovies)
+
 		mdocPattern = '*mrc.mdoc'
 		filesPath = self.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name)
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='100')
@@ -118,7 +119,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		expectedSetSize = 2
 		anglesCount = {TS_03: 5, TS_54: 6}
 
-		print(f'testSetAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value: {DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value}')
+		print(magentaStr(f"\n==> Checking Tilt Series: \n"))
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
 		                     expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
@@ -135,8 +136,8 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='80')
 		expectedSetSize = 1
 		anglesCount = {TS_54: 5}
-
 		self.assertSetSize(TiltSeries, expectedSetSize)
+		print(magentaStr(f"\n==> Checking Tilt Series: \n"))
 		self.checkTiltSeries(TiltSeries,
 		                     expectedSetSize=expectedSetSize,
 		                     expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
@@ -144,7 +145,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 		                     isHeterogeneousSet=False,
 		                     imported=True,
 		                     expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
-		                     testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcq54Dict.value,
+		                     testAcqObj=DataSet_RE_STA_TUTO_MOVIES.testAcq54_rejectDict.value,
 		                     anglesCount=anglesCount)
 
 
