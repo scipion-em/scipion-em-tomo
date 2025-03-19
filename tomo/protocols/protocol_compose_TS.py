@@ -203,6 +203,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
             else:
                 if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
                     self.createTS(mdoc_obj, mdoc_order_angle_list, file2read)
+                    for outputName in self._possibleOutputs.keys():
+                        output = getattr(self, outputName, None)
+                        if output:
+                            output.close()
         else:
             self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
 
