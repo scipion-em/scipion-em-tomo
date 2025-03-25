@@ -11,7 +11,7 @@ You'll need to download its dataset -> scipion3 testdata --download nonOrientedP
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "/home/scipion/scipion3/data/tests/nonOrientedPicking_tutorial/","~Files directoy|%(SCIPION_TESTS)s/nonOrientedPicking_tutorial/|2|filesPath~"
+        "filesPath": "~Files directoy|%(SCIPION_TESTS)s/nonOrientedPicking_tutorial/|2|filesPath~",
         "filesPattern": "*.mdoc",
         "isTomo5": false,
         "exclusionWords": null,
