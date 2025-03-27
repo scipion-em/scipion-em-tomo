@@ -513,7 +513,7 @@ class TestImportTomoMasks(BaseTest):
         cls.inTomoSetBinned = cls._normalizeTomo()
         # Create a link pointing to the tomogram but renaming it in a way that it won't be possible to match it with
         # the tomomask
-        nonMatchingTomoName = join(ds.getPath(), 'nonMatchingTomo.mrc')
+        nonMatchingTomoName = join(cls.outputPath, 'nonMatchingTomo.mrc')
         createLink(ds.getFile(tomoFile), nonMatchingTomoName)
         cls.inNotMatchingTomoSet = cls._importTomograms(nonMatchingTomoName)
 
