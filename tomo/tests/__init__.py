@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import math
 from enum import Enum
 from typing import Tuple
 
@@ -73,14 +74,17 @@ EMD_10439 = 'emd_10439'
 
 
 class DataSetEmd10439(Enum):
+    tomogramsDir = 'tomograms'
     tomoEmd10439 = 'tomograms/emd_10439.mrc'
     coords3dStarFile = 'importFromStarFiles/picking_001_parts.star'
     coords3dStarFileWithSRate = 'importFromStarFiles/picking_001_parts_with_sRate.star'
     subtomogramsStarFile = 'importFromStarFiles/class_ap_r_ali_k1_split.star'
     scipionSqlite3dCoords = 'importFromScipionSqlite/coordinates.sqlite'
     scipionSqlite3dCoordsSomeBad = 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
+    tomomasksAnnotatedDir = 'tomomasksAnnotated'
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
-    coords39Sqlite = 'coordinates/coordinates39.sqlite'
+    coords39Sqlite = 'coordinates/coordinates39_bin8.sqlite'
+    coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
@@ -235,36 +239,76 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For gapStopTM testing
+    tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
+
     @classmethod
-    def genTestTsDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54)):
+    def genTestTsDicts(cls,
+                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
+                       unbinnedXYDims: Tuple = (3710, 3838),
+                       binFactor: int = 1,
+                       swapXY: bool = False,
+                       isImod: bool = False):
         testAcqObjDict = dict()
         expectedDimensionsDict = dict()
         anglesCountDict = dict()
+        nImgs40 = 40
+        nImgs41 = 41
+        expectedDims40 = cls._getExpectedTsDims(unbinnedXYDims,
+                                                nImgs=nImgs40,
+                                                binFactor=binFactor,
+                                                swapXY=swapXY,
+                                                isImod=isImod)
+        expectedDims41 = cls._getExpectedTsDims(unbinnedXYDims,
+                                                nImgs=nImgs41,
+                                                binFactor=binFactor,
+                                                swapXY=swapXY,
+                                                isImod=isImod)
         if TS_01 in tsIdList:
             testAcqObjDict[TS_01] = cls.testAcq01.value
-            expectedDimensionsDict[TS_01] = cls.tsDims40.value
-            anglesCountDict[TS_01] = 40
+            expectedDimensionsDict[TS_01] = expectedDims40
+            anglesCountDict[TS_01] = nImgs40
         if TS_03 in tsIdList:
             testAcqObjDict[TS_03] = cls.testAcq03.value
-            expectedDimensionsDict[TS_03] = cls.tsDims40.value
-            anglesCountDict[TS_03] = 40
+            expectedDimensionsDict[TS_03] = expectedDims40
+            anglesCountDict[TS_03] = nImgs40
         if TS_43 in tsIdList:
             testAcqObjDict[TS_43] = cls.testAcq43.value
-            expectedDimensionsDict[TS_43] = cls.tsDims41.value
-            anglesCountDict[TS_43] = 41
+            expectedDimensionsDict[TS_43] = expectedDims41
+            anglesCountDict[TS_43] = nImgs41
         if TS_45 in tsIdList:
             testAcqObjDict[TS_45] = cls.testAcq45.value
-            expectedDimensionsDict[TS_45] = cls.tsDims41.value
-            anglesCountDict[TS_45] = 41
+            expectedDimensionsDict[TS_45] = expectedDims41
+            anglesCountDict[TS_45] = nImgs41
         if TS_54 in tsIdList:
             testAcqObjDict[TS_54] = cls.testAcq54.value
-            expectedDimensionsDict[TS_54] = cls.tsDims41.value
-            anglesCountDict[TS_54] = 41
+            expectedDimensionsDict[TS_54] = expectedDims41
+            anglesCountDict[TS_54] = nImgs41
 
         return testAcqObjDict, expectedDimensionsDict, anglesCountDict
 
+    @staticmethod
+    def _getExpectedTsDims(unbinnedXYDims: Tuple,
+                           nImgs: int,
+                           binFactor: int = 1,
+                           swapXY: bool = False,
+                           isImod: bool = False):
+        dims = []
+        for iDim in unbinnedXYDims:
+            newDim = math.ceil(iDim / binFactor)
+            # Imod always generates images with even dimensions, at least for the TS
+            if isImod:
+                if newDim % 2 != 0:
+                    newDim += 1
+            dims.append(newDim)
+
+        if swapXY:
+            dims.reverse()
+
+        return dims + [nImgs]
+
     @classmethod
-    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54)):
+    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54)):
         testAcqObjDict = dict()
         expectedDimensionsDict = dict()
         if TS_01 in tsIdList:
@@ -307,3 +351,7 @@ class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
 
 
 DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
+
+########################################################################################################################
+EMPIAR_10491 = 'empiar_10491'
+DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})

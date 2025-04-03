@@ -46,6 +46,7 @@ from .protocol_consensus_classes_subtomo import ProtConsensusClassesSubtomo
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_ctf_validate import ProtCTFTomoSeriesValidate
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
+from .protocol_project_coordinates import ProtProjectCoordinates
 from .protocol_rotate_astigmatism import ProtRotateAstigmatism
 from .protocol_mesh_from_segmentation import ProtMeshFromSegmentation
 from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
@@ -58,3 +59,4 @@ from .protocol_landmark_to_2d import ProtTomoLandmarksTo2D
 from .protocol_mask_coordinates import ProtMaskCoordinates
 from .protocol_geometric_picking import ProtGeometricPicking
 from .protocol_geometric_picking_filter import ProtGeometricPickingFilter
+from .protocol_export_coords import ProtExportCoordinates3D

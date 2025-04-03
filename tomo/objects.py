@@ -25,23 +25,18 @@
 # *
 # **************************************************************************
 import logging
-from os.path import exists
+import typing
+from os.path import exists, dirname, basename, join
 from sqlite3 import OperationalError
-from typing import Dict, Tuple, Any, Optional, Union
-
+from typing import Optional
 import mrcfile
-
 from pwem import ALIGN_NONE
-
-logger = logging.getLogger(__name__)
-
 import csv
 import math
 import os
 import threading
 from collections import OrderedDict
 from datetime import datetime
-
 import numpy as np
 import pwem.objects.data as data
 import pyworkflow.utils.path as path
@@ -49,7 +44,10 @@ import tomo.constants as const
 from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList, PointerList, Scalar
+from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
+from pyworkflow.utils import removeBaseExt
+
+logger = logging.getLogger(__name__)
 
 
 class MATRIX_CONVERSION:
@@ -234,12 +232,11 @@ class TiltImage(data.Image, TiltImageBase):
         return fileName + suffix + fileExtension
 
 
-TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
-
-
 class TiltSeriesBase(data.SetOfImages):
     TS_ID_FIELD = '_tsId'
     ACQ_ORDER_FIELD = '_acqOrder'
+    INDEX = '_index'
+    TS_IGNORE_ATTRS = ['_mapperPath', '_size', '_hasAlignment', '_hasOddEven']
 
     def __init__(self, **kwargs):
         data.SetOfImages.__init__(self, **kwargs)
@@ -259,7 +256,7 @@ class TiltSeriesBase(data.SetOfImages):
         return self._acquisition is not None and self._acquisition.getMagnification() is not None
 
     def getAnglesCount(self):
-        return self._anglesCount.get()
+        return self.getSize()
 
     def hasOddEven(self):
         return self._hasOddEven.get()
@@ -313,7 +310,7 @@ class TiltSeriesBase(data.SetOfImages):
         """ Copy basic information (id and other properties) but
         not _mapperPath or _size from other set of tilt series to current one.
         """
-        self.copy(other, copyId=copyId, ignoreAttrs=TS_IGNORE_ATTRS)
+        self.copy(other, copyId=copyId, ignoreAttrs=self.TS_IGNORE_ATTRS)
         # self.copyAttributes(other, '_tsId', '_anglesCount')
 
     def write(self, properties=True):
@@ -329,7 +326,8 @@ class TiltSeriesBase(data.SetOfImages):
         self._hasAlignment.set(tiltImage.hasTransform())
         self._hasOddEven.set(tiltImage.hasOddEven())
 
-    def clone(self, ignoreAttrs=TS_IGNORE_ATTRS):
+    def clone(self, ignoreAttrs=()):
+        # TODO: check if ignoreAttrs not empty is required somewhere in the code. If not, this method can be removed
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
@@ -341,35 +339,6 @@ class TiltSeriesBase(data.SetOfImages):
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()
         return self._samplingRate.get() * 1e-4 * mag
-
-    def generateTltFile(self, tltFilePath, reverse=False, excludeViews=False, presentAcqOrders=None):
-        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
-        file are sorted in the opposite order.
-        :param tltFilePath: String containing the path where the file is created.
-        :param reverse: Boolean indicating if the angle list must be reversed.
-        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
-        the non-excluded views (True) or all of them (False).
-        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
-        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
-        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
-        (see tomo > utils > getCommonTsAndCtfElements)
-        """
-
-        if presentAcqOrders:
-            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD) if
-                         ti.getAcquisitionOrder() in presentAcqOrders]
-        else:
-            angleList = []
-            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                if excludeViews and not ti.isEnabled():
-                    continue
-                angleList.append(ti.getTiltAngle())
-        if reverse:
-            angleList.reverse()
-
-        with open(tltFilePath, 'w') as f:
-            f.writelines("%.3f\n" % angle for angle in angleList)
-
 
     def hasOrigin(self):
         """ Method indicating if the TiltSeries object has a defined origin. """
@@ -472,36 +441,155 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self, outputFilePath, swapXY=False, excludeViews=False):
-        ih = ImageHandler()
-        inputFilePath = self.getFirstItem().getFileName()
+    def applyTransform(self,
+                       outFileName: str,
+                       swapXY: bool = False,
+                       presentAcqOrders: typing.Set[int] = (),
+                       even: typing.Union[bool, None] = None) -> None:
+        """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
+        tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
+        present excluded views at metadata level.
+        :param outFileName: String containing the path of the output file that is created.
+        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
+        True to the even one and False to the odd one.
+        """
+        inImgFileName= self.__getTsFileName(even=even)
+        excludedViews = len(presentAcqOrders) > 0
+        if excludedViews:
+            logger.info(f'{self.getTsId()}: excluded views detected {self.getTsExcludedViewsIndices(presentAcqOrders)}')
         if self.hasAlignment():
-            firstImg = self.getFirstItem()
-            xDim, yDim, _ = firstImg.getDim()
-            if firstImg.hasTransform() and swapXY:
-                xDim, yDim = yDim, xDim
-            if excludeViews:
-                excludedViewsInd = self.getExcludedViewsIndex()
-                counter = 0
-                for index, ti in enumerate(self.iterItems()):
-                    if index + 1 not in excludedViewsInd:
-                        self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, counter)
-                        counter += 1
-            else:
-                for index, ti in enumerate(self.iterItems()):
-                    self._applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index)
+            self.__applyTransformAli(inImgFileName, outFileName, swapXY, presentAcqOrders)
         else:
-            path.createAbsLink(os.path.abspath(inputFilePath), outputFilePath)
+            self.__applyTransformNoAli(inImgFileName, outFileName, presentAcqOrders)
+
+    def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
+        """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
+        :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
+        True to the even one and False to the odd one."""
+        if even is None:
+            inImgFileName = self.getFirstItem().getFileName()
+        elif even:
+            inImgFileName = self.getEvenFileName()
+        else:
+            inImgFileName = self.getOddFileName()
+        return inImgFileName
+
+    def __applyTransformNoAli(self,
+                              inFileName: str,
+                              outFileName: str,
+                              presentAcqOrders: typing.Set[int] = ()) -> None:
+        """Apply transform to a tilt-series without alignment.
+                :param inFileName: String containing the path of the image to which the transformation is going to be applied.
+        :param outFileName: String containing the path of the output file that is created.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        """
+        excludedViews = len(presentAcqOrders) > 0
+        if excludedViews:
+            self.reStack(outFileName, presentAcqOrders)
+        else:
+            path.createAbsLink(os.path.abspath(inFileName), outFileName)
+
+    def __applyTransformAli(self,
+                            inFileName: str,
+                            outFileName: str,
+                            swapXY: bool = False,
+                            presentAcqOrders: typing.Set[int] = ()) -> None:
+        """Apply transform to a tilt-series with alignment.
+        :param inFileName: String containing the path of the image to which the transformation is going to be applied.
+        :param outFileName: String containing the path of the output file that is created.
+        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        """
+        excludedViews = len(presentAcqOrders) > 0
+        firstImg = self.getFirstItem()
+        xDim, yDim, _ = firstImg.getDim()
+        if firstImg.hasTransform() and swapXY:
+            xDim, yDim = yDim, xDim
+        if excludedViews:
+            counter = 0
+            for ti in self.iterItems(orderBy=self.INDEX):
+                acqOrder = ti.getAcquisitionOrder()
+                trMatrix = ti.getTransform().getMatrix()
+                if acqOrder in presentAcqOrders:
+                    self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, counter)
+                    counter += 1
+        else:
+            for index, ti in enumerate(self.iterItems()):
+                trMatrix = ti.getTransform().getMatrix()
+                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index)
+
+    def applyTransformToAll(self,
+                            outFileName: str,
+                            outFileNamesEvenOdd: typing.List[str] = None,
+                            swapXY: bool = False,
+                            presentAcqOrders: typing.Set[int] = ()) -> None:
+        """Applies a transform to the main tilt-series, the even and the odd ones. Inputs:
+        :param outFileName: String containing the path of the output file that is created.
+        :param outFileNamesEvenOdd: List containing the file names of the output tilt-series even and
+        odd files that are created. The expected order is [even, odd]. If not provided, these names will be
+        generated in the same location as outFileName and with the same base name and extension but with the
+        corresponding suffixes _even, _odd.
+        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
+        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
+        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
+        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
+        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
+        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
+        ascending order beginning in 1.
+        """
+        fPath = dirname(outFileName)
+        if outFileNamesEvenOdd:
+            evenFName = outFileNamesEvenOdd[0]
+            oddFName = outFileNamesEvenOdd[1]
+        else:
+            bName = removeBaseExt(outFileName)
+            ext = path.getExt(outFileName)
+            evenFName = join(fPath, bName + '_even' + ext)
+            oddFName = join(fPath, bName + '_odd' + ext)
+        self.applyTransform(outFileName,
+                            swapXY=swapXY,
+                            presentAcqOrders=presentAcqOrders,
+                            even=None)
+        self.applyTransform(evenFName,
+                            swapXY=swapXY,
+                            presentAcqOrders=presentAcqOrders,
+                            even=True)
+        self.applyTransform(oddFName,
+                            swapXY=swapXY,
+                            presentAcqOrders=presentAcqOrders,
+                            even=False)
 
     @staticmethod
-    def _applyTransformToTi(ti, ih, xDim, yDim, outputFilePath, index):
-        transform = ti.getTransform().getMatrix()
-        transformArray = np.array(transform)
-        inputFilePath = ti.getFileName()
-        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + inputFilePath,
+    def _applyTransformToTi(imgFileName, trMatrix, xDim, yDim, outputFilePath, index):
+        ih = ImageHandler()
+        transformArray = np.array(trMatrix)
+        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + imgFileName,
                           outputFile=str(index + 1) + '@' + outputFilePath,
                           transformMatrix=transformArray,
-                          shape=(yDim, xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
+                          shape=(
+                              yDim,
+                              xDim))  # ih help: shape: dimensions of the output image given as a tuple (yDim, xDim)
 
     def _dimStr(self):
         """ Return the string representing the dimensions. """
@@ -520,48 +608,101 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
-    # TODO: deprecate this after IMOD is released. Jorge (07/07/2024)
-    def _getExcludedViewsIndex(self):
-        return self.getExcludedViewsIndex()
+    def getTsPresentAcqOrders(self) -> typing.Set[int]:
+        """It generates a set containing the acquisition orders that correspond to the enabled tilt images. If there
+        are not any excluded views at metadata level, the output will be an empty set."""
+        presentAcqOrders = set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
+        return () if len(presentAcqOrders) == len(self) else presentAcqOrders
 
-    def reStack(self, outFileName: Union[str, None] = None) -> Union[str, None]:
-        """Re-stacks a tilt-series creating a new one without the excluded views obtained by calling the method
-        getExcludedViewsIndex(). If the re-stacked file already exists, no action is carried out (avoid creating
-        the same file multiple times, even more necessary if calling this method from the viewer).
-        :param outFileName: Filename of the re-stacked tilt-series. If None, the re-stacked tilt-series will be
-        generated in the same location as the current tilt-series, but adding the suffix _restacked.
-        :returns: None is the re-stacked file already exists or outFileName if not."""
+    def getTsExcludedViewsIndices(self, presentAcqOrders: typing.Set[int] = ()) -> typing.Set[int]:
+        """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is
+        not contained in a given set of acquisition orders. If presentAcqOrders is empty, it returns an empty set."""
+        excludedViewsInds = []
+        for ti in self.iterItems():
+            if ti.getAcquisitionOrder() not in presentAcqOrders:
+                excludedViewsInds.append(ti.getIndex())
+        return set(excludedViewsInds)
+
+    def reStack(self, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
+        """If there aren't any excluded views (presentAcqOrders is empty), it does nothing. In the opposite case,
+        it se-stacks a tilt-series into a new one without the excluded views. If the re-stacked file already exists,
+        o action is carried out (avoid creating the same file multiple times, even more necessary if calling this
+        method from the viewer).
+        :param outFileName: Filename of the re-stacked tilt-series.
+        :param presentAcqOrders: set containing the present acq orders in both the given TS.
+        """
+        # excludedIndices = self.getExcludedViewsIndex()
         tsFileName = self.getFirstItem().getFileName()
-        if not outFileName:
-            outFileName = path.removeExt(tsFileName) + '_restacked' + path.getExt(tsFileName)
         if exists(outFileName):
-            return None
-        else:
-            excludedIndices = self.getExcludedViewsIndex()
-            if excludedIndices:
+            logger.info(f'reStack: file {outFileName} was skipped. It already exists')
+        if exists(tsFileName):
+            if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
                     tsData = tsMrc.data
                 # Create an empty array in which the re-stacked TS will be stored
-                nx, ny, nImgs = tsData.shape
-                finalNImgs = nImgs - len(excludedIndices)
-                newTsShape = (nx, ny, finalNImgs)
+                nImgs, nx, ny = tsData.shape
+                finalNImgs = len(presentAcqOrders)
+                newTsShape = (finalNImgs, nx, ny)
                 newTsData = np.empty(newTsShape, dtype=tsData.dtype)
                 # Fill it with the non-excluded images
                 counter = 0
-                for i in range(nImgs):
-                    if i not in excludedIndices:
-                        newTsData[counter] = tsData[i]
+                for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
+                    acqOrder = ti.getAcquisitionOrder()
+                    if acqOrder in presentAcqOrders:
+                        newTsData[counter] = tsData[index]
                         counter += 1
                 # Save the re-stacked TS
-                with mrcfile.mmap(outFileName, newTsShape) as reStackedTsMrc:
+                with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
                     reStackedTsMrc.set_data(newTsData)
                     reStackedTsMrc.update_header_from_data()
                     reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
-                return outFileName
             else:
-                return None
+                logger.info(f'reStack: file {tsFileName} was skippedas there are not any excluded views.')
+        else:
+            logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
+
+    def generateTltFile(self, tltFilePath: str, reverse: bool = False, excludeViews: bool = False,
+                        presentAcqOrders: typing.Set[int] = (), includeDose: bool = False) -> None:
+        """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
+        file are sorted in the opposite order.
+        :param tltFilePath: String containing the path where the file is created.
+        :param reverse: Boolean indicating if the angle list must be reversed.
+        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
+        the non-excluded views (True) or all of them (False).
+        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
+        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
+        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
+        (see tomo > utils > getCommonTsAndCtfElements)
+        :param includeDose: boolean used to indicate if the tlt file created must contain an additional column with
+        the dose or not (default).
+        """
+        angleList = []
+        doseList = []
+        if presentAcqOrders:
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                if ti.getAcquisitionOrder() in presentAcqOrders:
+                    angleList.append(ti.getTiltAngle())
+                    if includeDose:
+                        doseList.append(ti.getAcquisition().getAccumDose())
+        else:
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                if excludeViews and not ti.isEnabled():
+                    continue
+                angleList.append(ti.getTiltAngle())
+                if includeDose:
+                    doseList.append(ti.getAcquisition().getAccumDose())
+        if reverse:
+            angleList.reverse()
+            if includeDose:
+                doseList.reverse()
+
+        with open(tltFilePath, 'w') as f:
+            if includeDose:
+                f.writelines(f"{angle:0.3f} {dose:0.4f}\n" for angle, dose in zip(angleList, doseList))
+            else:
+                f.writelines(f"{angle:0.3f}\n" for angle in angleList)
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -840,7 +981,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def copyItems(self, inputTs,
                   orderByTs='id', updateTsCallback=None,
                   orderByTi='id', updateTiCallback=None,
-                  itemSelectedCallback=None):
+                  itemSelectedCallback=None, rowFilter=None):
         """ Copy items (TiltSeries and TiltImages) from the input Set.
          Params:
             inputTs: input TiltSeries (or movies) from where to copy elements.
@@ -855,7 +996,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         if itemSelectedCallback is None:
             itemSelectedCallback = data.SetOfImages.isItemEnabled
 
-        for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs)):
+        for i, ts in enumerate(inputTs.iterItems(orderBy=orderByTs, rowFilter=rowFilter)):
             if itemSelectedCallback(ts):
                 tsOut = self.ITEM_TYPE()
                 tsOut.copyInfo(ts)
@@ -878,8 +1019,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
     def update(self, item: TiltSeriesBase):
         if not self._firstDim.isEmpty():
-            currentSetNAngles = self._firstDim[2]
-            addedTsNAngles = item.getAnglesCount()
+            currentSetNAngles = self.getAnglesCount()
+            addedTsNAngles = item.getSize()
             if currentSetNAngles != addedTsNAngles and not self.isHeterogeneousSet():
                 self.setIsHeterogeneousSet(True)
         # Always update it. If not, the dimensions are not properly updated in the summary panel, being confusing
@@ -1027,7 +1168,9 @@ class TiltSeriesDict:
 
     def addTs(self, ts, includeTi=False):
         """ Add a clone of the tiltseries. """
-        self.__dict[ts.getTsId()] = (ts.clone(), OrderedDict())
+        newTs = TiltSeries()
+        newTs.copyInfo(ts)
+        self.__dict[ts.getTsId()] = (newTs, OrderedDict())
         if includeTi:
             for ti in ts:
                 self.addTi(ti)
@@ -1252,7 +1395,8 @@ class SetOfTomograms(data.SetOfVolumes):
              self._dimStr(), tomoStr, sampling, self._appendStreamState())
         return s
 
-    def update(self, item: Tomogram):
+    def append(self, item: Tomogram):
+        super().append(item)
         if not self._firstDim.isEmpty():
             currentSetThk = self._firstDim[2]
             _, _, addedTomoThk = item.getDim()
@@ -1263,7 +1407,6 @@ class SetOfTomograms(data.SetOfVolumes):
         self.setDim(item.getDim())
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
-        super().update(item)
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
@@ -2868,7 +3011,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         """ Copy items (CTFTomoSeries and CTFTomo) from the other Set.
          Params:
             other:  SetOfCTFTomoSeries from where to copy elements.
-            
+
             itemSelectedCallback: Optional, callback receiving an item and
                 returning true if it has to be copied
         """

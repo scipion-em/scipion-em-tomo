@@ -48,6 +48,7 @@ from pyworkflow.plugin import Domain
 import tomo.objects
 from . import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
+from ..objects import CTFTomo
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
 CONTRAST_STD = 2.0
@@ -107,9 +108,7 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ROT_ANGLE = "Rot"
     COL_TI_SHIFTX = 'ShiftX'
     COL_TI_SHIFTY = 'ShiftY'
-    ORDER_DICT = {COL_TI_ANGLE: '_tiltAngle',
-                  COL_TI_ACQ_ORDER: '_acqOrder',
-                  COL_TI_DOSE: '_acquisition._accumDose'}
+    ORDER_DICT = {COL_TS: '_tsId'}
 
     def __init__(self, protocol, tiltSeries):
         self.protocol = protocol
@@ -137,6 +136,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.tree.bind('<space>', self.onSpace)
         tsTooltip = TSTreeToolTip(self.tree)
         self.tree.bind("<Motion>", lambda event: self.onMouseMotion(event, self.tree, tsTooltip))
+        self.tree.bind("<Leave>", lambda event: tsTooltip.hide(event))
 
     def onMouseMotion(self, event, tsTree, tsTooltip):
         region = tsTree.identify_region(event.x, event.y)
@@ -146,11 +146,14 @@ class TiltSeriesTreeProvider(TreeProvider):
                 tsTooltip.hide(event)
                 item_id = tsTree.identify_row(event.y)
                 if item_id and len(tsTree.item(item_id)['values']) > 5:
-                    mlist = ast.literal_eval(tsTree.item(item_id)['values'][8])
-                    matriz = [mlist[i:i+3] for i in range(0, len(mlist), 3)]
-                    formattedMatrix = "\nTransformation matrix:\n\n[ " + "\n".join(["  ".join(f"{num:.4f}" for num in fila) for fila in matriz]) + " ]\n"
-                    tsTooltip.text = f"{formattedMatrix}"
-                    tsTooltip.show(event)
+                    tMatrix = tsTree.item(item_id)['values'][8]
+                    if tMatrix:
+                        mlist = ast.literal_eval(tMatrix)
+                        matriz = [mlist[i:i + 3] for i in range(0, len(mlist), 3)]
+                        formattedMatrix = "\nTransformation matrix:\n\n[ " + "\n".join(
+                            ["  ".join(f"{num:.4f}" for num in fila) for fila in matriz]) + " ]\n"
+                        tsTooltip.text = f"{formattedMatrix}"
+                        tsTooltip.show(event)
             else:
                 tsTooltip.hide(event)
         else:
@@ -254,17 +257,16 @@ class TiltSeriesTreeProvider(TreeProvider):
         if self.objects:
             return self.objects
 
-        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
-        direction = 'ASC' if self.isSortingAscending() else 'DESC'
+        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), self.COL_TS)
 
-        for ts in self.tiltSeries:
+        for ts in self.tiltSeries.iterItems(orderBy=orderBy):
             self.excludedDict[ts.getTsId()] = {}
             tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             tsObj.setEnabled(ts.isEnabled())
             self.objects.append(tsObj)
-            for ti in ts.iterItems(orderBy=orderBy, direction=direction):
+            for ti in ts.iterItems(orderBy='id'):  # ti IDs are already sorted by tilt angle (TS) or acq. order (TSM)
                 tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
                 if not ti.isEnabled():
                     self.excludedDict[ts.getTsId()][ti.getObjId()] = True
@@ -473,8 +475,8 @@ class TiltSeriesDialog(ToolbarListDialog):
 
     def validateClose(self):
         if self._provider.getUpdatedCount() and self._provider.getchanges():
-            msg = "Do you want to exit and loose your changes ? "
-            result = messagebox.askquestion("Loosing changes", msg, icon='warning', **{'parent': self})
+            msg = "Do you want to exit and discard your changes ? "
+            result = messagebox.askquestion("Discard changes", msg, icon='warning', **{'parent': self})
             return result == messagebox.YES
         return True
 
@@ -544,7 +546,7 @@ class TiltSeriesDialog(ToolbarListDialog):
                         newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
 
                     index = 1
-                    newTs = ts.clone()
+                    newTs = tomo.objects.TiltSeries()
                     newTs.copyInfo(ts)
                     outputSetOfTiltSeries.append(newTs)
 
@@ -1238,6 +1240,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     prepare the columns/rows models required by the TreeDialog GUI.
     """
     COL_CTF_SERIE = 'Tilt Series'
+    COL_ACQ_ORDER = 'Acq. Order'
     COL_TILT_ANG = 'Tilt Angle'
     COL_CTF_EXCLUDED = 'Excluded'
     COL_CTF_EST_DEFOCUS_U = 'DefocusU (Å)'
@@ -1247,12 +1250,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     COL_CTF_EST_FIT = 'CC value'
     COL_CTF_EST_PHASE = 'Phase shift (deg)'
 
-    ORDER_DICT = {COL_CTF_EST_DEFOCUS_U: '_defocusU',
-                  COL_CTF_EST_DEFOCUS_V: '_defocusV',
-                  COL_CTF_EST_AST: '_defocusRatio',
-                  COL_CTF_EST_RES: '_resolution',
-                  COL_CTF_EST_PHASE: '_phaseShift',
-                  COL_CTF_EST_FIT: '_fitQuality'}
+    ORDER_DICT = {COL_CTF_SERIE: '_tsId'}
 
     def __init__(self, master, protocol, outputSetOfCTFTomoSeries, **kw):
         ttk.Treeview.__init__(self, master, **kw)
@@ -1268,15 +1266,14 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     def getObjects(self):
         objects = []
 
-        orderBy = self.ORDER_DICT.get(self.getSortingColumnName(), 'id')
-        direction = 'ASC' if self.isSortingAscending() else 'DESC'
+        orderBy = self.ORDER_DICT.get(self.getSortingColumnName())
 
-        for ctfSerie in self.ctfSeries:
+        for ctfSerie in self.ctfSeries.iterItems(orderBy=orderBy):
             ctfEstObj = ctfSerie.clone()
             ctfEstObj._allowsSelection = True
             ctfEstObj._parentObject = None
             objects.append(ctfEstObj)
-            for item in ctfSerie.iterItems(orderBy=orderBy, direction=direction):
+            for item in ctfSerie.iterItems(orderBy='id'):
                 ctfEstItem = item.clone()
                 ctfEstItem._allowsSelection = False
                 ctfEstItem._parentObject = ctfEstObj
@@ -1297,6 +1294,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     def getColumns(self):
         cols = [
             (self.COL_CTF_SERIE, 100),
+            (self.COL_ACQ_ORDER, 100),
             (self.COL_TILT_ANG, 100),
             (self.COL_CTF_EXCLUDED, 100),
             (self.COL_CTF_EST_DEFOCUS_U, 100),
@@ -1330,13 +1328,15 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
             selected = obj.isEnabled()
         else:  # CTFTomo
             key = "%s.%s" % (obj._parentObject.getTsId(), str(obj.getObjId()))
-            text = obj.getIndex()
+            text = obj.getObjId()
+            acqOrder = obj.getAcquisitionOrder()
             ts = obj._parentObject.getTiltSeries()
-            tiltAngle = ts[int(text)].getTiltAngle()
+            tiltAngle = ts.getItem(CTFTomo.ACQ_ORDER_FIELD, acqOrder).getTiltAngle()
             ast = obj.getDefocusU() - obj.getDefocusV()
             phSh = obj.getPhaseShift() if obj.hasPhaseShift() else 0
 
-            values = [str("%0.2f" % tiltAngle),
+            values = [str(acqOrder),
+                      str("%0.2f" % tiltAngle),
                       CTFSerieStates.INCLUDED if obj.isEnabled() else CTFSerieStates.EXCLUDED,
                       str("%d" % obj.getDefocusU()),
                       str("%d" % obj.getDefocusV()),
@@ -1411,13 +1411,13 @@ class CTFEstimationTree(BoundTree):
         itemValues = self.item(item)
         values = itemValues['values']
         if excluded:
-            values[1] = CTFSerieStates.EXCLUDED
+            values[2] = CTFSerieStates.EXCLUDED
             self.item(item, tags=(CTFSerieStates.EXCLUDED, tags,))
             self.item(item, values=values)
             self._objDict[item].setEnabled(False)
             self.item(item)['selected'] = True
         else:
-            values[1] = CTFSerieStates.INCLUDED
+            values[2] = CTFSerieStates.INCLUDED
             self.item(item, tags=(CTFSerieStates.INCLUDED, tags,))
             self.item(item, values=values)
             self._objDict[item].setEnabled(True)
@@ -1429,7 +1429,7 @@ class CTFEstimationTree(BoundTree):
         self.selectedItem = self.identify_row(y)
         if "image" in elem:  # click on the CTFTomoSerie checkbox
             self.toogleExclusion(self.selectedItem, True)
-        elif x > 210 and x < 217:  # Position of exclude/include checkbox(CTFTomo)
+        elif x > 308 and x < 317:  # Position of exclude/include checkbox(CTFTomo)
             self.toogleExclusion(self.selectedItem, False)
 
     def getSelectedItem(self):

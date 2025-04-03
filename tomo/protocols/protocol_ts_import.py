@@ -376,7 +376,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
                              0)
 
             if self.MDOC_DATA_SOURCE:
-                tsAcq.setAccumDose(accumDoseList[-1])
+                tsAcq.setAccumDose(max(accumDoseList))
                 # Tilt series object dose per frame has been updated each
                 # time the tilt image dose per frame has
                 # been updated before, so the mean value is used to be the
@@ -748,7 +748,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
 
             for i, a in enumerate(angles):
                 order = i + 1 if not tiltorders else tiltorders[i]
-                dose = doses[i] if doses else int(self.dosePerFrame.get()) * order
+                dose = doses[i] if doses else float(self.dosePerFrame.get()) * order
                 fileList.append(((i + 1, file), order, a, dose))
 
         addFunc = _addOne if self._anglesInPattern() else _addMany
