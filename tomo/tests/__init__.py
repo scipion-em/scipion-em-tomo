@@ -71,7 +71,6 @@ DataSet(name='tomoMask', folder='tomoMask',
 
 ########################################################################################################################
 EMD_10439 = 'emd_10439'
-EMPIAR_10491 = 'empiar_10491'
 
 
 class DataSetEmd10439(Enum):
@@ -84,7 +83,8 @@ class DataSetEmd10439(Enum):
     scipionSqlite3dCoordsSomeBad = 'importFromScipionSqlite/coordinates_3badCoords.sqlite'
     tomomasksAnnotatedDir = 'tomomasksAnnotated'
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
-    coords39Sqlite = 'coordinates/coordinates39.sqlite'
+    coords39Sqlite = 'coordinates/coordinates39_bin8.sqlite'
+    coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
@@ -239,6 +239,9 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For gapStopTM testing
+    tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
+
     @classmethod
     def genTestTsDicts(cls,
                        tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
@@ -349,5 +352,42 @@ class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
 
 DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
 
-
+########################################################################################################################
+EMPIAR_10491 = 'empiar_10491'
 DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
+
+
+########################################################################################################################
+RE_STA_TUTO_MOVIES = 'relion_sta_tutorial_movies'
+
+DosePerFrame = 3.05
+testAcq03 = testAcq03.clone()
+testAcq54 = testAcq54.clone()
+
+testAcq03.setAngleMin(-6)
+testAcq03.setAngleMax(6)
+testAcq54.setAngleMin(-6)
+testAcq54.setAngleMax(9)
+testAcq03.setAccumDose(61.0)
+testAcq54.setAccumDose(91.5)
+testAcq03.setDosePerFrame(DosePerFrame)
+testAcq54.setDosePerFrame(DosePerFrame)
+testAcq54_reject = testAcq54.clone()
+testAcq54_reject.setDoseInitial(3.05)
+
+class DataSet_RE_STA_TUTO_MOVIES(Enum):
+    unbinnedPixSize = 1.35
+    framesDir = 'frames'
+    DosePerFrame = DosePerFrame
+    tsAcqDict = {TS_03: testAcq03,
+                 TS_54: testAcq54}
+    tsAcq03Dict = {TS_03: testAcq03}
+    tsAcq54Dict = {TS_54: testAcq54}
+    testAcq54_rejectDict = {TS_54: testAcq54_reject}
+
+    dimsTsBin1Dict = {TS_03: [7420, 7676, 5], TS_54: [7420, 7676, 6]}
+    dimsTs03Bin1Dict = {TS_03: [7420, 7676, 5]}
+    dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
+
+
+DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
