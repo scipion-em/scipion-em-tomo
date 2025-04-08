@@ -29,6 +29,7 @@ from typing import Tuple
 
 from pyworkflow.tests import DataSet
 from tomo.objects import TomoAcquisition
+from tomosegmemtv import TOMOSEGMEMTV
 
 DataSet(name='tomo-em', folder='tomo-em',
         files={
@@ -391,3 +392,15 @@ class DataSet_RE_STA_TUTO_MOVIES(Enum):
 
 
 DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
+
+########################################################################################################################
+TOMOSEGMEMTV_TEST_DATASET = 'tomosegmemtv'
+
+class DataSet_Tomosegmemtv(Enum):
+    tomogram = 'emd_1155i.mrc'
+    sRate = 1
+    tomoDims = [141, 281, 91]
+
+DataSet(name=TOMOSEGMEMTV_TEST_DATASET, folder=TOMOSEGMEMTV_TEST_DATASET, files={el.name: el.value for el in DataSet_Tomosegmemtv})
+
+
