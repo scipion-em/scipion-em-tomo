@@ -80,7 +80,14 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
         line.addParam('lowLimit', FloatParam, default=0.1, label='Lowest')
         line.addParam('highLimit', FloatParam, default=1, label='Highest')
 
-        form.addParam('applySkeletonization', BooleanParam, label='Apply skeletonization',
+        group = form.addGroup('Morphological operations', 
+                              help='Operations are performed in the same order '
+                              'as in the form')
+        group.addParam('applyDilation', IntParam, label='Dilation',
+                      default=0,
+                      help='When set to a positive number, a dilation '
+                      'operation is applied with the provided pixel count.')
+        group.addParam('applySkeletonization', BooleanParam, label='Skeletonization',
                       default=True,
                       help='When set to yes, a skeletonization operation is applied.')
         
@@ -198,8 +205,13 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
                            mesh: SetOfMeshes,
                            tomogram: Tomogram,
                            mask: np.ndarray ):
+        if self.applyDilation.get() > 0:
+            footprint =skimage.morphology.ball(self.applyDilation.get()) 
+            mask = skimage.morphology.binary_dilation(mask, footprint)
+            
         if self.applySkeletonization.get():
             mask = skimage.morphology.skeletonize_3d(mask)
+        
         
         probability = self.density.get() / 100.0
         coordinates = np.argwhere(mask)
