@@ -1257,7 +1257,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
         self.protocol = protocol
         self.ctfSeries = outputSetOfCTFTomoSeries
         self._hasPhaseShift = outputSetOfCTFTomoSeries.getFirstItem().getFirstItem().hasPhaseShift()
-        TreeProvider.__init__(self, sortingColumnName=self.COL_CTF_SERIE)
+        TreeProvider.__init__(self)
         self.selectedDict = {}
         self.mapper = protocol.mapper
         self.maxNum = 200
@@ -1266,7 +1266,7 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
     def getObjects(self):
         objects = []
 
-        orderBy = self.ORDER_DICT.get(self.getSortingColumnName())
+        orderBy = self.ORDER_DICT.get(self.COL_CTF_SERIE)
 
         for ctfSerie in self.ctfSeries.iterItems(orderBy=orderBy):
             ctfEstObj = ctfSerie.clone()
