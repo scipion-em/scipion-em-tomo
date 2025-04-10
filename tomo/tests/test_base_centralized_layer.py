@@ -32,7 +32,7 @@ from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
-    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -407,7 +407,7 @@ class TestBaseCentralizedLayer(BaseTest):
                        testSetAcqObj: TomoAcquisition = None,
                        testAcqObj: Union[dict, TomoAcquisition] = None) -> None:
         """
-        :param inTomoSet: SetOfSubTomograms.
+        :param inTomoSet: SetOfTomograms.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check. A dict of
@@ -478,6 +478,50 @@ class TestBaseCentralizedLayer(BaseTest):
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+
+    # TOMOMASKS ########################################################################################################
+    def checkTomoMasks(self,
+                       inTomoMasks: SetOfTomoMasks, expectedSetSize: int, expectedSRate: float,
+                       expectedDimensions: Union[List[int], dict] = None,
+                       isHeterogeneousSet: Union[bool, None] = None) -> None:
+        """
+        :param inTomoMasks: SetOfTomoMasks.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        """
+        checkMsgPattern = 'Expected and resulting %s are different.'
+        checkSizeMsg = checkMsgPattern % 'dimensions'
+        checkSRateMsg = checkMsgPattern % 'sampling rate'
+        checkOriginMsg = checkMsgPattern % 'origin shifts'
+
+        # Check the set
+        self.checkSetGeneralProps(inTomoMasks,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet)
+        # Check the set elements main attributes
+        for tomoMask in inTomoMasks:
+            tsId = tomoMask.getTsId()
+            # Check if the filename exists
+            self.assertTrue(exists(tomoMask.getFileName()))
+            # Check the sampling rate
+            self.assertAlmostEqual(tomoMask.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # At least, check that the TsId was not lost in metadata generation or copying methods
+            self.assertIsNotNone(getattr(tomoMask, Tomogram.TS_ID_FIELD, None),
+                                 msg=f'Tomogram {tomoMask.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
+                                     f'or it is empty.')
+            # Check the dimensions
+            if expectedDimensions:
+                x, y, z = tomoMask.getDimensions()
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
 
     # COORDINATES ######################################################################################################
     def checkCoordinates(self, outCoords, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
