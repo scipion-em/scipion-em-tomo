@@ -1,3 +1,7 @@
+v3.10.1:
+ Users:
+    - Fixing an error sorting in the CTF viewer
+
 v3.10.0:
  Users:
   - Removing unused and old templates
