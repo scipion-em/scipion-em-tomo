@@ -29,7 +29,6 @@ from typing import Tuple
 
 from pyworkflow.tests import DataSet
 from tomo.objects import TomoAcquisition
-from tomosegmemtv import TOMOSEGMEMTV
 
 DataSet(name='tomo-em', folder='tomo-em',
         files={
