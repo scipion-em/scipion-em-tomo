@@ -46,7 +46,7 @@ from pyworkflow.object import String
 from pyworkflow import Config
 
 import tomo.objects
-from . import TomoDataViewer
+from .viewers_data import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
 from ..objects import CTFTomo
 
