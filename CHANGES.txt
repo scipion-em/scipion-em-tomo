@@ -1,6 +1,7 @@
 v3.10.1:
  Users:
     - Fixing an error sorting in the CTF viewer
+    - Tomo Viewer applies orientation to the images
 
 v3.10.0:
  Users:

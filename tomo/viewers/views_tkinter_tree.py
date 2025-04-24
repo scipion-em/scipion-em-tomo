@@ -27,13 +27,13 @@ import ast
 import glob
 import os.path
 import threading
+from functools import lru_cache
 from tkinter import messagebox, BOTH, RAISED
 
 import numpy
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from pwem.convert.transformations import euler_from_matrix
 from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
 from pwem.viewers.showj import runJavaIJapp
@@ -43,12 +43,14 @@ from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
 from pyworkflow.object import String
-from pyworkflow.plugin import Domain
+from pyworkflow import Config
 
 import tomo.objects
 from . import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
 from ..objects import CTFTomo
+
+from PIL.ImageStat import Stat
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
 CONTRAST_STD = 2.0
@@ -283,7 +285,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         objects = self.getObjects()
         for index, obj in enumerate(objects):
             if obj == tiltSerie:
-                return self.objects[index + int(size/2)]
+                return self.objects[index + int(size/2)+1]
 
     def getTiltSerie(self, tiltSerie):
         objects = self.getObjects()
@@ -384,9 +386,7 @@ class TiltSeriesTreeProvider(TreeProvider):
                 shiftY = ''
                 if obj.hasTransform():
                     transform = obj.getTransform()
-                    # TODO These lines will be removed when transform.getEulerAngles is released
-                    rotation = transform.getRotationMatrix()
-                    _, _, rot = euler_from_matrix(rotation)
+                    _, _, rot = transform.getEulerAngles()
                     angle = str("%0.2f" % numpy.rad2deg(rot))
                     matrixList = transform.getMatrixAsList()
                     shiftX = str("%0.2f" % matrixList[2])
@@ -423,7 +423,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         actions = []
 
         if isinstance(obj, tomo.objects.TiltSeriesBase):
-            viewers = Domain.findViewers(obj.getClassName(),
+            viewers = Config.getDomain().findViewers(obj,
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 def createViewer(viewerClass, obj):
@@ -450,7 +450,7 @@ class TiltSeriesDialog(ToolbarListDialog):
         toolbarButtons = []
 
         if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
-            viewers = Domain.findViewers(tomo.objects.SetOfTiltSeries.getClassName(),
+            viewers = Config.getDomain().findViewers(self._tiltSeries,
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 if viewerClass is not TomoDataViewer:
@@ -789,28 +789,47 @@ class TiltSeriesDialogView(pwviewer.View):
         elif isinstance(obj, tomo.objects.TiltImageBase):
             text = "Tilt image at %sº" % obj.getTiltAngle()
 
-        imageStk = ImageReadersRegistry.open(str(obj.getIndex()) + '@' + obj.getFileName())
-        npImage = imageStk.getImage()  # Pass this when scipion-em is released with this functionality: pilImage=True)
-        image = self._normalize(npImage)  # Delete this once pilImage is used
-        # Get original size
-        width, height = image.size
+        rot = None
+        shifts = None
 
-        # Calculate the new dimension keeping the proportion
-        newWidth, newHeight = (THUMBNAIL_SIZE, int(THUMBNAIL_SIZE * height / width)) \
-            if width > height else (int(THUMBNAIL_SIZE * width / height), THUMBNAIL_SIZE)
+        if obj.hasTransform():
+            transf = obj.getTransform()
+            _, _, rot = transf.getEulerAngles()
+            rot = numpy.rad2deg(-rot)
+            list = transf.getMatrixAsList()
+            shifts = list[2], list[5]
 
-        # Resize the image creating a thumbnail
-        newImage = image.copy()
-        newImage.thumbnail((newWidth, newHeight))
+        newImage = self.getThumbnail(obj.getIndex(), obj.getFileName(), rot, shifts)
+
         data = np.array(newImage)
         preview._update(data)
         preview.setLabel(text)
-    
-    def _normalize(cls, npImage):
-        iMax = npImage.max()
-        iMin = npImage.min()
-        im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
-        return Image.fromarray(im255)
+
+    @classmethod
+    @lru_cache
+    def getThumbnail(cls, index, fileName, rot, shifts):
+        imageStk = ImageReadersRegistry.open(fileName)
+        image = imageStk.getImage(index=index-1, pilImage=True)
+
+        # Get original size
+        width, height = image.size
+        minDim = max(width, height)
+
+        ratio = minDim/THUMBNAIL_SIZE
+        newWidth = width/ratio
+        newHeight = height/ratio
+
+        # Resize the image creating a thumbnail
+        # image = image.copy()  # Is copy necessary? image.copy()
+        image.thumbnail((newWidth, newHeight))
+
+        if rot:
+            shifts = shifts[0]/ratio, shifts[1]/ratio
+            imgStats=Stat(image)
+            bg = int(imgStats.mean[0])
+            image = image.rotate(rot, translate=shifts, fillcolor=bg)
+
+        return image
 
 
 class TomogramsTreeProvider(TreeProvider):
