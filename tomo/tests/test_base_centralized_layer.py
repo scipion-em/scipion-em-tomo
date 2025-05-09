@@ -32,7 +32,7 @@ from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
-    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -252,7 +252,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
 
     def checkAnglesCount(self,
-                         inSet: Union[SetOfTiltSeries, TiltSeries],
+                         inSet: Union[SetOfTiltSeries, TiltSeries, SetOfTiltSeriesM, TiltSeriesM],
                          anglesCount: Union[int, dict],
                          tsId: str = None):
         """
@@ -524,30 +524,46 @@ class TestBaseCentralizedLayer(BaseTest):
                     self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
 
     # COORDINATES ######################################################################################################
-    def checkCoordinates(self, outCoords, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
-                         orientedParticles=False):
+    def checkCoordinates(self,
+                         outCoords: Union[SetOfCoordinates3D, SetOfMeshes],
+                         expectedSetSize: int = -1,
+                         expectedBoxSize: int =-1,
+                         expectedSRate: float = -1.0,
+                         orientedParticles: bool = False,
+                         setSizeTolPercent: float = 0.0) -> None:
         """Checks the general properties of a SetOfCoordinates3D.
 
-        :param outCoords: SetOf3DCoordinates.
+        :param outCoords: SetOf3DCoordinates or SetOfMeshes.
         :param expectedSetSize: expected set site to check.
         :param expectedBoxSize: expected box size, in pixels, to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
         and eye matrix (False) or not (True).
+        :param setSizeTolPercent: for non-deterministic protocols, it is a percentage value (from 0.0 to 1.0) used to
+        indicate the variability allowed on the given expectedSetSize. For example, if expectedSetSize = 100 and
+        setSizeTolPercent = 0.2 (20%), set sizes from in range [100 - 0.2 * 100, 100 + 0.2 * 100] = [80, 120]
+        will be considered as correct when checking the set size.
         """
 
         # First, check the set size, sampling rate, and box size
         self.checkCoordsOrPartsSetGeneralProps(outCoords,
                                                expectedSetSize=expectedSetSize,
                                                expectedSRate=expectedSRate,
-                                               expectedBoxSize=expectedBoxSize)
+                                               expectedBoxSize=expectedBoxSize,
+                                               setSizeTolPercent=setSizeTolPercent)
         for tomo in outCoords.getPrecedents():
             for coord in outCoords.iterCoordinates(volume=tomo):
                 self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
                 self.assertEqual(coord.getTomoId(), tomo.getTsId())
 
-    def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
-                                    expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
+    def checkExtracted3dCoordinates(self,
+                                    inSet: SetOfCoordinates3D,
+                                    outCoords: SetOfCoordinates3D,
+                                    expectedSetSize: int = -1,
+                                    expectedBoxSize: int = -1,
+                                    expectedSRate: float = -1.0,
+                                    convention: Union[str, None] = TR_SCIPION,
+                                    orientedParticles: bool = False) -> None:
         """Checks the results of a coordinate extraction protocol.
 
         :param inSet: input set from which the coordinates were extracted. It can be a SetOf3DCoordinates or a
@@ -819,9 +835,31 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(len(set(representativeFileList)), expectedSetSize, msg=msg)
 
     # COORDINATES AND PARTICLES TEST UTILS #############################################################################
-    def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
+    def checkCoordsOrPartsSetGeneralProps(self,
+                                          inSet: Union[SetOfCoordinates3D, SetOfSubTomograms],
+                                          expectedSetSize: int = -1,
+                                          expectedSRate: float = -1.0,
+                                          expectedBoxSize: int = 0,
+                                          setSizeTolPercent: float = 0.0):
+        """
+        :param inSet: A set of Scipion Tomo objects.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedBoxSize: expected box size, in pixels.
+        :param setSizeTolPercent: for non-deterministic protocols, it is a percentage value (from 0.0 to 1.0) used to
+        indicate the variability allowed on the given expectedSetSize. For example, if expectedSetSize = 100 and
+        setSizeTolPercent = 0.2 (20%), set sizes from in range [100 - 0.2 * 100, 100 + 0.2 * 100] = [80, 120]
+        will be considered as correct when checking the set size.
+        """
         # Check the set
-        self.checkSetGeneralProps(inSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
+        if expectedSetSize > 0:
+            if setSizeTolPercent > 0:
+                minSetSize = int(expectedSetSize * (1 - setSizeTolPercent))
+                maxSetSize = int(expectedSetSize * (1 + setSizeTolPercent))
+                self.assertTrue(expectedSetSize >= minSetSize & expectedSetSize <= maxSetSize)
+            else:
+                self.assertSetSize(inSet, expectedSetSize)
         if expectedBoxSize:
             self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
 
