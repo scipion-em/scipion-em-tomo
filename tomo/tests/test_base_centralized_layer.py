@@ -30,6 +30,7 @@ from pwem import ALIGN_NONE
 from pwem.emlib.image.image_readers import MRCImageReader
 from pwem.objects import Transform
 from pyworkflow.tests import BaseTest
+from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
     TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes
@@ -191,7 +192,7 @@ class TestBaseCentralizedLayer(BaseTest):
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
             tsId = ts.getTsId()
-            print(f'---> checking the TS tsId = {tsId}')
+            print(cyanStr(f'---> checking the TS tsId = {tsId}'))
             # Check the dimensions
             if expectedDimensions:
                 x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
@@ -224,7 +225,7 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(ts.getAlignment(), alignment)
             # Interpolated
             self.assertEqual(ts.interpolated(), isInterpolated)
-            print('---> Done!')
+            print(cyanStr('---> Done!'))
 
             # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
             for ind, ti in enumerate(ts):
@@ -530,7 +531,8 @@ class TestBaseCentralizedLayer(BaseTest):
                          expectedBoxSize: int =-1,
                          expectedSRate: float = -1.0,
                          orientedParticles: bool = False,
-                         setSizeTolPercent: float = 0.0) -> None:
+                         setSizeTolPercent: float = 0.0,
+                         orientedTolPercent: float = 0.0) -> None:
         """Checks the general properties of a SetOfCoordinates3D.
 
         :param outCoords: SetOf3DCoordinates or SetOfMeshes.
@@ -543,18 +545,37 @@ class TestBaseCentralizedLayer(BaseTest):
         indicate the variability allowed on the given expectedSetSize. For example, if expectedSetSize = 100 and
         setSizeTolPercent = 0.2 (20%), set sizes from in range [100 - 0.2 * 100, 100 + 0.2 * 100] = [80, 120]
         will be considered as correct when checking the set size.
+        :param orientedTolPercent: for oriented coordinates, there may be statistically a percentage of the oriented
+        coordinates whose orientation is the identity matrix, that may be interpreted as non-oriented by the test.
+        These parameter is used to indicate a percentage value (from 0.0 to 1.0) of variability in the number of those
+        "non-oriented"-like particles. For example, if expectedSetSize = 100 in an oriented picking and
+        orientedTolPercent = 0.2 (20%), the number of particles in which the transformation matrix is expected to be
+        different from the identity would be in greater or equal than than 100 - 0.2 * 100 = 80.
         """
-
         # First, check the set size, sampling rate, and box size
         self.checkCoordsOrPartsSetGeneralProps(outCoords,
                                                expectedSetSize=expectedSetSize,
                                                expectedSRate=expectedSRate,
                                                expectedBoxSize=expectedBoxSize,
                                                setSizeTolPercent=setSizeTolPercent)
-        for tomo in outCoords.getPrecedents():
-            for coord in outCoords.iterCoordinates(volume=tomo):
-                self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
-                self.assertEqual(coord.getTomoId(), tomo.getTsId())
+        if orientedTolPercent > 0:
+            print(cyanStr(f'OrientedTolPercent provided - value is {orientedTolPercent:.2f}'))
+            for tomo in outCoords.getPrecedents():
+                nOrientedCoords = 0
+                for coord in outCoords.iterCoordinates(volume=tomo):
+                    try:
+                        self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
+                        nOrientedCoords += 1
+                    except Exception as e:
+                        continue
+                    self.assertGreaterEqual(nOrientedCoords, expectedSetSize * (1 - orientedTolPercent))
+                    self.assertEqual(coord.getTomoId(), tomo.getTsId())
+        else:
+            print(cyanStr(f'No orientedTolPercent provided'))
+            for tomo in outCoords.getPrecedents():
+                for coord in outCoords.iterCoordinates(volume=tomo):
+                    self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
+                    self.assertEqual(coord.getTomoId(), tomo.getTsId())
 
     def checkExtracted3dCoordinates(self,
                                     inSet: SetOfCoordinates3D,
@@ -863,7 +884,12 @@ class TestBaseCentralizedLayer(BaseTest):
         if expectedBoxSize:
             self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
 
-    def checkTransformMatrix(self, outMatrix, alignment=False, is2d=False, isInterpolated=False, isExcludedView=False):
+    def checkTransformMatrix(self,
+                             outMatrix: np.ndarray,
+                             alignment: bool = False,
+                             is2d: bool = False,
+                             isInterpolated: bool = False,
+                             isExcludedView: bool = False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
 
         :param outMatrix: transformation matrix of a subtomogram or coordinate.
