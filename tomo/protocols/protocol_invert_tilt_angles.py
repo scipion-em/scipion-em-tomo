@@ -32,7 +32,7 @@ from pyworkflow import BETA
 from pyworkflow.object import Pointer
 from pyworkflow.protocol import PointerParam
 from pyworkflow.utils import Message
-from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
+from tomo.objects import SetOfTiltSeries, TiltSeries
 
 IN_TS_SET = 'inTsSet'
 
@@ -42,6 +42,8 @@ class InvertTiltsOutputs(Enum):
 
 
 class ProtInverTiltAngles(EMProtocol):
+    """This protocol inverts the physical handedness of the introduced tilt-series by inverting the tilt angles
+    in the metadata associated to each tilt.-series."""
     _label = 'invert tilt angles'
     _devStatus = BETA
     _possibleOutputs = InvertTiltsOutputs
