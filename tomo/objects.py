@@ -817,7 +817,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             for ti in self:
                 f.write('0.00\n')
 
-    def writeXfFile(self, transformFilePath):
+    def writeXfFile(self, transformFilePath, delimiter='\t'):
         """ This method takes a tilt series and the output transformation file
         path and creates an IMOD-based transform
         file in the location indicated. """
@@ -849,7 +849,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             tsMatrixTransformList.append(transformIMOD)
 
         with open(transformFilePath, 'w') as f:
-            csvW = csv.writer(f, delimiter='\t')
+            csvW = csv.writer(f, delimiter=delimiter)
             csvW.writerows(tsMatrixTransformList)
 
     def writeImodFiles(self, folderName, **kwargs):
@@ -873,7 +873,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         self.writeXtiltFile(folderName)
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
-        self.writeXfFile(transformFilePath)
+        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'))
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
