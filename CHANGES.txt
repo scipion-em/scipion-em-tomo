@@ -1,6 +1,7 @@
 v3.10.1:
  Users:
     - Fixing an error sorting in the CTF viewer
+    - Adding delimiter parameter to generate xf files
  Developers:
     - Expand the TCL:
         * For non-deterministic protocols that generates coordinates.
