@@ -2,6 +2,10 @@
 Tomo plugin
 ===========
 
+.. image:: https://img.shields.io/pypi/v/scipion-em-tomo.svg
+        :target: https://pypi.python.org/pypi/scipion-em-tomo
+        :alt: PyPI release
+
 Base Scipion plugin for electron cryo-tomography and subtomogram averaging.
 
 Protocols

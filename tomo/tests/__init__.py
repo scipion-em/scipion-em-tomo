@@ -27,9 +27,10 @@ import math
 from enum import Enum
 from typing import Tuple
 
+import numpy as np
+
 from pyworkflow.tests import DataSet
 from tomo.objects import TomoAcquisition
-from tomosegmemtv import TOMOSEGMEMTV
 
 DataSet(name='tomo-em', folder='tomo-em',
         files={
@@ -92,7 +93,11 @@ class DataSetEmd10439(Enum):
     unbinnedBoxSize = 88
     unbinnedSRate = 13.68
     bin2SRate = 27.36
+    unbinnedDims = [928, 928, 500]
 
+    @classmethod
+    def getBinnedDims(cls, binFactor: int) -> list:
+        return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
 
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
 
@@ -391,7 +396,8 @@ class DataSet_RE_STA_TUTO_MOVIES(Enum):
     dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
 
 
-DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
+DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES,
+        files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
 
 ########################################################################################################################
 TOMOSEGMEMTV_TEST_DATASET = 'tomosegmemtv'
@@ -401,6 +407,40 @@ class DataSet_Tomosegmemtv(Enum):
     sRate = 1
     tomoDims = [141, 281, 91]
 
-DataSet(name=TOMOSEGMEMTV_TEST_DATASET, folder=TOMOSEGMEMTV_TEST_DATASET, files={el.name: el.value for el in DataSet_Tomosegmemtv})
+DataSet(name=TOMOSEGMEMTV_TEST_DATASET, folder=TOMOSEGMEMTV_TEST_DATASET,
+        files={el.name: el.value for el in DataSet_Tomosegmemtv})
 
+########################################################################################################################
+MICROTUBULES_TOMOS_DATASET = 'microtubulesTomograms'
+
+class DataSet_MicrotubulesTomos(Enum):
+    fPath = ''
+    fPattern = '*.mrc'
+    nTomos = 2
+    unbinnedSRate = 15.8
+    unbinnedDims = [1024, 1024, 200]
+
+    @classmethod
+    def getBinnedDims(cls, binFactor: int) -> list:
+        return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
+
+DataSet(name=MICROTUBULES_TOMOS_DATASET, folder=MICROTUBULES_TOMOS_DATASET,
+        files={el.name: el.value for el in DataSet_MicrotubulesTomos})
+
+########################################################################################################################
+ACTIN_TOMOS_DATASET = 'actinTomograms'
+
+class DataSet_ActinTomos(Enum):
+    fPath = 'EMPIAR-10989_subset'
+    fPattern = '*.rec'
+    nTomos = 2
+    unbinnedSRate = 13.48
+    unbinnedDims = [928, 928, 500]
+
+    @classmethod
+    def getBinnedDims(cls, binFactor: int) -> list:
+        return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
+
+DataSet(name=ACTIN_TOMOS_DATASET, folder=ACTIN_TOMOS_DATASET,
+        files={el.name: el.value for el in DataSet_ActinTomos})
 

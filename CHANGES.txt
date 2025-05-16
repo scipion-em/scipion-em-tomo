@@ -1,7 +1,11 @@
 v3.10.1:
  Users:
     - Fixing an error sorting in the CTF viewer
-
+ Developers:
+    - Expand the TCL:
+        * For non-deterministic protocols that generates coordinates.
+        * To add a tolerance to the checking of oriented coordinates of particles allowing some percentage with
+          the identity matrix.
 v3.10.0:
  Users:
   - Removing unused and old templates
