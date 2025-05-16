@@ -250,7 +250,7 @@ class DataSetRe4STATuto(Enum):
 
     @classmethod
     def genTestTsDicts(cls,
-                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
+                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
                        unbinnedXYDims: Tuple = (3710, 3838),
                        binFactor: int = 1,
                        swapXY: bool = False,
