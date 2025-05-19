@@ -26,15 +26,16 @@
 # **************************************************************************
 import glob
 from os.path import join
-from typing import Union
+from typing import Union, Tuple
 
 import numpy as np
 
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr, cyanStr
-from tomo.objects import SetOfTiltSeries
-from tomo.protocols import ProtImportTs, ProtInverTiltAngles
-from tomo.protocols.protocol_invert_tilt_angles import IN_TS_SET
+from tomo.objects import SetOfTiltSeries, SetOfCTFTomoSeries
+from tomo.protocols import ProtImportTs, ProtInverTiltAngles, ProtImportTsCTF
+from tomo.protocols.protocol_import_ctf import ImportChoice
+from tomo.protocols.protocol_invert_tilt_angles import IN_TS_SET, IN_CTF_SET
 from tomo.tests import DataSetRe4STATuto, RE4_STA_TUTO, TS_03, TS_54
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
@@ -42,6 +43,7 @@ from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 class TestTsInvertTiltAngles(TestBaseCentralizedLayer):
     ds = None
     importedTs = None
+    importedCtf = None
     expectedSRate = None
     expectedSetSize = None
     expectedAcqDict = None
@@ -63,6 +65,7 @@ class TestTsInvertTiltAngles(TestBaseCentralizedLayer):
     def runPrevProtocols(cls):
         print(cyanStr('--------------------------------- RUNNING PREVIOUS PROTOCOLS ---------------------------------'))
         cls._runImportTs()
+        cls._runImportCtf()
         print(
             cyanStr('\n-------------------------------- PREVIOUS PROTOCOLS FINISHED ---------------------------------'))
 
@@ -87,12 +90,27 @@ class TestTsInvertTiltAngles(TestBaseCentralizedLayer):
         cls.importedTs = getattr(protTsImport, protTsImport.OUTPUT_NAME, None)
 
     @classmethod
-    def _runInvertTiltAngles(cls) -> Union[SetOfTiltSeries, None]:
-        print(magentaStr("\n==> Inverting the tilt-angles:"))
-        argsDict = {IN_TS_SET: cls.importedTs}
+    def _runImportCtf(cls):
+        print(magentaStr("\n==> Importing the CTFs:"))
+        protImportCtf = cls.newProtocol(ProtImportTsCTF,
+                                        filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                        filesPattern=DataSetRe4STATuto.ctfPattern.value,
+                                        importFrom=ImportChoice.CTFFIND.value,
+                                        inputSetOfTiltSeries=cls.importedTs)
+        cls.launchProtocol(protImportCtf)
+        cls.importedCtf = getattr(protImportCtf, protImportCtf._possibleOutputs.CTFs.name, None)
+
+    @classmethod
+    def _runInvertTiltAngles(cls, withCtf: bool = False) -> Tuple[Union[SetOfTiltSeries, None], Union[SetOfCTFTomoSeries, None]]:
+        argsDict = {
+            IN_TS_SET: cls.importedTs,
+        }
+        if withCtf:
+            argsDict[IN_CTF_SET] = cls.importedCtf
         protInvertTa = cls.newProtocol(ProtInverTiltAngles, **argsDict)
         cls.launchProtocol(protInvertTa)
-        return getattr(protInvertTa, protInvertTa._possibleOutputs.tiltSeries.name, None)
+        return (getattr(protInvertTa, protInvertTa._possibleOutputs.tiltSeries.name, None),
+                getattr(protInvertTa, protInvertTa._possibleOutputs.ctfs.name, None))
 
     @classmethod
     def _readAnglesFromTlt(cls, tltFile: str) -> np.array:
@@ -104,10 +122,21 @@ class TestTsInvertTiltAngles(TestBaseCentralizedLayer):
 
         return np.array(tiltAngles)
 
-    def testInvertTiltAngles(self) -> None:
-        invTsSet = self._runInvertTiltAngles()
+    def testInvertTiltAngles_01(self) -> None:
+        print(magentaStr("\n==> Inverting the tilt-angles, no CTF provided:"))
+        invTsSet, ctfTomoSet = self._runInvertTiltAngles()
+        self._checkTs(invTsSet)
+        self.assertIsNone(ctfTomoSet)
+
+    def testInvertTiltAngles_02(self) -> None:
+        print(magentaStr("\n==> Inverting the tilt-angles, CTF provided:"))
+        invTsSet, ctfTomoSet = self._runInvertTiltAngles(withCtf=True)
+        self._checkTs(invTsSet)
+        self.checkCTFs(ctfTomoSet, expectedSetSize=self.expectedSetSize)
+
+    def _checkTs(self, tsSet: SetOfTiltSeries,) -> None:
         # Check the tilt-series
-        self.checkTiltSeries(invTsSet,
+        self.checkTiltSeries(tsSet,
                              expectedSetSize=self.expectedSetSize,
                              expectedSRate=self.expectedSRate,
                              imported=True,
@@ -124,13 +153,12 @@ class TestTsInvertTiltAngles(TestBaseCentralizedLayer):
             TS_54: -1 * self._readAnglesFromTlt(ts54TltFile)
         }
         resultingTiltsDict = {}
-        for ts in invTsSet:
+        for ts in tsSet:
             resultingTiltsDict[ts.getTsId()] = np.array([ti.getTiltAngle() for ti in ts])
 
         self.assertEqual(expectedTiltsDict.keys(), resultingTiltsDict.keys())
         for tsId in expectedTiltsDict.keys():
             self.assertTrue(np.all(abs(expectedTiltsDict[tsId] - resultingTiltsDict[tsId]) <= 1e-4))
-
 
 
 

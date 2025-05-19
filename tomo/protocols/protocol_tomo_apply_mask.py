@@ -95,7 +95,7 @@ class ProtTomoApplyMask(EMProtocol):
             # Check the common elements
             matchingTsIds = tomosTsIds & tomoMaskTsIds
             nonMatchingTsIds = tomosTsIds ^ tomoMaskTsIds
-            if not nonMatchingTsIds:
+            if not matchingTsIds:
                 raise Exception('No matching tsIds were found among the given sets of tomogramas and tomo masks.')
             if nonMatchingTsIds:
                 msg = f'Some non-matching tsIds were found: {nonMatchingTsIds}'
