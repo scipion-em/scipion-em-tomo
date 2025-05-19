@@ -166,3 +166,11 @@ class ProtInverTiltAngles(EMProtocol):
             self._defineOutputs(**{outSetSetAttrib: outCtfSet})
             self._defineSourceRelation(self._getInCtfSet(returnPointer=True), outCtfSet)
         return outCtfSet
+
+    # --------------------------- INFO functions ------------------------------
+    def _summary(self) -> list:
+        msgList = []
+        nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
+        if nonMatchingTsIdsMsg:
+            msgList.append(f'*{nonMatchingTsIdsMsg}*')
+        return msgList
