@@ -58,3 +58,4 @@ from .protocol_fit_ellipsoid import TomoProtFitEllipsoid, XmippProtFitEllipsoid
 from .protocol_landmark_to_2d import ProtTomoLandmarksTo2D
 from .protocol_mask_coordinates import ProtMaskCoordinates
 from .protocol_export_coords import ProtExportCoordinates3D
+from .protocol_ts_to_mics import ProtTsToMics
