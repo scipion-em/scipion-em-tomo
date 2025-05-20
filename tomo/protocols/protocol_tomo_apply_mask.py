@@ -28,20 +28,16 @@ import logging
 from enum import Enum
 from os import remove
 from typing import Union
-
 import mrcfile
 import numpy as np
-from SCons.Subst import escape_list
-from scipy.ndimage import gaussian_filter, binary_dilation, distance_transform_edt
-
+from scipy.ndimage import gaussian_filter, binary_dilation
 from pwem.emlib.image.image_readers import MRCImageReader, ImageReadersRegistry, ImageStack
-from pwem.objects import VolumeMask
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
-from pyworkflow.object import Pointer, String
+from pyworkflow.object import Pointer, String, Set
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, STEPS_PARALLEL, GE
 from pyworkflow.utils import Message, cyanStr
-from tomo.objects import SetOfTomograms, SetOfTomoMasks, TomoMask
+from tomo.objects import SetOfTomograms, SetOfTomoMasks, Tomogram
 
 logger = logging.getLogger(__name__)
 IN_TOMO_SET = 'inTomoSet'
@@ -82,17 +78,27 @@ class ProtTomoApplyMask(EMProtocol):
                       important=True,
                       label='Masks',
                       help='The protocol will try to match the tomograms and the masks by tsId.')
-        form.addParam('sigmaGaussian', IntParam,
-                      default=3,
-                      label='Standard deviation for gaussian kernel (smoothing)',
-                      validators=[GE(0)],
-                      help='A gaussian filter can be applied by setting thi parameter with a value greater than 0. '
-                           'It can be used to smooth the borders, providing a more continuous transition between the '
-                           'mask and the background. It helps to avoid undesired mathematical artifacts when '
-                           'processing later the resulting masked tomograms.\n\nThis parameter (named sigma) '
-                           'determines how much neighboring pixels influence each other during smoothing. '
-                           'A small value of sigma means a sharper image, less smoothing, '
-                           'while a larger value of sigma means a blurrier image, more smoothing.')
+        group = form.addGroup('Mask operations')
+        group.addParam('invertMask', BooleanParam,
+                       default=False,
+                       label='Invert mask?')
+        group.addParam('dilationPixels', IntParam,
+                       default=0,
+                       label='Number of pixels for dilation',
+                       validators=[GE(0)],
+                       haelp='The dilation will expands the shape by the given number of pixels '
+                             'in all directions.')
+        group.addParam('sigmaGaussian', IntParam,
+                       default=3,
+                       label='Std for gaussian smoothing',
+                       validators=[GE(0)],
+                       help='A gaussian filter can be applied by setting this parameter with a value greater than 0. '
+                            'It can be used to smooth the borders, providing a more continuous transition between the '
+                            'mask and the background. It helps to avoid undesired mathematical artifacts when '
+                            'processing later the resulting masked tomograms.\n\nThis parameter (named sigma) '
+                            'determines how much neighboring pixels influence each other during smoothing. '
+                            'A small value of sigma means a sharper image, less smoothing, '
+                            'while a larger value of sigma means a blurrier image, more smoothing.')
         form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -100,7 +106,7 @@ class ProtTomoApplyMask(EMProtocol):
         self._initialize()
         closeStepDeps = []
         for tsId in self.tomosDict.keys():
-            smoothId = self._insertFunctionStep(self.smoothMaskStep, tsId,
+            smoothId = self._insertFunctionStep(self.processMaskStep, tsId,
                                                 prerequisites=[],
                                                 needsGPU=False)
             aMId = self._insertFunctionStep(self.applyMaskStep, tsId,
@@ -110,7 +116,7 @@ class ProtTomoApplyMask(EMProtocol):
                                               prerequisites=aMId,
                                               needsGPU=False)
             closeStepDeps.append(cOutId)
-        self._insertFunctionStep(self._closeOutputSet,
+        self._insertFunctionStep(self.closeOutputSetStep,
                                  prerequisites=closeStepDeps,
                                  needsGPU=False)
 
@@ -137,17 +143,23 @@ class ProtTomoApplyMask(EMProtocol):
         self.tomoMaskDict = {tomoMask.getTsId(): tomoMask.clone() for tomoMask in inTomoMasks
                              if tomoMask.getTsId() in matchingTsIds}
 
-    def smoothMaskStep(self, tsId: str):
+    def processMaskStep(self, tsId: str):
         if self.doSmooth:
-            logger.info(cyanStr(f'tsId = {tsId}: smoothing the mask...'))
-            mask = self._getCurrentMask(tsId)
+            logger.info(cyanStr(f'tsId = {tsId}: processing the mask...'))
+            mask = self.tomoMaskDict[tsId]
             maskFileName = mask.getFileName()
-            # Read and smooth
+            # Read the mask
             with mrcfile.mmap(maskFileName, mode='r', permissive=True) as mrc:
-                doInvert = True
-                data = 1 - mrc.data if doInvert else mrc.data
-                data = np.array(data, dtype=float)
-                smoothData = gaussian_filter(data, sigma=3)  # TODO: CHANGE THIS
+                # Invert if required
+                data = 1 - mrc.data if self.invertMask.get() else mrc.data
+            # Dilate the mask
+            dilationPixels = self.dilationPixels.get()
+            if dilationPixels > 0:
+                data = np.array(data, dtype=bool)  # Required for the binary dilation
+                data = binary_dilation(data, iterations=dilationPixels)
+            # Smooth the mask
+            data = np.array(data, dtype=float)  # Required to be cast from uint8 to float for the gaussian filtering
+            smoothData = gaussian_filter(data, sigma=self.sigmaGaussian.get())
             # Write the result
             smoothMaskFn = self._getSmoothedMaskFn(tsId)
             with mrcfile.new_mmap(smoothMaskFn, overwrite=True, shape=smoothData.shape,
@@ -159,7 +171,7 @@ class ProtTomoApplyMask(EMProtocol):
 
     def applyMaskStep(self, tsId: str):
         logger.info(cyanStr(f'tsId = {tsId}: applying the mask...'))
-        mask = self._getCurrentMask(tsId)
+        mask = self.tomoMaskDict[tsId]
         tomo = self.tomosDict[tsId]
         # Check tomo by tomo (to cover heterogeneous sets) both the sampling rate (checked out only at set level
         # in the _validate) and the dimensions
@@ -183,19 +195,40 @@ class ProtTomoApplyMask(EMProtocol):
                 MRCImageReader.write(resultingStack, self._getResultFn(tsId), samplingRate=tomoSRate)
                 # Remove the smoothed mask from the protocol tmp directory to avoid the storage of multiple
                 # big temporal files in execution time at once
-                # if self.doSmooth:
-                #     remove(self._getSmoothedMaskFn(tsId))
+                if self.doSmooth:
+                    remove(self._getSmoothedMaskFn(tsId))
 
     def createOutputStep(self, tsId: str):
-        pass
+        if not (tsId in self.failedApixTsIds or tsId in self.failedDimsTsIds):
+            with self._lock:
+                logger.info(cyanStr(f'tsId = {tsId}: registering the output...'))
+                currentTomo = self.tomosDict[tsId]
+                outputTomos = self._getOutTomos()
+                tomo = Tomogram()
+                tomo.copyInfo(currentTomo)
+                tomo.setFileName(self._getResultFn(tsId))
+                outputTomos.append(tomo)
+                outputTomos.update(tomo)
+                outputTomos.write()
+                self._store(outputTomos)
+
+    def closeOutputSetStep(self):
+        super()._closeOutputSet()
+        if self.failedApixTsIds:
+            failedApixTsIdList = String(str(self.failedApixTsIds))
+            self._store(failedApixTsIdList)
+        if self.failedDimsTsIds:
+            failedDimsTsIdList = String(str(self.failedDimsTsIds))
+            self._store(failedDimsTsIdList)
 
     # --------------------------- UTILS functions -----------------------------
     def _getInTomoSet(self, returnPointer: bool = False) -> Union[SetOfTomograms, Pointer]:
         inTomoSetPointer = getattr(self, IN_TOMO_SET)
         return inTomoSetPointer if returnPointer else inTomoSetPointer.get()
 
-    def _getInTomoMasks(self) -> Union[SetOfTomoMasks, VolumeMask]:
-        return getattr(self, IN_MASK_SET).get()
+    def _getInTomoMasks(self, returnPointer: bool = False) -> Union[SetOfTomoMasks, Pointer]:
+        inTomoMasksPointer = getattr(self, IN_MASK_SET)
+        return inTomoMasksPointer if returnPointer else inTomoMasksPointer.get()
 
     def _getResultFn(self, tsId: str):
         return self._getExtraPath(f'{tsId}.mrc')
@@ -203,34 +236,20 @@ class ProtTomoApplyMask(EMProtocol):
     def _getSmoothedMaskFn(self, tsId: str) -> str:
         return self._getTmpPath(f'{tsId}_smooth_mask.mrc')
 
-    def _getCurrentMask(self, tsId: str) -> Union[TomoMask, VolumeMask]:
-        if self.tomoMaskDict:
-            return self.tomoMaskDict[tsId]
+    def _getOutTomos(self) -> SetOfTomograms:
+        outputName = self._possibleOutputs.maskedTomograms.name
+        outTomograms = getattr(self, outputName, None)
+        if outTomograms:
+            outTomograms.enableAppend()
         else:
-            return self.mask
-
-    def _getSigmaForGaussianSmooth(self) -> float:
-        return self.smoothMaskNPix.get() / 3
-
-    def _smoothMask(self,
-                    maskData: ImageStack,
-                    outFileName: str,
-                    samplingRate: float) -> None:
-        """It smooths a mask applying a gaussian filtering and save it as specified in the input argument
-         named outFileName."""
-        # sigma = self._getSigmaForGaussianSmooth()
-        # smoothedImgList = [gaussian_filter(zSlice, sigma=sigma) for zSlice in maskData]
-        nPix = 5#self.smoothMaskNPix.get()
-        smoothedImgList = [self._dilateWithDecay(zSlice, nPix) for zSlice in maskData]
-        smoothedStack = ImageStack(smoothedImgList)
-        MRCImageReader.write(smoothedStack, outFileName, samplingRate=samplingRate)
-
-    @staticmethod
-    def _dilateWithDecay(zSliceBinary: np.array, nPix: int) -> np.array:
-        # dilatedZSlice = binary_dilation(zSliceBinary, iterations=nPix)
-        euclideanDistanceArray = distance_transform_edt(1 - zSliceBinary)
-        expDecayArray = np.exp(-euclideanDistanceArray / nPix)
-        return expDecayArray #* dilatedZSlice
+            inSetPointer = self._getInTomoSet(returnPointer=True)
+            outTomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
+            outTomograms.copyInfo(inSetPointer.get())
+            outTomograms.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{outputName: outTomograms})
+            self._defineSourceRelation(inSetPointer, outTomograms)
+            self._defineSourceRelation(self._getInTomoMasks(returnPointer=True), outTomograms)
+        return outTomograms
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self) -> list:
@@ -238,6 +257,14 @@ class ProtTomoApplyMask(EMProtocol):
         nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
         if nonMatchingTsIdsMsg:
             msgList.append(f'*{nonMatchingTsIdsMsg}*')
+        failedTsIdApixList = getattr(self, 'failedApixTsIdList', None)
+        if failedTsIdApixList:
+            msgList.append(f'*WARNING*: Failed tsIds because of different pixel size '
+                           f'in the tomo mask and the tomogram: {failedTsIdApixList}')
+        failedTsIdDims = getattr(self, 'failedDimsTsIdList', None)
+        if failedTsIdDims:
+            msgList.append(f'*WARNING*: Failed tsIds because of different dimensions '
+                           f'in the tomo mask and the tomogram: {failedTsIdDims}')
         return msgList
 
     def _validate(self) -> list:
