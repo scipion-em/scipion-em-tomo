@@ -30,6 +30,7 @@ from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFro
 from .protocol_import_tomomasks import ProtImportTomomasks
 from .protocol_import_ctf import ProtImportTsCTF
 from .protocol_invert_tilt_angles import ProtInverTiltAngles
+from .protocol_tomo_apply_mask import ProtTomoApplyMask
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
@@ -59,3 +60,4 @@ from .protocol_fit_ellipsoid import TomoProtFitEllipsoid, XmippProtFitEllipsoid
 from .protocol_landmark_to_2d import ProtTomoLandmarksTo2D
 from .protocol_mask_coordinates import ProtMaskCoordinates
 from .protocol_export_coords import ProtExportCoordinates3D
+
