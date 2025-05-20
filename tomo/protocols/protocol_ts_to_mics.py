@@ -80,8 +80,8 @@ class ProtTsToMics(EMProtocol):
                 micName = '%s_%03d' % (tsId, tiltId)
                 micrograph = Micrograph(location=self._getMicrographFilename(micName))
                 micrograph.setMicName(micName)
-                micrograph.setAttributeValue('tiltSeriesId', String(tsId))
-                micrograph.setAttributeValue('tiltImageId', Integer(tiltId))
+                setattr(micrograph, '_tiltSeriesId', String(tsId))
+                setattr(micrograph, '_tiltImageId', Integer(tiltId))
                 
                 ih.convert(tiltImage, micrograph)
                 output.append(micrograph)
