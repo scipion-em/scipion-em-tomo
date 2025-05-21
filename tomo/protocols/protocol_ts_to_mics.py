@@ -84,7 +84,6 @@ class ProtTsToMics(EMProtocol):
                     output.append(micrograph)
             
             self._store()
-            
 
     # --------------------------- UTILS functions ------------------------------
     def _getInputTiltSeries(self, tsId) -> TiltSeries:
