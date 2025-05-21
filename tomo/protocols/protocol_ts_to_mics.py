@@ -1,6 +1,10 @@
 # **************************************************************************
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * Authors:     Federico de Isidro Gomez (fepe.ig@gmail.com) [1]
+# *              Oier Lauzirika Zarrabeitia (oierlauzi@bizkaia.eu) [2]
+# *
+# * [1] Astex Therapeutics, UK
+# * [2] Centro Nacional de Biotecnologia, CSIC, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
