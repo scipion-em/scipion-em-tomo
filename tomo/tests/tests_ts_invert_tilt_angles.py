@@ -33,7 +33,7 @@ import numpy as np
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr, cyanStr
 from tomo.objects import SetOfTiltSeries, SetOfCTFTomoSeries
-from tomo.protocols import ProtImportTs, ProtInverTiltAngles, ProtImportTsCTF
+from tomo.protocols import ProtImportTs, ProtInvertTiltAngles, ProtImportTsCTF
 from tomo.protocols.protocol_import_ctf import ImportChoice
 from tomo.protocols.protocol_invert_tilt_angles import IN_TS_SET, IN_CTF_SET
 from tomo.tests import DataSetRe4STATuto, RE4_STA_TUTO, TS_03, TS_54
@@ -107,7 +107,7 @@ class TestTsInvertTiltAngles(TestBaseCentralizedLayer):
         }
         if withCtf:
             argsDict[IN_CTF_SET] = cls.importedCtf
-        protInvertTa = cls.newProtocol(ProtInverTiltAngles, **argsDict)
+        protInvertTa = cls.newProtocol(ProtInvertTiltAngles, **argsDict)
         cls.launchProtocol(protInvertTa)
         return (getattr(protInvertTa, protInvertTa._possibleOutputs.tiltSeries.name, None),
                 getattr(protInvertTa, protInvertTa._possibleOutputs.ctfs.name, None))

@@ -45,7 +45,7 @@ class InvertTiltsOutputs(Enum):
     ctfs = SetOfCTFTomoSeries
 
 
-class ProtInverTiltAngles(EMProtocol):
+class ProtInvertTiltAngles(EMProtocol):
     """This protocol inverts the physical handedness of the introduced tilt-series by inverting the tilt angles
     in the metadata associated to each tilt.-series. Introducing the CTFs will update the pointer from introduced
     CTFs to the tilt-series with the inverted tilt-angles in order to keep the coherence in the

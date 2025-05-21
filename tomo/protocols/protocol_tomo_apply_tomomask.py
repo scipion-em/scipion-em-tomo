@@ -40,21 +40,27 @@ from pyworkflow.utils import Message, cyanStr
 from tomo.objects import SetOfTomograms, SetOfTomoMasks, Tomogram
 
 logger = logging.getLogger(__name__)
-IN_TOMO_SET = 'inTomoSet'
-IN_MASK_SET = 'inMaskSet'
 
 
-class TomoApplyMaskOutputs(Enum):
+class ApplyTomoMaskOutputs(Enum):
     maskedTomograms = SetOfTomograms
 
 
-class ProtTomoApplyMask(EMProtocol):
+class ApplyTomoMaskFormParams(Enum):
+    IN_TOMO_SET = 'inTomoSet'
+    IN_MASK_SET = 'inMaskSet'
+    INVERT_MASK = 'invertMask'
+    DILATION_PX = 'dilationPixels'
+    SIGMA_GAUSSIAN = 'sigmaGaussian'
+
+
+class ProtTomoApplyTomoMask(EMProtocol):
     """This protocol applies a set of masks to a given set of tomograms. The protocol
     will try to match the tomograms and the masks by tsId. Once the mask/s are applied."""
 
     _label = 'apply tomomasks to tomograms'
     _devStatus = BETA
-    _possibleOutputs = TomoApplyMaskOutputs
+    _possibleOutputs = ApplyTomoMaskOutputs
     stepsExecutionMode = STEPS_PARALLEL
     _sRateTol = 1e-3  # Angstrom/px
 
@@ -69,26 +75,31 @@ class ProtTomoApplyMask(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_TOMO_SET, PointerParam,
+        form.addParam(ApplyTomoMaskFormParams.IN_TOMO_SET.value,
+                      PointerParam,
                       pointerClass='SetOfTomograms',
                       important=True,
                       label='Tomograms')
-        form.addParam(IN_MASK_SET, PointerParam,
+        form.addParam(ApplyTomoMaskFormParams.IN_MASK_SET.value,
+                      PointerParam,
                       pointerClass="VolumeMask, SetOfTomoMasks",
                       important=True,
                       label='Masks',
                       help='The protocol will try to match the tomograms and the masks by tsId.')
         group = form.addGroup('Mask operations')
-        group.addParam('invertMask', BooleanParam,
+        group.addParam(ApplyTomoMaskFormParams.INVERT_MASK.value,
+                       BooleanParam,
                        default=False,
                        label='Invert mask?')
-        group.addParam('dilationPixels', IntParam,
+        group.addParam(ApplyTomoMaskFormParams.DILATION_PX.value,
+                       IntParam,
                        default=0,
                        label='Number of pixels for dilation',
                        validators=[GE(0)],
                        haelp='The dilation will expands the shape by the given number of pixels '
                              'in all directions.')
-        group.addParam('sigmaGaussian', IntParam,
+        group.addParam(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value,
+                       IntParam,
                        default=3,
                        label='Std for gaussian smoothing',
                        validators=[GE(0)],
@@ -136,7 +147,7 @@ class ProtTomoApplyMask(EMProtocol):
             self.nonMatchingTsIdsMsg.set(msg)
             logger.info(cyanStr(msg))
             self._store(self.nonMatchingTsIdsMsg)
-        if self.sigmaGaussian.get() > 0:
+        if self._getFormAttrib(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value) > 0:
             self.doSmooth = True
         self.tomosDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos
                           if tomo.getTsId() in matchingTsIds}
@@ -151,15 +162,17 @@ class ProtTomoApplyMask(EMProtocol):
             # Read the mask
             with mrcfile.mmap(maskFileName, mode='r', permissive=True) as mrc:
                 # Invert if required
-                data = 1 - mrc.data if self.invertMask.get() else mrc.data
+                invertMask = self._getFormAttrib(ApplyTomoMaskFormParams.INVERT_MASK.value)
+                data = 1 - mrc.data if invertMask else mrc.data
             # Dilate the mask
-            dilationPixels = self.dilationPixels.get()
+            dilationPixels = self._getFormAttrib(ApplyTomoMaskFormParams.DILATION_PX.value)
             if dilationPixels > 0:
                 data = np.array(data, dtype=bool)  # Required for the binary dilation
                 data = binary_dilation(data, iterations=dilationPixels)
             # Smooth the mask
             data = np.array(data, dtype=float)  # Required to be cast from uint8 to float for the gaussian filtering
-            smoothData = gaussian_filter(data, sigma=self.sigmaGaussian.get())
+            sigma = self._getFormAttrib(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value)
+            smoothData = gaussian_filter(data, sigma=sigma)
             # Write the result
             smoothMaskFn = self._getSmoothedMaskFn(tsId)
             with mrcfile.new_mmap(smoothMaskFn, overwrite=True, shape=smoothData.shape,
@@ -222,12 +235,15 @@ class ProtTomoApplyMask(EMProtocol):
             self._store(failedDimsTsIdList)
 
     # --------------------------- UTILS functions -----------------------------
+    def _getFormAttrib(self, attribName: str):
+        return getattr(self, attribName).get()
+
     def _getInTomoSet(self, returnPointer: bool = False) -> Union[SetOfTomograms, Pointer]:
-        inTomoSetPointer = getattr(self, IN_TOMO_SET)
+        inTomoSetPointer = getattr(self, ApplyTomoMaskFormParams.IN_TOMO_SET.value)
         return inTomoSetPointer if returnPointer else inTomoSetPointer.get()
 
     def _getInTomoMasks(self, returnPointer: bool = False) -> Union[SetOfTomoMasks, Pointer]:
-        inTomoMasksPointer = getattr(self, IN_MASK_SET)
+        inTomoMasksPointer = getattr(self, ApplyTomoMaskFormParams.IN_MASK_SET.value)
         return inTomoMasksPointer if returnPointer else inTomoMasksPointer.get()
 
     def _getResultFn(self, tsId: str):
