@@ -33,7 +33,7 @@ from pwem.protocols import EMProtocol
 from pwem import emlib
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam
-from tomo.objects import SetOfTiltSeries, TiltImage
+from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
 
 
 class ProtTsToMicsOutput(enum.Enum):
@@ -59,31 +59,19 @@ class ProtTsToMics(EMProtocol):
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.createOutputStep)
+        for ts in self.input.get():
+            tsId = ts.getTsId()
+            self._insertFunctionStep(self.createOutputStep, tsId)
+        self._insertFunctionStep(self._closeOutputSet)
 
     # --------------------------- STEPS functions ------------------------------
-    def createOutputStep(self):
-        input = self.input.get()
-        output = SetOfMicrographs.create(self._getPath())
-        output.setSamplingRate(input.getSamplingRate())
-
-        # Acquisition
-        micAcq = Acquisition()
-        tomoAcq = input.getAcquisition()
-        micAcq.setMagnification(tomoAcq.getMagnification())
-        micAcq.setSphericalAberration(tomoAcq.getSphericalAberration())
-        micAcq.setVoltage(tomoAcq.getVoltage())
-        micAcq.setAmplitudeContrast(tomoAcq.getAmplitudeContrast())
-        micAcq.setDoseInitial(tomoAcq.getDoseInitial())
-        micAcq.setDosePerFrame(tomoAcq.getDosePerFrame())
-
-        output.setAcquisition(micAcq)
-
-        ih = emlib.image.ImageHandler()
-        for tiltSeries in input:
-            tsId = tiltSeries.getTsId()
+    def createOutputStep(self, tsId):
+        with self._lock:
+            inputTs = self._getInputTiltSeries(tsId)
+            output = self._getOutputMicrographs()
+            ih = emlib.image.ImageHandler()
             tiltImage: TiltImage = None
-            for tiltImage in tiltSeries:
+            for tiltImage in inputTs:
                 if self.maxTiltAngle < 0 or abs(tiltImage.getTiltAngle()) < self.maxTiltAngle:
                     acqOrder = tiltImage.getAcquisitionOrder()
                     micName = '%s_%03d' % (tsId, acqOrder)
@@ -95,9 +83,36 @@ class ProtTsToMics(EMProtocol):
                     ih.convert(tiltImage, micrograph)
                     output.append(micrograph)
             
-        self._defineOutputs(**{ProtTsToMicsOutput.outputMicrographs.name: output})
-        self._defineSourceRelation(self.input, output)
+            self._store()
+            
 
     # --------------------------- UTILS functions ------------------------------
+    def _getInputTiltSeries(self, tsId) -> TiltSeries:
+        setOfTs: SetOfTiltSeries = self.input.get()
+        return setOfTs.getTiltSeriesFromTsId(tsId)
+    
     def _getMicrographFilename(self, micName) -> str:
         return self._getExtraPath('%s.mrc' % micName)
+
+    def _getOutputMicrographs(self) -> SetOfMicrographs:
+        result = getattr(self, ProtTsToMicsOutput.outputMicrographs.name, None)
+        if result is None:
+            setOfTs: SetOfTiltSeries = self.input.get()
+            result = SetOfMicrographs.create(self._getPath())
+            result.setSamplingRate(setOfTs.getSamplingRate())
+
+            # Acquisition
+            micAcq = Acquisition()
+            tomoAcq = setOfTs.getAcquisition()
+            micAcq.setMagnification(tomoAcq.getMagnification())
+            micAcq.setSphericalAberration(tomoAcq.getSphericalAberration())
+            micAcq.setVoltage(tomoAcq.getVoltage())
+            micAcq.setAmplitudeContrast(tomoAcq.getAmplitudeContrast())
+            micAcq.setDoseInitial(tomoAcq.getDoseInitial())
+            micAcq.setDosePerFrame(tomoAcq.getDosePerFrame())
+            result.setAcquisition(micAcq)
+
+            self._defineOutputs(**{ProtTsToMicsOutput.outputMicrographs.name: result})
+            self._defineSourceRelation(self.input, result)
+            
+        return result
