@@ -28,8 +28,8 @@ from pwem.objects import SetOfMicrographs, Micrograph, Acquisition, String, Inte
 from pwem.protocols import EMProtocol
 from pwem import emlib
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam
-from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
+from pyworkflow.protocol.params import PointerParam, FloatParam
+from tomo.objects import SetOfTiltSeries
 
 
 class ProtTsToMicsOutput(enum.Enum):
@@ -49,6 +49,9 @@ class ProtTsToMics(EMProtocol):
                       label='Tilt series',
                       important=True,
                       help='Select the tilt-series to be turned into micrographs')
+        form.addParam('maxTiltAngle', FloatParam,
+                      default=-1, label='Max tilt angle',
+                      help='Maximum tilt angle of the tilt-series to be converted to micrographs. -1 to consider all images.')
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
@@ -76,15 +79,16 @@ class ProtTsToMics(EMProtocol):
         for tiltSeries in input:
             tsId = tiltSeries.getTsId()
             for tiltImage in tiltSeries:
-                tiltId = tiltImage.getObjId()
-                micName = '%s_%03d' % (tsId, tiltId)
-                micrograph = Micrograph(location=self._getMicrographFilename(micName))
-                micrograph.setMicName(micName)
-                setattr(micrograph, '_tiltSeriesId', String(tsId))
-                setattr(micrograph, '_tiltImageId', Integer(tiltId))
-                
-                ih.convert(tiltImage, micrograph)
-                output.append(micrograph)
+                if self.maxTiltAngle > 0 and abs(tiltImage.getTiltAngle()) < self.maxTiltAngle:
+                    tiltId = tiltImage.getObjId()
+                    micName = '%s_%03d' % (tsId, tiltId)
+                    micrograph = Micrograph(location=self._getMicrographFilename(micName))
+                    micrograph.setMicName(micName)
+                    micrograph._tiltSeriesId = String(tsId)
+                    micrograph._tiltImageId = Integer(tiltId)
+                    
+                    ih.convert(tiltImage, micrograph)
+                    output.append(micrograph)
             
         self._defineOutputs(**{ProtTsToMicsOutput.outputMicrographs.name: output})
         self._defineSourceRelation(self.input, output)
