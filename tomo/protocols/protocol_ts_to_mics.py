@@ -28,7 +28,8 @@
 
 import enum
 
-from pwem.objects import SetOfMicrographs, Micrograph, Acquisition, String, Integer
+from pwem.objects import (SetOfMicrographs, Micrograph, Acquisition, 
+                          String, Integer, Set)
 from pwem.protocols import EMProtocol
 from pwem import emlib
 from pyworkflow import BETA
@@ -98,6 +99,7 @@ class ProtTsToMics(EMProtocol):
         if result is None:
             setOfTs: SetOfTiltSeries = self.input.get()
             result = SetOfMicrographs.create(self._getPath())
+            result.setStreamState(Set.STREAM_OPEN)
             result.setSamplingRate(setOfTs.getSamplingRate())
 
             # Acquisition
