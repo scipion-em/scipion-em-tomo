@@ -56,7 +56,8 @@ class ApplyTomoMaskFormParams(Enum):
 
 class ProtTomoApplyTomoMask(EMProtocol):
     """This protocol applies a set of masks to a given set of tomograms. The protocol
-    will try to match the tomograms and the masks by tsId. Once the mask/s are applied."""
+    will try to match the tomograms and the masks by tsId. Once the mask/s are applied.
+    Some operations can be applied to the mask: invert, dilate and apply a gaussian filter."""
 
     _label = 'apply tomomasks to tomograms'
     _devStatus = BETA
