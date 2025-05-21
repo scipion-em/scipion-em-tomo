@@ -33,7 +33,7 @@ from pwem.protocols import EMProtocol
 from pwem import emlib
 from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, FloatParam
-from tomo.objects import SetOfTiltSeries
+from tomo.objects import SetOfTiltSeries, TiltImage
 
 
 class ProtTsToMicsOutput(enum.Enum):
@@ -82,14 +82,15 @@ class ProtTsToMics(EMProtocol):
         ih = emlib.image.ImageHandler()
         for tiltSeries in input:
             tsId = tiltSeries.getTsId()
+            tiltImage: TiltImage = None
             for tiltImage in tiltSeries:
-                if self.maxTiltAngle > 0 and abs(tiltImage.getTiltAngle()) < self.maxTiltAngle:
-                    tiltId = tiltImage.getObjId()
-                    micName = '%s_%03d' % (tsId, tiltId)
+                if self.maxTiltAngle < 0 or abs(tiltImage.getTiltAngle()) < self.maxTiltAngle:
+                    acqOrder = tiltImage.getAcquisitionOrder()
+                    micName = '%s_%03d' % (tsId, acqOrder)
                     micrograph = Micrograph(location=self._getMicrographFilename(micName))
                     micrograph.setMicName(micName)
-                    micrograph._tiltSeriesId = String(tsId)
-                    micrograph._tiltImageId = Integer(tiltId)
+                    setattr(micrograph, TiltImage.TS_ID_FIELD, String(tsId))
+                    setattr(micrograph, TiltImage.ACQ_ORDER_FIELD , Integer(acqOrder))
                     
                     ih.convert(tiltImage, micrograph)
                     output.append(micrograph)
