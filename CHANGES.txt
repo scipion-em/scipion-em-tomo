@@ -1,6 +1,7 @@
 v3.10.1:
  Users:
-    - Fixing an error sorting in the CTF viewer
+    - Fixing an error sorting in the CTF viewer.
+    - Improve the fail tolerance when importing tilt-series / tilt-series movies.
  Developers:
     - Expand the TCL:
         * For non-deterministic protocols that generates coordinates.
