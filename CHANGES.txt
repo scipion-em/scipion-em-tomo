@@ -1,6 +1,9 @@
 v3.10.1:
  Users:
     - Fixing an error sorting in the CTF viewer
+    - New protocols added:
+        * Invert tilt angles on tilt-series.
+        * Apply tomomasks to tomograms.
  Developers:
     - Expand the TCL:
         * For non-deterministic protocols that generates coordinates.
