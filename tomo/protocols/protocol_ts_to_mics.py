@@ -60,10 +60,11 @@ class ProtTsToMics(EMProtocol):
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
+        stepIds = []
         for ts in self.input.get():
             tsId = ts.getTsId()
-            self._insertFunctionStep(self.createOutputStep, tsId)
-        self._insertFunctionStep(self._closeOutputSet)
+            self._insertFunctionStep(self.createOutputStep, tsId, prerequisites=[])
+        self._insertFunctionStep(self._closeOutputSet, prerequisites=stepIds)
 
     # --------------------------- STEPS functions ------------------------------
     def createOutputStep(self, tsId):
