@@ -3115,11 +3115,15 @@ class TiltSeriesCoordinate(data.EMObject):
     """This class holds the (x,y,z) positions, in angstroms, and other information
     associated with a coordinate related to a tilt series"""
 
+    SCORE_ATTR = "_score"
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._x = Float()
         self._y = Float()
         self._z = Float()
+        self._score = Float()
+        
         # Used to access to the corresponding tilt series from each coord (it's the tsId)
         self._tsId = String(kwargs.get('tsId', None))
 
@@ -3174,7 +3178,12 @@ class TiltSeriesCoordinate(data.EMObject):
     def setTsId(self, tsId):
         self._tsId.set(tsId)
 
-
+    def getScore(self):
+        return self._score.get()
+    
+    def setScore(self, score):
+        self._score.set(score)
+    
 class SetOfTiltSeriesCoordinates(data.EMSet):
     """ Encapsulate the logic of a set of tilt series coordinates.
     Each coordinate has a (x,y,z) position in scipion's convention.
