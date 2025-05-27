@@ -87,6 +87,7 @@ class DataSetEmd10439(Enum):
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
     coords39Sqlite = 'coordinates/coordinates39_bin8.sqlite'
     coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
+    tomoMaskByTardisBin2 = 'tomomaskByTardisBin2/emd_10439.mrc'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
@@ -250,7 +251,7 @@ class DataSetRe4STATuto(Enum):
 
     @classmethod
     def genTestTsDicts(cls,
-                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
+                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
                        unbinnedXYDims: Tuple = (3710, 3838),
                        binFactor: int = 1,
                        swapXY: bool = False,
