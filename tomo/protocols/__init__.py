@@ -29,6 +29,8 @@ from .protocol_correct_tilt_offset import ProtCorrectTiltOffset
 from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from .protocol_import_tomomasks import ProtImportTomomasks
 from .protocol_import_ctf import ProtImportTsCTF
+from .protocol_invert_tilt_angles import ProtInvertTiltAngles
+from .protocol_tomo_apply_tomomask import ProtTomoApplyTomoMask
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
