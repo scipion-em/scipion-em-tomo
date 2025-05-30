@@ -1,6 +1,16 @@
 v3.10.1:
  Users:
-    - Fixing an error sorting in the CTF viewer
+    - Fixing an error sorting in the CTF viewer.
+    - Improve the fail tolerance when importing tilt-series / tilt-series movies.
+    - New protocols added:
+        * Invert tilt angles on tilt-series.
+        * Apply tomomasks to tomograms.
+ Developers:
+    - Expand the TCL:
+        * For non-deterministic protocols that generates coordinates.
+        * To add a tolerance to the checking of oriented coordinates of particles allowing some percentage with
+          the identity matrix.
+    - Adding delimiter parameter to generate xf files
     - Tomo Viewer applies orientation to the images
 
 v3.10.0:

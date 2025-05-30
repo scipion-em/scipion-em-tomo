@@ -34,6 +34,8 @@ Protocols
 * **export 3D coordinates**: Export 3D subtomogram coordinates to be used outside Scipion.
 * **split even/odd tomos/subtomos** : Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
 * **tomograms to micrographs** : Turns tomograms into set of micrographs to apply SPA picking methods.
+* **apply tomomasks to tomograms** : Aplies a set of masks to a given set of tomograms. Some operations can be applied to the mask: invert, dilate and apply a gaussian filter.
+* **invert tilt angles** : Inverts the physical handedness of the introduced tilt-series by inverting the tilt angles in the metadata associated to each tilt-series.
 
 
 **Latest plugin versions**

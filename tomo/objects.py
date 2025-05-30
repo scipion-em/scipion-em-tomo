@@ -817,7 +817,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             for ti in self:
                 f.write('0.00\n')
 
-    def writeXfFile(self, transformFilePath):
+    def writeXfFile(self, transformFilePath, delimiter='\t'):
         """ This method takes a tilt series and the output transformation file
         path and creates an IMOD-based transform
         file in the location indicated. """
@@ -849,7 +849,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             tsMatrixTransformList.append(transformIMOD)
 
         with open(transformFilePath, 'w') as f:
-            csvW = csv.writer(f, delimiter='\t')
+            csvW = csv.writer(f, delimiter=delimiter)
             csvW.writerows(tsMatrixTransformList)
 
     def writeImodFiles(self, folderName, **kwargs):
@@ -873,7 +873,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         self.writeXtiltFile(folderName)
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
-        self.writeXfFile(transformFilePath)
+        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'))
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -3115,11 +3115,15 @@ class TiltSeriesCoordinate(data.EMObject):
     """This class holds the (x,y,z) positions, in angstroms, and other information
     associated with a coordinate related to a tilt series"""
 
+    SCORE_ATTR = "_score"
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._x = Float()
         self._y = Float()
         self._z = Float()
+        self._score = Float()
+        
         # Used to access to the corresponding tilt series from each coord (it's the tsId)
         self._tsId = String(kwargs.get('tsId', None))
 
@@ -3174,7 +3178,12 @@ class TiltSeriesCoordinate(data.EMObject):
     def setTsId(self, tsId):
         self._tsId.set(tsId)
 
-
+    def getScore(self):
+        return self._score.get()
+    
+    def setScore(self, score):
+        self._score.set(score)
+    
 class SetOfTiltSeriesCoordinates(data.EMSet):
     """ Encapsulate the logic of a set of tilt series coordinates.
     Each coordinate has a (x,y,z) position in scipion's convention.
