@@ -39,7 +39,7 @@ import pyworkflow.protocol.params as params
 import pyworkflow.utils as pwutils
 import tomo.objects
 from pwem.objects import Transform
-from pyworkflow.object import Integer
+from pyworkflow.object import Integer, String
 from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
@@ -87,6 +87,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
         ProtImport.__init__(self, **args)
         ProtTomoBase.__init__(self)
         self.skippedMdocs = Integer()
+        self.failedTs = String()
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
@@ -274,139 +275,148 @@ class ProtImportTsBase(ProtTomoImportFiles):
 
         # Go through all of them
         for ts, tiltSeriesList in matchingFiles.items():
+            try:
+                self.info("Tilt series found: %s" % ts)
+                someNew = True
+                tsObj = tsClass(tsId=ts)
+                # Form value has higher priority than the mdoc values
+                samplingRate = \
+                    float(samplingRate if samplingRate else self.sRates[ts])
 
-            self.info("Tilt series found: %s" % ts)
-            someNew = True
-            tsObj = tsClass(tsId=ts)
-            # Form value has higher priority than the mdoc values
-            samplingRate = \
-                float(samplingRate if samplingRate else self.sRates[ts])
+                origin = Transform()
+                tsObj.setOrigin(origin)
+                tsObj.setAnglesCount(len(tiltSeriesList))
+                self.setItemExtraAttributes(tsObj)
 
-            origin = Transform()
-            tsObj.setOrigin(origin)
-            tsObj.setAnglesCount(len(tiltSeriesList))
-            self.setItemExtraAttributes(tsObj)
+                # we need this to set mapper before adding any item
+                outputSet.append(tsObj)
 
-            # we need this to set mapper before adding any item
-            outputSet.append(tsObj)
+                if self.MDOC_DATA_SOURCE:
+                    accumDoseList = self.accumDoses[ts]
+                    incomingDoseList = self.incomingDose[ts]
+                    counter = 0
 
-            if self.MDOC_DATA_SOURCE:
-                accumDoseList = self.accumDoses[ts]
-                incomingDoseList = self.incomingDose[ts]
-                counter = 0
+                tiltSeriesObjList = []
 
-            tiltSeriesObjList = []
+                # Acquisition exists for both the tilt images and the tilt series, but some values will be different when
+                # referred to the whole TS than when referred to a tilt image (such as the accumDose). Angle max, angle mix,
+                # and step will be generated here as it will be the same for both the TS and the tilt images.
+                tiltAngles =  [float(tiData[2]) for tiData in tiltSeriesList]
+                accumDoseTs = 0
+                tiltAngles = sorted(tiltAngles)
+                tsAcq = tsObj.getAcquisition().clone()
+                maxTilt = tiltAngles[-1]
+                minTilt = tiltAngles[0]
+                step = round(mean([tiltAngles[i + 1] - tiltAngles[i] for i in range(len(tiltAngles) - 1)]))
 
-            # Acquisition exists for both the tilt images and the tilt series, but some values will be different when
-            # referred to the whole TS than when referred to a tilt image (such as the accumDose). Angle max, angle mix,
-            # and step will be generated here as it will be the same for both the TS and the tilt images.
-            tiltAngles =  [float(tiData[2]) for tiData in tiltSeriesList]
-            accumDoseTs = 0
-            tiltAngles = sorted(tiltAngles)
-            tsAcq = tsObj.getAcquisition().clone()
-            maxTilt = tiltAngles[-1]
-            minTilt = tiltAngles[0]
-            step = round(mean([tiltAngles[i + 1] - tiltAngles[i] for i in range(len(tiltAngles) - 1)]))
+                setAcq.setAngleMin(minTilt)
+                setAcq.setAngleMax(maxTilt)
+                setAcq.setStep(step)
 
-            setAcq.setAngleMin(minTilt)
-            setAcq.setAngleMax(maxTilt)
-            setAcq.setStep(step)
+                tsAcq.setAngleMin(minTilt)
+                tsAcq.setAngleMax(maxTilt)
+                tsAcq.setStep(step)
 
-            tsAcq.setAngleMin(minTilt)
-            tsAcq.setAngleMax(maxTilt)
-            tsAcq.setStep(step)
+                # Add each tilt images to the tiltSeries
+                for f, to, ta, accDose in tiltSeriesList:
+                    try:
+                        # Link/move to extra
+                        imageFile = f[1] if type(f) is tuple else f
 
-            # Add each tilt images to the tiltSeries
-            for f, to, ta, accDose in tiltSeriesList:
-                try:
-                    # Link/move to extra
-                    imageFile = f[1] if type(f) is tuple else f
+                        # Double underscore is used in EMAN to determine set type e.g. phase flipped particles. We replace
+                        # it by a single underscore to avoid possible problems if the user uses EMAN
+                        finalDestination = self._getExtraPath(os.path.basename(imageFile))
+                        finalDestination = finalDestination.replace('__', '_')
+                        self.copyOrLink(imageFile, finalDestination)
 
-                    # Double underscore is used in EMAN to determine set type e.g. phase flipped particles. We replace
-                    # it by a single underscore to avoid possible problems if the user uses EMAN
-                    finalDestination = self._getExtraPath(os.path.basename(imageFile))
-                    finalDestination = finalDestination.replace('__', '_')
-                    self.copyOrLink(imageFile, finalDestination)
+                        f = (f[0], finalDestination) if type(f) is tuple else finalDestination
 
-                    f = (f[0], finalDestination) if type(f) is tuple else finalDestination
+                        ti = tiClass(location=f,
+                                     acquisitionOrder=to,
+                                     tiltAngle=ta)
 
-                    ti = tiClass(location=f,
-                                 acquisitionOrder=to,
-                                 tiltAngle=ta)
+                        tiAcq = tsAcq.clone()
+                        # Calculate the dose
+                        if self.MDOC_DATA_SOURCE:
+                            dosePerFrame = incomingDoseList[counter]
+                            accDose = accumDoseList[counter]
+                            initialDose = accDose - dosePerFrame
+                        else:
+                            dosePerFrame = self.dosePerFrame.get()
+                            if not accDose:
+                                accDose = to * dosePerFrame
+                            accumDoseTs = max(accumDoseTs, accDose)
+                            initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
+                        # Initial dose in current ti
+                        tiAcq.setDoseInitial(initialDose)
+                        # Incoming dose in current ti
+                        tiAcq.setDosePerFrame(dosePerFrame)
+                        # Accumulated dose in current ti
+                        tiAcq.setAccumDose(accDose)
+                        ti.setAcquisition(tiAcq)
+                        tiltSeriesObjList.append(ti)
+                        counter += 1
 
-                    tiAcq = tsAcq.clone()
-                    # Calculate the dose
-                    if self.MDOC_DATA_SOURCE:
-                        dosePerFrame = incomingDoseList[counter]
-                        accDose = accumDoseList[counter]
-                        initialDose = accDose - dosePerFrame
-                    else:
-                        dosePerFrame = self.dosePerFrame.get()
-                        if not accDose:
-                            accDose = to * dosePerFrame
-                        accumDoseTs = max(accumDoseTs, accDose)
-                        initialDose = self.doseInitial.get() if to == 1 else accDose - dosePerFrame
-                    # Initial dose in current ti
-                    tiAcq.setDoseInitial(initialDose)
-                    # Incoming dose in current ti
-                    tiAcq.setDosePerFrame(dosePerFrame)
-                    # Accumulated dose in current ti
-                    tiAcq.setAccumDose(accDose)
-                    ti.setAcquisition(tiAcq)
-                    tiltSeriesObjList.append(ti)
-                    counter += 1
+                    except OperationalError:
+                        raise Exception("%s is an invalid {TS} tag. "
+                                        "It must be an alpha-numeric sequence "
+                                        "(avoid symbols like -) that can not "
+                                        "start with a number." % ts)
 
-                except OperationalError:
-                    raise Exception("%s is an invalid {TS} tag. "
-                                    "It must be an alpha-numeric sequence "
-                                    "(avoid symbols like -) that can not "
-                                    "start with a number." % ts)
+                # Sort tilt image metadata if importing tilt series
+                if not self._isImportingTsMovies():
+                    tiltSeriesObjList.sort(key=lambda x: x.getTiltAngle(),
+                                           reverse=False)
 
-            # Sort tilt image metadata if importing tilt series
-            if not self._isImportingTsMovies():
-                tiltSeriesObjList.sort(key=lambda x: x.getTiltAngle(),
-                                       reverse=False)
+                for ti in tiltSeriesObjList:
+                    tsObj.append(ti)
 
-            for ti in tiltSeriesObjList:
-                tsObj.append(ti)
+                tsObjFirstItem = tsObj.getFirstItem()
+                origin.setShifts(-tsObjFirstItem.getXDim() / 2 * samplingRate,
+                                 -tsObjFirstItem.getYDim() / 2 * samplingRate,
+                                 0)
 
-            tsObjFirstItem = tsObj.getFirstItem()
-            origin.setShifts(-tsObjFirstItem.getXDim() / 2 * samplingRate,
-                             -tsObjFirstItem.getYDim() / 2 * samplingRate,
-                             0)
+                if self.MDOC_DATA_SOURCE:
+                    tsAcq.setAccumDose(max(accumDoseList))
+                    # Tilt series object dose per frame has been updated each
+                    # time the tilt image dose per frame has
+                    # been updated before, so the mean value is used to be the
+                    # reference in the acquisition of the
+                    # whole tilt series movie
+                    meanDosePerFrame = mean(incomingDoseList)
+                    tsAcq.setDosePerFrame(meanDosePerFrame)
+                    setAcq.setDosePerFrame(meanDosePerFrame)
+                else:
+                    dosePerFrame = self.dosePerFrame.get()
+                    tiltAxisAngle = self.tiltAxisAngle.get()
 
-            if self.MDOC_DATA_SOURCE:
-                tsAcq.setAccumDose(max(accumDoseList))
-                # Tilt series object dose per frame has been updated each
-                # time the tilt image dose per frame has
-                # been updated before, so the mean value is used to be the
-                # reference in the acquisition of the
-                # whole tilt series movie
-                meanDosePerFrame = mean(incomingDoseList)
-                tsAcq.setDosePerFrame(meanDosePerFrame)
-                setAcq.setDosePerFrame(meanDosePerFrame)
-            else:
-                dosePerFrame = self.dosePerFrame.get()
-                tiltAxisAngle = self.tiltAxisAngle.get()
+                    tsAcq.setDosePerFrame(dosePerFrame)
+                    tsAcq.setAccumDose(accumDoseTs)
+                    tsAcq.setTiltAxisAngle(tiltAxisAngle)
 
-                tsAcq.setDosePerFrame(dosePerFrame)
-                tsAcq.setAccumDose(accumDoseTs)
-                tsAcq.setTiltAxisAngle(tiltAxisAngle)
+                    setAcq.setDosePerFrame(dosePerFrame)
+                    setAcq.setAccumDose(accumDoseTs)
+                    setAcq.setTiltAxisAngle(tiltAxisAngle)
 
-                setAcq.setDosePerFrame(dosePerFrame)
-                setAcq.setAccumDose(accumDoseTs)
-                setAcq.setTiltAxisAngle(tiltAxisAngle)
+                tsObj.setAcquisition(tsAcq)
+                outputSet.update(tsObj)  # update items and size info
 
-            tsObj.setAcquisition(tsAcq)
-            outputSet.update(tsObj)  # update items and size info
+                if self._isImportingTsMovies():
+                    dim = tsObjFirstItem.getDim()
+                    framesRange = [1, dim[2], 1]
+                    outputSet.setFramesRange(framesRange)
 
-            if self._isImportingTsMovies():
-                dim = tsObjFirstItem.getDim()
-                framesRange = [1, dim[2], 1]
-                outputSet.setFramesRange(framesRange)
+                self._existingTs.add(ts)
+                someAdded = True
 
-            self._existingTs.add(ts)
-            someAdded = True
+            except Exception as e:
+                logger.info(f"Failed importing the tilt-series: {ts} -> {e}")
+                tsStr = f'{ts}'
+                failedTs = self.failedTs.get()
+                updatedMsg = failedTs + tsStr if failedTs else tsStr
+                self.failedTs.set(updatedMsg)
+                self._store(self.failedTs)
+                continue
 
         if someAdded:
             self.debug('Updating output...')
@@ -442,6 +452,9 @@ class ProtImportTsBase(ProtTomoImportFiles):
             summary.append('*%i* mdoc files were skipped --> '
                            'check the Output Log tab for more details.'
                            % self.skippedMdocs.get())
+        failedTs = getattr(self, 'failedTs', String()).get()
+        if failedTs:
+            summary.append(f'Failed importing the following tilt-series/tilt-series movies {failedTs}')
         return summary
 
     def _validate(self):
