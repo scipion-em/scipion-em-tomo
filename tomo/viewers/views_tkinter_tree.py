@@ -807,7 +807,34 @@ class TiltSeriesDialogView(pwviewer.View):
 
     @classmethod
     @lru_cache
-    def getThumbnail(cls, index, fileName, rot, shifts):
+    def getThumbnail(self, index, fileName, rot, shifts):
+
+        imageStk = ImageReadersRegistry.open(f'{index}@{fileName}')
+        image = imageStk.getImage()
+
+        # Get original size
+        width, height = image.shape
+        minDim = max(width, height)
+
+        ratio = THUMBNAIL_SIZE / minDim
+
+        # Resize the image creating a thumbnail
+
+        # Special case, when image is smaller than the thumbnail
+        if ratio > 1:
+            image = imageStk.scaleSlice(image, ratio)
+        elif ratio < 1:
+            # Thumbail does not scale up, only down
+            image = imageStk.thumbnailSlice(image, int(width * ratio), int(height * ratio))
+
+        if rot is not None:
+            shiftX = shifts[0] * ratio
+            shiftY = shifts[1] * ratio
+            image = imageStk.transformSlice(image, (shiftX, shiftY), rot)
+        image = imageStk.flipSlice(image)
+
+        return image
+    def getThumbnailOLD(cls, index, fileName, rot, shifts):
         imageStk = ImageReadersRegistry.open(fileName)
         image = imageStk.getImage(index=index-1, pilImage=True)
 
