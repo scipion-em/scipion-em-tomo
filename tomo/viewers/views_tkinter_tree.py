@@ -834,30 +834,6 @@ class TiltSeriesDialogView(pwviewer.View):
         image = imageStk.flipSlice(image)
 
         return image
-    def getThumbnailOLD(cls, index, fileName, rot, shifts):
-        imageStk = ImageReadersRegistry.open(fileName)
-        image = imageStk.getImage(index=index-1, pilImage=True)
-
-        # Get original size
-        width, height = image.size
-        minDim = max(width, height)
-
-        ratio = minDim/THUMBNAIL_SIZE
-        newWidth = width/ratio
-        newHeight = height/ratio
-
-        # Resize the image creating a thumbnail
-        # image = image.copy()  # Is copy necessary? image.copy()
-        image.thumbnail((newWidth, newHeight))
-
-        if rot:
-            shifts = shifts[0]/ratio, shifts[1]/ratio
-            imgStats=Stat(image)
-            bg = int(imgStats.mean[0])
-            image = image.rotate(rot, translate=shifts, fillcolor=bg)
-
-        return image
-
 
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
