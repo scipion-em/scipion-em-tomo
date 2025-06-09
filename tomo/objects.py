@@ -2023,7 +2023,8 @@ class SubTomogram(data.Volume):
             return self._transform
 
 
-class SetOfSubTomograms(data.SetOfVolumes):
+
+class SetOfSubTomogramsBase(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
     EXPOSE_ITEMS = False
@@ -2170,6 +2171,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
                 self._tomos[tsId] = tomo
 
         return self._tomos
+
+
+class SetOfSubTomograms(SetOfSubTomogramsBase):
+    pass
 
 
 class AverageSubTomogram(SubTomogram):
