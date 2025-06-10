@@ -516,13 +516,13 @@ class TiltSeries(TiltSeriesBase):
             # scale shifts
             x=x*factor
             y=y*factor
-            slice = imgStk.getImage(ti.getIndex()-1)
+            npImage = imgStk.getImage(ti.getIndex()-1)
 
             if binning != 0:
-                slice = imgStk.scaleSlice(slice, factor)
+                npImage = imgStk.scaleSlice(npImage, factor)
 
-            slice = imgStk.transformSlice(slice,(x,y), rot)
-            output.append(slice)
+            npImage = imgStk.transformSlice(npImage,(x,y), rot)
+            output.append(npImage)
 
         output.write(outputFile)
 
