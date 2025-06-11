@@ -89,6 +89,10 @@ class ProtImportTsBase(ProtTomoImportFiles):
         self.skippedMdocs = Integer()
         self.failedTs = String()
 
+    def createSet(self):
+        """ Creates the set of TS or TSM and returns it"""
+        pass
+
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
@@ -247,6 +251,8 @@ class ProtImportTsBase(ProtTomoImportFiles):
         samplingRate = self.samplingRate.get()
         counter = 0
 
+        someAdded = False
+
         if not self.MDOC_DATA_SOURCE:
             self.info("Using glob pattern: '%s'" % self._globPattern)
             self.info("Using regex pattern: '%s'" % self._regexPattern)
@@ -254,8 +260,8 @@ class ProtImportTsBase(ProtTomoImportFiles):
         outputSet = getattr(self, self.OUTPUT_NAME, None)
 
         if outputSet is None:
-            createSetFunc = getattr(self, self._createOutputName)
-            outputSet = createSetFunc()
+            outputSet = self.createSet()
+
         elif outputSet.getSize() > 0:
             outputSet.loadAllProperties()
 
@@ -272,6 +278,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
 
         # Get files that matches the pattern via mdoc or not
         matchingFiles = self.getMatchingFiles()
+
 
         # Go through all of them
         for ts, tiltSeriesList in matchingFiles.items():
@@ -331,6 +338,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
 
                         f = (f[0], finalDestination) if type(f) is tuple else finalDestination
 
+                        logger.debug(f"Adding TiltImage( tilt={ta}, aqOrder={to} to the tilt serie.")
                         ti = tiClass(location=f,
                                      acquisitionOrder=to,
                                      tiltAngle=ta)
@@ -936,6 +944,8 @@ class ProtImportTs(ProtImportTsBase):
                       help="Select Yes if images have been rotated/interpolated "
                            "using alignment information.")
 
+    def createSet(self):
+        return tomo.objects.SetOfTiltSeries.create(self.getPath(), prefix="TiltSeries")
     def setItemExtraAttributes(self, tsObj: tomo.objects.TiltSeries):
         """
         Sets ctf corrected parameter and interpolation status.
@@ -1007,6 +1017,9 @@ class ProtImportTsMovies(ProtImportTsBase):
                        label='Dark image',
                        help='A dark image related to a set of movies')
         return group
+
+    def createSet(self):
+        return tomo.objects.SetOfTiltSeriesM.create(self.getPath(), prefix="TiltSeriesM")
 
     def _fillAcquisitionInfo(self, inputTs):
         ProtImportTsBase._fillAcquisitionInfo(self, inputTs)

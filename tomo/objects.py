@@ -541,9 +541,6 @@ class TiltSeries(TiltSeriesBase):
         ext = path.getExt(self.__getTsFileName())
         return os.path.join(tmpFolder, f"ts_{setId}_{self.getTsId()}_bin{binning}{ext}")
 
-    def getFileName(self):
-        return self.__getTsFileName()
-
     def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
         """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
