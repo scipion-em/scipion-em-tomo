@@ -26,10 +26,12 @@
 # **************************************************************************
 import logging
 import typing
-from os.path import exists, dirname, basename, join
+from os.path import exists, dirname, join
 from sqlite3 import OperationalError
 from typing import Optional
 import mrcfile
+
+from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem import ALIGN_NONE
 import csv
 import math
@@ -469,6 +471,75 @@ class TiltSeries(TiltSeriesBase):
             self.__applyTransformAli(inImgFileName, outFileName, swapXY, presentAcqOrders)
         else:
             self.__applyTransformNoAli(inImgFileName, outFileName, presentAcqOrders)
+
+    def getInterpolated(self, setId, binning, folder=None):
+        """ Returns the path to the interpolated file for this tilt series.
+        If exists, it will re-use it, otherwise it will create it.
+            :param setId: objId of the set this tilt series belong to
+            :param binning: binning at which you want he interpolated file
+            :param tmpFolder: folder for the interpolated file"""
+
+        if not self.hasAlignment():
+            return self.__getTsFileName()
+        else:
+            if folder is None:
+                folder = os.path.dirname(self.__getTsFileName())
+            path = self.getInterpolatedFileName(setId, binning, folder)
+            if not os.path.exists(path):
+                self.applyTransformPy(path, binning)
+            return path
+
+    def applyTransformPy(self, outputFile, binning):
+        """ Apply the transformation matrix to the tilt series using python. Use for now for visualization purposes until
+        quality is verified to be enough for processing.
+
+        :param outputFile: output file for the interpolated image
+        :param binning: times smaller you want the output"""
+
+        orig = self.__getTsFileName()
+
+        imgStk = ImageReadersRegistry.open(orig)
+
+        output = ImageStack()
+
+        for ti in self.iterItems():
+
+            transf = ti.getTransform()
+
+            _, _, rot = transf.getEulerAngles()
+            rot = np.rad2deg(-rot)
+
+            # Scale factor
+            factor = 1/binning
+
+            x,y,_ = transf.getShifts()
+            # scale shifts
+            x=x*factor
+            y=y*factor
+            npImage = imgStk.getImage(ti.getIndex()-1)
+
+            if binning != 0:
+                npImage = imgStk.scaleSlice(npImage, factor)
+
+            npImage = imgStk.transformSlice(npImage,(x,y), rot)
+            output.append(npImage)
+
+        output.write(outputFile)
+
+
+
+    def getInterpolatedFileName(self, setId, binning, tmpFolder):
+        """ Returns the interpolated filename for the tilt series
+        at the binning passed and in the tmp folder
+
+            :param setId: objId of the set this tilt series belong to
+            :param binning: binning at which you want he interpolated file
+            :param tmpFolder: folder for the interpolated file
+
+        """
+
+        ext = path.getExt(self.__getTsFileName())
+        return os.path.join(tmpFolder, f"ts_{setId}_{self.getTsId()}_bin{binning}{ext}")
 
     def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
         """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
