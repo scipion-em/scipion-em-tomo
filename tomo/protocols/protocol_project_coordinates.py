@@ -106,8 +106,8 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
                     position2d += offset
                     
                     landmarkModel.addLandmark(
-                        xCoor=position2d[0],
-                        yCoor=position2d[1],
+                        xCoor=round(position2d[0]),
+                        yCoor=round(position2d[1]),
                         tiltIm=tiltImage.getIndex(),
                         chainId=chainId,
                         xResid=0,

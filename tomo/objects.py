@@ -401,6 +401,9 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
+    def getTiltImageFromAcqOrder(self, acqOrder):
+        return self[{self.ACQ_ORDER_FIELD}: acqOrder]
+    
 
 def tiltSeriesToString(tiltSeries):
     s = []
@@ -3114,7 +3117,7 @@ class SetOfCTFTomoSeries(data.EMSet):
 class TiltSeriesCoordinate(data.EMObject):
     """This class holds the (x,y,z) positions, in angstroms, and other information
     associated with a coordinate related to a tilt series"""
-
+    TS_ID_FIELD = "_tsId"
     SCORE_ATTR = "_score"
 
     def __init__(self, **kwargs):
@@ -3226,3 +3229,12 @@ class SetOfTiltSeriesCoordinates(data.EMSet):
         from other set of objects to current one.
         """
         self.setSetOfTiltSeries(other.getSetOfTiltSeries())
+
+    def iterCoordinates(self, ts: TiltSeriesBase = None, orderBy='id'):
+        if ts is None:
+            coordWhere = '1'
+        else:
+            coordWhere = '%s="%s"' % (TiltSeriesCoordinate.TS_ID_FIELD, ts.getTsId())
+
+        for item in self.iterItems(where=coordWhere, orderBy=orderBy):
+            yield item
