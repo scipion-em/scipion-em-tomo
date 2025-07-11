@@ -888,7 +888,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             for ti in self:
                 f.write('0.00\n')
 
-    def writeXfFile(self, transformFilePath, delimiter='\t'):
+    def writeXfFile(self, transformFilePath, delimiter='\t', factor=1):
         """ This method takes a tilt series and the output transformation file
         path and creates an IMOD-based transform
         file in the location indicated. """
@@ -902,8 +902,8 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.7f' % transform[1],
                                  '%.7f' % transform[3],
                                  '%.7f' % transform[4],
-                                 '%.3f' % transform[2],
-                                 '%.3f' % transform[5]]
+                                 '%.3f' % (float(transform[2]) / factor),
+                                 '%.3f' % (float(transform[5]) / factor)]
             else:
                 from pyworkflow.utils import yellowStr
                 logging.info(
@@ -944,7 +944,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         self.writeXtiltFile(folderName)
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
-        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'))
+        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
