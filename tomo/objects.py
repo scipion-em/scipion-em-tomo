@@ -26,10 +26,12 @@
 # **************************************************************************
 import logging
 import typing
-from os.path import exists, dirname, basename, join
+from os.path import exists, dirname, join
 from sqlite3 import OperationalError
 from typing import Optional
 import mrcfile
+
+from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem import ALIGN_NONE
 import csv
 import math
@@ -470,6 +472,75 @@ class TiltSeries(TiltSeriesBase):
         else:
             self.__applyTransformNoAli(inImgFileName, outFileName, presentAcqOrders)
 
+    def getInterpolated(self, setId, binning, folder=None):
+        """ Returns the path to the interpolated file for this tilt series.
+        If exists, it will re-use it, otherwise it will create it.
+            :param setId: objId of the set this tilt series belong to
+            :param binning: binning at which you want he interpolated file
+            :param tmpFolder: folder for the interpolated file"""
+
+        if not self.hasAlignment():
+            return self.__getTsFileName()
+        else:
+            if folder is None:
+                folder = os.path.dirname(self.__getTsFileName())
+            path = self.getInterpolatedFileName(setId, binning, folder)
+            if not os.path.exists(path):
+                self.applyTransformPy(path, binning)
+            return path
+
+    def applyTransformPy(self, outputFile, binning):
+        """ Apply the transformation matrix to the tilt series using python. Use for now for visualization purposes until
+        quality is verified to be enough for processing.
+
+        :param outputFile: output file for the interpolated image
+        :param binning: times smaller you want the output"""
+
+        orig = self.__getTsFileName()
+
+        imgStk = ImageReadersRegistry.open(orig)
+
+        output = ImageStack()
+
+        for ti in self.iterItems():
+
+            transf = ti.getTransform()
+
+            _, _, rot = transf.getEulerAngles()
+            rot = np.rad2deg(-rot)
+
+            # Scale factor
+            factor = 1/binning
+
+            x,y,_ = transf.getShifts()
+            # scale shifts
+            x=x*factor
+            y=y*factor
+            npImage = imgStk.getImage(ti.getIndex()-1)
+
+            if binning != 0:
+                npImage = imgStk.scaleSlice(npImage, factor)
+
+            npImage = imgStk.transformSlice(npImage,(x,y), rot)
+            output.append(npImage)
+
+        output.write(outputFile)
+
+
+
+    def getInterpolatedFileName(self, setId, binning, tmpFolder):
+        """ Returns the interpolated filename for the tilt series
+        at the binning passed and in the tmp folder
+
+            :param setId: objId of the set this tilt series belong to
+            :param binning: binning at which you want he interpolated file
+            :param tmpFolder: folder for the interpolated file
+
+        """
+
+        ext = path.getExt(self.__getTsFileName())
+        return os.path.join(tmpFolder, f"ts_{setId}_{self.getTsId()}_bin{binning}{ext}")
+
     def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
         """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
@@ -817,7 +888,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             for ti in self:
                 f.write('0.00\n')
 
-    def writeXfFile(self, transformFilePath):
+    def writeXfFile(self, transformFilePath, delimiter='\t', factor=1):
         """ This method takes a tilt series and the output transformation file
         path and creates an IMOD-based transform
         file in the location indicated. """
@@ -831,8 +902,8 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.7f' % transform[1],
                                  '%.7f' % transform[3],
                                  '%.7f' % transform[4],
-                                 '%.3f' % transform[2],
-                                 '%.3f' % transform[5]]
+                                 '%.3f' % (float(transform[2]) / factor),
+                                 '%.3f' % (float(transform[5]) / factor)]
             else:
                 from pyworkflow.utils import yellowStr
                 logging.info(
@@ -849,7 +920,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
             tsMatrixTransformList.append(transformIMOD)
 
         with open(transformFilePath, 'w') as f:
-            csvW = csv.writer(f, delimiter='\t')
+            csvW = csv.writer(f, delimiter=delimiter)
             csvW.writerows(tsMatrixTransformList)
 
     def writeImodFiles(self, folderName, **kwargs):
@@ -873,7 +944,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         self.writeXtiltFile(folderName)
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
-        self.writeXfFile(transformFilePath)
+        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -2023,7 +2094,8 @@ class SubTomogram(data.Volume):
             return self._transform
 
 
-class SetOfSubTomograms(data.SetOfVolumes):
+
+class SetOfSubTomogramsBase(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
     EXPOSE_ITEMS = False
@@ -2170,6 +2242,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
                 self._tomos[tsId] = tomo
 
         return self._tomos
+
+
+class SetOfSubTomograms(SetOfSubTomogramsBase):
+    pass
 
 
 class AverageSubTomogram(SubTomogram):
@@ -3115,11 +3191,15 @@ class TiltSeriesCoordinate(data.EMObject):
     """This class holds the (x,y,z) positions, in angstroms, and other information
     associated with a coordinate related to a tilt series"""
 
+    SCORE_ATTR = "_score"
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self._x = Float()
         self._y = Float()
         self._z = Float()
+        self._score = Float()
+        
         # Used to access to the corresponding tilt series from each coord (it's the tsId)
         self._tsId = String(kwargs.get('tsId', None))
 
@@ -3174,7 +3254,12 @@ class TiltSeriesCoordinate(data.EMObject):
     def setTsId(self, tsId):
         self._tsId.set(tsId)
 
-
+    def getScore(self):
+        return self._score.get()
+    
+    def setScore(self, score):
+        self._score.set(score)
+    
 class SetOfTiltSeriesCoordinates(data.EMSet):
     """ Encapsulate the logic of a set of tilt series coordinates.
     Each coordinate has a (x,y,z) position in scipion's convention.

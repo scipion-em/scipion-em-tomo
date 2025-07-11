@@ -24,8 +24,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import numpy as np
+
+from enum import Enum
 import math
+import numpy as np
+import skimage.morphology
 
 from pwem.protocols import EMProtocol
 from pwem.objects import Set, Integer
@@ -40,6 +43,8 @@ from tomo.objects import (SetOfMeshes, MeshPoint, SetOfTomoMasks, TomoMask,
 from tomo.protocols import ProtTomoBase
 import tomo.constants as const
 
+class OutputMeshesFromSegmentation(Enum):
+    Meshes = SetOfMeshes
 
 class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
     """
@@ -47,14 +52,11 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
     """
     _label = 'meshes from tomo mask'
     _devStatus = BETA
-    _OUTPUT_NAME = 'Meshes'
-    _possibleOutputs = {_OUTPUT_NAME: SetOfMeshes}
-    listOfMeshCoords = {}
+    _possibleOutputs = OutputMeshesFromSegmentation
 
     # --------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
-        form.addSection(label='Parameters')
-
+        form.addSection(label='Input')
         form.addParam('inputMasks', PointerParam, pointerClass=SetOfTomoMasks,
                       label='Tomo Masks', important=True,
                       help='Set of tomo mask from which the meshes will be created')
@@ -62,22 +64,33 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
                       label='Tomograms',
                       help='Tomograms to which the meshes will be asotiated')
         
-        form.addParam('segmentation', BooleanParam, label='Is input segmented',
+        form.addSection(label='Parameters')
+        form.addParam('smoothMask', BooleanParam, label='Smooth mask',
                       important=True, default=False,
-                      help='TODO')
-        
+                      help='Wether the input is a segmentation or a smooth mask')
         form.addParam('backgroundLabel', IntParam, label='Background label',
-                      condition='segmentation', default=0,
+                      condition='not smoothMask', default=0,
                       help='Label in the segmentation to be considered as '
                            'background')
-        
+
         line = form.addLine('Threshold to keep',
-                            condition='not segmentation',
+                            condition='smoothMask',
                             help="Only the voxels between these two values "
                             "will be considered to create the meshes.")
         line.addParam('lowLimit', FloatParam, default=0.1, label='Lowest')
         line.addParam('highLimit', FloatParam, default=1, label='Highest')
 
+        group = form.addGroup('Morphological operations', 
+                              help='Operations are performed in the same order '
+                              'as in the form')
+        group.addParam('applyDilation', IntParam, label='Dilation',
+                      default=0,
+                      help='When set to a positive number, a dilation '
+                      'operation is applied with the provided pixel count.')
+        group.addParam('applySkeletonization', BooleanParam, label='Skeletonization',
+                      default=True,
+                      help='When set to yes, a skeletonization operation is applied.')
+        
         form.addParam('density',
                       FloatParam,
                       label='Percentage of density ',
@@ -88,60 +101,64 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
 
     # --------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
-        tomograms: SetOfTomograms = self.inputTomograms.get()
-
-        self._insertFunctionStep(self.createOutputStep)
-        for tomogram in tomograms:
-            tsId = tomogram.getTsId()
+        self._initialize()
+        
+        for tsId in self.masks.keys():
             self._insertFunctionStep(self.processTomogramStep, tsId)
-        self._insertFunctionStep(self.closeOutputStep)
+        self._insertFunctionStep(self._closeOutputSet)
 
     # --------------------------- STEPS functions ------------------------------
-
-    def createOutputStep(self):
-        tomograms = self.inputTomograms
-    
-        meshes: SetOfMeshes = self._createSetOfMeshes(tomograms)
-        meshes.setSamplingRate(tomograms.get().getSamplingRate())
-        meshes.setStreamState(Set.STREAM_OPEN)
- 
-        self._defineOutputs(**{self._OUTPUT_NAME: meshes})
-        self._defineSourceRelation(self.inputMasks, tomograms)
-        self._defineSourceRelation(self.inputTomograms, tomograms)
-        
-        self.baseGroupId = Integer(1)
- 
     def processTomogramStep(self, tsId):
         mask = self._getInputMask(tsId)
-        if mask is not None:
-            tomogram = self._getInputTomogram(tsId)
-            outputMeshes = getattr(self, self._OUTPUT_NAME)
-            maskData = self._loadMask(mask)
-    
-            if self.segmentation:
-                self._processSegmentation(
-                    mesh=outputMeshes,
-                    tomogram=tomogram,
-                    segmentation=maskData
-                )
-            else:
-                self._processSmoothMask(
-                    mesh=outputMeshes,
-                    tomogram=tomogram,
-                    mask=maskData
-                )
-    
-    def closeOutputStep(self):
-        self._closeOutputSet()
+        tomogram = self._getInputTomogram(tsId)
+        
+        if mask is not None and tomogram is not None:
+            with self._lock:
+                outputMeshes = self._getOutputMeshes()
+                maskData = self._loadMask(mask)
+        
+                if self.smoothMask:
+                    self._processSmoothMask(
+                        mesh=outputMeshes,
+                        tomogram=tomogram,
+                        mask=maskData
+                    )
+                else:
+                    self._processSegmentation(
+                        mesh=outputMeshes,
+                        tomogram=tomogram,
+                        segmentation=maskData
+                    )
 
+            
+                outputMeshes.write()
+                self._store()
+    
     # --------------------------- UTILS functions ------------------------------
+    def _initialize(self):
+        self.masks = { mask.getTsId(): mask.clone() for mask in  self.inputMasks.get() }
+        self.tomos = { tomo.getTsId(): tomo.clone() for tomo in  self.inputTomograms.get() } 
+        self.baseGroupId = Integer(1)
+    
+    def _getOutputMeshes(self) -> SetOfMeshes:
+        output: SetOfMeshes = getattr(self, self._possibleOutputs.Meshes.name, None)
+        if output is not None:
+            output.enableAppend()
+        else:
+            output = self._createSetOfMeshes(self.inputTomograms)
+            output.setSamplingRate(self.inputMasks.get().getSamplingRate())
+            output.setStreamState(Set.STREAM_OPEN)
+
+            self._defineOutputs(**{self._possibleOutputs.Meshes.name: output})
+            self._defineSourceRelation(self.inputMasks, output)
+
+        return output
+    
     def _getInputMask(self, tsId: str) -> TomoMask:
-        masks = self.inputMasks.get()
-        return masks[{TomoMask.TS_ID_FIELD: tsId}]
+        return self.masks[tsId]
 
     def _getInputTomogram(self, tsId: str) -> Tomogram:
-        tomos = self.inputTomograms.get()
-        return tomos[{Tomogram.TS_ID_FIELD: tsId}]
+        return self.tomos[tsId]
     
     def _loadMask(self, mask: TomoMask) -> np.ndarray:
         ih = ImageHandler()
@@ -188,6 +205,14 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
                            mesh: SetOfMeshes,
                            tomogram: Tomogram,
                            mask: np.ndarray ):
+        if self.applyDilation.get() > 0:
+            footprint =skimage.morphology.ball(self.applyDilation.get()) 
+            mask = skimage.morphology.binary_dilation(mask, footprint)
+            
+        if self.applySkeletonization.get():
+            mask = skimage.morphology.skeletonize_3d(mask)
+        
+        
         probability = self.density.get() / 100.0
         coordinates = np.argwhere(mask)
         indices = np.arange(0, len(coordinates))
