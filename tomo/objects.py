@@ -717,7 +717,8 @@ class TiltSeries(TiltSeriesBase):
         else:
             logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
 
-    def generateTltFile(self, tltFilePath: str,
+    def generateTltFile(self,
+                        tltFilePath: str,
                         reverse: bool = False,
                         excludeViews: bool = False,
                         includeDose: bool = False) -> None:
@@ -732,20 +733,18 @@ class TiltSeries(TiltSeriesBase):
         """
         angleList = []
         doseList = []
-        if self.hasExcludedViews():
-            presentAcqOrders= self.getTsPresentAcqOrders()
+        if excludeViews:
+            presentAcqOrders = self.getTsPresentAcqOrders()
             for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 if ti.getAcquisitionOrder() in presentAcqOrders:
                     angleList.append(ti.getTiltAngle())
                     if includeDose:
                         doseList.append(ti.getAcquisition().getAccumDose())
         else:
-            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                if excludeViews and not ti.isEnabled():
-                    continue
-                angleList.append(ti.getTiltAngle())
-                if includeDose:
-                    doseList.append(ti.getAcquisition().getAccumDose())
+            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
+            if includeDose:
+                doseList = [ti.getAcquisition().getAccumDose() for ti
+                            in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
         if reverse:
             angleList.reverse()
             if includeDose:
