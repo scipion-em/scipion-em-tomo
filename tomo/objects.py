@@ -683,7 +683,7 @@ class TiltSeries(TiltSeriesBase):
         """It generates a set containing the acquisition orders that correspond to the enabled tilt images. If there
         are not any excluded views at metadata level, the output will be an empty set."""
         presentAcqOrders = set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
-        return () if len(presentAcqOrders) == len(self) else presentAcqOrders
+        return presentAcqOrders
 
     def getTsExcludedViewsIndices(self, presentAcqOrders: typing.Set[int] = ()) -> typing.Set[int]:
         """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is

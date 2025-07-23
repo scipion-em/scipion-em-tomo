@@ -28,7 +28,7 @@ import glob
 import os.path
 import threading
 from functools import lru_cache
-from tkinter import messagebox, BOTH, RAISED
+from tkinter import messagebox, BOTH, RAISED, simpledialog
 
 import numpy
 from matplotlib.figure import Figure
@@ -36,6 +36,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
+from pwem.viewers.filehandlers import getTkImage
 from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
@@ -49,8 +50,6 @@ import tomo.objects
 from .viewers_data import TomoDataViewer
 from ..convert.convert import getMeshVolFileName
 from ..objects import CTFTomo
-
-from PIL.ImageStat import Stat
 
 # How many standard deviations to truncate above and below the mean when increasing contrast:
 CONTRAST_STD = 2.0
@@ -469,9 +468,7 @@ class TiltSeriesDialog(ToolbarListDialog):
 
     def body(self, bodyFrame):
         ToolbarListDialog.body(self, bodyFrame)
-        firstTiltImage = self.tree.get_children(self.tree.get_children()[0])[0]
-        if firstTiltImage:
-            self.tree.selection_set(firstTiltImage)
+        self.tree.selection_set(self.tree.get_children()[0])
 
     def validateClose(self):
         if self._provider.getUpdatedCount() and self._provider.getchanges():
@@ -480,18 +477,38 @@ class TiltSeriesDialog(ToolbarListDialog):
             return result == messagebox.YES
         return True
 
+    def cancel(self, event=None):
+        """Clean tmp folder anc close the viewer"""
+        self.info('Cleaning temporal files and closing IMOD viewer...')
+        tmpFolder = self._protocol._getTmpPath()
+        pwutils.cleanPath(tmpFolder)
+        ListDialog.cancel(self)
+
+    def on_close(self, event=None):
+        self.cancel(event)
+
     def launchViewer(self, viewerInstance):
-        itemSelected = self.tree.selection() if not self.tree.parent(self.tree.selection()) else self.tree.parent(self.tree.selection())
-        obj = self.tree._objects[self.tree.index(itemSelected) + 1]
-        item = self._tiltSeries[obj.getObjId()]
-        viewerInstance.visualize(item)
+        tsSelected = self.tree.selection() if not self.tree.parent(self.tree.selection()) else self.tree.parent(self.tree.selection())
+        tsId = self.tree.item(tsSelected, 'text')
+        ts = self._tiltSeries.getItem('_tsId', tsId)
+        binning = 1
+        if viewerInstance.getName() == 'Imod':
+            binning = simpledialog.askinteger("Binning", "Display binning:", initialvalue=1, parent=self)
+            if binning is None:
+                return
+            if ts.hasAlignment():
+                self.info('Interpolating the tiltserie...')
+                self.update_idletasks()
+        viewerInstance.visualize(ts, setOfObjs=self._tiltSeries, binning=binning)
+        self.info('')
 
     def _showHelp(self, event=None):
         showInfo('TiltSeries viewer help',
                  'This viewer allows you to exclude or include TiltImages.\n\n'
                  '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox or space over the item\n'
                  '2. Increase contrast button to enhance the tiltimage contrast.\n'
-                 '3. Save button to create a new set with excluded views marked.', self)
+                 '3. Apply alignments button to display the interpolated tiltimage .\n'
+                 '4. Save button to create a new set with excluded views marked.', self)
 
     def _saveExcluded(self, event=None):
         updatedCount = self._provider.getUpdatedCount()
@@ -621,7 +638,7 @@ class TiltSeriesDialogView(pwviewer.View):
         self._protocol = protocol
         self._tiltSeries = tiltSeries
         self._provider = TiltSeriesTreeProvider(self._protocol, self._tiltSeries)
-        self._preview = None  # To store preview widget
+        self.canvas = None  # To store preview widget
 
     def show(self):
         previewCallback = self.previewTiltSeries
@@ -633,47 +650,55 @@ class TiltSeriesDialogView(pwviewer.View):
                          itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True)
 
     def getPreviewWidget(self, frame):
+        actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
+        actionBar.grid(row=0, column=0, sticky='ns')
 
-        if not self._preview:
+        self.startButton = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTINUE), command=self.autoNavigate,
+                                     width=25, height=25, relief=tk.RAISED)
+        self.startButton.grid(row=0, column=0, sticky='ns')
+        ToolTip(self.startButton, text='Auto navigate', delay=0)
 
-            actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
-            actionBar.grid(row=0, column=0, sticky='ns')
+        self.next = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_NEXT), command=lambda: self.navigate(DIRECTION_DOWN),
+                                     width=25, height=25, relief=tk.RAISED)
+        self.next.grid(row=0, column=1, sticky='ns')
+        ToolTip(self.next, text='Next', delay=0)
 
-            self.startButton = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTINUE), command=self.autoNavigate,
-                                         width=25, height=25, relief=tk.RAISED)
-            self.startButton.grid(row=0, column=0, sticky='ns')
-            ToolTip(self.startButton, text='Auto navigate', delay=0)
+        self.previous = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_PREVIOUS), command=lambda: self.navigate(DIRECTION_UP),
+                              width=25, height=25, relief=tk.RAISED)
+        self.previous.grid(row=0, column=2, sticky='ns')
+        ToolTip(self.previous, text='Previous', delay=0)
 
-            self.next = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_NEXT), command=lambda: self.navigate(DIRECTION_DOWN),
-                                         width=25, height=25, relief=tk.RAISED)
-            self.next.grid(row=0, column=1, sticky='ns')
-            ToolTip(self.next, text='Next', delay=0)
+        self.stopButton = tk.Button(actionBar, image=getImage(Icon.ACTION_STOP), command=self.stopNavigate, width=25, height=25)
+        self.stopButton.grid(row=0, column=3, sticky='ne')
+        ToolTip(self.stopButton, text='Stop navigate', delay=0)
 
-            self.previous = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_PREVIOUS), command=lambda: self.navigate(DIRECTION_UP),
-                                  width=25, height=25, relief=tk.RAISED)
-            self.previous.grid(row=0, column=2, sticky='ns')
-            ToolTip(self.previous, text='Previous', delay=0)
+        self.autoContrast = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTRAST),
+                                      command=self.increaseContrast,
+                                      width=25, height=25)
+        self.autoContrast.grid(row=0, column=4, sticky='ns')
 
-            self.stopButton = tk.Button(actionBar, image=getImage(Icon.ACTION_STOP), command=self.stopNavigate, width=25, height=25)
-            self.stopButton.grid(row=0, column=3, sticky='ne')
-            ToolTip(self.stopButton, text='Stop navigate', delay=0)
+        self.applyAlignmentsButton = tk.Button(actionBar, image=getImage(Icon.ACTION_INTERPOLATE),
+                                      command=self.onApplyAlignmentsClick,
+                                      width=25, height=25)
+        self.applyAlignmentsButton.grid(row=0, column=5, sticky='ns')
+        ToolTip(self.applyAlignmentsButton, text='Apply alignments', delay=0)
+        self.isAlignPressed = False
 
-            self.autoContrast = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTRAST),
-                                          command=self.increaseContrast,
-                                          width=25, height=25)
-            self.autoContrast.grid(row=0, column=4, sticky='ns')
-            ToolTip(self.autoContrast, text='Apply contrast to the selected tiltimage', delay=0)
+        self.toogleExclusion = tk.Button(actionBar, image=getImage(Icon.ACTION_CLOSE),
+                                         command=self._provider._toggleExclusion,
+                                         width=25, height=25)
+        self.toogleExclusion.grid(row=0, column=6, sticky='ns', command=None)
+        ToolTip(self.toogleExclusion, text='Exclude or include the selection', delay=0)
 
-            self.toogleExclusion = tk.Button(actionBar, image=getImage(Icon.ACTION_CLOSE),
-                                             command=self._provider._toggleExclusion,
-                                             width=25, height=25)
-            self.toogleExclusion.grid(row=0, column=5, sticky='ns', command=None)
-            ToolTip(self.toogleExclusion, text='Exclude or include the selection', delay=0)
-
-            from pyworkflow.gui.matplotlib_image import ImagePreview
-            self._preview = ImagePreview(frame, dim=500, label="Tilt series")
-            self._preview.grid(row=2, column=0)
-        return self._preview
+        self.canvasWidth = 550  # píxels
+        self.canvasHeight = 550  # píxels
+        self.canvas = tk.Canvas(frame,
+                                width=self.canvasWidth,
+                                height=self.canvasHeight,
+                                bg="#808080")
+        self.canvas.grid(row=2, column=0, sticky='nsew', padx=5, pady=5)
+        self.textLabel = tk.Label(frame, text="", anchor='center')
+        self.textLabel.grid(row=3, column=0, sticky='nsew', padx=5, pady=5)
 
     def stopNavigate(self):
         global afterId
@@ -735,20 +760,50 @@ class TiltSeriesDialogView(pwviewer.View):
                 else:
                     afterId = tree.after(100, self.autoNavigate, item, DIRECTION_DOWN)
 
+    def onApplyAlignmentsClick(self):
+        self.isAlignPressed = not self.isAlignPressed
+        if self.isAlignPressed:
+            self.applyAlignmentsButton.config(relief='sunken')
+        else:
+            self.applyAlignmentsButton.config(relief='raised')
+        self.applyAlignments()
+
+    def applyAlignments(self):
+        """To apply alignments"""
+        self.previewTiltSeries(self.selectedItem, None)
+
+    def updateAlignmentButtonState(self, obj):
+        if obj.hasTransform():
+            self.isAlignPressed = True
+            self.applyAlignmentsButton.config(
+                state='normal',
+                relief='sunken',
+            )
+        else:
+            self.applyAlignmentsButton.config(
+                state='disabled',
+                relief='raised',
+            )
+
     def increaseContrast(self):
 
         # Try to increase the contrast. TODO: Move this to somewhere more resusable
         try:
-            data = self._preview.figureimg.get_array()
+            data = np.asarray(self.pilImg)
             imgmean = data.mean()
             imgstd = data.std()
             low = imgmean - CONTRAST_STD * imgstd
             high = imgmean + CONTRAST_STD * imgstd
-            data = np.clip(data, low, high)
-            # Normalize data to the range [0, 255] if necessary
-            data = 255 * (data - low) / (high - low)
-            data = np.clip(data, 0, 255).astype(np.uint8)
-            self._preview._update(data)
+            contrast_data = np.clip(data, low, high)
+            contrast_data = 255 * (contrast_data - low) / (high - low)
+            contrast_data = np.clip(contrast_data, 0, 255).astype(np.uint8)
+
+            pilImg = Image.fromarray(contrast_data)
+            self.tkImg = getTkImage(pilImg)
+            self.canvas.delete("all")
+            x = (self.canvasWidth - pilImg.width) // 2
+            y = (self.canvasHeight - pilImg.height) // 2
+            self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
 
         except Exception as e:
             print(e)
@@ -777,18 +832,24 @@ class TiltSeriesDialogView(pwviewer.View):
             _, obj = self._provider.getTiltImage(tsId, tiId)
         else:
             return
-
+        self.selectedItem = obj
         self._provider._itemSelected(obj)
 
     def previewTiltSeries(self, obj, frame):
-
-        preview = self.getPreviewWidget(frame)
-        if isinstance(obj, tomo.objects.TiltSeriesBase):
-            text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
+        if self.canvas is None:
+            self.getPreviewWidget(frame)
             obj = self._provider.getTiltSerieRepresentative(obj)
-        elif isinstance(obj, tomo.objects.TiltImageBase):
-            text = "Tilt image at %sº" % obj.getTiltAngle()
+            self.updateAlignmentButtonState(obj)
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
+            angInfo = 'Tilt Axis angle: %s' % round(obj.getAcquisition().getTiltAxisAngle(), 2)
+            obj = self._provider.getTiltSerieRepresentative(obj)
 
+        elif isinstance(obj, tomo.objects.TiltImageBase):
+            angInfo = 'Tilt image at %sº' % round(obj.getTiltAngle(), 2)
+        else:
+            angInfo = ''
+
+        self.selectedItem = obj
         rot = None
         shifts = None
 
@@ -799,41 +860,43 @@ class TiltSeriesDialogView(pwviewer.View):
             list = transf.getMatrixAsList()
             shifts = list[2], list[5]
 
-        newImage = self.getThumbnail(obj.getIndex(), obj.getFileName(), rot, shifts)
+        newImage = self.getThumbnail(obj.getIndex(), obj.getFileName(), rot, shifts, self.isAlignPressed)
+        self.pilImg = Image.fromarray(newImage)
+        self.tkImg = getTkImage(self.pilImg)
+        self.canvas.delete("all")
+        imgW, imgH = self.pilImg.size
+        x = (self.canvasWidth - imgW) // 2
+        y = (self.canvasHeight - imgH) // 2
+        self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
+        self.textLabel.config(text=angInfo)
 
-        data = np.array(newImage)
-        preview._update(data)
-        preview.setLabel(text)
-
-    @classmethod
     @lru_cache
-    def getThumbnail(cls, index, fileName, rot, shifts):
+    def getThumbnail(self, index, fileName, rot, shifts, isAlignPressed):
 
-        imageStk = ImageReadersRegistry.open(f'{index}@{fileName}')
-        image = imageStk.getImage()
+        imageStk = ImageReadersRegistry.open(fileName)
+        image = imageStk.getImage(index=index-1, pilImage=True)
+        imgW, imgH = image.size
+        scale = min(self.canvasWidth / imgW, self.canvasHeight / imgH)
+        newSize = (int(imgW * scale), int(imgH * scale))
+        pilImg = image.resize(newSize)
 
-        # Get original size
-        width, height = image.shape
-        minDim = max(width, height)
-
+        THUMBNAIL_SIZE = self.canvasWidth
+        minDim = min(imgW, imgH)
         ratio = THUMBNAIL_SIZE / minDim
-
-        # Resize the image creating a thumbnail
-
-        # Special case, when image is smaller than the thumbnail
         if ratio > 1:
-            image = imageStk.scaleSlice(image, ratio)
+            image = imageStk.scaleSlice(np.array(pilImg), ratio)
         elif ratio < 1:
-            # Thumbn    ail does not scale up, only down
-            image = imageStk.thumbnailSlice(image, int(width * ratio), int(height * ratio))
+            image = imageStk.thumbnailSlice(np.array(pilImg), int(imgW * ratio), int(imgH * ratio))
 
-        if rot is not None:
+        if rot is not None and isAlignPressed:
             shiftX = shifts[0] * ratio
             shiftY = shifts[1] * ratio
             image = imageStk.transformSlice(image, (shiftX, shiftY), rot)
+            image = imageStk.thumbnailSlice(image, THUMBNAIL_SIZE, THUMBNAIL_SIZE)
         image = imageStk.flipSlice(image)
 
         return image
+
 
 class TomogramsTreeProvider(TreeProvider):
     """ Populate Tree from SetOfTomograms. """
