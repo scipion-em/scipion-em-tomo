@@ -444,7 +444,7 @@ class TiltSeriesDialog(ToolbarListDialog):
         self._protocol = protocol
         self._provider = provider
         self._applyContrastCallback = kwargs.get('applyContrastCallback', None)
-
+        self._displayInterpolated = kwargs.get('displayInterpolatedCallback', None)
 
         toolbarButtons = []
 
@@ -499,7 +499,8 @@ class TiltSeriesDialog(ToolbarListDialog):
             if ts.hasAlignment():
                 self.info('Interpolating the tiltserie...')
                 self.update_idletasks()
-        viewerInstance.visualize(ts, setOfObjs=self._tiltSeries, binning=binning)
+        viewerInstance.visualize(ts, setOfObjs=self._tiltSeries, binning=binning,
+                                 displayInterpolated=self._displayInterpolated())
         self.info('')
 
     def _showHelp(self, event=None):
@@ -642,12 +643,14 @@ class TiltSeriesDialogView(pwviewer.View):
 
     def show(self):
         previewCallback = self.previewTiltSeries
+        displayInterpolatedCallback = self.displayInterpolated
         if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeriesM):
             previewCallback = None
 
         TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
                          lockGui=False, previewCallback=previewCallback,
-                         itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True)
+                         itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True,
+                         displayInterpolatedCallback=displayInterpolatedCallback)
 
     def getPreviewWidget(self, frame):
         actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
@@ -836,6 +839,9 @@ class TiltSeriesDialogView(pwviewer.View):
             return
         self.selectedItem = obj
         self._provider._itemSelected(obj)
+
+    def displayInterpolated(self):
+        return self.isAlignPressed
 
     def previewTiltSeries(self, obj, frame):
         if self.canvas is None:
