@@ -697,6 +697,8 @@ class TiltSeriesDialogView(pwviewer.View):
                                 height=self.canvasHeight,
                                 bg="#808080")
         self.canvas.grid(row=2, column=0, sticky='nsew', padx=5, pady=5)
+        self.canvas.bind("<Button-4>", lambda e: self.navigate(DIRECTION_UP))
+        self.canvas.bind("<Button-5>", lambda e: self.navigate(DIRECTION_DOWN))
         self.textLabel = tk.Label(frame, text="", anchor='center')
         self.textLabel.grid(row=3, column=0, sticky='nsew', padx=5, pady=5)
 
