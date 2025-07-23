@@ -566,6 +566,8 @@ class TiltSeries(TiltSeriesBase):
         """
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
+            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             self.reStack(outFileName, presentAcqOrders)
         else:
             path.createAbsLink(os.path.abspath(inFileName), outFileName)
@@ -587,12 +589,14 @@ class TiltSeries(TiltSeriesBase):
         if firstImg.hasTransform() and swapXY:
             xDim, yDim = yDim, xDim
         if self.hasExcludedViews() and not ignoreExcludedViews:
+            presentAcqOrders = self.getTsPresentAcqOrders()
+            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             counter = 1
             for ti in self.iterItems(orderBy=self.INDEX):
                 acqOrder = ti.getAcquisitionOrder()
-                trMatrix = ti.getTransform().getMatrix()
-                presentAcqOrders = self.getTsPresentAcqOrders()
                 if acqOrder in presentAcqOrders:
+                    trMatrix = ti.getTransform().getMatrix()
                     self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, counter)
                     counter += 1
         else:
