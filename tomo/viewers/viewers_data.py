@@ -165,7 +165,7 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
     """ This class implements a view using Tkinter CtfEstimationListDialog
     and the CtfEstimationTreeProvider.
     """
-    _label = 'CTF estimation viewer'
+    _name = 'Tomo CTF'
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [tomo.objects.SetOfCTFTomoSeries]
 
