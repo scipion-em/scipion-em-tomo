@@ -602,7 +602,7 @@ class TiltSeries(TiltSeriesBase):
         else:
             for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
                 trMatrix = ti.getTransform().getMatrix()
-                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index)
+                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index + 1)
 
     def applyTransformToAll(self,
                             outFileName: str,
@@ -645,8 +645,8 @@ class TiltSeries(TiltSeriesBase):
     def _applyTransformToTi(imgFileName, trMatrix, xDim, yDim, outputFilePath, index):
         ih = ImageHandler()
         transformArray = np.array(trMatrix)
-        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + imgFileName,
-                          outputFile=str(index + 1) + '@' + outputFilePath,
+        ih.applyTransform(inputFile=str(index) + ':mrcs@' + imgFileName,
+                          outputFile=str(index) + '@' + outputFilePath,
                           transformMatrix=transformArray,
                           shape=(
                               yDim,

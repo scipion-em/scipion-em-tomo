@@ -167,8 +167,8 @@ class DataSetRe4STATuto(Enum):
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = tiltAxisAngle
     initialDose = initialDose
-    dosePerTiltImg = 3.05  # Mean dose
-    dosePerTiltImgWithTltFile = dosePerTiltImgWithTltFile
+    dosePerTiltImg = 3.05 # Mean dose
+    dosePerTiltImgWithTltFile = 3.0
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs54 = 'output 01 43 45 03'
     exclusionWordsTs03ts54 = 'output 01 43 45'
