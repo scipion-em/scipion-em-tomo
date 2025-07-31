@@ -728,21 +728,22 @@ class TiltSeries(TiltSeriesBase):
     def generateTltFile(self,
                         tltFilePath: str,
                         reverse: bool = False,
-                        excludeViews: bool = False,
+                        presentAcqOrders: typing.Set[int] = None,
                         includeDose: bool = False) -> None:
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
-        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
-        the non-excluded views (True) or all of them (False).
+        :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
+        filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
+        if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
+        (see tomo > utils > getCommonTsAndCtfElements)
         :param includeDose: boolean used to indicate if the tlt file created must contain an additional column with
         the dose or not (default).
         """
         angleList = []
         doseList = []
-        if excludeViews:
-            presentAcqOrders = self.getTsPresentAcqOrders()
+        if presentAcqOrders:
             for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 if ti.getAcquisitionOrder() in presentAcqOrders:
                     angleList.append(ti.getTiltAngle())
