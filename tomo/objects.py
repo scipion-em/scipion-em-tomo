@@ -233,6 +233,11 @@ class TiltImage(data.Image, TiltImageBase):
 
         return fileName + suffix + fileExtension
 
+    def getRotationAngle(self) -> float:
+        trMatrix = self.getTransform().getMatrix() if self.getTransform() is not None else np.eye(3)
+        rotAngle = np.rad2deg(np.arctan2(trMatrix[0, 1], trMatrix[0, 0]))
+        return rotAngle
+
 
 class TiltSeriesBase(data.SetOfImages):
     TS_ID_FIELD = '_tsId'
