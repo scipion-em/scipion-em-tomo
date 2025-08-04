@@ -445,6 +445,7 @@ class TestBaseCentralizedLayer(BaseTest):
         # Check the set elements main attributes
         for tomo in inTomoSet:
             tsId = tomo.getTsId()
+            print(cyanStr(f'---> checking the Tomogram tsId = {tsId}'))
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
@@ -479,6 +480,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+            print(cyanStr('---> Done!'))
 
     # TOMOMASKS ########################################################################################################
     def checkTomoMasks(self,
