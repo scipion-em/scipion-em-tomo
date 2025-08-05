@@ -6,6 +6,7 @@ v3.10.1:
         * Invert tilt angles on tilt-series.
         * Apply tomomasks to tomograms.
     - Tomo Viewer applies orientation to the images
+    - Tomo viewer is capable of managing tomograms
  Developers:
     - Expand the TCL:
         * For non-deterministic protocols that generates coordinates.
