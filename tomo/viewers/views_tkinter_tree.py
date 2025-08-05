@@ -174,57 +174,68 @@ class ObjectsTreeProvider(TreeProvider):
             self._itemSelected(obj)
 
     def _itemSelected(self, obj):
+        # Get selected tree item
         _, y, _, _ = self.tree.bbox(self.tree.selection()[0])
         selectedItem = self.tree.identify_row(y + 1)
         itemValues = self.tree.item(selectedItem, 'values')
 
-        if isinstance(obj, tomo.objects.TiltSeriesBase) or isinstance(obj, tomo.objects.Tomogram):
-            excludedTS = ObjectsState.INCLUDED if obj.isEnabled() else ObjectsState.EXCLUDED
-            obj.setEnabled(not obj.isEnabled())
-            tags = ObjectsState.INCLUDED
-            if ObjectsState.EXCLUDED in self.tree.item(selectedItem, 'tags'):
-                tags = ObjectsState.INCLUDED
+        isTiltSeries = isinstance(obj, tomo.objects.TiltSeriesBase)
+        isTomogram = isinstance(obj, tomo.objects.Tomogram)
 
-            if excludedTS == ObjectsState.INCLUDED:
-                self.tree.item(selectedItem, tags=(ObjectsState.EXCLUDED, tags,))
-                excludedTi = TiltImageStates.CHECK_MARK
-                self.updatedCount += 1
-                self.changes += 1
+        # Case 1: TiltSeries or Tomogram
+        if isTiltSeries or isTomogram:
+            wasEnabled = obj.isEnabled()
+            obj.setEnabled(not wasEnabled)
 
-            else:
-                self.tree.item(selectedItem, tags=(ObjectsState.INCLUDED, tags,))
-                excludedTi = TiltImageStates.CHECK_UNMARK
-                self.updatedCount -= 1
-                self.changes -= 1
+            # Determine tag updates
+            newState = ObjectsState.EXCLUDED if wasEnabled else ObjectsState.INCLUDED
+            self.tree.item(selectedItem, tags=(newState, newState))
 
-            if isinstance(obj, tomo.objects.TiltSeriesBase):
+            # Update counters
+            self.updatedCount += 1 if wasEnabled else -1
+            self.changes += 1 if wasEnabled else -1
+
+            excludedTi = (
+                TiltImageStates.CHECK_MARK if wasEnabled else TiltImageStates.CHECK_UNMARK
+            )
+
+            # If it's a TiltSeries, propagate change to its children
+            if isTiltSeries:
                 children = self.tree.get_children(selectedItem)
                 index, ts = self.getSelectedObject(obj)
-                size = ts.getSize()
-                for tiIndex in range(size):
-                    obj = self.objects[tiIndex + index + 1]
-                    if excludedTS == ObjectsState.INCLUDED:
-                        obj.setEnabled(False)
-                    else:
-                        obj.setEnabled(True)
-                    item = children[tiIndex]
-                    itemValues = self.tree.item(item, 'values')
-                    self.excludeTiltImage(obj, item, itemValues, excludedTi)
 
+                for i, item in enumerate(children):
+                    childObj = self.objects[index + i + 1]
+                    childObj.setEnabled(not wasEnabled)
+
+                    itemValues = self.tree.item(item, 'values')
+                    self.excludeTiltImage(childObj, item, itemValues, excludedTi)
+
+        # Case 2: TiltImage (child of a TiltSeries)
         else:
-            excludedTi = TiltImageStates.CHECK_MARK if obj.isEnabled() else TiltImageStates.CHECK_UNMARK
-            obj.setEnabled(not obj.isEnabled())
+            wasEnabled = obj.isEnabled()
+            obj.setEnabled(not wasEnabled)
+
+            excludedTi = (
+                TiltImageStates.CHECK_MARK if wasEnabled else TiltImageStates.CHECK_UNMARK
+            )
+
             self.excludeTiltImage(obj, selectedItem, itemValues, excludedTi)
-            # Verify if it is necessary to check or uncheck the tiltserie
+
+            # Check parent TiltSeries state
             parentItem = self.tree.parent(selectedItem)
             parentObj = obj._parentObject
+            parentText = self.tree.item(parentItem)['text']
+            excludedCount = len(self.excludedDict[parentText])
+            totalImages = parentObj.getSize()
 
-            if excludedTi == TiltImageStates.CHECK_UNMARK:
+            if not wasEnabled:
+                # We unchecked one → mark TiltSeries as INCLUDED
                 self.tree.item(parentItem, tags=(ObjectsState.INCLUDED, ObjectsState.INCLUDED))
                 parentObj.setEnabled(True)
-            # Checking the tiltserie if all tiltimages are checked
-            elif obj._parentObject.getSize() == len(self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']]):
-                self.tree.item(self.tree.parent(selectedItem), tags=(ObjectsState.EXCLUDED, ObjectsState.EXCLUDED))
+            elif excludedCount == totalImages:
+                # All images excluded → mark TiltSeries as EXCLUDED
+                self.tree.item(parentItem, tags=(ObjectsState.EXCLUDED, ObjectsState.EXCLUDED))
                 parentObj.setEnabled(False)
 
     def excludeTiltImage(self, obj,  selectedItem, itemValues, excluded):
@@ -620,6 +631,7 @@ class TomoDialog(ToolbarListDialog):
                 self.createNewSetOfTomogram()
 
     def createNewSetOfTomogram(self):
+        self.info('Processing ...')
         outputName = self._protocol.getNextOutputName('Tomograms_')
         outTomoSet = tomo.objects.SetOfTomograms.create(self._protocol._getPath(),
                                                         suffix=str(self._protocol.getOutputsSize()))
@@ -632,85 +644,94 @@ class TomoDialog(ToolbarListDialog):
                 tomogramClone = tomogram.clone()
                 tomogramClone.copyInfo(tomogram)
                 outTomoSet.append(tomogramClone)
+        self.info('The new set (%s) has been created successfully' % outputName)
         self._protocol._defineOutputs(**{outputName: outTomoSet})
 
     def createNewSetOfTiltSeries(self, restack):
-        outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
-                                                                    suffix=str(self._protocol.getOutputsSize()))
-        outputSetOfTiltSeries.copyInfo(self._setOfObjects)
-        outputSetOfTiltSeries.setDim(self._setOfObjects.getDim())
+        protocol = self._protocol
+        inputSet = self._setOfObjects
         excludedViews = self._provider.getExcludedViews()
-        outputName = self._protocol.getNextOutputName('TiltSeries_')
-        outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
+        hasOddEven = inputSet.hasOddEven()
+        outputName = protocol.getNextOutputName('TiltSeries_')
+        outputPath = os.path.join(protocol._getExtraPath(), outputName)
 
-        if restack:  # Creating a new directory to write a new stack
-            if not os.path.exists(outputPath):
-                os.mkdir(outputPath)
-        hasOddEven = self._setOfObjects.hasOddEven()
-        count = len(self._setOfObjects.getTSIds())
-        for tsIndex, ts in enumerate(self._setOfObjects):
-            self.info('Processing %s of %s tiltseries ...' % (tsIndex + 1, count))
+        outputSet = tomo.objects.SetOfTiltSeries.create(protocol.getPath(), suffix=str(protocol.getOutputsSize()))
+        outputSet.copyInfo(inputSet)
+        outputSet.setDim(inputSet.getDim())
+
+        if restack and not os.path.exists(outputPath):
+            os.mkdir(outputPath)
+
+        for tsIndex, ts in enumerate(inputSet):
+            self.info(f'Processing {tsIndex + 1} of {len(inputSet)} tiltseries ...')
             self.update_idletasks()
+
             tsId = ts.getTsId()
             _, obj = self._provider.getSelectedObject(tsId)
-            if obj.isEnabled():  # We will exclude the TS that are checked even if the restack option is not chosen.
-                newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
+
+            if not obj.isEnabled():
+                continue  # Skip disabled tilt series
+
+            newTs = tomo.objects.TiltSeries()
+            newTs.copyInfo(ts)
+            outputSet.append(newTs)
+
+            newBinaryName = os.path.join(outputPath, f'{tsId}.mrcs')
+            if hasOddEven:
+                oddFileName = ts.getOddFileName()
+                evenFileName = ts.getEvenFileName()
+                newOddBinaryName = os.path.join(outputPath, f'{tsId}_odd.mrcs')
+                newEvenBinaryName = os.path.join(outputPath, f'{tsId}_even.mrcs')
+
+            # Create new stacks if restacking
+            properties = {"sr": obj.getSamplingRate()}
+            stack, oddStack, evenStack = ImageStack(properties), ImageStack(properties), ImageStack(properties)
+
+            index = 1
+            for ti in ts.iterItems():
+                included = ti.getObjId() not in excludedViews[tsId]
+                if not restack or (included and restack):
+                    newTi = self._cloneTiltImage(ti, included)
+                    if restack:
+                        oldIndex = str(ti.getIndex())
+                        stack.append(ImageReadersRegistry.open(f"{oldIndex}@{ti.getFileName()}"))
+                        newTi.setLocation((index, newBinaryName))
+
+                        if hasOddEven:
+                            oddStack.append(ImageReadersRegistry.open(f"{oldIndex}@{oddFileName}"))
+                            evenStack.append(ImageReadersRegistry.open(f"{oldIndex}@{evenFileName}"))
+                            newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
+
+                        index += 1
+
+                    newTs.append(newTi)
+
+            if restack:
+                ImageReadersRegistry.write(stack, newBinaryName, isStack=True)
                 if hasOddEven:
-                    oddFileName = ts.getOddFileName()
-                    newOddBinaryName = os.path.join(outputPath, tsId + '_odd.mrcs')
-                    evenFileName = ts.getEvenFileName()
-                    newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
+                    ImageReadersRegistry.write(oddStack, newOddBinaryName, isStack=True)
+                    ImageReadersRegistry.write(evenStack, newEvenBinaryName, isStack=True)
 
-                index = 1
-                newTs = tomo.objects.TiltSeries()
-                newTs.copyInfo(ts)
-                outputSetOfTiltSeries.append(newTs)
+            if len(excludedViews[tsId]) == ts.getSize():
+                newTs.setEnabled(False)
 
-                # New Stacks
-                properties = {"sr": obj.getSamplingRate()}
-                newStack = ImageStack(properties=properties)
-                oddFileNames = ImageStack(properties=properties)
-                evenFileNames = ImageStack(properties=properties)
+            newTs.setDim(ts.getDim())
+            newTs.setAnglesCount(newTs.getSize())
+            newTs.write()
+            outputSet.update(newTs)
 
-                for ti in ts.iterItems():
-                    included = False if ti.getObjId() in excludedViews[tsId] else True
-                    if not restack or (included and restack):
-                        newTi = ti.clone()
-                        newTi.copyInfo(ti, copyId=False)
-                        newTi.setObjId(None)
-                        newTi.setAcquisition(ti.getAcquisition())
-                        # For some reason .clone() does not clone the enabled nor the creation time
-                        newTi.setEnabled(included)
-                        if restack:
-                            oldIndex = str(ti.getIndex())
-                            newStack.append(ImageReadersRegistry.open(oldIndex + '@' + ti.getFileName()))
-                            newTi.setLocation((index, newBinaryName))
-
-                            if hasOddEven:
-                                oddFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + oddFileName))
-                                evenFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + evenFileName))
-                                newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
-
-                            index += 1
-                        newTs.append(newTi)
-
-                if restack:
-                    ImageReadersRegistry.write(newStack, newBinaryName, isStack=True)
-                    if hasOddEven:
-                        ImageReadersRegistry.write(oddFileNames, newOddBinaryName, isStack=True)
-                        ImageReadersRegistry.write(evenFileNames, newEvenBinaryName, isStack=True)
-
-                if len(excludedViews[ts.getTsId()]) == ts.getSize():
-                    newTs.setEnabled(False)
-                newTs.setDim(ts.getDim())
-                newTs.setAnglesCount(newTs.getSize())
-                newTs.write()
-                outputSetOfTiltSeries.update(newTs)
-                outputSetOfTiltSeries.write()
-
-        self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
-        self.info('The new set (%s) has been created successfully' % outputName)
+        outputSet.write()
+        protocol._defineOutputs(**{outputName: outputSet})
+        self.info(f'The new set ({outputName}) has been created successfully')
         self._provider.resetChanges()
+
+    def _cloneTiltImage(self, ti, included):
+        newTi = ti.clone()
+        newTi.copyInfo(ti, copyId=False)
+        newTi.setObjId(None)
+        newTi.setAcquisition(ti.getAcquisition())
+        newTi.setEnabled(included)
+        return newTi
 
 
 class TomoObjectDialogView(pwviewer.View):
@@ -831,9 +852,8 @@ class TomoObjectDialogView(pwviewer.View):
         itemSelected = tree.selection()
         if itemSelected:
             item = itemSelected[0]
-            if not tree.parent(item):
-                if tree.get_children(item):
-                    item = tree.get_children(item)[0]
+            if not tree.parent(item) and tree.get_children(item):
+                item = tree.get_children(item)[0]
             if direction == DIRECTION_DOWN:
                 item = tree.next(item)
             else:
