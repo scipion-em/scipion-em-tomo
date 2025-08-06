@@ -202,7 +202,7 @@ class ObjectsTreeProvider(TreeProvider):
             # If it's a TiltSeries, propagate change to its children
             if isTiltSeries:
                 children = self.tree.get_children(selectedItem)
-                index, ts = self.getSelectedObject(obj)
+                index, _ = self.getSelectedObject(obj)
 
                 for i, item in enumerate(children):
                     childObj = self.objects[index + i + 1]
