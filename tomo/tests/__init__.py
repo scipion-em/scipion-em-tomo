@@ -246,6 +246,9 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For IMOD CTF import testing
+    imodCtfFilesPath = 'testImodCtf'
+
     # For gapStopTM testing
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
 
