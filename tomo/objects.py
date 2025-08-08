@@ -531,14 +531,12 @@ class TiltSeries(TiltSeriesBase):
 
     def applyTransform(self,
                        outFileName: str,
-                       swapXY: bool = False,
                        even: typing.Union[bool, None] = None,
                        ignoreExcludedViews: bool = False) -> None:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
         tilt-series or re-stacks it depending on the value jorgeof the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
         :param outFileName: String containing the path of the output file that is created.
-        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
         True to the even one and False to the odd one.
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
@@ -552,7 +550,6 @@ class TiltSeries(TiltSeriesBase):
         if self.hasAlignment():
             self.__applyTransformAli(inImgFileName,
                                      outFileName,
-                                     swapXY=swapXY,
                                      ignoreExcludedViews=ignoreExcludedViews)
         else:
             self.__applyTransformNoAli(inImgFileName,
@@ -580,17 +577,20 @@ class TiltSeries(TiltSeriesBase):
     def __applyTransformAli(self,
                             inFileName: str,
                             outFileName: str,
-                            swapXY: bool = False,
                             ignoreExcludedViews: bool = False) -> None:
         """Apply transform to a tilt-series with alignment.
         :param inFileName: String containing the path of the image to which the transformation is going to be applied.
         :param outFileName: String containing the path of the output file that is created.
-        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
         (default) or not.
         """
         firstImg = self.getFirstItem()
         xDim, yDim, _ = firstImg.getDim()
+        # Check if rotation angle is greater than 45º. If so,
+        # swap x and y dimensions to adapt output image sizes to
+        # the final sample disposition.
+        rotationAngle = firstImg.getRotationAngle()
+        swapXY = True if 45 < abs(rotationAngle) < 135 else False
         if firstImg.hasTransform() and swapXY:
             xDim, yDim = yDim, xDim
         if self.hasExcludedViews() and not ignoreExcludedViews:
@@ -612,7 +612,6 @@ class TiltSeries(TiltSeriesBase):
     def applyTransformToAll(self,
                             outFileName: str,
                             outFileNamesEvenOdd: typing.List[str] = None,
-                            swapXY: bool = False,
                             ignoreExcludedViews: bool = False) -> None:
         """Applies a transform to the main tilt-series, the even and the odd ones. Inputs:
         :param outFileName: String containing the path of the output file that is created.
@@ -620,7 +619,6 @@ class TiltSeries(TiltSeriesBase):
         odd files that are created. The expected order is [even, odd]. If not provided, these names will be
         generated in the same location as outFileName and with the same base name and extension but with the
         corresponding suffixes _even, _odd.
-        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
         (default) or not.
         """
@@ -634,15 +632,12 @@ class TiltSeries(TiltSeriesBase):
             evenFName = join(fPath, bName + '_even' + ext)
             oddFName = join(fPath, bName + '_odd' + ext)
         self.applyTransform(outFileName,
-                            swapXY=swapXY,
                             even=None,
                             ignoreExcludedViews=ignoreExcludedViews)
         self.applyTransform(evenFName,
-                            swapXY=swapXY,
                             even=True,
                             ignoreExcludedViews=ignoreExcludedViews)
         self.applyTransform(oddFName,
-                            swapXY=swapXY,
                             even=False,
                             ignoreExcludedViews=ignoreExcludedViews)
 
