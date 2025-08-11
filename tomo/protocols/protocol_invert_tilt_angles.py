@@ -61,6 +61,7 @@ class ProtInvertTiltAngles(EMProtocol):
         self.ctfDict = None
         self.nonMatchingTsIdsMsg = String()
 
+    # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_TS_SET, PointerParam,
