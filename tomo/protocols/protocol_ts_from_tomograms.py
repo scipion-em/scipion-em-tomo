@@ -27,13 +27,12 @@
 import logging
 from enum import Enum
 from typing import Union
-
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer
 from pyworkflow.protocol import PointerParam
-from pyworkflow.utils import Message
-from tomo.objects import SetOfTiltSeries, SetOfTomograms
+from pyworkflow.utils import Message, cyanStr
+from tomo.objects import SetOfTiltSeries, SetOfTomograms, TiltSeries, TiltImage
 
 logger = logging.getLogger(__name__)
 IN_TOMO_SET = 'inTomoSet'
@@ -68,23 +67,48 @@ class ProtTsFromTomos(EMProtocol):
         form.addParam(IN_TS_SET, PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
-                      label='Tilt-Series (opt.)',
-                      help='If not provided, the protocol will try to find the corresponding '
-                           'tilt-series via data relations.')
+                      label='Tilt-Series')
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._initialize()
-        for tsId in self.tsDict.keys():
-            self._insertFunctionStep(self._getTsFromTomosStep, tsId,
-                                     needsGPU=False)
+        self._insertFunctionStep(self._getTsFromTomosStep, needsGPU=False)
 
     # -------------------------- STEPS functions ------------------------------
-    def _initialize(self):
+    def _getTsFromTomosStep(self):
+        inTomosSet = self._getInTomoSet()
         inTsSet = self._getInTsSet()
-
-    def _getTsFromTomosStep(self, tsId: str):
-        pass
+        # Compute the matching tsIds among the tilt-series and the tomograms, as they both could be a subset
+        tomosTsIds = set(inTsSet.getTSIds())
+        tsIds = set(inTomosSet.getTSIds())
+        presentTsIds = tomosTsIds & tsIds
+        nonMatchingTsIds = (tomosTsIds ^ tsIds) - presentTsIds
+        # Validate the intersection
+        if len(presentTsIds) <= 0:
+            raise Exception("There isn't any common tsIds among the tomograms and  the "
+                            "tilt-series introduced.")
+        if len(nonMatchingTsIds) > 0:
+            logger.info(cyanStr(f"TsIds not common in the introduced tomograms and "
+                                f"tilt-series are: {nonMatchingTsIds}"))
+        tsDict = {ts.getTsId(): ts.clone() for ts in inTsSet.iterItems() if ts.getTsId() in presentTsIds}
+        # Create the output set
+        outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries')
+        outTsSet.copyInfo(inTsSet)
+        self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet})
+        self._defineSourceRelation(self._getInTsSet(returnPointer=True), outTsSet)
+        for tsId in presentTsIds:
+            inTs = tsDict[tsId]
+            outTs = TiltSeries()
+            outTs.copyInfo(inTs)
+            outTsSet.append(outTs)
+            for ti in inTs.iterItems(orderBy=TiltImage.INDEX_FIELD):
+                outTi = TiltImage()
+                outTi.copyInfo(ti)
+                outTs.append(outTi)
+            outTsSet.update(outTs)
+            # Data persistence
+            outTs.write()
+            outTsSet.update(outTs)
+            outTsSet.write()
 
     # --------------------------- UTILS functions -----------------------------
     def _getInTsSet(self, returnPointer: bool = False) -> Union[SetOfTiltSeries, Pointer]:
@@ -94,7 +118,3 @@ class ProtTsFromTomos(EMProtocol):
     def _getInTomoSet(self, returnPointer: bool = False) -> Union[SetOfTomograms, Pointer]:
         inTomosPointer = getattr(self, IN_TOMO_SET)
         return inTomosPointer if returnPointer else inTomosPointer.get()
-
-    # def _getTsFromRelations(self) -> Union[SetOfTiltSeries, None]:
-    #     inTomos = self._getFormAttrib(IN_CTF_SET)
-    #     return getObjFromRelation(inTomos, self, SetOfTiltSeries)

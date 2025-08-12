@@ -5,6 +5,7 @@ v3.10.1:
     - New protocols added:
         * Invert tilt angles on tilt-series.
         * Apply tomomasks to tomograms.
+        * Get tilt-series from tomograms.
     - Tomo Viewer applies orientation to the images
  Developers:
     - Expand the TCL:

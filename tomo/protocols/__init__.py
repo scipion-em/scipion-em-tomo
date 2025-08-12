@@ -32,6 +32,7 @@ from .protocol_import_ctf import ProtImportTsCTF
 from .protocol_invert_tilt_angles import ProtInvertTiltAngles
 from .protocol_tomo_apply_tomomask import ProtTomoApplyTomoMask
 from .protocol_ts_base import ProtTomoReconstruct
+from .protocol_ts_from_tomograms import ProtTsFromTomos
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
 from .protocol_ts_correct_motion import ProtTsCorrectMotion, ProtTsAverage
