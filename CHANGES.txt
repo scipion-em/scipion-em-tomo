@@ -7,7 +7,9 @@ v3.10.1:
         * Apply tomomasks to tomograms.
         * Get tilt-series from tomograms.
     - Tomo Viewer applies orientation to the images
+    - Improve the matching method in protocol tilt-series assign alignment.
  Developers:
+    - Changes in the TiltSeries data model.
     - Expand the TCL:
         * For non-deterministic protocols that generates coordinates.
         * To add a tolerance to the checking of oriented coordinates of particles allowing some percentage with
