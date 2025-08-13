@@ -84,7 +84,7 @@ class ProtTsFromTomos(EMProtocol):
         nonMatchingTsIds = (tomosTsIds ^ tsIds) - presentTsIds
         # Validate the intersection
         if len(presentTsIds) <= 0:
-            raise Exception("There isn't any common tsIds among the tomograms and  the "
+            raise Exception("There isn't any common tsIds among the tomograms and the "
                             "tilt-series introduced.")
         if len(nonMatchingTsIds) > 0:
             logger.info(cyanStr(f"TsIds not common in the introduced tomograms and "
@@ -109,6 +109,10 @@ class ProtTsFromTomos(EMProtocol):
             outTs.write()
             outTsSet.update(outTs)
             outTsSet.write()
+
+        if len(outTsSet) == 0:
+            raise Exception(f'No output/s {self._possibleOutputs.tiltSeries.name} were generated. '
+                            f'Please check the Output Log > run.stdout and run.stderr')
 
     # --------------------------- UTILS functions -----------------------------
     def _getInTsSet(self, returnPointer: bool = False) -> Union[SetOfTiltSeries, Pointer]:
