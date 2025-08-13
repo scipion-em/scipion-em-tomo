@@ -106,7 +106,10 @@ class TestBaseCentralizedLayer(BaseTest):
                 if checkIds:
                     self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
 
-    def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float,
+    def checkTiltSeries(self,
+                        inTsSet: SetOfTiltSeries,
+                        expectedSetSize: int,
+                        expectedSRate: float,
                         imported: bool = False,
                         expectedDimensions: Union[List[int], dict] = None,
                         testSetAcqObj: TomoAcquisition = None,
@@ -126,7 +129,8 @@ class TestBaseCentralizedLayer(BaseTest):
                         tiltAnglesTolDeg: float = 0.01,
                         rotAngleTolDeg: float = 0.01,
                         originTolAngst: float = 0.1,
-                        sRateAngsPix: float = 0.001) -> None:
+                        sRateAngsPix: float = 0.001,
+                        presentTsIds: List[str] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -168,6 +172,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param rotAngleTolDeg: angular tolerance, in degrees, of the acquisition rotation angle.
         :param originTolAngst: tolerance, in angstroms, of the shifts from the origin matrix.
         :param sRateAngsPix: tolerance, in angtroms/pixel, of the sampling rate.
+        :param presentTsIds: list with the expected TsIds.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # CHECK THE SET ------------------------------------------------------------------------------------------------
@@ -187,6 +192,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
         if anglesCountSet:
             self.checkAnglesCount(inTsSet, anglesCountSet)
+        if presentTsIds:
+            self.assertEqual(sorted(inTsSet.getTSIds()), sorted(presentTsIds))
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
@@ -445,6 +452,7 @@ class TestBaseCentralizedLayer(BaseTest):
         # Check the set elements main attributes
         for tomo in inTomoSet:
             tsId = tomo.getTsId()
+            print(cyanStr(f'---> checking the Tomogram tsId = {tsId}'))
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
@@ -479,6 +487,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+            print(cyanStr('---> Done!'))
 
     # TOMOMASKS ########################################################################################################
     def checkTomoMasks(self,

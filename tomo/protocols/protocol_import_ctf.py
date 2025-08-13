@@ -182,10 +182,9 @@ class ProtImportTsCTF(ProtTomoImportFiles):
         importFrom = self.importFrom.get()
 
         if importFrom == ImportChoice.IMOD.value:
-            importFunc = Domain.importFromPlugin('imod.protocols',
-                                                 'ProtImodBase',
+            importFunc = Domain.importFromPlugin('imod.convert',
+                                                 'ImodCtfParser',
                                                  doRaise=True)
-            return importFunc()
         elif importFrom == ImportChoice.CTFFIND.value:
             importFunc = Domain.importFromPlugin('cistem.convert',
                                                  'GrigorieffLabImportCTF',
