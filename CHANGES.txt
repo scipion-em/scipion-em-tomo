@@ -11,7 +11,9 @@ v3.10.1:
         * For non-deterministic protocols that generates coordinates.
         * To add a tolerance to the checking of oriented coordinates of particles allowing some percentage with
           the identity matrix.
+        * Checks set properties
     - Adding delimiter parameter to generate xf files
+    - SetOfLandmarkMOdels.getBinning() to be used in viewers
     - SetOfSubtomogramsBase available to inherit from it in RelionPseudoSubtomograms
 
 v3.10.0:
