@@ -56,6 +56,10 @@ class TestBaseCentralizedLayer(BaseTest):
         if isHeterogeneous:
             self.assertEqual(inSet.isHeterogeneousSet(), isHeterogeneous)
 
+        print("Checking properties are persisted")
+
+        self.assertTrue(inSet.hasProperty("self"),f"Set {inSet.getFileName()} does not have 'self' in properties table. Probably properties are not persisted.")
+
     # TILT SERIES ######################################################################################################
     def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
                          expectedDimensions: List[int] = None,

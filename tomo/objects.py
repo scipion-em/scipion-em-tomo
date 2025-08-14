@@ -2523,6 +2523,21 @@ class SetOfLandmarkModels(data.EMSet):
     def setHasResidualInfo(self, hasResidualInfo):
         self._hasResidualInfo.set(hasResidualInfo)
 
+    def getBinning(self, target_sr, decimals=0):
+        """ Returns the ratio of the sampling rate to target_sr.
+        :param target_sr: Target size you want the binning for.
+            E.g: target_sr=10, this.sr = 2, binning = 5
+        :param rounded: (True) pass False if you want exact ratio
+
+        """
+
+        binning = target_sr/self.getSetOfTiltSeries().getSamplingRate()
+        binning = round(binning, decimals)
+        if decimals==0:
+            binning=int(binning)
+        return binning
+
+
 
 class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
