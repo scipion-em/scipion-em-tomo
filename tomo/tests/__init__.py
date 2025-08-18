@@ -167,8 +167,8 @@ class DataSetRe4STATuto(Enum):
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = tiltAxisAngle
     initialDose = initialDose
-    dosePerTiltImg = 3.05  # Mean dose
-    dosePerTiltImgWithTltFile = dosePerTiltImgWithTltFile
+    dosePerTiltImg = 3.05 # Mean dose
+    dosePerTiltImgWithTltFile = 3.0
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs54 = 'output 01 43 45 03'
     exclusionWordsTs03ts54 = 'output 01 43 45'
@@ -245,6 +245,9 @@ class DataSetRe4STATuto(Enum):
 
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
+
+    # For IMOD CTF import testing
+    imodCtfFilesPath = 'testImodCtf'
 
     # For gapStopTM testing
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
