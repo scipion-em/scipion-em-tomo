@@ -242,18 +242,18 @@ with weakImport("xmipptomo"):
                                    )
 
         def addMisaligner(self, label, inputTs, **kwargs):
-            """ Adds a misalinger with the label and parameters passes
+            """ Adds a mis-aligner with the label and parameters passes
 
             :param label: label for the protocol
-            :param kwargs: params to pass to the misalign protocol
+            :param kwargs: params to pass to the mis-align protocol
             """
 
             missAligner = self.newProtocol(ProtTomoMisalignTiltSeries,
-                                           objLabel=label,
                                            inputSetOfTiltSeries=inputTs,
                                            applyMatrix=True,
                                            addInverseMatrix=True,
                                            **kwargs)
+            missAligner.setObjLabel(label)
             self.launchProtocol(missAligner)
 
 
