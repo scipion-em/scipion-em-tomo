@@ -771,52 +771,65 @@ class TomoObjectDialogView(pwviewer.View):
                          itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True,
                          displayInterpolatedCallback=displayInterpolatedCallback)
 
+    def _create_button(self, parent, icon, command, row, column, tooltip,
+                       relief=tk.RAISED, sticky="ns", width=25, height=25):
+        """Helper to create a Tk button with image, grid placement and tooltip."""
+        btn = tk.Button(
+            parent,
+            image=getImage(icon),
+            command=command,
+            width=width,
+            height=height,
+            relief=relief
+        )
+        btn.grid(row=row, column=column, sticky=sticky)
+        ToolTip(btn, text=tooltip, delay=0)
+        return btn
+
     def getPreviewWidget(self, obj, frame):
         actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
         actionBar.grid(row=0, column=0, sticky='ns')
         self.isAlignPressed = False
+        self.isContrastPressed = False
 
-        self.startButton = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTINUE), command=self.autoNavigate,
-                                     width=25, height=25, relief=tk.RAISED)
-        self.startButton.grid(row=0, column=0, sticky='ns')
-        ToolTip(self.startButton, text='Auto navigate', delay=0)
 
-        self.stopButton = tk.Button(actionBar, image=getImage(Icon.ACTION_STOP), command=self.stopNavigate, width=25,
-                                    height=25)
-        self.stopButton.grid(row=0, column=3, sticky='ne')
-        ToolTip(self.stopButton, text='Stop navigate', delay=0)
+        # Play
+        self.startButton = self._create_button(
+            actionBar, Icon.ACTION_CONTINUE, self.autoNavigate, 0, 2, "Auto navigate"
+        )
+
+        # Stop
+        self.stopButton = self._create_button(
+            actionBar, Icon.ACTION_STOP, self.stopNavigate, 0, 3, "Stop navigate", relief=tk.FLAT, sticky="ne"
+        )
 
         if not isinstance(obj, tomo.objects.Tomogram):
-            self.next = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_NEXT),
-                                  command=lambda: self.navigate(DIRECTION_DOWN),
-                                  width=25, height=25, relief=tk.RAISED)
-            self.next.grid(row=0, column=1, sticky='ns')
-            ToolTip(self.next, text='Next', delay=0)
+            # Next slice
+            self.next = self._create_button(
+                actionBar, Icon.ACTION_FIND_NEXT, lambda: self.navigate(DIRECTION_DOWN), 0, 0, "Next"
+            )
 
-            self.previous = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_PREVIOUS),
-                                      command=lambda: self.navigate(DIRECTION_UP),
-                                      width=25, height=25, relief=tk.RAISED)
-            self.previous.grid(row=0, column=2, sticky='ns')
-            ToolTip(self.previous, text='Previous', delay=0)
+            # Previous slice
+            self.previous = self._create_button(
+                actionBar, Icon.ACTION_FIND_PREVIOUS, lambda: self.navigate(DIRECTION_UP), 0, 1, "Previous"
+            )
 
-            self.applyAlignmentsButton = tk.Button(actionBar, image=getImage(Icon.ACTION_INTERPOLATE),
-                                          command=self.onApplyAlignmentsClick,
-                                          width=25, height=25)
-            self.applyAlignmentsButton.grid(row=0, column=4, sticky='ns')
-            ToolTip(self.applyAlignmentsButton, text='Apply alignments', delay=0)
+            # Apply transformation
+            self.applyAlignmentsButton = self._create_button(
+                actionBar, Icon.ACTION_INTERPOLATE, self.onApplyAlignmentsClick, 0, 4, "Apply alignments",
+                relief=tk.FLAT
+            )
 
-        self.autoContrast = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTRAST),
-                                      command=self.increaseContrast,
-                                      width=25, height=25)
-        self.autoContrast.grid(row=0, column=5, sticky='ns')
-        ToolTip(self.autoContrast, text='Increase contrast', delay=0)
+        # Contrast
+        self.autoContrast = self._create_button(
+            actionBar, Icon.ACTION_CONTRAST, self.onIncreaseContrastClick, 0, 5, "Increase contrast"
+        )
 
-        self.toogleExclusion = tk.Button(actionBar, image=getImage(Icon.ACTION_CLOSE),
-                                         command=self._provider._toggleExclusion,
-                                         width=25, height=25)
-        self.toogleExclusion.grid(row=0, column=6, sticky='ns', command=None)
-        ToolTip(self.toogleExclusion, text='Exclude or include the selection', delay=0)
-
+        # Exclude
+        self.toogleExclusion = self._create_button(
+            actionBar, Icon.ACTION_CLOSE, self._provider._toggleExclusion, 0, 6, "Exclude or include the selection",
+            relief=tk.FLAT
+        )
         self.createPreviewCanvas(frame)
 
     def createPreviewCanvas(self, frame):
@@ -864,6 +877,8 @@ class TomoObjectDialogView(pwviewer.View):
 
     def autoNavigateTiltSeries(self, item=None, direction=DIRECTION_DOWN):
         # Making sure that we do not press the navigate button more than once.
+
+        waiting = 200
         global afterId
         tree = self._provider.getTree()
 
@@ -883,16 +898,16 @@ class TomoObjectDialogView(pwviewer.View):
             nextItem = tree.prev(item)
 
         if nextItem:
-            afterId = tree.after(100, self.autoNavigateTiltSeries, nextItem, direction)
+            afterId = tree.after(waiting, self.autoNavigateTiltSeries, nextItem, direction)
         else:
             # Continue with the following item after a short delay
             children = tree.get_children(item)
             if not children:
                 # Start navigating in the other direction
                 if direction == DIRECTION_DOWN:
-                    afterId = tree.after(100, self.autoNavigateTiltSeries, item, DIRECTION_UP)
+                    afterId = tree.after(waiting, self.autoNavigateTiltSeries, item, DIRECTION_UP)
                 else:
-                    afterId = tree.after(100, self.autoNavigateTiltSeries, item, DIRECTION_DOWN)
+                    afterId = tree.after(waiting, self.autoNavigateTiltSeries, item, DIRECTION_DOWN)
 
     def autoNavigateTomograms(self, direction=DIRECTION_DOWN):
         global afterId
@@ -911,7 +926,7 @@ class TomoObjectDialogView(pwviewer.View):
 
     def autoNavigate(self, item=None, direction=DIRECTION_DOWN):
         self.startButton.configure(relief=tk.SUNKEN, state=tk.DISABLED)
-        self.autoContrast.configure(state=tk.DISABLED)
+        # self.autoContrast.configure(state=tk.DISABLED)
         if isinstance(self._setOfObjects, tomo.objects.SetOfTiltSeriesBase):
             self.autoNavigateTiltSeries(item, direction)
         elif isinstance(self._setOfObjects, tomo.objects.SetOfTomograms):
@@ -923,9 +938,18 @@ class TomoObjectDialogView(pwviewer.View):
             self.applyAlignmentsButton.config(relief='sunken')
         else:
             self.applyAlignmentsButton.config(relief='raised')
-        self.applyAlignments()
+        self.applySettings()
 
-    def applyAlignments(self):
+
+    def onIncreaseContrastClick(self):
+        self.isContrastPressed = not self.isContrastPressed
+        if self.isContrastPressed:
+            self.autoContrast.config(relief='sunken')
+        else:
+            self.autoContrast.config(relief='raised')
+        self.applySettings()
+
+    def applySettings(self):
         """To apply alignments"""
         self.previewTiltSeries(self.selectedItem, None)
 
@@ -962,7 +986,7 @@ class TomoObjectDialogView(pwviewer.View):
             self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
 
         except Exception as e:
-            print(e)
+            logger.error("Can't increase contrast", exc_info=e)
 
     def itemOnClick(self, e=None):
         x, y, widget = e.x, e.y, e.widget
@@ -1066,7 +1090,8 @@ class TomoObjectDialogView(pwviewer.View):
             list = transf.getMatrixAsList()
             shifts = list[2], list[5]
 
-        newImage = self.getThumbnail(obj.getIndex(), obj.getFileName(), rot, shifts, self.isAlignPressed)
+        ts = os.path.getmtime(obj.getFileName())
+        newImage = self.getThumbnail(obj.getIndex(), obj.getFileName(), ts, rot, shifts, self.isAlignPressed, self.isContrastPressed)
         self.pilImg = Image.fromarray(newImage)
         self.tkImg = getTkImage(self.pilImg)
         self.canvas.delete("all")
@@ -1076,30 +1101,31 @@ class TomoObjectDialogView(pwviewer.View):
         self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
         self.textLabel.config(text=angInfo)
 
-    @lru_cache
-    def getThumbnail(self, index, fileName, rot, shifts, isAlignPressed):
+    @lru_cache # can't cache thumbnail just using the path. need time stamps if we want to do so.
+    def getThumbnail(self, index, fileName, ts, rot, shifts, isAlignPressed, highlighted):
 
         imageStk = ImageReadersRegistry.open(fileName)
         image = imageStk.getImage(index=index-1, pilImage=True)
         imgW, imgH = image.size
+
+        # Scale: Typically, imgW and H would be bigger than canvasWidth. Therefore, scale would be lower than 1.
+        # 0.5 would be to scale down the image to halve. We take the min value cause, the lower the value the
+        # higher reduction.
         scale = min(self.canvasWidth / imgW, self.canvasHeight / imgH)
         newSize = (int(imgW * scale), int(imgH * scale))
         pilImg = image.resize(newSize)
 
-        THUMBNAIL_SIZE = self.canvasWidth
-        minDim = min(imgW, imgH)
-        ratio = THUMBNAIL_SIZE / minDim
-        if ratio > 1:
-            image = imageStk.scaleSlice(np.array(pilImg), ratio)
-        elif ratio < 1:
-            image = imageStk.thumbnailSlice(np.array(pilImg), int(imgW * ratio), int(imgH * ratio))
+        image = np.array(pilImg)
 
         if rot is not None and isAlignPressed:
-            shiftX = shifts[0] * ratio
-            shiftY = shifts[1] * ratio
+            shiftX = shifts[0] * scale
+            shiftY = shifts[1] * scale
             image = imageStk.transformSlice(image, (shiftX, shiftY), rot)
-            image = imageStk.thumbnailSlice(image, THUMBNAIL_SIZE, THUMBNAIL_SIZE)
         image = imageStk.flipSlice(image)
+
+        if highlighted:
+            image = imageStk.highlightSlice(image)
+            image = imageStk.normalizeSlice(image)
 
         return image
 
