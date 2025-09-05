@@ -49,6 +49,7 @@ from pyworkflow import Config
 
 import tomo.objects
 from .viewers_data import TomoDataViewer
+from ..constants import INTERPOLATED_FOLDER
 from ..convert.convert import getMeshVolFileName
 from ..objects import CTFTomo
 
@@ -517,8 +518,8 @@ class TomoDialog(ToolbarListDialog):
     def cancel(self, event=None):
         """Clean tmp folder anc close the viewer"""
         self.info('Cleaning temporal files and closing IMOD viewer...')
-        tmpFolder = self._protocol._getTmpPath()
-        pwutils.cleanPath(tmpFolder)
+        interpolatedFolder = os.path.join(self._protocol._getExtraPath(), INTERPOLATED_FOLDER)
+        pwutils.cleanPath(interpolatedFolder)
         ListDialog.cancel(self)
 
     def on_close(self, event=None):
