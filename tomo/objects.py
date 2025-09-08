@@ -2807,7 +2807,7 @@ class CTFTomo(data.CTFModel):
             lenProvidedDefocusUList = len(providedDefocusUList)
             lenProvidedDefocusVList = len(providedDefocusVList)
             lenProvidedDefocusAngleList = len(providedDefocusAngleList)
-            if (lenProvidedDefocusUList + lenProvidedDefocusVList + lenProvidedDefocusAngleList) != 0:
+            if (lenProvidedDefocusUList + lenProvidedDefocusVList + lenProvidedDefocusAngleList) % 3 != 0:
                 raise Exception("DefocusUList, DefocusVList and DefocusAngleList lengths must be equal.")
 
             # DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list
