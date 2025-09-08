@@ -120,10 +120,10 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
         presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
         matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
-        fromTsAcqDir = {ti.getAcquisitonOrder(): ti.clone() for ti in fromTs
-                        if ti.getAcquisitonOrder() in matchingAcqOrders}
-        toTsAcqDir = {ti.getAcquisitonOrder(): ti.clone() for ti in toTs
-                      if ti.getAcquisitonOrder() in matchingAcqOrders}
+        fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
+                        if ti.getAcquisitionOrder() in matchingAcqOrders}
+        toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
+                      if ti.getAcquisitionOrder() in matchingAcqOrders}
 
         for acqOrder in matchingAcqOrders:
             tiFrom = fromTsAcqDir[acqOrder]
