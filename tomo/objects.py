@@ -2755,7 +2755,7 @@ class CTFTomo(data.CTFModel):
 
         This method will assign as the defocus value and angle the median of the estimation list. """
 
-        # DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"ç
+        # DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
 
         # Check that at least one list is provided
         if not self.hasEstimationInfoAsList():
