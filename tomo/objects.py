@@ -1411,6 +1411,19 @@ class Tomogram(data.Volume):
         """ Sets the ctf correction status"""
         self._ctfCorrected.set(corrected)
 
+    def getBinning(self, target_sr, decimals=0):
+        """ Returns the ratio of the sampling rate to target_sr.
+        :param target_sr: Target size you want the binning for.
+            E.g: target_sr=10, this.sr = 2, binning = 5
+        :param decimals: (True) pass False if you want exact ratio
+
+        """
+        binning = target_sr/self.getSamplingRate()
+        binning = round(binning, decimals)
+        if decimals==0:
+            binning=int(binning)
+        return binning
+
 
 class SetOfTomograms(data.SetOfVolumes):
     ITEM_TYPE = Tomogram
@@ -2517,7 +2530,7 @@ class SetOfLandmarkModels(data.EMSet):
         """ Returns the ratio of the sampling rate to target_sr.
         :param target_sr: Target size you want the binning for.
             E.g: target_sr=10, this.sr = 2, binning = 5
-        :param rounded: (True) pass False if you want exact ratio
+        :param decimals: (True) pass False if you want exact ratio
 
         """
 
@@ -2755,28 +2768,28 @@ class CTFTomo(data.CTFModel):
 
         This method will assign as the defocus value and angle the median of the estimation list. """
 
-        " DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
+        # DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
 
-        " Check that at least one list is provided "
+        # Check that at least one list is provided
         if not self.hasEstimationInfoAsList():
             raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
                             "list information available.")
 
-        " Get the number of provided list (1 or 2) "
+        # Get the number of provided list (1 or 2)
         numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")) else 1
 
-        " No astigmatism is estimated (only one list provided) "
+        # No astigmatism is estimated (only one list provided)
         if numberOfProvidedList == 1:
             providedDefocusUList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
             providedDefocusUList = providedDefocusUList.split(",")
 
-            " DefocusAngle is set to 0 degrees "
+            # DefocusAngle is set to 0 degrees
             self.setDefocusAngle(0)
 
-            " DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list "
+            # DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list
             middlePoint = math.trunc(len(providedDefocusUList) / 2)
 
-            " If the size of the defocus list is even, mean the 2 centre values "
+            # If the size of the defocus list is even, mean the 2 centre values
             if len(providedDefocusUList) % 2 == 0:
                 value = (float(providedDefocusUList[middlePoint]) + float(providedDefocusUList[middlePoint - 1])) / 2
 
@@ -2784,7 +2797,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(value)
 
             else:
-                " If the size of defocus estimation is odd, get the centre value "
+                # If the size of defocus estimation is odd, get the centre value
 
                 value = providedDefocusUList[middlePoint]
 
@@ -2792,7 +2805,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(value)
 
         else:
-            " Astigmatism is estimated (two lists are provided) "
+            # Astigmatism is estimated (two lists are provided)
 
             providedDefocusUList = self.getDefocusUList()
             providedDefocusUList = providedDefocusUList.split(",")
@@ -2803,17 +2816,18 @@ class CTFTomo(data.CTFModel):
             providedDefocusAngleList = self.getDefocusAngleList()
             providedDefocusAngleList = providedDefocusAngleList.split(",")
 
-            " Check that the three list are equally long "
-            if len(providedDefocusUList) != len(providedDefocusVList) or \
-                    len(providedDefocusUList) != len(providedDefocusAngleList) or \
-                    len(providedDefocusVList) != len(providedDefocusAngleList):
+            # Check that the three list are equally long
+            lenProvidedDefocusUList = len(providedDefocusUList)
+            lenProvidedDefocusVList = len(providedDefocusVList)
+            lenProvidedDefocusAngleList = len(providedDefocusAngleList)
+            if (lenProvidedDefocusUList + lenProvidedDefocusVList + lenProvidedDefocusAngleList) % 3 != 0:
                 raise Exception("DefocusUList, DefocusVList and DefocusAngleList lengths must be equal.")
 
-            " DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list "
-            middlePoint = math.trunc(len(providedDefocusUList) / 2)
+            # DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list
+            middlePoint = math.trunc(lenProvidedDefocusUList / 2)
 
-            " If the size of the defocus list is even, mean the 2 centre values "
-            if len(providedDefocusUList) % 2 == 0:
+            # If the size of the defocus list is even, mean the 2 centre values
+            if lenProvidedDefocusUList % 2 == 0:
                 defocusU = (float(providedDefocusUList[middlePoint]) +
                             float(providedDefocusUList[middlePoint - 1])) / 2
                 defocusV = (float(providedDefocusVList[middlePoint]) +
@@ -2826,7 +2840,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusAngle(defocusAngle)
 
             else:
-                " If the size of defocus estimation list is odd, get the centre value "
+                # If the size of defocus estimation list is odd, get the centre value
 
                 defocusU = providedDefocusUList[middlePoint]
                 defocusV = providedDefocusVList[middlePoint]
@@ -2836,22 +2850,22 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(defocusV)
                 self.setDefocusAngle(defocusAngle)
 
-        " PHASE SHIFT INFORMATION -------------------------------------------------------------------------------------"
+        # PHASE SHIFT INFORMATION -------------------------------------------------------------------------------------
 
-        " Check if phase shift information is also available "
+        # Check if phase shift information is also available
         if hasattr(self, "_phaseShiftList"):
             providedPhaseShiftList = self.getPhaseShiftList()
             providedPhaseShiftList = providedPhaseShiftList.split(",")
 
-            " Check that all the lists are equally long "
+            # Check that all the lists are equally long
             if len(providedDefocusUList) != len(providedPhaseShiftList):
                 raise Exception("PhaseShiftList length must be equal to DefocusUList, DefocusVList and "
                                 "DefocusAngleList lengths.")
 
-            " PhaseShift is set equal to the middle estimation of the list "
+            # PhaseShift is set equal to the middle estimation of the list
             middlePoint = math.trunc(len(providedPhaseShiftList) / 2)
 
-            " If the size of the phase shift list is even, mean the 2 centre values "
+            # If the size of the phase shift list is even, mean the 2 centre values
             if len(providedPhaseShiftList) % 2 == 0:
                 phaseShift = (float(providedPhaseShiftList[middlePoint]) +
                               float(providedPhaseShiftList[middlePoint - 1])) / 2
@@ -2859,28 +2873,28 @@ class CTFTomo(data.CTFModel):
                 self.setPhaseShift(phaseShift)
 
             else:
-                " If the size of phase shift list estimation is odd, get the centre value "
+                # If the size of phase shift list estimation is odd, get the centre value
 
                 phaseShift = providedPhaseShiftList[middlePoint]
 
                 self.setPhaseShift(phaseShift)
 
-        " CUT-ON FREQUENCY INFORMATION --------------------------------------------------------------------------------"
+        # CUT-ON FREQUENCY INFORMATION --------------------------------------------------------------------------------
 
-        " Check if cut-on frequency information is also available "
+        # Check if cut-on frequency information is also available
         if hasattr(self, "_cutOnFreqList"):
             providedCutOnFreqList = self.getCutOnFreqList()
             providedCutOnFreqList = providedCutOnFreqList.split(",")
 
-            " Check that all the lists are equally long "
+            # Check that all the lists are equally long
             if len(providedPhaseShiftList) != len(providedCutOnFreqList):
                 raise Exception("CutOnFreqList length must be equal to PhaseShiftList, DefocusUList, DefocusVList and "
                                 "DefocusAngleList lengths.")
 
-            " Cut-on frequency is set equal to the middle estimation of the list "
+            # Cut-on frequency is set equal to the middle estimation of the list
             middlePoint = math.trunc(len(providedCutOnFreqList) / 2)
 
-            " If the size of the cut-on frequency shift list is even, mean the 2 centre values "
+            # If the size of the cut-on frequency shift list is even, mean the 2 centre values
             if len(providedCutOnFreqList) % 2 == 0:
                 cutOnFreq = (float(providedCutOnFreqList[middlePoint]) +
                              float(providedCutOnFreqList[middlePoint - 1])) / 2
@@ -2888,13 +2902,13 @@ class CTFTomo(data.CTFModel):
                 self.setCutOnFreq(cutOnFreq)
 
             else:
-                " If the size of the cut-on frequency list estimation is odd, get the centre value "
+                # If the size of the cut-on frequency list estimation is odd, get the centre value
 
                 cutOnFreq = providedCutOnFreqList[middlePoint]
 
                 self.setCutOnFreq(cutOnFreq)
 
-        " Standardize the input values "
+        # Standardize the input values "
         self.standardize()
 
 

@@ -108,45 +108,45 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             logger.info(cyanStr(f"tsId = {tsId} - The number of tilt-images in the source [{fromTsSize}] "
                                 f"and target [{toTsSize}] sets is different."))
 
-            newTs = TiltSeries(tsId=tsId)
-            newTs.copyInfo(toTs)
-            # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
-            # values of the transformation matrix assigned
-            fromTsTAx = fromTs.getAcquisition().getTiltAxisAngle()
-            newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
-            outTsSet.append(newTs)
+        newTs = TiltSeries(tsId=tsId)
+        newTs.copyInfo(toTs)
+        # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
+        # values of the transformation matrix assigned
+        fromTsTAx = fromTs.getAcquisition().getTiltAxisAngle()
+        newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
+        outTsSet.append(newTs)
 
-            # Manage the possible previously excluded views or previous ts re-stacking
-            presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
-            presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
-            matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
-            fromTsAcqDir = {ti.getAcquisitonOrder(): ti.clone() for ti in fromTs
-                            if ti.getAcquisitonOrder() in matchingAcqOrders}
-            toTsAcqDir = {ti.getAcquisitonOrder(): ti.clone() for ti in toTs
-                          if ti.getAcquisitonOrder() in matchingAcqOrders}
+        # Manage the possible previously excluded views or previous ts re-stacking
+        presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
+        presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
+        matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
+        fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
+                        if ti.getAcquisitionOrder() in matchingAcqOrders}
+        toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
+                      if ti.getAcquisitionOrder() in matchingAcqOrders}
 
-            for acqOrder in matchingAcqOrders:
-                tiFrom = fromTsAcqDir[acqOrder]
-                tiTo = toTsAcqDir[acqOrder]
-                newTi = TiltImage()
-                newTi.copyInfo(tiTo, copyId=True)
-                newTi.setLocation(tiTo.getLocation())
+        for acqOrder in matchingAcqOrders:
+            tiFrom = fromTsAcqDir[acqOrder]
+            tiTo = toTsAcqDir[acqOrder]
+            newTi = TiltImage()
+            newTi.copyInfo(tiTo, copyId=True)
+            newTi.setLocation(tiTo.getLocation())
 
-                # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
-                # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
-                # coherence with the values of the transformation matrix assigned
-                fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-                newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-                newTi.setTiltAngle(tiFrom.getTiltAngle())
-                newTransform = self.updateTM(tiFrom.getTransform())
-                newTi.setTransform(newTransform)
-                newTs.append(newTi)
+            # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
+            # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
+            # coherence with the values of the transformation matrix assigned
+            fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+            newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
+            newTi.setTiltAngle(tiFrom.getTiltAngle())
+            newTransform = self.updateTM(tiFrom.getTransform())
+            newTi.setTransform(newTransform)
+            newTs.append(newTi)
 
-            newTs.setDim(toTs.getDim())
-            newTs.write()
-            outTsSet.update(newTs)
-            outTsSet.write()
-            self._store()
+        newTs.setDim(toTs.getDim())
+        newTs.write()
+        outTsSet.update(newTs)
+        outTsSet.write()
+        self._store()
 
     def closeOutputSetStep(self):
         outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
