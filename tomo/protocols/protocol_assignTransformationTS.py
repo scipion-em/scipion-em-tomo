@@ -104,12 +104,6 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             toTs = self.toTsDict[tsId]
             outTsSet = self.getOutTsSet()
 
-            fromTsSize = fromTs.getSize()
-            toTsSize = toTs.getSize()
-            if fromTsSize != toTsSize:
-                logger.info(cyanStr(f"tsId = {tsId} - The number of tilt-images in the source [{fromTsSize}] "
-                                    f"and target [{toTsSize}] sets is different."))
-
             newTs = TiltSeries(tsId=tsId)
             newTs.copyInfo(toTs)
             # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
@@ -119,14 +113,16 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             outTsSet.append(newTs)
 
             # Manage the possible previously excluded views or previous ts re-stacking
+            fromTsSize = fromTs.getSize()
+            toTsSize = toTs.getSize()
             presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
             presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
             matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
-            nonMatchingAcqOrders = presentAcqOrdersFrom ^ presentAcqOrdersTo
-            if nonMatchingAcqOrders:
-                logger.info(cyanStr(f'tsId = {tsId} - Some tilt-images are not present or excluded from one '
-                                    f'tilt-series but not from the other. Present acquisition orders are '
-                                    f'{matchingAcqOrders}'))
+            if fromTsSize != toTsSize:
+                logger.info(cyanStr(f"tsId = {tsId} - The number of tilt-images in the source [{fromTsSize}] "
+                                    f"and target [{toTsSize}] tilt-series is different. Present acquisition "
+                                    f"orders in both are {matchingAcqOrders}"))
+
             fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
                             if ti.getAcquisitionOrder() in matchingAcqOrders}
             toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
