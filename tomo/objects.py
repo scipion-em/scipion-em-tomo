@@ -764,6 +764,9 @@ class TiltSeries(TiltSeriesBase):
                 f.writelines(f"{angle:0.3f} {dose:0.4f}\n" for angle, dose in zip(angleList, doseList))
             else:
                 f.writelines(f"{angle:0.3f}\n" for angle in angleList)
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
