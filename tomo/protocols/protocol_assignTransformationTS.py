@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import logging
+import traceback
 from enum import Enum
 from typing import Tuple, Set, List
 
@@ -31,7 +32,7 @@ from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String
-from pyworkflow.utils import Message, cyanStr
+from pyworkflow.utils import Message, cyanStr, redStr
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
 from tomo.protocols import ProtTomoBase
 
@@ -88,8 +89,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         fromTsSet = self.getTMSetOfTiltSeries.get()
         toTsSet = self.setTMSetOfTiltSeries.get()
         commonTsIds, nonCommonTsIds = self._matchTsIds(fromTsSet, toTsSet)
-        self.fromTsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in fromTsSet if ts.getTsId() in commonTsIds}
-        self.toTsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in toTsSet if ts.getTsId() in commonTsIds}
+        self.fromTsDict = {ts.getTsId(): ts.clone() for ts in fromTsSet if ts.getTsId() in commonTsIds}
+        self.toTsDict = {ts.getTsId(): ts.clone() for ts in toTsSet if ts.getTsId() in commonTsIds}
         if nonCommonTsIds:
             msg = f'Non-matching tsIds: *{nonCommonTsIds}*'
             logger.info(cyanStr(msg))
@@ -97,56 +98,62 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         return commonTsIds
 
     def assignTrMat(self, tsId: str):
-        logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
-        fromTs = self.fromTsDict[tsId]
-        toTs = self.toTsDict[tsId]
-        outTsSet = self.getOutTsSet()
+        try:
+            logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
+            fromTs = self.fromTsDict[tsId]
+            toTs = self.toTsDict[tsId]
+            outTsSet = self.getOutTsSet()
 
-        fromTsSize = fromTs.getSize()
-        toTsSize = toTs.getSize()
-        if fromTsSize != toTsSize:
-            logger.info(cyanStr(f"tsId = {tsId} - The number of tilt-images in the source [{fromTsSize}] "
-                                f"and target [{toTsSize}] sets is different."))
+            newTs = TiltSeries(tsId=tsId)
+            newTs.copyInfo(toTs)
+            # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
+            # values of the transformation matrix assigned
+            fromTsTAx = fromTs.getAcquisition().getTiltAxisAngle()
+            newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
+            outTsSet.append(newTs)
 
-        newTs = TiltSeries(tsId=tsId)
-        newTs.copyInfo(toTs)
-        # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
-        # values of the transformation matrix assigned
-        fromTsTAx = fromTs.getAcquisition().getTiltAxisAngle()
-        newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
-        outTsSet.append(newTs)
+            # Manage the possible previously excluded views or previous ts re-stacking
+            fromTsSize = fromTs.getSize()
+            toTsSize = toTs.getSize()
+            presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
+            presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
+            matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
+            if fromTsSize != toTsSize:
+                logger.info(cyanStr(f"tsId = {tsId} - The number of tilt-images in the source [{fromTsSize}] "
+                                    f"and target [{toTsSize}] tilt-series is different. Present acquisition "
+                                    f"orders in both are {matchingAcqOrders}"))
 
-        # Manage the possible previously excluded views or previous ts re-stacking
-        presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
-        presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
-        matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
-        fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
-                        if ti.getAcquisitionOrder() in matchingAcqOrders}
-        toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
-                      if ti.getAcquisitionOrder() in matchingAcqOrders}
+            fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
+                            if ti.getAcquisitionOrder() in matchingAcqOrders}
+            toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
+                          if ti.getAcquisitionOrder() in matchingAcqOrders}
 
-        for acqOrder in matchingAcqOrders:
-            tiFrom = fromTsAcqDir[acqOrder]
-            tiTo = toTsAcqDir[acqOrder]
-            newTi = TiltImage()
-            newTi.copyInfo(tiTo, copyId=True)
-            newTi.setLocation(tiTo.getLocation())
+            for acqOrder in matchingAcqOrders:
+                tiFrom = fromTsAcqDir[acqOrder]
+                tiTo = toTsAcqDir[acqOrder]
+                newTi = TiltImage()
+                newTi.copyInfo(tiTo, copyId=True)
+                newTi.setFileName(tiTo.getFileName())
 
-            # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
-            # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
-            # coherence with the values of the transformation matrix assigned
-            fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-            newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-            newTi.setTiltAngle(tiFrom.getTiltAngle())
-            newTransform = self.updateTM(tiFrom.getTransform())
-            newTi.setTransform(newTransform)
-            newTs.append(newTi)
+                # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
+                # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
+                # coherence with the values of the transformation matrix assigned
+                fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+                newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
+                newTi.setTiltAngle(tiFrom.getTiltAngle())
+                newTransform = self.updateTM(tiFrom.getTransform())
+                newTi.setTransform(newTransform)
+                newTs.append(newTi)
 
-        newTs.setDim(toTs.getDim())
-        newTs.write()
-        outTsSet.update(newTs)
-        outTsSet.write()
-        self._store()
+            newTs.setDim(toTs.getDim())
+            newTs.write()
+            outTsSet.update(newTs)
+            outTsSet.write()
+            self._store()
+        except Exception as e:
+            logger.error(redStr(f'tsId = {tsId} -> transformation matrix assignment failed '
+                                f'with the exception -> {e}'))
+            logger.error(traceback.format_exc())
 
     def closeOutputSetStep(self):
         outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
@@ -184,14 +191,10 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def updateTM(self, transform):
         """ Scale the transform matrix shifts. """
         matrix = transform.getMatrix()
-
         sr = self.getSamplingRatio()
-
         matrix[0][2] /= sr
         matrix[1][2] /= sr
-
         transform.setMatrix(matrix)
-
         return transform
 
     @staticmethod
