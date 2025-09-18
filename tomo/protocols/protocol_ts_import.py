@@ -29,7 +29,7 @@ import re
 from glob import glob
 from datetime import datetime
 from collections import OrderedDict
-from os.path import join, basename
+from os.path import join, basename, exists
 from statistics import mean
 import numpy as np
 from sqlite3 import OperationalError
@@ -468,6 +468,12 @@ class ProtImportTsBase(ProtTomoImportFiles):
     def _validate(self):
         errMsg = []
         self._initialize()
+
+        if type(self) is ProtImportTsMovies:
+            gainFile = self.gainFile.get()
+            if gainFile and not exists(gainFile):
+                errMsg.append('The introduced gain file does not exist. Please check the path or '
+                              'continue without it.')
 
         if type(self) is ProtImportTs and not self.MDOC_DATA_SOURCE:
             # If the set of TS imported is heterogeneous in the number of tilt images and the angular data source chosen
