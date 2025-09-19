@@ -829,7 +829,6 @@ class TomoObjectDialogView(pwviewer.View):
         # Exclude
         self.toogleExclusion = self._create_button(
             actionBar, Icon.ACTION_CLOSE, self._provider._toggleExclusion, 0, 6, "Exclude or include the selection",
-            relief=tk.FLAT
         )
         self.createPreviewCanvas(frame)
 
@@ -1126,7 +1125,9 @@ class TomoObjectDialogView(pwviewer.View):
 
         if highlighted:
             image = imageStk.highlightSlice(image)
-            image = imageStk.normalizeSlice(image)
+
+        # Normalize always at the end
+        image = imageStk.normalizeSlice(image)
 
         return image
 
