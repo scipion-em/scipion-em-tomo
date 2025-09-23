@@ -801,7 +801,7 @@ class TomoObjectDialogView(pwviewer.View):
 
         # Stop
         self.stopButton = self._create_button(
-            actionBar, Icon.ACTION_STOP, self.stopNavigate, 0, 3, "Stop navigate", relief=tk.FLAT, sticky="ne"
+            actionBar, Icon.ACTION_STOP, self.stopNavigate, 0, 3, "Stop navigate", relief=tk.RAISED, sticky="ne"
         )
 
         if not isinstance(obj, tomo.objects.Tomogram):
@@ -1029,8 +1029,8 @@ class TomoObjectDialogView(pwviewer.View):
         if self.canvas is None:
             self.getPreviewWidget(obj, frame)
 
-        imagePath = obj.getFileName()
-        self.imgStk = ImageReadersRegistry.open(imagePath)
+        self.imagePath = obj.getFileName()
+        self.imgStk = ImageReadersRegistry.open(self.imagePath)
         self.zDim = obj.getDim()[2]
 
         # Create the slider only once
@@ -1050,14 +1050,16 @@ class TomoObjectDialogView(pwviewer.View):
         self.slider.set(self.zDim // 2)
         # Load initial image at middle slice
         self._updatePreviewImage(index=self.zDim // 2)
+        self.selectedItem = obj
 
     def _updatePreviewImage(self, index):
         originalImg = self.imgStk.getImage(index=index, pilImage=True)
         imgW, imgH = originalImg.size
         scale = min(self.canvasWidth / imgW, self.canvasHeight / imgH)
         newSize = (int(imgW * scale), int(imgH * scale))
-        self.pilImg = originalImg.resize(newSize)
-
+        originalImg = self.getThumbnail(index+1, self.imagePath, None, None, None, self.isAlignPressed,
+                                        self.isContrastPressed)
+        self.pilImg = Image.fromarray(originalImg)
         x = (self.canvasWidth - newSize[0]) // 2
         y = (self.canvasHeight - newSize[1]) // 2
 
@@ -1091,7 +1093,8 @@ class TomoObjectDialogView(pwviewer.View):
             shifts = list[2], list[5]
 
         ts = os.path.getmtime(obj.getFileName())
-        newImage = self.getThumbnail(obj.getIndex(), obj.getFileName(), ts, rot, shifts, self.isAlignPressed, self.isContrastPressed)
+        index = obj.getIndex() if isinstance(obj, tomo.objects.TiltImageBase) else self.slider.get()
+        newImage = self.getThumbnail(index, obj.getFileName(), ts, rot, shifts, self.isAlignPressed, self.isContrastPressed)
         self.pilImg = Image.fromarray(newImage)
         self.tkImg = getTkImage(self.pilImg)
         self.canvas.delete("all")
