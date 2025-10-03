@@ -794,7 +794,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
                                        taperAtFill[1], offsetsInXandY[0],
                                        offsetsInXandY[1], imagesAreBinned,
                                        binByFactor, pathi))
-
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
         return newstcomPath
 
     def writeTiltcomFile(self, ts_folder, **kwargs):
@@ -859,7 +861,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        actionIfGPUFails[0], actionIfGPUFails[1],
                                        pathi, offset, shift[0], shift[1],
                                        excludedViewsIndexes))
-
+        # For parallel processing, ensure that the file is completely written and persists on disk
+        f.flush()  # Empty python buffer
+        os.fsync(f.fileno())  # Empty system buffer
         return tiltcomPath
 
     def writeTltFile(self, ts_folder, excludeViews=False):
@@ -874,12 +878,18 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                 if excludeViews and not ti.isEnabled():
                     continue
                 f.write(str(ti.getTiltAngle()) + '\n')
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeXtiltFile(self, ts_folder):
         xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
             for ti in self:
                 f.write('0.00\n')
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeXfFile(self, transformFilePath, delimiter='\t', factor=1):
         """ This method takes a tilt series and the output transformation file
@@ -915,6 +925,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         with open(transformFilePath, 'w') as f:
             csvW = csv.writer(f, delimiter=delimiter)
             csvW.writerows(tsMatrixTransformList)
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeImodFiles(self, folderName, **kwargs):
         """Writes the following IMOD files:
