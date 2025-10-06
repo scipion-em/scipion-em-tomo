@@ -137,6 +137,7 @@ class TestBaseCentralizedLayer(BaseTest):
                         tiltAnglesTolDeg: float = 0.01,
                         rotAngleTolDeg: float = 0.01,
                         originTolAngst: float = 0.1,
+                        checkHeaderApix: bool = True,
                         sRateAngsPixTol: float = 0.015,
                         presentTsIds: List[str] = None) -> None:
         """
@@ -179,6 +180,10 @@ class TestBaseCentralizedLayer(BaseTest):
         :param tiltAnglesTolDeg: angular tolerance, in degrees, of the acquisition min and max tilt angles.
         :param rotAngleTolDeg: angular tolerance, in degrees, of the acquisition rotation angle.
         :param originTolAngst: tolerance, in angstroms, of the shifts from the origin matrix.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
         :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
         :param presentTsIds: list with the expected TsIds.
         """
@@ -237,7 +242,8 @@ class TestBaseCentralizedLayer(BaseTest):
             # Sampling rate
             self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
             # Sampling rate in file header
-            self.checkHeaderSRate(ts, expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
+            if checkHeaderApix:
+                self.checkHeaderSRate(ts, expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
             # Alignment
             self.assertEqual(ts.hasAlignment(), hasAlignment)
             self.assertEqual(ts.getAlignment(), alignment)
@@ -425,6 +431,7 @@ class TestBaseCentralizedLayer(BaseTest):
                        isHeterogeneousSet: Union[bool, None] = None,
                        testSetAcqObj: TomoAcquisition = None,
                        testAcqObj: Union[dict, TomoAcquisition] = None,
+                       checkHeaderApix: bool = True,
                        sRateAngsPixTol: float = 0.01) -> None:
         """
         :param inTomoSet: SetOfTomograms.
@@ -446,7 +453,11 @@ class TestBaseCentralizedLayer(BaseTest):
         It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
         :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tomograms. A
         dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
-        :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
@@ -505,7 +516,8 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
             # Check the sampling rate value in the header
-            self.checkHeaderSRate(tomo, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
+            if checkHeaderApix:
+                self.checkHeaderSRate(tomo, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
             print(cyanStr('---> Done!'))
 
     # TOMOMASKS ########################################################################################################
