@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 from os.path import exists, isabs, islink
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional
 
 import mrcfile
 import numpy as np
@@ -36,7 +36,7 @@ from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
     TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes, \
-    TomoMask
+    TomoMask, SubTomogram
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -423,7 +423,10 @@ class TestBaseCentralizedLayer(BaseTest):
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
-    def checkTomograms(self, inTomoSet: SetOfTomograms, expectedSetSize: int, expectedSRate: float,
+    def checkTomograms(self,
+                       inTomoSet: SetOfTomograms,
+                       expectedSetSize: int,
+                       expectedSRate: float,
                        expectedDimensions: Union[List[int], dict] = None,
                        hasOddEven: bool = False,
                        expectedOriginShifts: Union[List[float], None] = None,
@@ -707,9 +710,18 @@ class TestBaseCentralizedLayer(BaseTest):
                                   hasHalves=False)
                 self.assertFalse(subtomo.hasCoordinate3D())
 
-    def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                               convention=TR_SCIPION, orientedParticles=False, expectedExtension='.mrc',
-                               isStack2d=False, noImgs=None):
+    def checkExtractedSubtomos(self,
+                               inCoords: SetOfCoordinates3D,
+                               outSubtomos: SetOfSubTomograms,
+                               expectedSetSize: int = -1,
+                               expectedBoxSize: int = -1,
+                               expectedSRate: float = -1.,
+                               convention: Optional[str] = TR_SCIPION,
+                               orientedParticles: bool = False,
+                               expectedExtension: str = 'mrc',
+                               isStack2d: bool = False,
+                               noImgs: Optional[int] = None,
+                               sRateAngsPixTol: float = 0.01) -> None:
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
 
         :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
@@ -726,13 +738,15 @@ class TestBaseCentralizedLayer(BaseTest):
         :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
         are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
         noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
         # Check the critical properties of the set
         # First, check the set size, sampling rate, and box size
         self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
                                                expectedSetSize=expectedSetSize,
-                                               expectedSRate=expectedSRate)
+                                               expectedSRate=expectedSRate,
+                                               sRateAngsPixTol=sRateAngsPixTol)
         if expectedBoxSize:
             self.getSubtomosDims(outSubtomos,
                                  is2dStack=isStack2d,
@@ -756,7 +770,8 @@ class TestBaseCentralizedLayer(BaseTest):
                                       expectedBoxSize=expectedBoxSize,
                                       isStack2d=isStack2d,
                                       noImgs=noImgs,
-                                      expectedExtension=expectedExtension)
+                                      expectedExtension=expectedExtension,
+                                      sRateAngsPixTol=sRateAngsPixTol)
                 subtomoTr = outSubtomo.getTransform(convention=convention)
                 subtomoMatrix = subtomoTr.getMatrix()
                 coordinate = outSubtomo.getCoordinate3D()
@@ -769,9 +784,20 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Check the tomoId
                 self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
-    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1,
-                                 expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False, angTol=0.05,
-                                 shiftTol=1, expectedExtension='mrc', isStack2d=False, noImgs=None):
+    def checkRefinedSubtomograms(self,
+                                 inSubtomos: SetOfSubTomograms,
+                                 outSubtomos: SetOfSubTomograms,
+                                 expectedSetSize: int = -1,
+                                 expectedBoxSize: int = -1,
+                                 expectedSRate: float = -1.,
+                                 convention: Optional[str] = TR_SCIPION,
+                                 orientedParticles: bool = False,
+                                 angTol: float = 0.05,
+                                 shiftTol: float = 1.,
+                                 expectedExtension: str = 'mrc',
+                                 isStack2d: bool = False,
+                                 noImgs: Optional[int] = None,
+                                 sRateAngsPixTol: float = 0.01) -> None:
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram refinement
 
         :param inSubtomos: SetOfSubTomograms introduced for the subtomo refinement.
@@ -794,6 +820,7 @@ class TestBaseCentralizedLayer(BaseTest):
         matrices.
         :param shiftTol: shift tolerance, in pixels. Used to compare the input and output subtomograms transformation
         matrices.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         angTolMat = np.ones([3, 3]) * angTol
         shiftTolMat = np.ones(3) * shiftTol
@@ -813,7 +840,8 @@ class TestBaseCentralizedLayer(BaseTest):
                                   expectedBoxSize=expectedBoxSize,
                                   isStack2d=isStack2d,
                                   noImgs=noImgs,
-                                  expectedExtension=expectedExtension)
+                                  expectedExtension=expectedExtension,
+                                  sRateAngsPixTol=sRateAngsPixTol)
             # Check the transformation matrix
             inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
             outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
@@ -831,8 +859,14 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
 
-    def checkSubtomogram(self, subtomo, expectedSRate=-1, expectedBoxSize=-1, expectedExtension='.mrc',
-                         isStack2d=False, noImgs=None):
+    def checkSubtomogram(self,
+                         subtomo: SubTomogram,
+                         expectedSRate: float = -1.,
+                         expectedBoxSize: int = -1,
+                         expectedExtension: str = '.mrc',
+                         isStack2d: bool = False,
+                         noImgs: Optional[int] = None,
+                         sRateAngsPixTol: float = 0.01) -> None:
         """Checks the main properties of a subtomogram.
 
         :param subtomo: SubTomogram.
@@ -844,6 +878,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
         are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
         noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         self.assertTrue(exists(subtomo.getFileName()), "Average %s does not exists" % subtomo.getFileName())
         self.assertTrue(subtomo.getFileName().endswith(expectedExtension))
@@ -852,6 +887,8 @@ class TestBaseCentralizedLayer(BaseTest):
                              is2dStack=isStack2d,
                              expectedBoxSize=expectedBoxSize,
                              noImgs=noImgs)
+        # Check the sampling rate value in the header
+        self.checkHeaderSRate(subtomo, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
 
     def getSubtomosDims(self, inObj, is2dStack=None, expectedBoxSize=None, noImgs=None):
         """It can be used with a sigle SubTomogram or a set of them."""
@@ -914,7 +951,8 @@ class TestBaseCentralizedLayer(BaseTest):
                                           expectedSetSize: int = -1,
                                           expectedSRate: float = -1.0,
                                           expectedBoxSize: int = 0,
-                                          setSizeTolPercent: float = 0.0):
+                                          setSizeTolPercent: float = 0.0,
+                                          sRateAngsPixTol: float = 0.01) -> None:
         """
         :param inSet: A set of Scipion Tomo objects.
         :param expectedSetSize: expected set site to check.
@@ -924,9 +962,10 @@ class TestBaseCentralizedLayer(BaseTest):
         indicate the variability allowed on the given expectedSetSize. For example, if expectedSetSize = 100 and
         setSizeTolPercent = 0.2 (20%), set sizes from in range [100 - 0.2 * 100, 100 + 0.2 * 100] = [80, 120]
         will be considered as correct when checking the set size.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         # Check the set
-        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
         if expectedSetSize > 0:
             if setSizeTolPercent > 0:
                 minSetSize = int(expectedSetSize * (1 - setSizeTolPercent))
@@ -1069,7 +1108,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertTrue(exists(ctf.getPsdFile().rsplit('@', 1)[-1]))  # Expected syntax is index@psdFile
 
     def checkHeaderSRate(self,
-                         inObj: Union[Tomogram, TiltSeries, TomoMask],
+                         inObj: Union[Tomogram, TiltSeries, TomoMask, SubTomogram],
                          expectedSRate: float,
                          sRateAngsPixTol: float = 0.01) -> None:
         tsId = inObj.getTsId()

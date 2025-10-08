@@ -319,24 +319,26 @@ class DataSetRe4STATuto(Enum):
         return dims + [nImgs]
 
     @classmethod
-    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54)):
+    def genTestTomoDicts(cls,
+                         tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
+                         binning: int = 1) -> Tuple[dict, dict]:
         testAcqObjDict = dict()
         expectedDimensionsDict = dict()
         if TS_01 in tsIdList:
             testAcqObjDict[TS_01] = cls.testAcq01.value
-            expectedDimensionsDict[TS_01] = cls.tomoDimsThk340.value
+            expectedDimensionsDict[TS_01] = (np.array(cls.tomoDimsThk340.value) / binning).tolist()
         if TS_03 in tsIdList:
             testAcqObjDict[TS_03] = cls.testAcq03.value
-            expectedDimensionsDict[TS_03] = cls.tomoDimsThk280.value
+            expectedDimensionsDict[TS_03] = (np.array(cls.tomoDimsThk280.value) / binning).tolist()
         if TS_43 in tsIdList:
             testAcqObjDict[TS_43] = cls.testAcq43.value
-            expectedDimensionsDict[TS_43] = cls.tomoDimsThk300.value
+            expectedDimensionsDict[TS_43] = (np.array(cls.tomoDimsThk300.value) / binning).tolist()
         if TS_45 in tsIdList:
             testAcqObjDict[TS_45] = cls.testAcq45.value
-            expectedDimensionsDict[TS_45] = cls.tomoDimsThk300.value
+            expectedDimensionsDict[TS_45] = (np.array(cls.tomoDimsThk300.value) / binning).tolist()
         if TS_54 in tsIdList:
             testAcqObjDict[TS_54] = cls.testAcq54.value
-            expectedDimensionsDict[TS_54] = cls.tomoDimsThk280.value
+            expectedDimensionsDict[TS_54] = (np.array(cls.tomoDimsThk280.value) / binning).tolist()
 
         return testAcqObjDict, expectedDimensionsDict
 
