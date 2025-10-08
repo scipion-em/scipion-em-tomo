@@ -1121,7 +1121,7 @@ class TestBaseCentralizedLayer(BaseTest):
                          expectedSRate: float,
                          sRateAngsPixTol: float = 0.01) -> None:
         tomoFile = inObj.getFirstItem().getFileName() if type(inObj) is TiltSeries else inObj.getFileName()
-        tsId = tomoFile if type(inObj) is SubTomogram else inObj.getTsId()
+        tsId = tomoFile if isinstance(inObj, SubTomogram) else inObj.getTsId()
         with mrcfile.open(tomoFile, permissive=True, header_only=True) as mrc:
             vs = mrc.voxel_size
             vs = [float(vs.x), float(vs.y), float(vs.z)] if type(inObj) is Tomogram else [float(vs.x), float(vs.y)]
