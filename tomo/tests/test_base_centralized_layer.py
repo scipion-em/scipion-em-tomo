@@ -36,7 +36,7 @@ from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
     TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes, \
-    TomoMask, SubTomogram
+    TomoMask, SubTomogram, AverageSubTomogram
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -902,19 +902,28 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inObj.getDimensions(), testBoxSize)
 
     # AVERAGE ##########################################################################################################
-    def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
+    def checkAverage(self,
+                     avg: AverageSubTomogram,
+                     expectedSRate: float = -1.,
+                     expectedBoxSize: int = -1,
+                     hasHalves: bool = True,
+                     sRateAngsPixTol: float = 0.01) -> None:
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
         an initial model or refinement of subtomograms.
 
         :param avg: AverageSubtomogram.
         :param expectedBoxSize: expected box size, in pixels, to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated."""
+        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
+        """
         testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
         self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
         self.assertTrue(avg.getFileName().endswith(".mrc"))
         self.assertTrue(abs(avg.getSamplingRate() - expectedSRate) <= 1e-4)
         self.assertEqual(avg.getDimensions(), testBoxSize)
+        # Check the sampling rate value in the header
+        self.checkHeaderSRate(avg, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
         # Check the halves
         if hasHalves:
             self.assertTrue(avg.hasHalfMaps(), "Halves not registered.")
@@ -1111,8 +1120,8 @@ class TestBaseCentralizedLayer(BaseTest):
                          inObj: Union[Tomogram, TiltSeries, TomoMask, SubTomogram],
                          expectedSRate: float,
                          sRateAngsPixTol: float = 0.01) -> None:
-        tsId = inObj.getTsId()
         tomoFile = inObj.getFirstItem().getFileName() if type(inObj) is TiltSeries else inObj.getFileName()
+        tsId = tomoFile if type(inObj) is SubTomogram else inObj.getTsId()
         with mrcfile.open(tomoFile, permissive=True, header_only=True) as mrc:
             vs = mrc.voxel_size
             vs = [float(vs.x), float(vs.y), float(vs.z)] if type(inObj) is Tomogram else [float(vs.x), float(vs.y)]
