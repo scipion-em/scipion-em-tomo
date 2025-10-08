@@ -35,7 +35,8 @@ from pyworkflow.tests import BaseTest
 from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
-    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes, \
+    TomoMask
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -522,9 +523,13 @@ class TestBaseCentralizedLayer(BaseTest):
 
     # TOMOMASKS ########################################################################################################
     def checkTomoMasks(self,
-                       inTomoMasks: SetOfTomoMasks, expectedSetSize: int, expectedSRate: float,
+                       inTomoMasks: SetOfTomoMasks,
+                       expectedSetSize: int,
+                       expectedSRate: float,
                        expectedDimensions: Union[List[int], dict] = None,
-                       isHeterogeneousSet: Union[bool, None] = None) -> None:
+                       isHeterogeneousSet: Union[bool, None] = None,
+                       checkHeaderApix: bool = True,
+                       sRateAngsPixTol: float = 0.01) -> None:
         """
         :param inTomoMasks: SetOfTomoMasks.
         :param expectedSetSize: expected set site to check.
@@ -534,17 +539,22 @@ class TestBaseCentralizedLayer(BaseTest):
         TS with different number of tilt images.
         :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
         number of tilt-images.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
         checkSRateMsg = checkMsgPattern % 'sampling rate'
-        checkOriginMsg = checkMsgPattern % 'origin shifts'
 
         # Check the set
         self.checkSetGeneralProps(inTomoMasks,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
-                                  isHeterogeneous=isHeterogeneousSet)
+                                  isHeterogeneous=isHeterogeneousSet,
+                                  sRateAngsPixTol=sRateAngsPixTol)
         # Check the set elements main attributes
         for tomoMask in inTomoMasks:
             tsId = tomoMask.getTsId()
@@ -563,6 +573,9 @@ class TestBaseCentralizedLayer(BaseTest):
                     self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
                 else:
                     self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            # Check the sampling rate value in the header
+            if checkHeaderApix:
+                self.checkHeaderSRate(tomoMask, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
 
     # COORDINATES ######################################################################################################
     def checkCoordinates(self,
@@ -1056,11 +1069,12 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertTrue(exists(ctf.getPsdFile().rsplit('@', 1)[-1]))  # Expected syntax is index@psdFile
 
     def checkHeaderSRate(self,
-                         inObj: Union[Tomogram, TiltSeries],
+                         inObj: Union[Tomogram, TiltSeries, TomoMask],
                          expectedSRate: float,
                          sRateAngsPixTol: float = 0.01) -> None:
         tsId = inObj.getTsId()
-        tomoFile = inObj.getFileName() if type(inObj) is Tomogram else inObj.getFirstItem().getFileName()
+        tomoFile = inObj.getFileName() if type(inObj) in [Tomogram, TomoMask]\
+            else inObj.getFirstItem().getFileName()
         with mrcfile.open(tomoFile, permissive=True, header_only=True) as mrc:
             vs = mrc.voxel_size
             vs = [float(vs.x), float(vs.y), float(vs.z)] if type(inObj) is Tomogram else [float(vs.x), float(vs.y)]
