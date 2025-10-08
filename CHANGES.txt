@@ -1,4 +1,4 @@
-v3.10.1:
+v3.11.0:
  Users:
     - Fixing an error sorting in the CTF viewer.
     - Improve the fail tolerance when importing tilt-series / tilt-series movies.
@@ -16,10 +16,11 @@ v3.10.1:
         * To add a tolerance to the checking of oriented coordinates of particles allowing some percentage with
           the identity matrix.
         * Checks set properties
+        * Check the sampling rate in the header of the binary files created.
     - Adding delimiter parameter to generate xf files
     - SetOfLandmarkMOdels.getBinning() to be used in viewers
     - SetOfSubtomogramsBase available to inherit from it in RelionPseudoSubtomograms
-
+    - For parallel processing, ensure that the file is completely written and persists on disk
 v3.10.0:
  Users:
   - Removing unused and old templates

@@ -24,7 +24,9 @@
 # *
 # **************************************************************************
 from os.path import exists, isabs, islink
-from typing import List, Union
+from typing import List, Union, Tuple
+
+import mrcfile
 import numpy as np
 from pwem import ALIGN_NONE
 from pwem.emlib.image.image_readers import MRCImageReader
@@ -40,7 +42,8 @@ class TestBaseCentralizedLayer(BaseTest):
 
     def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float,
                              isHeterogeneous: Union[bool, None] = None,
-                             streamState: int = 2) -> None:
+                             streamState: int = 2,
+                             sRateAngsPixTol: float = 0.01) -> None:
         """
         :param inSet: A set of Scipion Tomo objects.
         :param expectedSetSize: expected set site to check.
@@ -48,10 +51,11 @@ class TestBaseCentralizedLayer(BaseTest):
         :param isHeterogeneous: used to check if the set contains heterogeneous elements, like TS with different
         number of tilt-images or tomograms with different thicknesses.
         :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
         """
         if expectedSetSize > 0:
             self.assertSetSize(inSet, expectedSetSize)
-        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
         self.assertEqual(inSet.getStreamState(), streamState)
         if isHeterogeneous:
             self.assertEqual(inSet.isHeterogeneousSet(), isHeterogeneous)
@@ -133,7 +137,8 @@ class TestBaseCentralizedLayer(BaseTest):
                         tiltAnglesTolDeg: float = 0.01,
                         rotAngleTolDeg: float = 0.01,
                         originTolAngst: float = 0.1,
-                        sRateAngsPix: float = 0.001,
+                        checkHeaderApix: bool = True,
+                        sRateAngsPixTol: float = 0.015,
                         presentTsIds: List[str] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
@@ -175,7 +180,11 @@ class TestBaseCentralizedLayer(BaseTest):
         :param tiltAnglesTolDeg: angular tolerance, in degrees, of the acquisition min and max tilt angles.
         :param rotAngleTolDeg: angular tolerance, in degrees, of the acquisition rotation angle.
         :param originTolAngst: tolerance, in angstroms, of the shifts from the origin matrix.
-        :param sRateAngsPix: tolerance, in angtroms/pixel, of the sampling rate.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
         :param presentTsIds: list with the expected TsIds.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
@@ -183,7 +192,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkSetGeneralProps(inTsSet,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
-                                  isHeterogeneous=isHeterogeneousSet)
+                                  isHeterogeneous=isHeterogeneousSet,
+                                  sRateAngsPixTol=sRateAngsPixTol)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition(),
                                       tiltAnglesTolDeg=tiltAnglesTolDeg,
@@ -230,7 +240,10 @@ class TestBaseCentralizedLayer(BaseTest):
                     testOrigin = expectedOrigin
                 self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTolAngst=originTolAngst)
             # Sampling rate
-            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
+            # Sampling rate in file header
+            if checkHeaderApix:
+                self.checkHeaderSRate(ts, expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
             # Alignment
             self.assertEqual(ts.hasAlignment(), hasAlignment)
             self.assertEqual(ts.getAlignment(), alignment)
@@ -261,7 +274,7 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
-                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
 
     def checkAnglesCount(self,
                          inSet: Union[SetOfTiltSeries, TiltSeries, SetOfTiltSeriesM, TiltSeriesM],
@@ -417,7 +430,9 @@ class TestBaseCentralizedLayer(BaseTest):
                        hasHalves: bool = False,
                        isHeterogeneousSet: Union[bool, None] = None,
                        testSetAcqObj: TomoAcquisition = None,
-                       testAcqObj: Union[dict, TomoAcquisition] = None) -> None:
+                       testAcqObj: Union[dict, TomoAcquisition] = None,
+                       checkHeaderApix: bool = True,
+                       sRateAngsPixTol: float = 0.01) -> None:
         """
         :param inTomoSet: SetOfTomograms.
         :param expectedSetSize: expected set site to check.
@@ -438,6 +453,11 @@ class TestBaseCentralizedLayer(BaseTest):
         It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
         :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tomograms. A
         dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
@@ -448,7 +468,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkSetGeneralProps(inTomoSet,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
-                                  isHeterogeneous=isHeterogeneousSet)
+                                  isHeterogeneous=isHeterogeneousSet,
+                                  sRateAngsPixTol=sRateAngsPixTol)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition(), isTomogramAcq=True)
         self.assertEqual(inTomoSet.hasOddEven(), hasOddEven)
@@ -460,7 +481,10 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
-            self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            self.assertAlmostEqual(tomo.getSamplingRate(),
+                                   expectedSRate,
+                                   delta=sRateAngsPixTol,
+                                   msg=checkSRateMsg)
             # Check the ctf correction
             if ctfCorrected is not None:
                 self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
@@ -491,6 +515,9 @@ class TestBaseCentralizedLayer(BaseTest):
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+            # Check the sampling rate value in the header
+            if checkHeaderApix:
+                self.checkHeaderSRate(tomo, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
             print(cyanStr('---> Done!'))
 
     # TOMOMASKS ########################################################################################################
@@ -1027,3 +1054,22 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the psd file
             if expectPsdFile:
                 self.assertTrue(exists(ctf.getPsdFile().rsplit('@', 1)[-1]))  # Expected syntax is index@psdFile
+
+    def checkHeaderSRate(self,
+                         inObj: Union[Tomogram, TiltSeries],
+                         expectedSRate: float,
+                         sRateAngsPixTol: float = 0.01) -> None:
+        tsId = inObj.getTsId()
+        tomoFile = inObj.getFileName() if type(inObj) is Tomogram else inObj.getFirstItem().getFileName()
+        with mrcfile.open(tomoFile, permissive=True, header_only=True) as mrc:
+            vs = mrc.voxel_size
+            vs = [float(vs.x), float(vs.y), float(vs.z)] if type(inObj) is Tomogram else [float(vs.x), float(vs.y)]
+            for voxelSize in vs:
+                self.assertAlmostEqual(voxelSize,
+                                       expectedSRate,
+                                       delta=sRateAngsPixTol,
+                                       msg=f"tsId = {tsId}: header value/s of the sampling rate are different within "
+                                           f"tolerance {sRateAngsPixTol}\n"
+                                           f"File = {tomoFile}\n"
+                                           f"Expected sampling rate = {expectedSRate} angst / pix\n"
+                                           f"Sampling rate/s in header  = {vs}")
