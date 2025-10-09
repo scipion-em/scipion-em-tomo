@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 from os.path import exists, isabs, islink
-from typing import List, Union, Tuple, Optional
+from typing import List, Union, Optional
 
 import mrcfile
 import numpy as np
