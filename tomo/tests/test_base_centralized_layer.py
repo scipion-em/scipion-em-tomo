@@ -30,7 +30,7 @@ import mrcfile
 import numpy as np
 from pwem import ALIGN_NONE
 from pwem.emlib.image.image_readers import MRCImageReader
-from pwem.objects import Transform
+from pwem.objects import Transform, Volume
 from pyworkflow.tests import BaseTest
 from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
@@ -1121,7 +1121,7 @@ class TestBaseCentralizedLayer(BaseTest):
                          expectedSRate: float,
                          sRateAngsPixTol: float = 0.01) -> None:
         tomoFile = inObj.getFirstItem().getFileName() if type(inObj) is TiltSeries else inObj.getFileName()
-        tsId = tomoFile if isinstance(inObj, SubTomogram) else inObj.getTsId()
+        tsId = tomoFile if type(inObj) in [Volume, AverageSubTomogram, SubTomogram] else inObj.getTsId()
         with mrcfile.open(tomoFile, permissive=True, header_only=True) as mrc:
             vs = mrc.voxel_size
             vs = [float(vs.x), float(vs.y), float(vs.z)] if type(inObj) is Tomogram else [float(vs.x), float(vs.y)]
