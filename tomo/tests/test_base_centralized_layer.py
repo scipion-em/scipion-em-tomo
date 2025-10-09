@@ -497,32 +497,51 @@ class TestBaseCentralizedLayer(BaseTest):
                                  msg=f'Tomogram {tomo.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
                                      f'or it is empty.')
             # Check the dimensions
-            if expectedDimensions:
-                x, y, z = tomo.getDimensions()
-                if type(expectedDimensions) is dict:
-                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
-                else:
-                    self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            self._checkTomoDims(tomo,
+                                expectedDimensions=expectedDimensions,
+                                checkSizeMsg=checkSizeMsg)
             # Check the acquisition
             if testAcqObj:
                 tsAcq = tomo.getAcquisition()
-                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId, isTomogramAcq=True)
+                self.checkTomoAcquisition(testAcqObj, tsAcq,
+                                          tsId=tsId,
+                                          isTomogramAcq=True)
             # Check the origin
-            if expectedOriginShifts is not None:
-                x, y, z = tomo.getOrigin().getShifts()
-                for i, j in zip([x, y, z], expectedOriginShifts):
-                    self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
-            # Check the halves
+            self._checkTomoOrigin(tomo,
+                                  expectedOriginShifts=expectedOriginShifts,
+                                  checkOriginMsg=checkOriginMsg)
             if hasHalves:
-                tsId = tomo.getTsId()
                 self.assertTrue(tomo.hasHalfMaps(), "Halves not registered.")
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
             # Check the sampling rate value in the header
             if checkHeaderApix:
-                self.checkHeaderSRate(tomo, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
+                self.checkHeaderSRate(tomo,
+                                      expectedSRate=expectedSRate,
+                                      sRateAngsPixTol=sRateAngsPixTol)
             print(cyanStr('---> Done!'))
+
+    def _checkTomoDims(self,
+                       tomo = Tomogram,
+                       expectedDimensions: Union[List[int], dict] = None,
+                       checkSizeMsg: Optional[str] = None) -> None:
+        if expectedDimensions:
+            tsId = tomo.getTsId()
+            x, y, z = tomo.getDimensions()
+            if type(expectedDimensions) is dict:
+                self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
+            else:
+                self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+
+    def _checkTomoOrigin(self,
+                         tomo: Tomogram,
+                         expectedOriginShifts: Union[List[float], None] = None,
+                         checkOriginMsg: Optional[str] = None) -> None:
+        if expectedOriginShifts is not None:
+            x, y, z = tomo.getOrigin().getShifts()
+            for i, j in zip([x, y, z], expectedOriginShifts):
+                self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
 
     # TOMOMASKS ########################################################################################################
     def checkTomoMasks(self,
