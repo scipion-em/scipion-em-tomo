@@ -861,9 +861,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        actionIfGPUFails[0], actionIfGPUFails[1],
                                        pathi, offset, shift[0], shift[1],
                                        excludedViewsIndexes))
-        # For parallel processing, ensure that the file is completely written and persists on disk
-        f.flush()  # Empty python buffer
-        os.fsync(f.fileno())  # Empty system buffer
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
         return tiltcomPath
 
     def writeTltFile(self, ts_folder, excludeViews=False):
