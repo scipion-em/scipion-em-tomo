@@ -635,9 +635,11 @@ class TiltSeries(TiltSeriesBase):
         self.applyTransform(outFileName,
                             even=None,
                             ignoreExcludedViews=ignoreExcludedViews)
+        logger.info(cyanStr('Even'))
         self.applyTransform(evenFName,
                             even=True,
                             ignoreExcludedViews=ignoreExcludedViews)
+        logger.info(cyanStr('Odd'))
         self.applyTransform(oddFName,
                             even=False,
                             ignoreExcludedViews=ignoreExcludedViews)
@@ -697,7 +699,7 @@ class TiltSeries(TiltSeriesBase):
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
         tsFileName = self.getFirstItem().getFileName()
         if exists(outFileName):
-            logger.info(f'reStack: file {outFileName} was skipped. It already exists')
+            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(tsFileName):
             if presentAcqOrders:
                 # Load the file
