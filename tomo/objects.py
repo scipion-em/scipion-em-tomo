@@ -542,12 +542,12 @@ class TiltSeries(TiltSeriesBase):
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
         (default) or not.
         """
-        logger.info(cyanStr(f'tsId = {self.getTsId()} -> Applying the transformation matrix with Scipion...'))
         inImgFileName = self.__getTsFileName(even=even)
         if not ignoreExcludedViews and self.hasExcludedViews():
             excludedViewsIndices = self.getTsExcludedViewsIndices(self.getTsPresentAcqOrders())
             logger.info(cyanStr(f'{self.getTsId()}: excluded views detected {excludedViewsIndices}'))
         if self.hasAlignment():
+            logger.info(cyanStr(f'tsId = {self.getTsId()} -> Applying the transformation matrix with Scipion...'))
             self.__applyTransformAli(inImgFileName,
                                      outFileName,
                                      ignoreExcludedViews=ignoreExcludedViews)
@@ -561,7 +561,7 @@ class TiltSeries(TiltSeriesBase):
                               outFileName: str,
                               ignoreExcludedViews: bool = False) -> None:
         """Apply transform to a tilt-series without alignment.
-                :param inFileName: String containing the path of the image to which the transformation is going to be applied.
+        :param inFileName: String containing the path of the image to which the transformation is going to be applied.
         :param outFileName: String containing the path of the output file that is created.
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
         (default) or not.
@@ -572,6 +572,7 @@ class TiltSeries(TiltSeriesBase):
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             self.reStack(outFileName, presentAcqOrders)
         else:
+            logger.info(cyanStr(f'\t--> No re-stack is required. Creating a link...'))
             path.createAbsLink(os.path.abspath(inFileName), outFileName)
 
     def __applyTransformAli(self,
