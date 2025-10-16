@@ -11,7 +11,7 @@ You'll need to download this dataset -> scipion3 testdata --download tomo_apofer
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "/home/scipion/scipion3/data/tests/tomo_apoferritin_tutorial/",
+        "filesPath": "%(SCIPION_TESTS)s/tomo_apoferritin_tutorial/",
         "filesPattern": "*.mdoc",
         "isTomo5": false,
         "exclusionWords": null,
@@ -26,7 +26,7 @@ You'll need to download this dataset -> scipion3 testdata --download tomo_apofer
         "tiltAxisAngle": 85.0,
         "doseInitial": 0.0,
         "dosePerFrame": null,
-        "gainFile": "/home/scipion/scipion3/data/tests/tomo_apoferritin_tutorial/gain_ref.mrc",
+        "gainFile": "%(SCIPION_TESTS)s/tomo_apoferritin_tutorial/gain_ref.mrc",
         "darkFile": null
     },
     {
