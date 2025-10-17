@@ -722,8 +722,8 @@ class TiltSeries(TiltSeriesBase):
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
                     reStackedTsMrc.set_data(newTsData)
-                    reStackedTsMrc.update_header_from_data()
-                    reStackedTsMrc.update_header_stats()
+                    # reStackedTsMrc.update_header_from_data()
+                    # reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
                 logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
