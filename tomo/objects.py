@@ -711,7 +711,7 @@ class TiltSeries(TiltSeriesBase):
                 nImgs, nx, ny = tsData.shape
                 finalNImgs = len(presentAcqOrders)
                 newTsShape = (finalNImgs, nx, ny)
-                newTsData = np.empty(newTsShape)  #, dtype=tsData.dtype)
+                newTsData = np.empty(newTsShape, dtype=np.float32)
                 # Fill it with the non-excluded images
                 counter = 0
                 for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
