@@ -722,7 +722,7 @@ class TiltSeries(TiltSeriesBase):
                 #         counter += 1
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
-                    newTsData = tsData[presentAcqOrders, :, :]
+                    newTsData = tsData[list(presentAcqOrders), :, :]
                     reStackedTsMrc.set_data(newTsData)
                     reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
