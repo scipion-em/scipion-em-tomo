@@ -706,23 +706,25 @@ class TiltSeries(TiltSeriesBase):
             if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                    # origHeader = tsMrc.extended_header
                     tsData = tsMrc.data
-                # Create an empty array in which the re-stacked TS will be stored
-                nImgs, nx, ny = tsData.shape
-                finalNImgs = len(presentAcqOrders)
-                newTsShape = (finalNImgs, nx, ny)
-                newTsData = np.empty(newTsShape, dtype=np.float32)
-                # Fill it with the non-excluded images
-                counter = 0
-                for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
-                    acqOrder = ti.getAcquisitionOrder()
-                    if acqOrder in presentAcqOrders:
-                        newTsData[counter] = tsData[index]
-                        counter += 1
+                # # Create an empty array in which the re-stacked TS will be stored
+                # nImgs, nx, ny = tsData.shape
+                # finalNImgs = len(presentAcqOrders)
+                # newTsShape = (finalNImgs, nx, ny)
+                # newTsData = np.empty(newTsShape, dtype=np.float32)
+                # # Fill it with the non-excluded images
+                # counter = 0
+                # for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
+                #     acqOrder = ti.getAcquisitionOrder()
+                #     if acqOrder in presentAcqOrders:
+                #         newTsData[counter] = tsData[index]
+                #         counter += 1
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
+                    newTsData = tsData[presentAcqOrders, :, :]
                     reStackedTsMrc.set_data(newTsData)
-                    # reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
