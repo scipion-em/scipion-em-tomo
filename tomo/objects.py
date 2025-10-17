@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #  **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# * Authors:     Scipion Team
 # *
-# * [1] SciLifeLab, Stockholm University
+# * National Center of Biotechnology, CSIC, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -47,7 +47,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pyworkflow.utils import removeBaseExt, cyanStr
+from pyworkflow.utils import removeBaseExt, cyanStr, replaceExt
 
 logger = logging.getLogger(__name__)
 
@@ -625,6 +625,7 @@ class TiltSeries(TiltSeriesBase):
         """
         fPath = dirname(outFileName)
         if outFileNamesEvenOdd:
+            outFileNamesEvenOdd = sorted(outFileNamesEvenOdd)
             evenFName = outFileNamesEvenOdd[0]
             oddFName = outFileNamesEvenOdd[1]
         else:
@@ -701,6 +702,7 @@ class TiltSeries(TiltSeriesBase):
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(tsFileName):
+            replaceExt(outFileName, 'mrcs')
             if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
