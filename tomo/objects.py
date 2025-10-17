@@ -702,7 +702,7 @@ class TiltSeries(TiltSeriesBase):
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(tsFileName):
-            replaceExt(outFileName, 'mrcs')
+            outFileName = replaceExt(outFileName, 'mrcs')
             if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
