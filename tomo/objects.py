@@ -726,7 +726,7 @@ class TiltSeries(TiltSeriesBase):
                     excludedViesInd = self.getTsExcludedViewsIndices(presentAcqOrders)
                     newTsData = tsData[list(excludedViesInd), :, :]
                     reStackedTsMrc.set_data(newTsData)
-                    # reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
