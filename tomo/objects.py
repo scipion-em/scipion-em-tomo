@@ -711,7 +711,7 @@ class TiltSeries(TiltSeriesBase):
                     tsData = tsMrc.data
 
                     print(cyanStr(f'Orig header {tsFileName}'))
-                    tsData.print_header()
+                    tsMrc.print_header()
 
                 # Create an empty array in which the re-stacked TS will be stored
                 nImgs, nx, ny = tsData.shape
