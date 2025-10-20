@@ -706,16 +706,23 @@ class TiltSeries(TiltSeriesBase):
             if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
-                    tsData = tsMrc.data
-                # Save the re-stacked TS
-                with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
+                    origData = tsMrc.data
+                    origHeader = tsMrc.header
+                    origExtHeader = tsMrc.extended_header
                     includedViewsList = [ti.getIndex() - 1 for ti in self.iterItems(orderBy=self.INDEX)
                                          if ti.getAcquisitionOrder() in presentAcqOrders]
-                    newTsData = tsData[includedViewsList, :, :]
+                    newExtHeader = origExtHeader[includedViewsList]
+                # Save the re-stacked TS
+                with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
+                    for name in origHeader.dtype.names:
+                        reStackedTsMrc.header[name] = origHeader[name]
+
+                    reStackedTsMrc.set_extended_header(newExtHeader)
+                    newTsData = origData[includedViewsList, :, :]
                     reStackedTsMrc.set_data(newTsData)
-                    reStackedTsMrc.header.ispg = 0
-                    reStackedTsMrc.update_header_from_data()
-                    reStackedTsMrc.update_header_stats()
+                    # reStackedTsMrc.header.ispg = 0
+                    # reStackedTsMrc.update_header_from_data()
+                    # reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
                 logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
