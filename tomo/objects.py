@@ -711,13 +711,12 @@ class TiltSeries(TiltSeriesBase):
                     origExtHeader = tsMrc.extended_header
                     includedViewsList = [ti.getIndex() - 1 for ti in self.iterItems(orderBy=self.INDEX)
                                          if ti.getAcquisitionOrder() in presentAcqOrders]
-                    newExtHeader = origExtHeader[includedViewsList]
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
                     for name in origHeader.dtype.names:
                         reStackedTsMrc.header[name] = origHeader[name]
-
-                    if newExtHeader:
+                    if origExtHeader:
+                        newExtHeader = origExtHeader[includedViewsList]
                         reStackedTsMrc.set_extended_header(newExtHeader)
                     newTsData = origData[includedViewsList, :, :]
                     reStackedTsMrc.set_data(newTsData)
