@@ -543,6 +543,7 @@ class TiltSeries(TiltSeriesBase):
         (default) or not.
         """
         inImgFileName = self.__getTsFileName(even=even)
+        logger.info(cyanStr(f'inImgFileName = {inImgFileName}'))
         if not ignoreExcludedViews and self.hasExcludedViews():
             excludedViewsIndices = self.getTsExcludedViewsIndices(self.getTsPresentAcqOrders())
             logger.info(cyanStr(f'{self.getTsId()}: excluded views detected {excludedViewsIndices}'))
