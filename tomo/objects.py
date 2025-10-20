@@ -727,9 +727,9 @@ class TiltSeries(TiltSeriesBase):
                                          if ti.getAcquisitionOrder() in presentAcqOrders]
                     newTsData = tsData[includedViewsList, :, :]
                     reStackedTsMrc.set_data(newTsData)
+                    reStackedTsMrc.header.ispg = 0
                     reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
-                    reStackedTsMrc.header.ispg = 0
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
                 logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
