@@ -723,8 +723,9 @@ class TiltSeries(TiltSeriesBase):
                 #         counter += 1
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
-                    excludedViesInd = self.getTsExcludedViewsIndices(presentAcqOrders)
-                    newTsData = tsData[list(excludedViesInd), :, :]
+                    includedViewsList = [ti.getIndex() - 1 for ti in self.iterItems(orderBy=self.INDEX)
+                                         if ti.getAcquisitionOrder() in presentAcqOrders]
+                    newTsData = tsData[includedViewsList, :, :]
                     reStackedTsMrc.set_data(newTsData)
                     reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
