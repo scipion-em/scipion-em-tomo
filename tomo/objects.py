@@ -706,21 +706,7 @@ class TiltSeries(TiltSeriesBase):
             if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
-                    # origHeader = tsMrc.extended_header
                     tsData = tsMrc.data
-                    # TODO: CONTINUE HERE
-                # # Create an empty array in which the re-stacked TS will be stored
-                # nImgs, nx, ny = tsData.shape
-                # finalNImgs = len(presentAcqOrders)
-                # newTsShape = (finalNImgs, nx, ny)
-                # newTsData = np.empty(newTsShape, dtype=np.float32)
-                # # Fill it with the non-excluded images
-                # counter = 0
-                # for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
-                #     acqOrder = ti.getAcquisitionOrder()
-                #     if acqOrder in presentAcqOrders:
-                #         newTsData[counter] = tsData[index]
-                #         counter += 1
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
                     includedViewsList = [ti.getIndex() - 1 for ti in self.iterItems(orderBy=self.INDEX)
@@ -729,7 +715,7 @@ class TiltSeries(TiltSeriesBase):
                     reStackedTsMrc.set_data(newTsData)
                     reStackedTsMrc.header.ispg = 0
                     reStackedTsMrc.update_header_from_data()
-                    # reStackedTsMrc.update_header_stats()
+                    reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
                 logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
