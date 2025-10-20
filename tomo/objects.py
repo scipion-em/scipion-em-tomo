@@ -705,21 +705,21 @@ class TiltSeries(TiltSeriesBase):
             outFileName = replaceExt(outFileName, 'mrcs')
             if presentAcqOrders:
                 # Load the file
-                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                with mrcfile.mmap(tsFileName, permissive=True) as tsMrc:
                     origData = tsMrc.data
                     origHeader = tsMrc.header
                     origExtHeader = tsMrc.extended_header
                     includedViewsList = [ti.getIndex() - 1 for ti in self.iterItems(orderBy=self.INDEX)
                                          if ti.getAcquisitionOrder() in presentAcqOrders]
+                    newTsData = origData[includedViewsList].copy()  # The copy is because the mmap data is read-only
                 # Save the re-stacked TS
-                with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
+                with mrcfile.new(outFileName, overwrite=True) as reStackedTsMrc:
                     for name in origHeader.dtype.names:
                         reStackedTsMrc.header[name] = origHeader[name]
+                    reStackedTsMrc.set_data(newTsData)
                     if origExtHeader:
                         newExtHeader = origExtHeader[includedViewsList]
                         reStackedTsMrc.set_extended_header(newExtHeader)
-                    newTsData = origData[includedViewsList, :, :]
-                    reStackedTsMrc.set_data(newTsData)
                     # reStackedTsMrc.header.ispg = 0
                     # reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
