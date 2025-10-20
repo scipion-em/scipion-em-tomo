@@ -708,6 +708,7 @@ class TiltSeries(TiltSeriesBase):
                 with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
                     # origHeader = tsMrc.extended_header
                     tsData = tsMrc.data
+                    # TODO: CONTINUE HERE
                 # # Create an empty array in which the re-stacked TS will be stored
                 # nImgs, nx, ny = tsData.shape
                 # finalNImgs = len(presentAcqOrders)
@@ -722,9 +723,10 @@ class TiltSeries(TiltSeriesBase):
                 #         counter += 1
                 # Save the re-stacked TS
                 with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
-                    newTsData = tsData[list(presentAcqOrders), :, :]
+                    excludedViesInd = self.getTsExcludedViewsIndices(presentAcqOrders)
+                    newTsData = tsData[list(excludedViesInd), :, :]
                     reStackedTsMrc.set_data(newTsData)
-                    reStackedTsMrc.update_header_from_data()
+                    # reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
