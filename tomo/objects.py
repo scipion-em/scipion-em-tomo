@@ -717,7 +717,8 @@ class TiltSeries(TiltSeriesBase):
                     for name in origHeader.dtype.names:
                         reStackedTsMrc.header[name] = origHeader[name]
 
-                    reStackedTsMrc.set_extended_header(newExtHeader)
+                    if newExtHeader:
+                        reStackedTsMrc.set_extended_header(newExtHeader)
                     newTsData = origData[includedViewsList, :, :]
                     reStackedTsMrc.set_data(newTsData)
                     # reStackedTsMrc.header.ispg = 0
