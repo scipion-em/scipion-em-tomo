@@ -571,7 +571,7 @@ class TiltSeries(TiltSeriesBase):
             presentAcqOrders = self.getTsPresentAcqOrders()
             tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
-            self.reStack(outFileName, presentAcqOrders)
+            self.reStack(inFileName, outFileName, presentAcqOrders)
         else:
             logger.info(cyanStr(f'\t--> No re-stack is required. Creating a link...'))
             path.createAbsLink(os.path.abspath(inFileName), outFileName)
@@ -690,7 +690,7 @@ class TiltSeries(TiltSeriesBase):
                 excludedViewsInds.append(ti.getIndex())
         return set(excludedViewsInds)
 
-    def reStack(self, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
+    def reStack(self, inFileName: str, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
         """If there aren't any excluded views (presentAcqOrders is empty), it does nothing. In the opposite case,
         it se-stacks a tilt-series into a new one without the excluded views. If the re-stacked file already exists,
         o action is carried out (avoid creating the same file multiple times, even more necessary if calling this
@@ -702,16 +702,16 @@ class TiltSeries(TiltSeriesBase):
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
-        tsFileName = self.getFirstItem().getFileName()
+        # tsFileName = self.getFirstItem().getFileName()
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
-        if exists(tsFileName):
+        if exists(inFileName):
             if presentAcqOrders:
                 # Load the file
-                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                with mrcfile.mmap(inFileName, mode='r+') as tsMrc:
                     tsData = tsMrc.data
 
-                    print(cyanStr(f'Orig header {tsFileName}'))
+                    print(cyanStr(f'Orig header {inFileName}'))
                     tsMrc.print_header()
 
                 # Create an empty array in which the re-stacked TS will be stored
@@ -737,9 +737,9 @@ class TiltSeries(TiltSeriesBase):
                     reStackedTsMrc.print_header()
 
             else:
-                logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
+                logger.info(f'reStack: file {inFileName} was skipped as there are not any excluded views.')
         else:
-            logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
+            logger.warning(f'reStack: file {inFileName} was skipped. It does not exist.')
 
     def generateTltFile(self,
                         tltFilePath: str,
