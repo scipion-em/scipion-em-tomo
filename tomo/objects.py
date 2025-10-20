@@ -706,6 +706,10 @@ class TiltSeries(TiltSeriesBase):
             if presentAcqOrders:
                 # Load the file
                 with mrcfile.mmap(tsFileName, permissive=True) as tsMrc:
+
+                    print(cyanStr('Orig header'))
+                    tsMrc.print_header()
+
                     origData = tsMrc.data
                     origHeader = tsMrc.header
                     origExtHeader = tsMrc.extended_header
@@ -714,16 +718,25 @@ class TiltSeries(TiltSeriesBase):
                     newTsData = origData[includedViewsList].copy()  # The copy is because the mmap data is read-only
                 # Save the re-stacked TS
                 with mrcfile.new(outFileName, overwrite=True) as reStackedTsMrc:
-                    for name in origHeader.dtype.names:
-                        reStackedTsMrc.header[name] = origHeader[name]
+                    # for name in origHeader.dtype.names:
+                    #     reStackedTsMrc.header[name] = origHeader[name]
                     reStackedTsMrc.set_data(newTsData)
-                    if origExtHeader:
-                        newExtHeader = origExtHeader[includedViewsList]
-                        reStackedTsMrc.set_extended_header(newExtHeader)
-                    # reStackedTsMrc.header.ispg = 0
+
+                    print(cyanStr('Re-stacked header'))
+                    reStackedTsMrc.print_header()
+
+                    # if origExtHeader:
+                    #     newExtHeader = origExtHeader[includedViewsList]
+                    #     reStackedTsMrc.set_extended_header(newExtHeader)
                     # reStackedTsMrc.update_header_from_data()
                     # reStackedTsMrc.update_header_stats()
+                    for name in origHeader.dtype.names:
+                        reStackedTsMrc.header[name] = origHeader[name]
+                    # reStackedTsMrc.header.ispg = 0
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
+
+                    print(cyanStr('Final Re-stacked header'))
+                    reStackedTsMrc.print_header()
             else:
                 logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
         else:
