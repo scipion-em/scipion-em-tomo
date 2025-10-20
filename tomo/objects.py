@@ -698,45 +698,43 @@ class TiltSeries(TiltSeriesBase):
         :param presentAcqOrders: set containing the present acq orders in both the given TS.
         """
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
+        if exists(outFileName):
+            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
+        logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
         tsFileName = self.getFirstItem().getFileName()
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(tsFileName):
-            outFileName = replaceExt(outFileName, 'mrcs')
             if presentAcqOrders:
                 # Load the file
-                with mrcfile.mmap(tsFileName, permissive=True) as tsMrc:
+                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                    tsData = tsMrc.data
 
-                    print(cyanStr('Orig header'))
-                    tsMrc.print_header()
+                    print(cyanStr(f'Orig header {tsFileName}'))
+                    tsData.print_header()
 
-                    origData = tsMrc.data
-                    origHeader = tsMrc.header
-                    origExtHeader = tsMrc.extended_header
-                    includedViewsList = [ti.getIndex() - 1 for ti in self.iterItems(orderBy=self.INDEX)
-                                         if ti.getAcquisitionOrder() in presentAcqOrders]
-                    newTsData = origData[includedViewsList].copy()  # The copy is because the mmap data is read-only
+                # Create an empty array in which the re-stacked TS will be stored
+                nImgs, nx, ny = tsData.shape
+                finalNImgs = len(presentAcqOrders)
+                newTsShape = (finalNImgs, nx, ny)
+                newTsData = np.empty(newTsShape, dtype=tsData.dtype)
+                # Fill it with the non-excluded images
+                counter = 0
+                for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
+                    acqOrder = ti.getAcquisitionOrder()
+                    if acqOrder in presentAcqOrders:
+                        newTsData[counter] = tsData[index]
+                        counter += 1
                 # Save the re-stacked TS
-                with mrcfile.new(outFileName, overwrite=True) as reStackedTsMrc:
-                    # for name in origHeader.dtype.names:
-                    #     reStackedTsMrc.header[name] = origHeader[name]
+                with mrcfile.mmap(outFileName, mode='w+') as reStackedTsMrc:
                     reStackedTsMrc.set_data(newTsData)
-
-                    print(cyanStr('Re-stacked header'))
-                    reStackedTsMrc.print_header()
-
-                    # if origExtHeader:
-                    #     newExtHeader = origExtHeader[includedViewsList]
-                    #     reStackedTsMrc.set_extended_header(newExtHeader)
-                    # reStackedTsMrc.update_header_from_data()
-                    # reStackedTsMrc.update_header_stats()
-                    for name in origHeader.dtype.names:
-                        reStackedTsMrc.header[name] = origHeader[name]
-                    # reStackedTsMrc.header.ispg = 0
+                    reStackedTsMrc.update_header_from_data()
+                    reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
 
-                    print(cyanStr('Final Re-stacked header'))
+                    print(cyanStr(f'Final header {outFileName}'))
                     reStackedTsMrc.print_header()
+
             else:
                 logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
         else:
