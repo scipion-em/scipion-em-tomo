@@ -695,14 +695,14 @@ class TiltSeries(TiltSeriesBase):
         it se-stacks a tilt-series into a new one without the excluded views. If the re-stacked file already exists,
         o action is carried out (avoid creating the same file multiple times, even more necessary if calling this
         method from the viewer).
-        :param outFileName: Filename of the re-stacked tilt-series.
+        :param inFileName: Filename of the input tilt-series that will be re-stacked.
+        :param outFileName: Filename of the out re-stacked tilt-series.
         :param presentAcqOrders: set containing the present acq orders in both the given TS.
         """
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
-        # tsFileName = self.getFirstItem().getFileName()
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(inFileName):
@@ -710,10 +710,6 @@ class TiltSeries(TiltSeriesBase):
                 # Load the file
                 with mrcfile.mmap(inFileName, mode='r+') as tsMrc:
                     tsData = tsMrc.data
-
-                    print(cyanStr(f'Orig header {inFileName}'))
-                    tsMrc.print_header()
-
                 # Create an empty array in which the re-stacked TS will be stored
                 nImgs, nx, ny = tsData.shape
                 finalNImgs = len(presentAcqOrders)
@@ -732,10 +728,6 @@ class TiltSeries(TiltSeriesBase):
                     reStackedTsMrc.update_header_from_data()
                     reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
-
-                    print(cyanStr(f'Final header {outFileName}'))
-                    reStackedTsMrc.print_header()
-
             else:
                 logger.info(f'reStack: file {inFileName} was skipped as there are not any excluded views.')
         else:
