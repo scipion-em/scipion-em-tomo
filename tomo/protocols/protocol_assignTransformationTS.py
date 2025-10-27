@@ -128,9 +128,9 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                             if ti.getAcquisitionOrder() in matchingAcqOrders}
             toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
                           if ti.getAcquisitionOrder() in matchingAcqOrders}
-            fromTsExcludedIndices = self._getTsExcludedViewsIndices(fromTs, matchingAcqOrders)
-            toTsExcludedIndices = self._getTsExcludedViewsIndices(toTs, matchingAcqOrders)
-            matchingIndices = fromTsExcludedIndices & toTsExcludedIndices
+            fromTsIncludedIndices = self._getTsIncludedViewsIndices(fromTs, matchingAcqOrders)
+            toTsIncludedIndices = self._getTsIncludedViewsIndices(toTs, matchingAcqOrders)
+            matchingIndices = fromTsIncludedIndices & toTsIncludedIndices
 
             keysValsSortedByInd = sorted(zip(matchingIndices, matchingAcqOrders))
             sortedKeys, sortedValues = zip(*keysValsSortedByInd)
@@ -140,7 +140,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                 tiFrom = fromTsAcqDir[acqOrder]
                 tiTo = toTsAcqDir[acqOrder]
                 newTi = TiltImage()
-                newTi.copyInfo(tiFrom)
+                newTi.copyInfo(tiTo)
                 newTi.setFileName(tiTo.getFileName())
                 newTi.setIndex(i + 1)
 
@@ -217,7 +217,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         return commonTsIds, nonCommonTsIds
 
     @staticmethod
-    def _getTsExcludedViewsIndices(ts: TiltSeries, presentAcqOrders) -> typing.Set[int]:
+    def _getTsIncludedViewsIndices(ts: TiltSeries, presentAcqOrders) -> typing.Set[int]:
         """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is
         contained in a given set of acquisition orders. If presentAcqOrders is empty, it returns an empty set."""
         excludedViewsInds = []
