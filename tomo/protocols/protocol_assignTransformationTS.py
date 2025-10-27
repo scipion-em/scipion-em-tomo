@@ -26,7 +26,7 @@
 import logging
 import traceback
 from enum import Enum
-from typing import Tuple, Set, List
+from typing import Tuple, Set, List, OrderedDict
 
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
@@ -127,8 +127,15 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                             if ti.getAcquisitionOrder() in matchingAcqOrders}
             toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
                           if ti.getAcquisitionOrder() in matchingAcqOrders}
+            fromTsExcludedIndices = fromTs.getTsExcludedViewsIndices(matchingAcqOrders)
+            toTsExcludedIndices = toTs.getTsExcludedViewsIndices(matchingAcqOrders)
+            matchingIndices = fromTsExcludedIndices & toTsExcludedIndices
 
-            for i, acqOrder in enumerate(matchingAcqOrders):
+            keysValsSortedByInd = sorted(zip(matchingIndices, matchingAcqOrders))
+            sortedKeys, sortedValues = zip(*keysValsSortedByInd)
+            mappingDict = OrderedDict(zip(sortedKeys, sortedValues))
+
+            for i, acqOrder in enumerate(mappingDict.values()):
                 tiFrom = fromTsAcqDir[acqOrder]
                 tiTo = toTsAcqDir[acqOrder]
                 newTi = TiltImage()
