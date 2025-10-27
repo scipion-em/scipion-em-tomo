@@ -132,7 +132,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                 tiFrom = fromTsAcqDir[acqOrder]
                 tiTo = toTsAcqDir[acqOrder]
                 newTi = TiltImage()
-                newTi.copyInfo(tiTo)
+                newTi.copyInfo(tiTo, copyId=True)
                 newTi.setFileName(tiTo.getFileName())
                 newTi.setIndex(i + 1)
 
