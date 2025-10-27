@@ -123,28 +123,28 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                                     f"and target [{toTsSize}] tilt-series is different. Present acquisition "
                                     f"orders in both are {matchingAcqOrders}"))
 
-            fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
+            fromTsAcqDict= {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
                             if ti.getAcquisitionOrder() in matchingAcqOrders}
-            toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
-                          if ti.getAcquisitionOrder() in matchingAcqOrders}
-            mappingDict = self._getTiltAnglesAcqOrderMappingDict(fromTs, matchingAcqOrders)
 
-            for i, acqOrder in enumerate(mappingDict.values()):
-                tiFrom = fromTsAcqDir[acqOrder]
-                tiTo = toTsAcqDir[acqOrder]
-                newTi = TiltImage()
-                newTi.copyInfo(tiTo)
-                newTi.setFileName(tiTo.getFileName())
-                newTi.setIndex(i + 1)
+            for i, tiTo in enumerate(toTs.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+                acqOrder = tiTo.getAcquisitionOrder()
+                if tiTo.getAcquisitionOrder() in matchingAcqOrders:
+                    tiFrom = fromTsAcqDict[acqOrder]
+                    newTi = TiltImage()
+                    newTi.copyInfo(tiTo)
+                    newTi.setFileName(tiTo.getFileName())
 
-                # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
-                # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
-                # coherence with the values of the transformation matrix assigned
-                fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-                newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-                newTi.setTiltAngle(tiFrom.getTiltAngle())
-                newTransform = self.updateTM(tiFrom.getTransform())
-                newTi.setTransform(newTransform)
+                    # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
+                    # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
+                    # coherence with the values of the transformation matrix assigned
+                    fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+                    newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
+                    newTi.setTiltAngle(tiFrom.getTiltAngle())
+                    newTransform = self.updateTM(tiFrom.getTransform())
+                    newTi.setTransform(newTransform)
+                else:
+                    newTi = tiTo.clone()
+                    newTi.setEnabled(False)
                 newTs.append(newTi)
 
             newTs.setDim(toTs.getDim())
