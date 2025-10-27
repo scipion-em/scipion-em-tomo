@@ -25,6 +25,7 @@
 # **************************************************************************
 import logging
 import traceback
+import typing
 from enum import Enum
 from typing import Tuple, Set, List, OrderedDict
 
@@ -127,8 +128,8 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                             if ti.getAcquisitionOrder() in matchingAcqOrders}
             toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
                           if ti.getAcquisitionOrder() in matchingAcqOrders}
-            fromTsExcludedIndices = fromTs.getTsExcludedViewsIndices(matchingAcqOrders)
-            toTsExcludedIndices = toTs.getTsExcludedViewsIndices(matchingAcqOrders)
+            fromTsExcludedIndices = self._getTsExcludedViewsIndices(fromTs, matchingAcqOrders)
+            toTsExcludedIndices = self._getTsExcludedViewsIndices(toTs, matchingAcqOrders)
             matchingIndices = fromTsExcludedIndices & toTsExcludedIndices
 
             keysValsSortedByInd = sorted(zip(matchingIndices, matchingAcqOrders))
@@ -214,6 +215,16 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         commonTsIds = setCastedFromTsIds & setCastedToTsIds  # Intersection, common elements
         nonCommonTsIds = setCastedFromTsIds ^ setCastedToTsIds  # Symmetric difference, non-common elements
         return commonTsIds, nonCommonTsIds
+
+    @staticmethod
+    def _getTsExcludedViewsIndices(ts: TiltSeries, presentAcqOrders) -> typing.Set[int]:
+        """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is
+        contained in a given set of acquisition orders. If presentAcqOrders is empty, it returns an empty set."""
+        excludedViewsInds = []
+        for ti in ts.iterItems():
+            if ti.getAcquisitionOrder() in presentAcqOrders:
+                excludedViewsInds.append(ti.getIndex())
+        return set(excludedViewsInds)
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self) -> List[str]:
