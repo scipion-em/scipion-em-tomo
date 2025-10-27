@@ -128,12 +128,13 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
             toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
                           if ti.getAcquisitionOrder() in matchingAcqOrders}
 
-            for acqOrder in matchingAcqOrders:
+            for i, acqOrder in enumerate(matchingAcqOrders):
                 tiFrom = fromTsAcqDir[acqOrder]
                 tiTo = toTsAcqDir[acqOrder]
                 newTi = TiltImage()
-                newTi.copyInfo(tiTo, copyId=True)
+                newTi.copyInfo(tiTo)
                 newTi.setFileName(tiTo.getFileName())
+                newTi.setIndex(i + 1)
 
                 # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
                 # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
