@@ -25,7 +25,6 @@
 # **************************************************************************
 import logging
 import traceback
-import typing
 from enum import Enum
 from typing import Tuple, Set, List, OrderedDict
 
@@ -128,13 +127,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                             if ti.getAcquisitionOrder() in matchingAcqOrders}
             toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
                           if ti.getAcquisitionOrder() in matchingAcqOrders}
-            fromTsIncludedIndices = self._getTsIncludedViewsIndices(fromTs, matchingAcqOrders)
-            toTsIncludedIndices = self._getTsIncludedViewsIndices(toTs, matchingAcqOrders)
-            matchingIndices = fromTsIncludedIndices & toTsIncludedIndices
-
-            keysValsSortedByInd = sorted(zip(matchingIndices, matchingAcqOrders))
-            sortedKeys, sortedValues = zip(*keysValsSortedByInd)
-            mappingDict = OrderedDict(zip(sortedKeys, sortedValues))
+            mappingDict = self._getTiltAnglesAcqOrderMappingDict(fromTs, matchingAcqOrders)
 
             for i, acqOrder in enumerate(mappingDict.values()):
                 tiFrom = fromTsAcqDir[acqOrder]
@@ -217,14 +210,13 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         return commonTsIds, nonCommonTsIds
 
     @staticmethod
-    def _getTsIncludedViewsIndices(ts: TiltSeries, presentAcqOrders) -> typing.Set[int]:
-        """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is
-        contained in a given set of acquisition orders. If presentAcqOrders is empty, it returns an empty set."""
-        excludedViewsInds = []
-        for ti in ts.iterItems():
-            if ti.getAcquisitionOrder() in presentAcqOrders:
-                excludedViewsInds.append(ti.getIndex())
-        return set(excludedViewsInds)
+    def _getTiltAnglesAcqOrderMappingDict(ts: TiltSeries, presentAcqOrders) -> dict:
+        mappingDict = OrderedDict()
+        for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+            acqOrder = ti.getAcquisitionOrder()
+            if acqOrder in presentAcqOrders:
+                mappingDict[ti.getTiltAngle()] = acqOrder
+        return mappingDict
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self) -> List[str]:
