@@ -36,6 +36,7 @@ import tomo.constants as constants
 from tomo.utils import getObjFromRelation
 
 import enum
+import random
 import numpy as np
 
 class OutputProjectCoordinates(enum.Enum):
@@ -67,6 +68,18 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
                       allowsNull=True,
                       help='Tilt series on which coordinates are projected. '
                       'If not specified, it will be deduced from the coordinates.')
+        form.addParam('detectionSigma',
+                      params.FloatParam,
+                      label='Detection sigma (px)',
+                      default=0.0)
+        form.addParam('falsePositiveRate',
+                      params.FloatParam,
+                      label='False positive rate (%)',
+                      default=0.0)
+        form.addParam('falseNegativeRate',
+                      params.FloatParam,
+                      label='False negative rate (%)',
+                      default=0.0)
 
     # -------------------------- INSERT steps functions ---------------------
     def _insertAllSteps(self):
@@ -74,17 +87,21 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions ----------------------------
     def createOutputStep(self):
-        inputTiltSeries = self._getInputSetOfTiltSeries()
+        inputSetOfTiltSeries = self._getInputSetOfTiltSeries()
         inputCoodinates = self._getInputSetOfCoordinates3d()
-        landmarkSize = inputCoodinates.getBoxSize() * inputTiltSeries.getSamplingRate()
-        offset = np.array(inputTiltSeries.getDim()[:2]) / 2
-        scale = inputCoodinates.getSamplingRate() / inputTiltSeries.getSamplingRate()
+        landmarkSize = inputCoodinates.getBoxSize() * inputSetOfTiltSeries.getSamplingRate()
+        offset = np.array(inputSetOfTiltSeries.getDim()[:2]) / 2
+        scale = inputCoodinates.getSamplingRate() / inputSetOfTiltSeries.getSamplingRate()
+        detectionSigma = self.detectionSigma.get()
+        falsePositiveRate = self.falsePositiveRate.get()/100
+        falseNegativeRate = self.falseNegativeRate.get()/100
         
         outputSetOfLandmarkModels: SetOfLandmarkModels = self._createSetOfLandmarkModels()
-        outputSetOfLandmarkModels.copyInfo(inputTiltSeries)
-        outputSetOfLandmarkModels.setSetOfTiltSeries(inputTiltSeries)
+        outputSetOfLandmarkModels.copyInfo(inputSetOfTiltSeries)
+        outputSetOfLandmarkModels.setSetOfTiltSeries(inputSetOfTiltSeries)
         
-        for tiltSeries in inputTiltSeries:
+        chainId = 0
+        for tiltSeries in inputSetOfTiltSeries:
             tsId = tiltSeries.getTsId()
             where = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, tsId)
             landmarkModel = LandmarkModel(
@@ -95,15 +112,21 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
             )
             landmarkModel.setTiltSeries(tiltSeries)
             
+            count = 0
             for coordinate3d in inputCoodinates.iterItems(where=where):
                 position3d = np.array(coordinate3d.getPosition(constants.SCIPION) + (1, ))
                 position3d[:3] *= scale # Scale to match the binning of the TS
-                chainId = coordinate3d.getObjId()
+                chainId += 1
                 
                 for tiltImage in tiltSeries:
+                    count += 1
+                    if random.random() < falseNegativeRate:
+                        continue
+                    
                     position2d = self._projectCoordinate(tiltImage, position3d)
                     position2d = position2d[:2]
                     position2d += offset
+                    position2d += detectionSigma*np.random.randn(2)
                     
                     landmarkModel.addLandmark(
                         xCoor=round(position2d[0]),
@@ -113,6 +136,22 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
                         xResid=0,
                         yResid=0
                     )
+            
+            xSize, ySize, _ = tiltSeries.getDim()
+            nFalsePositives = round(count*falsePositiveRate)
+            for _ in range(nFalsePositives):
+                position2d = (xSize, ySize) * np.random.uniform(size=2)
+                tiltIndex = random.randint(1, len(tiltSeries))
+                chainId += 1
+                
+                landmarkModel.addLandmark(
+                    xCoor=round(position2d[0]),
+                    yCoor=round(position2d[1]),
+                    tiltIm=tiltIndex,
+                    chainId=chainId,
+                    xResid=0,
+                    yResid=0
+                )
 
             outputSetOfLandmarkModels.append(landmarkModel)
                     

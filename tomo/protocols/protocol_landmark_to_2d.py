@@ -29,7 +29,7 @@ from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol.params import PointerParam
 from pwem.protocols import EMProtocol
 from pwem.objects import SetOfMicrographs, Micrograph, SetOfCoordinates, Coordinate
-from pyworkflow.object import Integer, Pointer
+from pyworkflow.object import Integer, Pointer, String
 from functools import lru_cache
 import tomo.objects as tomoObjs
 
@@ -96,9 +96,11 @@ class ProtTomoLandmarksTo2D(EMProtocol):
 
         # Iterate the tilt series associated to the landmark
         for ts in tsSet.iterItems():
+            tsId = ts.getTsId()
 
             # for each tilt image
             for ti in ts:
+                acqOrder = ti.getAcquisitionOrder()
 
                 # Get the file
                 slice, stackFn = ti.getLocation()
@@ -113,6 +115,9 @@ class ProtTomoLandmarksTo2D(EMProtocol):
                 newMic = Micrograph(location=micFn)
                 newMic.setSamplingRate(ti.getSamplingRate())
                 newMic.setMicName(self.composeMicName(ti))
+
+                setattr(newMic, tomoObjs.TiltImage.TS_ID_FIELD, String(tsId))
+                setattr(newMic, tomoObjs.TiltImage.ACQ_ORDER_FIELD , Integer(acqOrder))
 
                 mics.append(newMic)
 
