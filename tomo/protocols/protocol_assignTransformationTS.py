@@ -136,6 +136,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                     newTi = TiltImage()
                     newTi.copyInfo(tiFrom)
                     newTi.setFileName(tiToFileName)
+                    newTi.setAcquisition(tiTo.getAcquisition())
 
                     # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
                     # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the

@@ -593,7 +593,7 @@ class TiltSeries(TiltSeriesBase):
         # the final sample disposition.
         rotationAngle = firstImg.getRotationAngle()
         swapXY = True if 45 < abs(rotationAngle) < 135 else False
-        if firstImg.hasTransform() and swapXY:
+        if self.hasAlignment() and swapXY:
             xDim, yDim = yDim, xDim
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
