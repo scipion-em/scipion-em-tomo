@@ -136,7 +136,7 @@ class TestTomoImportTomogramsFromPattern(TestBaseCentralizedLayer):
 
 class TestTomoImportTsFromPattern(TestBaseCentralizedLayer):
     testAcq = None
-    samplingRate = 1.35
+    samplingRate = 20.2
 
     @classmethod
     def setUpClass(cls):
