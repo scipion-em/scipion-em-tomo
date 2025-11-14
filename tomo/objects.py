@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #  **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# * Authors:     Scipion Team
 # *
-# * [1] SciLifeLab, Stockholm University
+# * National Center of Biotechnology, CSIC, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -47,7 +47,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pyworkflow.utils import removeBaseExt, cyanStr
+from pyworkflow.utils import removeBaseExt, cyanStr, replaceExt
 
 logger = logging.getLogger(__name__)
 
@@ -543,6 +543,7 @@ class TiltSeries(TiltSeriesBase):
         (default) or not.
         """
         inImgFileName = self.__getTsFileName(even=even)
+        logger.info(cyanStr(f'inImgFileName = {inImgFileName}'))
         if not ignoreExcludedViews and self.hasExcludedViews():
             excludedViewsIndices = self.getTsExcludedViewsIndices(self.getTsPresentAcqOrders())
             logger.info(cyanStr(f'{self.getTsId()}: excluded views detected {excludedViewsIndices}'))
@@ -570,7 +571,7 @@ class TiltSeries(TiltSeriesBase):
             presentAcqOrders = self.getTsPresentAcqOrders()
             tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
-            self.reStack(outFileName, presentAcqOrders)
+            self.reStack(inFileName, outFileName, presentAcqOrders)
         else:
             logger.info(cyanStr(f'\t--> No re-stack is required. Creating a link...'))
             path.createAbsLink(os.path.abspath(inFileName), outFileName)
@@ -592,7 +593,7 @@ class TiltSeries(TiltSeriesBase):
         # the final sample disposition.
         rotationAngle = firstImg.getRotationAngle()
         swapXY = True if 45 < abs(rotationAngle) < 135 else False
-        if firstImg.hasTransform() and swapXY:
+        if self.hasAlignment() and swapXY:
             xDim, yDim = yDim, xDim
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
@@ -625,6 +626,7 @@ class TiltSeries(TiltSeriesBase):
         """
         fPath = dirname(outFileName)
         if outFileNamesEvenOdd:
+            outFileNamesEvenOdd = sorted(outFileNamesEvenOdd)
             evenFName = outFileNamesEvenOdd[0]
             oddFName = outFileNamesEvenOdd[1]
         else:
@@ -688,22 +690,25 @@ class TiltSeries(TiltSeriesBase):
                 excludedViewsInds.append(ti.getIndex())
         return set(excludedViewsInds)
 
-    def reStack(self, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
+    def reStack(self, inFileName: str, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
         """If there aren't any excluded views (presentAcqOrders is empty), it does nothing. In the opposite case,
         it se-stacks a tilt-series into a new one without the excluded views. If the re-stacked file already exists,
         o action is carried out (avoid creating the same file multiple times, even more necessary if calling this
         method from the viewer).
-        :param outFileName: Filename of the re-stacked tilt-series.
+        :param inFileName: Filename of the input tilt-series that will be re-stacked.
+        :param outFileName: Filename of the out re-stacked tilt-series.
         :param presentAcqOrders: set containing the present acq orders in both the given TS.
         """
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
-        tsFileName = self.getFirstItem().getFileName()
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
-        if exists(tsFileName):
+        logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
+        if exists(outFileName):
+            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
+        if exists(inFileName):
             if presentAcqOrders:
                 # Load the file
-                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                with mrcfile.mmap(inFileName, mode='r+') as tsMrc:
                     tsData = tsMrc.data
                 # Create an empty array in which the re-stacked TS will be stored
                 nImgs, nx, ny = tsData.shape
@@ -724,9 +729,9 @@ class TiltSeries(TiltSeriesBase):
                     reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
-                logger.info(f'reStack: file {tsFileName} was skipped as there are not any excluded views.')
+                logger.info(f'reStack: file {inFileName} was skipped as there are not any excluded views.')
         else:
-            logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
+            logger.warning(f'reStack: file {inFileName} was skipped. It does not exist.')
 
     def generateTltFile(self,
                         tltFilePath: str,

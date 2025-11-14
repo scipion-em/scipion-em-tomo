@@ -26,8 +26,11 @@
 import logging
 import traceback
 from enum import Enum
-from typing import Tuple, Set, List
+from typing import Tuple, Set, List, OrderedDict
 
+import numpy as np
+
+from pwem.objects import Transform
 from pyworkflow import BETA
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
@@ -123,26 +126,33 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
                                     f"and target [{toTsSize}] tilt-series is different. Present acquisition "
                                     f"orders in both are {matchingAcqOrders}"))
 
-            fromTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs
-                            if ti.getAcquisitionOrder() in matchingAcqOrders}
-            toTsAcqDir = {ti.getAcquisitionOrder(): ti.clone() for ti in toTs
-                          if ti.getAcquisitionOrder() in matchingAcqOrders}
+            fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs}
 
-            for acqOrder in matchingAcqOrders:
-                tiFrom = fromTsAcqDir[acqOrder]
-                tiTo = toTsAcqDir[acqOrder]
-                newTi = TiltImage()
-                newTi.copyInfo(tiTo, copyId=True)
-                newTi.setFileName(tiTo.getFileName())
+            for i, tiTo in enumerate(toTs.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+                acqOrder = tiTo.getAcquisitionOrder()
+                tiToFileName = tiTo.getFileName()
+                if tiTo.getAcquisitionOrder() in matchingAcqOrders:
+                    tiFrom = fromTsAcqDict[acqOrder]
+                    newTi = TiltImage()
+                    newTi.copyInfo(tiFrom)
+                    newTi.setFileName(tiToFileName)
+                    newTi.setAcquisition(tiTo.getAcquisition())
 
-                # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
-                # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
-                # coherence with the values of the transformation matrix assigned
-                fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-                newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-                newTi.setTiltAngle(tiFrom.getTiltAngle())
-                newTransform = self.updateTM(tiFrom.getTransform())
-                newTi.setTransform(newTransform)
+                    # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
+                    # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
+                    # coherence with the values of the transformation matrix assigned
+                    fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+                    newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
+                    newTi.setTiltAngle(tiFrom.getTiltAngle())
+                    self.updateTiTrMatrix(newTi)
+                else:
+                    t = Transform()
+                    newTi = tiTo.clone()
+                    # An identity matrix is set so both the non-active views has the same fields as the active ones,
+                    # preventing problems when writing the sqlite files
+                    t.setMatrix(np.identity(3))
+                    newTi.setTransform(t)
+                    newTi.setEnabled(False)
                 newTs.append(newTi)
 
             newTs.setDim(toTs.getDim())
@@ -188,14 +198,15 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     def getSamplingRatio(self):
         return self.setTMSetOfTiltSeries.get().getSamplingRate() / self.getTMSetOfTiltSeries.get().getSamplingRate()
 
-    def updateTM(self, transform):
+    def updateTiTrMatrix(self, ti: TiltImage):
         """ Scale the transform matrix shifts. """
+        transform = ti.getTransform()
         matrix = transform.getMatrix()
         sr = self.getSamplingRatio()
         matrix[0][2] /= sr
         matrix[1][2] /= sr
         transform.setMatrix(matrix)
-        return transform
+        ti.setTransform(transform)
 
     @staticmethod
     def _matchTsIds(fromTsSet: SetOfTiltSeries, toTsSet: SetOfTiltSeries) -> Tuple[Set[str], Set[str]]:
@@ -206,6 +217,15 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         commonTsIds = setCastedFromTsIds & setCastedToTsIds  # Intersection, common elements
         nonCommonTsIds = setCastedFromTsIds ^ setCastedToTsIds  # Symmetric difference, non-common elements
         return commonTsIds, nonCommonTsIds
+
+    @staticmethod
+    def _getTiltAnglesAcqOrderMappingDict(ts: TiltSeries, presentAcqOrders) -> dict:
+        mappingDict = OrderedDict()
+        for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+            acqOrder = ti.getAcquisitionOrder()
+            if acqOrder in presentAcqOrders:
+                mappingDict[ti.getTiltAngle()] = acqOrder
+        return mappingDict
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self) -> List[str]:
