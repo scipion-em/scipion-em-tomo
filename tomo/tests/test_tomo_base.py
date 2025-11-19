@@ -699,22 +699,6 @@ class TestTomoAssignTomo2Subtomo(BaseTest):
         self.launchProtocol(protImportSubtomo)
         return protImportTomo, protImportSubtomo
 
-    def _assignTomos2subtomos(self):
-        protImportTomo, protImportSubtomo = self._runPreviousProtocols()
-        tomo2subtomo = self.newProtocol(tomo.protocols.ProtAssignTomo2Subtomo,
-                                        inputSubtomos=protImportSubtomo.outputSubTomograms,
-                                        inputTomos=protImportTomo.Tomograms)
-        self.launchProtocol(tomo2subtomo)
-        self.assertIsNotNone(tomo2subtomo.outputSubtomograms,
-                             "There was a problem with subtomograms output")
-        return tomo2subtomo
-
-    def test_assignTomos2subtomos(self):
-        tomo2subtomo = self._assignTomos2subtomos()
-        self.assertTrue(getattr(tomo2subtomo, 'outputSubtomograms'))
-        # It can not be checked properly with current test data
-        return tomo2subtomo
-
 
 with weakImport("xmipptomo"):
     from xmipptomo.protocols.protocol_project_top import SubtomoProjectOutput

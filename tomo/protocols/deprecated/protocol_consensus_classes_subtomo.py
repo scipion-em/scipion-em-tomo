@@ -27,8 +27,8 @@
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol.params import MultiPointerParam
-from ..objects import ClassSubTomogram
-from ..protocols import ProtTomoBase
+from tomo.objects import ClassSubTomogram
+from tomo.protocols import ProtTomoBase
 
 
 class ProtConsensusClassesSubtomo(EMProtocol, ProtTomoBase):

@@ -272,11 +272,11 @@ class TiltSeriesBase(data.SetOfImages):
         return inputStr.split('@')[-1]
 
     def getOddFileName(self):
-        firstItem = self.getFirstItem()
+        firstItem = self.getFirstEnabledTi()
         return self.extractFileName(firstItem.getOdd())
 
     def getEvenFileName(self):
-        firstItem = self.getFirstItem()
+        firstItem = self.getFirstEnabledTi()
         return self.extractFileName(firstItem.getEven())
 
     def setAnglesCount(self, value):
@@ -408,6 +408,15 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
+    def getFirstEnabledTi(self) -> typing.Union[TiltImage,None]:
+        # Instead of iterating over the live cursor, force all IDs to be read
+        # into memory first
+        ti_list = list(self.iterItems())
+        for ti in ti_list:
+            if ti.isEnabled():
+                return ti
+        return None
+
 
 def tiltSeriesToString(tiltSeries):
     s = []
@@ -502,8 +511,6 @@ class TiltSeries(TiltSeriesBase):
 
         output.write(outputFile)
 
-
-
     def getInterpolatedFileName(self, setId, binning, tmpFolder):
         """ Returns the interpolated filename for the tilt series
         at the binning passed and in the tmp folder
@@ -522,7 +529,7 @@ class TiltSeries(TiltSeriesBase):
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
         True to the even one and False to the odd one."""
         if even is None:
-            inImgFileName = self.getFirstItem().getFileName()
+            inImgFileName = self.getFirstEnabledTi().getFileName()
         elif even:
             inImgFileName = self.getEvenFileName()
         else:
@@ -586,7 +593,7 @@ class TiltSeries(TiltSeriesBase):
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
         (default) or not.
         """
-        firstImg = self.getFirstItem()
+        firstImg = self.getFirstEnabledTi()
         xDim, yDim, _ = firstImg.getDim()
         # Check if rotation angle is greater than 45º. If so,
         # swap x and y dimensions to adapt output image sizes to
@@ -604,12 +611,13 @@ class TiltSeries(TiltSeriesBase):
                 acqOrder = ti.getAcquisitionOrder()
                 if acqOrder in presentAcqOrders:
                     trMatrix = ti.getTransform().getMatrix()
-                    self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, counter)
+                    self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, ti.getIndex(), counter)
                     counter += 1
         else:
             for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
                 trMatrix = ti.getTransform().getMatrix()
-                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index + 1)
+                ind = index + 1
+                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, ind, ind)
 
     def applyTransformToAll(self,
                             outFileName: str,
@@ -647,11 +655,17 @@ class TiltSeries(TiltSeriesBase):
                             ignoreExcludedViews=ignoreExcludedViews)
 
     @staticmethod
-    def _applyTransformToTi(imgFileName, trMatrix, xDim, yDim, outputFilePath, index):
+    def _applyTransformToTi(imgFileName: str,
+                            trMatrix: typing.List[float],
+                            xDim: int,
+                            yDim: int,
+                            outputFilePath: str,
+                            inImgIndex: int,
+                            outImgIndex: int):
         ih = ImageHandler()
         transformArray = np.array(trMatrix)
-        ih.applyTransform(inputFile=str(index) + ':mrcs@' + imgFileName,
-                          outputFile=str(index) + '@' + outputFilePath,
+        ih.applyTransform(inputFile=str(inImgIndex) + ':mrcs@' + imgFileName,
+                          outputFile=str(outImgIndex) + '@' + outputFilePath,
                           transformMatrix=transformArray,
                           shape=(
                               yDim,
