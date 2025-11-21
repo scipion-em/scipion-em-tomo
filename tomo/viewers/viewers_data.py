@@ -50,6 +50,7 @@ class TomoDataViewer(pwviewer.Viewer):
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
         tomo.objects.SetOfTiltSeriesM,
+        tomo.objects.SetOfTomograms,
         tomo.objects.SetOfTiltSeries,
         tomo.objects.SetOfClassesSubTomograms,
         tomo.objects.SetOfMeshes
@@ -69,10 +70,10 @@ class TomoDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         # For now handle both types of SetOfTiltSeries together
-        if issubclass(cls, tomo.objects.SetOfTiltSeriesBase):
+        if issubclass(cls, tomo.objects.SetOfTiltSeriesBase) or issubclass(cls, tomo.objects.SetOfTomograms):
             # JMRT: Local import to avoid importing Tkinter stuff at top level
-            from .views_tkinter_tree import TiltSeriesDialogView
-            setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, obj)
+            from .views_tkinter_tree import TomoObjectDialogView
+            setTsView = TomoObjectDialogView(self.getTkRoot(), self.protocol, obj)
             views.append(setTsView)
 
         elif issubclass(cls, tomo.objects.SetOfClassesSubTomograms):
@@ -155,8 +156,8 @@ class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
         }
 
     def _visualize(self, setOfTiltSeries, **kwargs):
-        from .views_tkinter_tree import TiltSeriesDialogView
-        setTsView = TiltSeriesDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
+        from .views_tkinter_tree import TomoObjectDialogView
+        setTsView = TomoObjectDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
 
         return [setTsView]
 
@@ -165,7 +166,7 @@ class CtfEstimationTomoViewer(pwviewer.Viewer):
     """ This class implements a view using Tkinter CtfEstimationListDialog
     and the CtfEstimationTreeProvider.
     """
-    _label = 'CTF estimation viewer'
+    _name = 'Tomo CTF'
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [tomo.objects.SetOfCTFTomoSeries]
 

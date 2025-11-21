@@ -27,15 +27,17 @@ import ast
 import glob
 import os.path
 import threading
-from tkinter import messagebox, BOTH, RAISED
+import time
+from functools import lru_cache
+from tkinter import messagebox, BOTH, RAISED, simpledialog
 
 import numpy
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from pwem.convert.transformations import euler_from_matrix
 from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem.viewers import showj
+from pwem.viewers.filehandlers import getTkImage
 from pwem.viewers.showj import runJavaIJapp
 from pyworkflow.gui import *
 from pyworkflow.gui.tree import TreeProvider
@@ -43,10 +45,11 @@ from pyworkflow.gui.dialog import ListDialog, ToolbarListDialog, showInfo
 import pyworkflow.viewer as pwviewer
 import pyworkflow.utils as pwutils
 from pyworkflow.object import String
-from pyworkflow.plugin import Domain
+from pyworkflow import Config
 
 import tomo.objects
-from . import TomoDataViewer
+from .viewers_data import TomoDataViewer
+from ..constants import INTERPOLATED_FOLDER
 from ..convert.convert import getMeshVolFileName
 from ..objects import CTFTomo
 
@@ -58,9 +61,10 @@ DIRECTION_UP = 1
 RESULT_CREATE_WITH = 0
 RESULT_RESTACK = 1
 THUMBNAIL_SIZE = 512
+EXTERNAL_VIEWERS = ['Imod', 'Chimera', 'ChimeraX']
 
 
-class TSTreeToolTip:
+class ObjTreeToolTip:
     def __init__(self, widget, text=""):
         self.widget = widget
         self.text = text
@@ -80,7 +84,7 @@ class TSTreeToolTip:
             self.tooltip = None
 
 
-class TiltSerieState:
+class ObjectsState:
     EXCLUDED = 'excludedTs'
     INCLUDED = 'includedTs'
 
@@ -94,8 +98,8 @@ class TiltImageStates:
     CHECK_UNMARK = "\u2610"  # ☐
 
 
-class TiltSeriesTreeProvider(TreeProvider):
-    """ Model class that will retrieve the information from TiltSeries and
+class ObjectsTreeProvider(TreeProvider):
+    """ Model class that will retrieve the information from TiltSeries, Tomograms,..., and
     prepare the columns/rows models required by the TreeDialog GUI.
     """
     COL_TS = 'Tilt series'
@@ -108,6 +112,8 @@ class TiltSeriesTreeProvider(TreeProvider):
     COL_TI_ROT_ANGLE = "Rot"
     COL_TI_SHIFTX = 'ShiftX'
     COL_TI_SHIFTY = 'ShiftY'
+    COL_INFO = 'Info'
+    COL_TOMOGRAM = 'Tomograms'
     ORDER_DICT = {COL_TS: '_tsId'}
 
     def __init__(self, protocol, tiltSeries):
@@ -124,9 +130,9 @@ class TiltSeriesTreeProvider(TreeProvider):
     def configureTags(self, tree):
         self.tree = tree
         standardFont = getDefaultFont()
-        self.tree.tag_configure(TiltSerieState.EXCLUDED, font=standardFont, foreground='red',
+        self.tree.tag_configure(ObjectsState.EXCLUDED, font=standardFont, foreground='red',
                                 image=getImage(Icon.CHECKED))
-        self.tree.tag_configure(TiltSerieState.INCLUDED, font=standardFont, foreground='black',
+        self.tree.tag_configure(ObjectsState.INCLUDED, font=standardFont, foreground='black',
                                 image=getImage(Icon.UNCHECKED))
 
         self.tree.tag_configure(TiltImageStates.EXCLUDED,  font=standardFont, foreground='red')
@@ -134,9 +140,9 @@ class TiltSeriesTreeProvider(TreeProvider):
         self.tree.tag_configure(TiltImageStates.EVEN, background='#F2F2F2', foreground='black')
         self.tree.tag_configure(TiltImageStates.ODD, background='#E6E6E6', foreground='black')
         self.tree.bind('<space>', self.onSpace)
-        tsTooltip = TSTreeToolTip(self.tree)
-        self.tree.bind("<Motion>", lambda event: self.onMouseMotion(event, self.tree, tsTooltip))
-        self.tree.bind("<Leave>", lambda event: tsTooltip.hide(event))
+        objTooltip = ObjTreeToolTip(self.tree)
+        self.tree.bind("<Motion>", lambda event: self.onMouseMotion(event, self.tree, objTooltip))
+        self.tree.bind("<Leave>", lambda event: objTooltip.hide(event))
 
     def onMouseMotion(self, event, tsTree, tsTooltip):
         region = tsTree.identify_region(event.x, event.y)
@@ -169,51 +175,68 @@ class TiltSeriesTreeProvider(TreeProvider):
             self._itemSelected(obj)
 
     def _itemSelected(self, obj):
+        # Get selected tree item
         _, y, _, _ = self.tree.bbox(self.tree.selection()[0])
         selectedItem = self.tree.identify_row(y + 1)
         itemValues = self.tree.item(selectedItem, 'values')
 
-        if isinstance(obj, tomo.objects.TiltSeriesBase):
-            excludedTS = TiltSerieState.INCLUDED if obj.isEnabled() else TiltSerieState.EXCLUDED
-            obj.setEnabled(not obj.isEnabled())
-            tags = TiltSerieState.INCLUDED
-            if TiltSerieState.EXCLUDED in self.tree.item(selectedItem, 'tags'):
-                tags = TiltSerieState.INCLUDED
+        isTiltSeries = isinstance(obj, tomo.objects.TiltSeriesBase)
+        isTomogram = isinstance(obj, tomo.objects.Tomogram)
 
-            if excludedTS == TiltSerieState.INCLUDED:
-                self.tree.item(selectedItem, tags=(TiltSerieState.EXCLUDED, tags,))
-                excludedTi = TiltImageStates.CHECK_MARK
-            else:
-                self.tree.item(selectedItem, tags=(TiltSerieState.INCLUDED, tags,))
-                excludedTi = TiltImageStates.CHECK_UNMARK
+        # Case 1: TiltSeries or Tomogram
+        if isTiltSeries or isTomogram:
+            wasEnabled = obj.isEnabled()
+            obj.setEnabled(not wasEnabled)
 
-            children = self.tree.get_children(selectedItem)
-            index, ts = self.getTiltSerie(obj)
-            size = ts.getSize()
-            for tiIndex in range(size):
-                obj = self.objects[tiIndex + index + 1]
-                if excludedTS == TiltSerieState.INCLUDED:
-                    obj.setEnabled(False)
-                else:
-                    obj.setEnabled(True)
-                item = children[tiIndex]
-                itemValues = self.tree.item(item, 'values')
-                self.excludeTiltImage(obj, item, itemValues, excludedTi)
+            # Determine tag updates
+            newState = ObjectsState.EXCLUDED if wasEnabled else ObjectsState.INCLUDED
+            self.tree.item(selectedItem, tags=(newState, newState))
 
+            # Update counters
+            self.updatedCount += 1 if wasEnabled else -1
+            self.changes += 1 if wasEnabled else -1
+
+            excludedTi = (
+                TiltImageStates.CHECK_MARK if wasEnabled else TiltImageStates.CHECK_UNMARK
+            )
+
+            # If it's a TiltSeries, propagate change to its children
+            if isTiltSeries:
+                children = self.tree.get_children(selectedItem)
+                index, _ = self.getSelectedObject(obj)
+
+                for i, item in enumerate(children):
+                    childObj = self.objects[index + i + 1]
+                    childObj.setEnabled(not wasEnabled)
+
+                    itemValues = self.tree.item(item, 'values')
+                    self.excludeTiltImage(childObj, item, itemValues, excludedTi)
+
+        # Case 2: TiltImage (child of a TiltSeries)
         else:
-            excludedTi = TiltImageStates.CHECK_MARK if obj.isEnabled() else TiltImageStates.CHECK_UNMARK
-            obj.setEnabled(not obj.isEnabled())
+            wasEnabled = obj.isEnabled()
+            obj.setEnabled(not wasEnabled)
+
+            excludedTi = (
+                TiltImageStates.CHECK_MARK if wasEnabled else TiltImageStates.CHECK_UNMARK
+            )
+
             self.excludeTiltImage(obj, selectedItem, itemValues, excludedTi)
-            # Verify if it is necessary to check or uncheck the tiltserie
+
+            # Check parent TiltSeries state
             parentItem = self.tree.parent(selectedItem)
             parentObj = obj._parentObject
+            parentText = self.tree.item(parentItem)['text']
+            excludedCount = len(self.excludedDict[parentText])
+            totalImages = parentObj.getSize()
 
-            if excludedTi == TiltImageStates.CHECK_UNMARK:
-                self.tree.item(parentItem, tags=(TiltSerieState.INCLUDED, TiltSerieState.INCLUDED))
+            if not wasEnabled:
+                # We unchecked one → mark TiltSeries as INCLUDED
+                self.tree.item(parentItem, tags=(ObjectsState.INCLUDED, ObjectsState.INCLUDED))
                 parentObj.setEnabled(True)
-            # Checking the tiltserie if all tiltimages are checked
-            elif obj._parentObject.getSize() == len(self.excludedDict[self.tree.item(self.tree.parent(selectedItem))['text']]):
-                self.tree.item(self.tree.parent(selectedItem), tags=(TiltSerieState.EXCLUDED, TiltSerieState.EXCLUDED))
+            elif excludedCount == totalImages:
+                # All images excluded → mark TiltSeries as EXCLUDED
+                self.tree.item(parentItem, tags=(ObjectsState.EXCLUDED, ObjectsState.EXCLUDED))
                 parentObj.setEnabled(False)
 
     def excludeTiltImage(self, obj,  selectedItem, itemValues, excluded):
@@ -245,7 +268,7 @@ class TiltSeriesTreeProvider(TreeProvider):
         itemId = self.tree.item(itemSelected)['text']
         itemParent = self.tree.parent(itemSelected)
         if not itemParent:
-            _, obj = self.getTiltSerie(itemId)
+            _, obj = self.getSelectedObject(itemId)
         else:
             tsId = itemSelected[0].split('.')[0]
             _, obj = self.getTiltImage(tsId, itemId)
@@ -261,19 +284,23 @@ class TiltSeriesTreeProvider(TreeProvider):
 
         for ts in self.tiltSeries.iterItems(orderBy=orderBy):
             self.excludedDict[ts.getTsId()] = {}
-            tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
+            if isinstance(ts, tomo.objects.TiltSeriesBase):
+                tsObj = ts.clone(ignoreAttrs=['_mapperPath'])
+            else:
+                tsObj = ts.clone()
             tsObj._allowsSelection = True
             tsObj._parentObject = None
             tsObj.setEnabled(ts.isEnabled())
             self.objects.append(tsObj)
-            for ti in ts.iterItems(orderBy='id'):  # ti IDs are already sorted by tilt angle (TS) or acq. order (TSM)
-                tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
-                if not ti.isEnabled():
-                    self.excludedDict[ts.getTsId()][ti.getObjId()] = True
-                tiObj.setEnabled(ti.isEnabled())
-                tiObj._allowsSelection = False
-                tiObj._parentObject = tsObj
-                self.objects.append(tiObj)
+            if isinstance(ts, tomo.objects.TiltSeriesBase):
+                for ti in ts.iterItems(orderBy='id'):  # ti IDs are already sorted by tilt angle (TS) or acq. order (TSM)
+                    tiObj = ti.clone()  # For some reason .clone() does not clone the enabled nor the creation time
+                    if not ti.isEnabled():
+                        self.excludedDict[ts.getTsId()][ti.getObjId()] = True
+                    tiObj.setEnabled(ti.isEnabled())
+                    tiObj._allowsSelection = False
+                    tiObj._parentObject = tsObj
+                    self.objects.append(tiObj)
 
         return self.objects
 
@@ -283,16 +310,16 @@ class TiltSeriesTreeProvider(TreeProvider):
         objects = self.getObjects()
         for index, obj in enumerate(objects):
             if obj == tiltSerie:
-                return self.objects[index + int(size/2)]
+                return self.objects[index + int(size/2)+1]
 
-    def getTiltSerie(self, tiltSerie):
+    def getSelectedObject(self, selectedObj):
         objects = self.getObjects()
-        is_tsId = isinstance(tiltSerie, str)
+        is_tsId = isinstance(selectedObj, str)
 
         for index, obj in enumerate(objects):
-            if isinstance(obj, tomo.objects.TiltSeriesBase):
-                if (is_tsId and obj.getTsId() == tiltSerie) or \
-                        (not is_tsId and obj.getObjId() == tiltSerie.getObjId()):
+            if isinstance(obj, tomo.objects.TiltSeriesBase) or isinstance(obj, tomo.objects.Tomogram):
+                if (is_tsId and obj.getTsId() == selectedObj) or \
+                        (not is_tsId and obj.getObjId() == selectedObj.getObjId()):
                     return index, obj
 
         return None, None
@@ -324,20 +351,22 @@ class TiltSeriesTreeProvider(TreeProvider):
 
     def getColumns(self):
         cols = [
-            (self.COL_TS, 80),
-            (self.COL_TI_ACQ_ORDER, 50),
-            (self.COL_TI_ANGLE, 70),
-            (self.COL_TI_ENABLED, 65),
-            (self.COL_TI_DOSE, 55),
-            (self.COL_TI, 400),
-        ]
-        if not isinstance(self.tiltSeries, tomo.objects.SetOfTiltSeriesM):
-            cols.append((self.COL_TI_ROT_ANGLE, 100))
-            cols.append((self.COL_TI_SHIFTX, 100))
-            cols.append((self.COL_TI_SHIFTY, 100))
-            # cols.append((self.COL_TI_TRANSFORM, 200))
-
-
+            (self.COL_TOMOGRAM, 200),
+            (self.COL_INFO, 400)]
+        if isinstance(self.tiltSeries, tomo.objects.SetOfTiltSeriesBase):
+            cols = [
+                (self.COL_TS, 80),
+                (self.COL_TI_ACQ_ORDER, 50),
+                (self.COL_TI_ANGLE, 70),
+                (self.COL_TI_ENABLED, 65),
+                (self.COL_TI_DOSE, 55),
+                (self.COL_TI, 400),
+            ]
+            if not isinstance(self.tiltSeries, tomo.objects.SetOfTiltSeriesM):
+                cols.append((self.COL_TI_ROT_ANGLE, 100))
+                cols.append((self.COL_TI_SHIFTX, 100))
+                cols.append((self.COL_TI_SHIFTY, 100))
+                # cols.append((self.COL_TI_TRANSFORM, 200))
         return cols
 
     def isSelected(self, obj):
@@ -357,12 +386,12 @@ class TiltSeriesTreeProvider(TreeProvider):
             text = tsId
             values = ['', '', '', '', str(obj)]
             opened = False
-            tags = TiltSerieState.INCLUDED
+            tags = ObjectsState.INCLUDED
             if not obj.isEnabled():
                 obj.setEnabled(False)
-                tags = TiltSerieState.EXCLUDED
+                tags = ObjectsState.EXCLUDED
 
-        else:  # TiltImageBase
+        elif isinstance(obj, tomo.objects.TiltImageBase):  # TiltImageBase
             key = '%s.%s' % (tsId, objId)
             text = objId
 
@@ -384,9 +413,7 @@ class TiltSeriesTreeProvider(TreeProvider):
                 shiftY = ''
                 if obj.hasTransform():
                     transform = obj.getTransform()
-                    # TODO These lines will be removed when transform.getEulerAngles is released
-                    rotation = transform.getRotationMatrix()
-                    _, _, rot = euler_from_matrix(rotation)
+                    _, _, rot = transform.getEulerAngles()
                     angle = str("%0.2f" % numpy.rad2deg(rot))
                     matrixList = transform.getMatrixAsList()
                     shiftX = str("%0.2f" % matrixList[2])
@@ -403,6 +430,16 @@ class TiltSeriesTreeProvider(TreeProvider):
             if not obj.isEnabled():
                 obj.setEnabled(False)
                 tags = TiltImageStates.EXCLUDED
+
+        elif isinstance(obj, tomo.objects.Tomogram):
+            key = objId
+            text = tsId
+            values = [str(obj)]
+            opened = False
+            tags = ObjectsState.INCLUDED
+            if not obj.isEnabled():
+                obj.setEnabled(False)
+                tags = ObjectsState.EXCLUDED
 
         item = {
             'key': key, 'text': text,
@@ -422,8 +459,8 @@ class TiltSeriesTreeProvider(TreeProvider):
     def getObjectActions(self, obj):
         actions = []
 
-        if isinstance(obj, tomo.objects.TiltSeriesBase):
-            viewers = Domain.findViewers(obj.getClassName(),
+        if isinstance(obj, tomo.objects.TiltSeriesBase) or isinstance(obj, tomo.objects.Tomogram):
+            viewers = Config.getDomain().findViewers(obj,
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 def createViewer(viewerClass, obj):
@@ -438,19 +475,19 @@ class TiltSeriesTreeProvider(TreeProvider):
         return actions
 
 
-class TiltSeriesDialog(ToolbarListDialog):
+class TomoDialog(ToolbarListDialog):
     def __init__(self, parent, title, provider, tiltSeries, protocol, **kwargs):
 
-        self._tiltSeries = tiltSeries
+        self._setOfObjects = tiltSeries
         self._protocol = protocol
         self._provider = provider
         self._applyContrastCallback = kwargs.get('applyContrastCallback', None)
-
+        self._displayInterpolated = kwargs.get('displayInterpolatedCallback', None)
 
         toolbarButtons = []
 
-        if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeries):
-            viewers = Domain.findViewers(tomo.objects.SetOfTiltSeries.getClassName(),
+        if isinstance(self._setOfObjects, tomo.objects.SetOfTiltSeries) or isinstance(self._setOfObjects, tomo.objects.SetOfTomograms):
+            viewers = Config.getDomain().findViewers(self._setOfObjects,
                                          pwviewer.DESKTOP_TKINTER)
             for viewerClass in viewers:
                 if viewerClass is not TomoDataViewer:
@@ -469,9 +506,7 @@ class TiltSeriesDialog(ToolbarListDialog):
 
     def body(self, bodyFrame):
         ToolbarListDialog.body(self, bodyFrame)
-        firstTiltImage = self.tree.get_children(self.tree.get_children()[0])[0]
-        if firstTiltImage:
-            self.tree.selection_set(firstTiltImage)
+        self.tree.selection_set(self.tree.get_children()[0])
 
     def validateClose(self):
         if self._provider.getUpdatedCount() and self._provider.getchanges():
@@ -480,128 +515,231 @@ class TiltSeriesDialog(ToolbarListDialog):
             return result == messagebox.YES
         return True
 
+    def cancel(self, event=None):
+        """Clean tmp folder anc close the viewer"""
+        self.info('Cleaning temporal files and closing IMOD viewer...')
+        interpolatedFolder = os.path.join(self._protocol._getExtraPath(), INTERPOLATED_FOLDER)
+        pwutils.cleanPath(interpolatedFolder)
+        ListDialog.cancel(self)
+
+    def on_close(self, event=None):
+        self.cancel(event)
+
     def launchViewer(self, viewerInstance):
-        itemSelected = self.tree.selection() if not self.tree.parent(self.tree.selection()) else self.tree.parent(self.tree.selection())
-        obj = self.tree._objects[self.tree.index(itemSelected) + 1]
-        item = self._tiltSeries[obj.getObjId()]
-        viewerInstance.visualize(item)
+        # Get selected item from the tree (or its parent if applicable)
+        selected = self.tree.selection()
+        tsSelected = selected if not self.tree.parent(selected) else self.tree.parent(selected)
+        tsId = self.tree.item(tsSelected, 'text')
+        if viewerInstance.getName() in EXTERNAL_VIEWERS:
+            obj = self._setOfObjects.getItem('_tsId', tsId)
+        else:
+            obj = self._setOfObjects
+        binning = 1
+        if viewerInstance.getName() == 'Imod':
+            # Ask user for binning factor if using IMOD viewer
+            obj = self._setOfObjects.getItem('_tsId', tsId)  # re-fetch in case it was overridden
+            binning = simpledialog.askinteger("Binning", "Display binning:", initialvalue=1, parent=self)
+            if binning is None:
+                return
+            if isinstance(obj, tomo.objects.TiltSeriesBase) and obj.hasAlignment():
+                self.info('Interpolating the tiltserie...')
+                self.update_idletasks()
+
+        viewerInstance.visualize(
+            obj,
+            setOfObjs=self._setOfObjects,
+            binning=binning,
+            displayInterpolated=self._displayInterpolated()
+        )
+
+        # Clear any previous info messages
+        self.info('')
 
     def _showHelp(self, event=None):
-        showInfo('TiltSeries viewer help',
-                 'This viewer allows you to exclude or include TiltImages.\n\n'
-                 '1. Toggle exclusion button to exclude or include a selected tiltimage or use click over the checkbox or space over the item\n'
-                 '2. Increase contrast button to enhance the tiltimage contrast.\n'
-                 '3. Save button to create a new set with excluded views marked.', self)
+        showInfo('Tomo viewer help',
+                 'This viewer allows you to exclude or include TiltSeries, TiltImages, Tomograms.\n\n'
+                 '1. Toggle exclusion button to exclude or include a selected item or use click over the checkbox or space over the item\n'
+                 '2. Increase contrast button to enhance the tiltimage or the tomogram contrast.\n'
+                 '3. Apply alignments button to display the interpolated tiltimage if the selected item is a TiltSerie or TiltImage.\n'
+                 '4. Save button to create a new set with excluded views marked.', self)
 
     def _saveExcluded(self, event=None):
         updatedCount = self._provider.getUpdatedCount()
         changes = self._provider.getchanges()
+        isTS = isinstance(self._setOfObjects, tomo.objects.SetOfTiltSeriesBase)
+        isTomogram = isinstance(self._setOfObjects, tomo.objects.SetOfTomograms)
 
-        msg = ("Are you going to create a new set of tiltseries with the excluded views?\n\n"
-               "What do you do ? \n\n"
-               "Yes: The set will be created with the excluded views. \n"
-               "Re-stack: Delete excluded views and create a new TS stack") if updatedCount and changes \
-            else ("This set of TiltSeries has already been saved previously or is the original one. \n\n"
-                  "Are you still sure you want to generate a new set?")
+        # Determine if changes exist
+        hasChanges = updatedCount and changes
 
-        d = GenericDialog(self, "Create a new set of tiltseries", msg,
-                          Icon.ALERT,
-                          buttons=[('Yes', RESULT_CREATE_WITH),
-                                   ('Re-stack', RESULT_RESTACK),
-                                   ('Cancel', RESULT_CANCEL)],
-                          default='Yes',
-                          icons={RESULT_CANCEL: Icon.BUTTON_CANCEL,
-                                 RESULT_CREATE_WITH: Icon.BUTTON_SELECT,
-                                 RESULT_RESTACK: Icon.ACTION_EXECUTE})
+        # Prepare message based on object type and whether changes exist
+        if isTS:
+            if hasChanges:
+                msg = (
+                    "Are you going to create a new set of tiltseries without the excluded views?\n\n"
+                    "What do you want to do?\n\n"
+                    "Yes: The set will be created without the excluded views.\n"
+                    "Re-stack: Delete excluded views and create a new TS stack."
+                )
+            else:
+                msg = (
+                    "This set of TiltSeries has already been saved previously or is the original one.\n\n"
+                    "Are you still sure you want to generate a new set?"
+                )
+        elif isTomogram:
+            if hasChanges:
+                msg = (
+                    "Are you going to create a new set of tomogram without the excluded tomograms?\n\n"
+                )
+            else:
+                msg = (
+                    "This set of tomograms has already been saved previously or is the original one.\n\n"
+                    "Are you still sure you want to generate a new set?"
+                )
+        else:
+            return  # Unknown object type — do nothing
+
+        # Set up dialog buttons
+        if isTS:
+            buttons = [
+                ('Yes', RESULT_CREATE_WITH),
+                ('Re-stack', RESULT_RESTACK),
+                ('Cancel', RESULT_CANCEL)
+            ]
+        else:  # Tomogram set
+            buttons = [
+                ('Yes', RESULT_CREATE_WITH),
+                ('Cancel', RESULT_CANCEL)
+            ]
+
+        # Create and show dialog
+        d = GenericDialog(self, "Create a new set", msg, Icon.ALERT, buttons=buttons, default='Yes',
+                           icons={
+                                RESULT_CANCEL: Icon.BUTTON_CANCEL,
+                                RESULT_CREATE_WITH: Icon.BUTTON_SELECT,
+                                RESULT_RESTACK: Icon.ACTION_EXECUTE
+                            })
 
         result = d.result
         if result != RESULT_CANCEL:
 
             self.update_idletasks()
             restack = result == RESULT_RESTACK
-            outputSetOfTiltSeries = tomo.objects.SetOfTiltSeries.create(self._protocol.getPath(),
-                                                                        suffix=str(self._protocol.getOutputsSize()))
-            outputSetOfTiltSeries.copyInfo(self._tiltSeries)
-            outputSetOfTiltSeries.setDim(self._tiltSeries.getDim())
-            excludedViews = self._provider.getExcludedViews()
-            outputName = self._protocol.getNextOutputName('TiltSeries_')
-            outputPath = os.path.join(self._protocol._getExtraPath(), outputName)
 
-            if restack:  # Creating a new directory to write a new stack
-                if not os.path.exists(outputPath):
-                    os.mkdir(outputPath)
-            hasOddEven = self._tiltSeries.hasOddEven()
-            count = len(self._tiltSeries.getTSIds())
-            for tsIndex, ts in enumerate(self._tiltSeries):
-                self.info('Processing %s of %s tiltseries ...' % (tsIndex + 1, count))
-                self.update_idletasks()
-                tsId = ts.getTsId()
-                _, obj = self._provider.getTiltSerie(tsId)
-                if obj.isEnabled():  # We will exclude the TS that are checked even if the restack option is not chosen.
-                    newBinaryName = os.path.join(outputPath, tsId + '.mrcs')
-                    if hasOddEven:
-                        oddFileName = ts.getOddFileName()
-                        newOddBinaryName = os.path.join(outputPath, tsId + '_odd.mrcs')
-                        evenFileName = ts.getEvenFileName()
-                        newEvenBinaryName = os.path.join(outputPath, tsId + '_even.mrcs')
+            if isTS:
+                self.createNewSetOfTiltSeries(restack)
+            elif isTomogram:
+                self.createNewSetOfTomogram()
 
-                    index = 1
-                    newTs = tomo.objects.TiltSeries()
-                    newTs.copyInfo(ts)
-                    outputSetOfTiltSeries.append(newTs)
+    def createNewSetOfTomogram(self):
+        self.info('Processing ...')
+        outputName = self._protocol.getNextOutputName('Tomograms_')
+        outTomoSet = tomo.objects.SetOfTomograms.create(self._protocol._getPath(),
+                                                        suffix=str(self._protocol.getOutputsSize()))
+        outTomoSet.copyInfo(self._setOfObjects)
+        outTomoSet.setSamplingRate(self._setOfObjects.getSamplingRate())
+        for tomogram in self._setOfObjects.iterItems():
+            tsId = tomogram.getTsId()
+            _, obj = self._provider.getSelectedObject(tsId)
+            if obj.isEnabled():
+                tomogramClone = tomogram.clone()
+                tomogramClone.copyInfo(tomogram)
+                outTomoSet.append(tomogramClone)
+        self.info('The new set (%s) has been created successfully' % outputName)
+        self._protocol._defineOutputs(**{outputName: outTomoSet})
 
-                    # New Stacks
-                    properties = {"sr": obj.getSamplingRate()}
-                    newStack = ImageStack(properties=properties)
-                    oddFileNames = ImageStack(properties=properties)
-                    evenFileNames = ImageStack(properties=properties)
+    def createNewSetOfTiltSeries(self, restack):
+        protocol = self._protocol
+        inputSet = self._setOfObjects
+        excludedViews = self._provider.getExcludedViews()
+        hasOddEven = inputSet.hasOddEven()
+        outputName = protocol.getNextOutputName('TiltSeries_')
+        outputPath = os.path.join(protocol._getExtraPath(), outputName)
 
-                    for ti in ts.iterItems():
-                        included = False if ti.getObjId() in excludedViews[tsId] else True
-                        if not restack or (included and restack):
-                            newTi = ti.clone()
-                            newTi.copyInfo(ti, copyId=False)
-                            newTi.setObjId(None)
-                            newTi.setAcquisition(ti.getAcquisition())
-                            # For some reason .clone() does not clone the enabled nor the creation time
-                            newTi.setEnabled(included)
-                            if restack:
-                                oldIndex = str(ti.getIndex())
-                                newStack.append(ImageReadersRegistry.open(oldIndex + '@' + ti.getFileName()))
-                                newTi.setLocation((index, newBinaryName))
+        outputSet = tomo.objects.SetOfTiltSeries.create(protocol.getPath(), suffix=str(protocol.getOutputsSize()))
+        outputSet.copyInfo(inputSet)
+        outputSet.setDim(inputSet.getDim())
 
-                                if hasOddEven:
-                                    oddFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + oddFileName))
-                                    evenFileNames.append(ImageReadersRegistry.open(oldIndex + '@' + evenFileName))
-                                    newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
+        if restack and not os.path.exists(outputPath):
+            os.mkdir(outputPath)
 
-                                index += 1
-                            newTs.append(newTi)
+        for tsIndex, ts in enumerate(inputSet):
+            self.info(f'Processing {tsIndex + 1} of {len(inputSet)} tiltseries ...')
+            self.update_idletasks()
 
+            tsId = ts.getTsId()
+            _, obj = self._provider.getSelectedObject(tsId)
+
+            if not obj.isEnabled():
+                continue  # Skip disabled tilt series
+
+            newTs = tomo.objects.TiltSeries()
+            newTs.copyInfo(ts)
+            outputSet.append(newTs)
+
+            newBinaryName = os.path.join(outputPath, f'{tsId}.mrcs')
+            if hasOddEven:
+                oddFileName = ts.getOddFileName()
+                evenFileName = ts.getEvenFileName()
+                newOddBinaryName = os.path.join(outputPath, f'{tsId}_odd.mrcs')
+                newEvenBinaryName = os.path.join(outputPath, f'{tsId}_even.mrcs')
+
+            # Create new stacks if restacking
+            properties = {"sr": obj.getSamplingRate()}
+            stack, oddStack, evenStack = ImageStack(properties), ImageStack(properties), ImageStack(properties)
+
+            index = 1
+            for ti in ts.iterItems():
+                included = ti.getObjId() not in excludedViews[tsId]
+                if not restack or (included and restack):
+                    newTi = self._cloneTiltImage(ti, included)
                     if restack:
-                        ImageReadersRegistry.write(newStack, newBinaryName, isStack=True)
+                        oldIndex = str(ti.getIndex())
+                        stack.append(ImageReadersRegistry.open(f"{oldIndex}@{ti.getFileName()}"))
+                        newTi.setLocation((index, newBinaryName))
+
                         if hasOddEven:
-                            ImageReadersRegistry.write(oddFileNames, newOddBinaryName, isStack=True)
-                            ImageReadersRegistry.write(evenFileNames, newEvenBinaryName, isStack=True)
+                            oddStack.append(ImageReadersRegistry.open(f"{oldIndex}@{oddFileName}"))
+                            evenStack.append(ImageReadersRegistry.open(f"{oldIndex}@{evenFileName}"))
+                            newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
 
-                    if len(excludedViews[ts.getTsId()]) == ts.getSize():
-                        newTs.setEnabled(False)
-                    newTs.setDim(ts.getDim())
-                    newTs.setAnglesCount(newTs.getSize())
-                    newTs.write()
-                    outputSetOfTiltSeries.update(newTs)
-                    outputSetOfTiltSeries.write()
+                        index += 1
 
-            self._protocol._defineOutputs(**{outputName: outputSetOfTiltSeries})
-            self.info('The new set (%s) has been created successfully' % outputName)
-            self._provider.resetChanges()
+                    newTs.append(newTi)
+
+            if restack:
+                ImageReadersRegistry.write(stack, newBinaryName, isStack=True)
+                if hasOddEven:
+                    ImageReadersRegistry.write(oddStack, newOddBinaryName, isStack=True)
+                    ImageReadersRegistry.write(evenStack, newEvenBinaryName, isStack=True)
+
+            if len(excludedViews[tsId]) == ts.getSize():
+                newTs.setEnabled(False)
+
+            newTs.setDim(ts.getDim())
+            newTs.setAnglesCount(newTs.getSize())
+            newTs.write()
+            outputSet.update(newTs)
+
+        outputSet.write()
+        protocol._defineOutputs(**{outputName: outputSet})
+        self.info(f'The new set ({outputName}) has been created successfully')
+        self._provider.resetChanges()
+
+    def _cloneTiltImage(self, ti, included):
+        newTi = ti.clone()
+        newTi.copyInfo(ti, copyId=False)
+        newTi.setObjId(None)
+        newTi.setAcquisition(ti.getAcquisition())
+        newTi.setEnabled(included)
+        return newTi
 
 
-class TiltSeriesDialogView(pwviewer.View):
+class TomoObjectDialogView(pwviewer.View):
     """ This class implements a view using Tkinter ListDialog
-    and the TiltSeriesTreeProvider.
+    and the ObjectsTreeProvider.
     """
-    def __init__(self, parent, protocol, tiltSeries, **kwargs):
+    def __init__(self, parent, protocol, setOfObjects, **kwargs):
         """
          Params:
             parent: Tkinter parent widget
@@ -619,90 +757,128 @@ class TiltSeriesDialogView(pwviewer.View):
         """
         self._tkParent = parent
         self._protocol = protocol
-        self._tiltSeries = tiltSeries
-        self._provider = TiltSeriesTreeProvider(self._protocol, self._tiltSeries)
-        self._preview = None  # To store preview widget
+        self._setOfObjects = setOfObjects
+        self._provider = ObjectsTreeProvider(self._protocol, self._setOfObjects)
+        self.canvas = None  # To store preview widget
 
     def show(self):
-        previewCallback = self.previewTiltSeries
-        if isinstance(self._tiltSeries, tomo.objects.SetOfTiltSeriesM):
+        previewCallback = self.previewImage
+        displayInterpolatedCallback = self.displayInterpolated
+        if isinstance(self._setOfObjects, tomo.objects.SetOfTiltSeriesM):
             previewCallback = None
 
-        TiltSeriesDialog(self._tkParent, 'Tilt series viewer', self._provider, self._tiltSeries, self._protocol,
+        TomoDialog(self._tkParent, 'Tomo viewer', self._provider, self._setOfObjects, self._protocol,
                          lockGui=False, previewCallback=previewCallback,
-                         itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True)
+                         itemOnClick=self.itemOnClick, allowSelect=False, cancelButton=True,
+                         displayInterpolatedCallback=displayInterpolatedCallback)
 
-    def getPreviewWidget(self, frame):
+    def _create_button(self, parent, icon, command, row, column, tooltip,
+                       relief=tk.RAISED, sticky="ns", width=25, height=25):
+        """Helper to create a Tk button with image, grid placement and tooltip."""
+        btn = tk.Button(
+            parent,
+            image=getImage(icon),
+            command=command,
+            width=width,
+            height=height,
+            relief=relief
+        )
+        btn.grid(row=row, column=column, sticky=sticky)
+        ToolTip(btn, text=tooltip, delay=0)
+        return btn
 
-        if not self._preview:
+    def getPreviewWidget(self, obj, frame):
+        actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
+        actionBar.grid(row=0, column=0, sticky='ns')
+        self.isAlignPressed = False
+        self.isContrastPressed = False
 
-            actionBar = tk.Frame(frame, bd=1, relief=tk.SUNKEN)
-            actionBar.grid(row=0, column=0, sticky='ns')
 
-            self.startButton = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTINUE), command=self.autoNavigate,
-                                         width=25, height=25, relief=tk.RAISED)
-            self.startButton.grid(row=0, column=0, sticky='ns')
-            ToolTip(self.startButton, text='Auto navigate', delay=0)
+        # Play
+        self.startButton = self._create_button(
+            actionBar, Icon.ACTION_CONTINUE, self.autoNavigate, 0, 2, "Auto navigate"
+        )
 
-            self.next = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_NEXT), command=lambda: self.navigate(DIRECTION_DOWN),
-                                         width=25, height=25, relief=tk.RAISED)
-            self.next.grid(row=0, column=1, sticky='ns')
-            ToolTip(self.next, text='Next', delay=0)
+        # Stop
+        self.stopButton = self._create_button(
+            actionBar, Icon.ACTION_STOP, self.stopNavigate, 0, 3, "Stop navigate", relief=tk.RAISED, sticky="ne"
+        )
 
-            self.previous = tk.Button(actionBar, image=getImage(Icon.ACTION_FIND_PREVIOUS), command=lambda: self.navigate(DIRECTION_UP),
-                                  width=25, height=25, relief=tk.RAISED)
-            self.previous.grid(row=0, column=2, sticky='ns')
-            ToolTip(self.previous, text='Previous', delay=0)
+        if not isinstance(obj, tomo.objects.Tomogram):
+            # Next slice
+            self.next = self._create_button(
+                actionBar, Icon.ACTION_FIND_NEXT, lambda: self.navigate(DIRECTION_DOWN), 0, 0, "Next"
+            )
 
-            self.stopButton = tk.Button(actionBar, image=getImage(Icon.ACTION_STOP), command=self.stopNavigate, width=25, height=25)
-            self.stopButton.grid(row=0, column=3, sticky='ne')
-            ToolTip(self.stopButton, text='Stop navigate', delay=0)
+            # Previous slice
+            self.previous = self._create_button(
+                actionBar, Icon.ACTION_FIND_PREVIOUS, lambda: self.navigate(DIRECTION_UP), 0, 1, "Previous"
+            )
 
-            self.autoContrast = tk.Button(actionBar, image=getImage(Icon.ACTION_CONTRAST),
-                                          command=self.increaseContrast,
-                                          width=25, height=25)
-            self.autoContrast.grid(row=0, column=4, sticky='ns')
-            ToolTip(self.autoContrast, text='Apply contrast to the selected tiltimage', delay=0)
+            # Apply transformation
+            self.applyAlignmentsButton = self._create_button(
+                actionBar, Icon.ACTION_INTERPOLATE, self.onApplyAlignmentsClick, 0, 4, "Apply alignments",
+                relief=tk.FLAT
+            )
 
-            self.toogleExclusion = tk.Button(actionBar, image=getImage(Icon.ACTION_CLOSE),
-                                             command=self._provider._toggleExclusion,
-                                             width=25, height=25)
-            self.toogleExclusion.grid(row=0, column=5, sticky='ns', command=None)
-            ToolTip(self.toogleExclusion, text='Exclude or include the selection', delay=0)
+        # Contrast
+        self.autoContrast = self._create_button(
+            actionBar, Icon.ACTION_CONTRAST, self.onIncreaseContrastClick, 0, 5, "Increase contrast"
+        )
 
-            from pyworkflow.gui.matplotlib_image import ImagePreview
-            self._preview = ImagePreview(frame, dim=500, label="Tilt series")
-            self._preview.grid(row=2, column=0)
-        return self._preview
+        # Exclude
+        self.toogleExclusion = self._create_button(
+            actionBar, Icon.ACTION_CLOSE, self._provider._toggleExclusion, 0, 6, "Exclude or include the selection",
+        )
+        self.createPreviewCanvas(frame)
+
+    def createPreviewCanvas(self, frame):
+        self.canvasWidth = 550  # píxels
+        self.canvasHeight = 550  # píxels
+        self.canvas = tk.Canvas(frame,
+                                width=self.canvasWidth,
+                                height=self.canvasHeight,
+                                bg="#808080")
+        self.canvas.grid(row=2, column=0, sticky='nsew', padx=5, pady=5)
+        self.canvas.bind("<Button-4>", lambda e: self.navigate(DIRECTION_UP))
+        self.canvas.bind("<Button-5>", lambda e: self.navigate(DIRECTION_DOWN))
+        self.textLabel = tk.Label(frame, text="", anchor='center')
+        self.textLabel.grid(row=3, column=0, sticky='nsew', padx=5, pady=5)
 
     def stopNavigate(self):
         global afterId
         if afterId:
-            tree = self._provider.getTree()
-            tree.after_cancel(afterId)
+            if isinstance(self._setOfObjects, tomo.objects.SetOfTiltSeriesBase):
+                tree = self._provider.getTree()
+                tree.after_cancel(afterId)
+                self.next.configure(state=tk.NORMAL)
+                self.previous.configure(state=tk.NORMAL)
+            else:
+                self.slider.after_cancel(afterId)
+
             afterId = None
             self.startButton.configure(relief=tk.RAISED, state=tk.NORMAL)
             self.autoContrast.configure(state=tk.NORMAL)
-            self.next.configure(state=tk.NORMAL)
-            self.previous.configure(state=tk.NORMAL)
 
     def navigate(self, direction=DIRECTION_DOWN):
         tree = self._provider.getTree()
         itemSelected = tree.selection()
         if itemSelected:
             item = itemSelected[0]
-            if not tree.parent(item):
+            if not tree.parent(item) and tree.get_children(item):
                 item = tree.get_children(item)[0]
             if direction == DIRECTION_DOWN:
                 item = tree.next(item)
             else:
                 item = tree.prev(item)
-            tree.selection_set(item)
-            tree.see(item)
+            if item:
+                tree.selection_set(item)
+                tree.see(item)
 
-    def autoNavigate(self, item=None, direction=DIRECTION_DOWN):
-
+    def autoNavigateTiltSeries(self, item=None, direction=DIRECTION_DOWN):
         # Making sure that we do not press the navigate button more than once.
+
+        waiting = 200
         global afterId
         tree = self._provider.getTree()
 
@@ -711,8 +887,6 @@ class TiltSeriesDialogView(pwviewer.View):
             if not tree.parent(item):
                 item = tree.get_children(item)[0]
 
-        self.startButton.configure(relief=tk.SUNKEN, state=tk.DISABLED)
-        self.autoContrast.configure(state=tk.DISABLED)
         self.next.configure(state=tk.DISABLED)
         self.previous.configure(state=tk.DISABLED)
         tree.selection_set(item)
@@ -724,34 +898,95 @@ class TiltSeriesDialogView(pwviewer.View):
             nextItem = tree.prev(item)
 
         if nextItem:
-            afterId = tree.after(100, self.autoNavigate, nextItem, direction)
+            afterId = tree.after(waiting, self.autoNavigateTiltSeries, nextItem, direction)
         else:
             # Continue with the following item after a short delay
             children = tree.get_children(item)
             if not children:
                 # Start navigating in the other direction
                 if direction == DIRECTION_DOWN:
-                    afterId = tree.after(100, self.autoNavigate, item, DIRECTION_UP)
+                    afterId = tree.after(waiting, self.autoNavigateTiltSeries, item, DIRECTION_UP)
                 else:
-                    afterId = tree.after(100, self.autoNavigate, item, DIRECTION_DOWN)
+                    afterId = tree.after(waiting, self.autoNavigateTiltSeries, item, DIRECTION_DOWN)
+
+    def autoNavigateTomograms(self, direction=DIRECTION_DOWN):
+        global afterId
+        current = self.slider.get()
+        minVal = self.slider.cget("from")
+        maxVal = self.slider.cget("to")
+        # Start navigating in the other direction
+        if current <= minVal:
+            direction = DIRECTION_DOWN
+        elif current >= maxVal:
+            direction = DIRECTION_UP
+        newVal = current + 1 if direction == DIRECTION_DOWN else current - 1
+        self.slider.set(newVal)
+
+        afterId = self.slider.after(50, self.autoNavigateTomograms, direction)
+
+    def autoNavigate(self, item=None, direction=DIRECTION_DOWN):
+        self.startButton.configure(relief=tk.SUNKEN, state=tk.DISABLED)
+        # self.autoContrast.configure(state=tk.DISABLED)
+        if isinstance(self._setOfObjects, tomo.objects.SetOfTiltSeriesBase):
+            self.autoNavigateTiltSeries(item, direction)
+        elif isinstance(self._setOfObjects, tomo.objects.SetOfTomograms):
+            self.autoNavigateTomograms(direction)
+
+    def onApplyAlignmentsClick(self):
+        self.isAlignPressed = not self.isAlignPressed
+        if self.isAlignPressed:
+            self.applyAlignmentsButton.config(relief='sunken')
+        else:
+            self.applyAlignmentsButton.config(relief='raised')
+        self.applySettings()
+
+
+    def onIncreaseContrastClick(self):
+        self.isContrastPressed = not self.isContrastPressed
+        if self.isContrastPressed:
+            self.autoContrast.config(relief='sunken')
+        else:
+            self.autoContrast.config(relief='raised')
+        self.applySettings()
+
+    def applySettings(self):
+        """To apply alignments"""
+        self.previewTiltSeries(self.selectedItem, None)
+
+    def updateAlignmentButtonState(self, obj):
+        if obj.hasTransform():
+            self.isAlignPressed = True
+            self.applyAlignmentsButton.config(
+                state='normal',
+                relief='sunken',
+            )
+        else:
+            self.applyAlignmentsButton.config(
+                state='disabled',
+                relief='raised',
+            )
 
     def increaseContrast(self):
-
         # Try to increase the contrast. TODO: Move this to somewhere more resusable
         try:
-            data = self._preview.figureimg.get_array()
+            data = np.asarray(self.pilImg)
             imgmean = data.mean()
             imgstd = data.std()
             low = imgmean - CONTRAST_STD * imgstd
             high = imgmean + CONTRAST_STD * imgstd
-            data = np.clip(data, low, high)
-            # Normalize data to the range [0, 255] if necessary
-            data = 255 * (data - low) / (high - low)
-            data = np.clip(data, 0, 255).astype(np.uint8)
-            self._preview._update(data)
+            contrast_data = np.clip(data, low, high)
+            contrast_data = 255 * (contrast_data - low) / (high - low)
+            contrast_data = np.clip(contrast_data, 0, 255).astype(np.uint8)
+
+            pilImg = Image.fromarray(contrast_data)
+            self.tkImg = getTkImage(pilImg)
+            self.canvas.delete("all")
+            x = (self.canvasWidth - pilImg.width) // 2
+            y = (self.canvasHeight - pilImg.height) // 2
+            self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
 
         except Exception as e:
-            print(e)
+            logger.error("Can't increase contrast", exc_info=e)
 
     def itemOnClick(self, e=None):
         x, y, widget = e.x, e.y, e.widget
@@ -770,47 +1005,134 @@ class TiltSeriesDialogView(pwviewer.View):
 
         if "image" in elem:  # click on the checkbox
             tsId = tree.item(selectedItem)['text']
-            _, obj = self._provider.getTiltSerie(tsId)
+            _, obj = self._provider.getSelectedObject(tsId)
         elif itemValue in [TiltImageStates.CHECK_UNMARK, TiltImageStates.CHECK_MARK]:
             tsId = tree.item(tree.parent(selectedItem))['text']
             tiId = tree.item(selectedItem)['text']
             _, obj = self._provider.getTiltImage(tsId, tiId)
         else:
             return
-
+        self.selectedItem = obj
         self._provider._itemSelected(obj)
 
+    def displayInterpolated(self):
+        return self.isAlignPressed
+
+    def previewImage(self, obj, frame):
+        if isinstance(obj, tomo.objects.TiltSeriesBase) or isinstance(obj, tomo.objects.TiltImageBase):
+            self.previewTiltSeries(obj, frame)
+        elif isinstance(obj, tomo.objects.Tomogram):
+            self.previewTomograms(obj, frame)
+
+    def previewTomograms(self, obj, frame):
+        # Create canvas and slider widgets if they don't exist
+        if self.canvas is None:
+            self.getPreviewWidget(obj, frame)
+
+        self.imagePath = obj.getFileName()
+        self.imgStk = ImageReadersRegistry.open(self.imagePath)
+        self.zDim = obj.getDim()[2]
+
+        # Create the slider only once
+        if not hasattr(self, 'slider'):
+            sliderFrame = tk.Frame(frame)
+            sliderFrame.grid(row=3, column=0, sticky='ns', padx=5, pady=5)
+
+            # Add label to the left
+            label = tk.Label(sliderFrame, text="z")
+            label.grid(row=0, column=0, sticky='s', padx=5, pady=5)
+
+            self.slider = tk.Scale(sliderFrame, from_=1, to=self.zDim,
+                                   orient='horizontal', length=self.canvasWidth // 2,
+                                   command=lambda val: self._updatePreviewImage(int(val)-1))
+            self.slider.grid(row=0, column=1, sticky='ns', padx=5, pady=5)
+
+        self.slider.set(self.zDim // 2)
+        # Load initial image at middle slice
+        self._updatePreviewImage(index=self.zDim // 2)
+        self.selectedItem = obj
+
+    def _updatePreviewImage(self, index):
+        originalImg = self.imgStk.getImage(index=index, pilImage=True)
+        imgW, imgH = originalImg.size
+        scale = min(self.canvasWidth / imgW, self.canvasHeight / imgH)
+        newSize = (int(imgW * scale), int(imgH * scale))
+        originalImg = self.getThumbnail(index+1, self.imagePath, None, None, None, self.isAlignPressed,
+                                        self.isContrastPressed)
+        self.pilImg = Image.fromarray(originalImg)
+        x = (self.canvasWidth - newSize[0]) // 2
+        y = (self.canvasHeight - newSize[1]) // 2
+
+        self.tkImg = getTkImage(self.pilImg)
+        self.canvas.delete("all")
+        self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
+
     def previewTiltSeries(self, obj, frame):
-
-        preview = self.getPreviewWidget(frame)
-        if isinstance(obj, tomo.objects.TiltSeriesBase):
-            text = "Tilt Axis angle: %s" % obj.getAcquisition().getTiltAxisAngle()
+        if self.canvas is None:
+            self.getPreviewWidget(obj, frame)
             obj = self._provider.getTiltSerieRepresentative(obj)
+            self.updateAlignmentButtonState(obj)
+        if isinstance(obj, tomo.objects.TiltSeriesBase):
+            angInfo = 'Tilt Axis angle: %s' % round(obj.getAcquisition().getTiltAxisAngle(), 2)
+            obj = self._provider.getTiltSerieRepresentative(obj)
+
         elif isinstance(obj, tomo.objects.TiltImageBase):
-            text = "Tilt image at %sº" % obj.getTiltAngle()
+            angInfo = 'Tilt image at %sº' % round(obj.getTiltAngle(), 2)
+        else:
+            angInfo = ''
 
-        imageStk = ImageReadersRegistry.open(str(obj.getIndex()) + '@' + obj.getFileName())
-        npImage = imageStk.getImage()  # Pass this when scipion-em is released with this functionality: pilImage=True)
-        image = self._normalize(npImage)  # Delete this once pilImage is used
-        # Get original size
-        width, height = image.size
+        self.selectedItem = obj
+        rot = None
+        shifts = None
 
-        # Calculate the new dimension keeping the proportion
-        newWidth, newHeight = (THUMBNAIL_SIZE, int(THUMBNAIL_SIZE * height / width)) \
-            if width > height else (int(THUMBNAIL_SIZE * width / height), THUMBNAIL_SIZE)
+        if obj.hasTransform():
+            transf = obj.getTransform()
+            _, _, rot = transf.getEulerAngles()
+            rot = numpy.rad2deg(-rot)
+            list = transf.getMatrixAsList()
+            shifts = list[2], list[5]
 
-        # Resize the image creating a thumbnail
-        newImage = image.copy()
-        newImage.thumbnail((newWidth, newHeight))
-        data = np.array(newImage)
-        preview._update(data)
-        preview.setLabel(text)
-    
-    def _normalize(cls, npImage):
-        iMax = npImage.max()
-        iMin = npImage.min()
-        im255 = ((npImage - iMin) / (iMax - iMin) * 255).astype(numpy.uint8)
-        return Image.fromarray(im255)
+        ts = os.path.getmtime(obj.getFileName())
+        index = obj.getIndex() if isinstance(obj, tomo.objects.TiltImageBase) else self.slider.get()
+        newImage = self.getThumbnail(index, obj.getFileName(), ts, rot, shifts, self.isAlignPressed, self.isContrastPressed)
+        self.pilImg = Image.fromarray(newImage)
+        self.tkImg = getTkImage(self.pilImg)
+        self.canvas.delete("all")
+        imgW, imgH = self.pilImg.size
+        x = (self.canvasWidth - imgW) // 2
+        y = (self.canvasHeight - imgH) // 2
+        self.canvas.create_image(x, y, anchor='nw', image=self.tkImg)
+        self.textLabel.config(text=angInfo)
+
+    @lru_cache # can't cache thumbnail just using the path. need time stamps if we want to do so.
+    def getThumbnail(self, index, fileName, ts, rot, shifts, isAlignPressed, highlighted):
+
+        imageStk = ImageReadersRegistry.open(fileName)
+        image = imageStk.getImage(index=index-1, pilImage=True)
+        imgW, imgH = image.size
+
+        # Scale: Typically, imgW and H would be bigger than canvasWidth. Therefore, scale would be lower than 1.
+        # 0.5 would be to scale down the image to halve. We take the min value cause, the lower the value the
+        # higher reduction.
+        scale = min(self.canvasWidth / imgW, self.canvasHeight / imgH)
+        newSize = (int(imgW * scale), int(imgH * scale))
+        pilImg = image.resize(newSize)
+
+        image = np.array(pilImg)
+
+        if rot is not None and isAlignPressed:
+            shiftX = shifts[0] * scale
+            shiftY = shifts[1] * scale
+            image = imageStk.transformSlice(image, (shiftX, shiftY), rot)
+        image = imageStk.flipSlice(image)
+
+        if highlighted:
+            image = imageStk.highlightSlice(image)
+
+        # Normalize always at the end
+        image = imageStk.normalizeSlice(image)
+
+        return image
 
 
 class TomogramsTreeProvider(TreeProvider):

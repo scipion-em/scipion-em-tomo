@@ -69,7 +69,6 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
         self._insertFunctionStep(self.importCoordinatesStep)
 
     # --------------------------- STEPS functions -----------------------------
-
     def importCoordinatesStep(self):
         inTomoSet = self.importTomograms.get()
         inCoordsSet = SetOfCoordinates3D()
@@ -96,10 +95,9 @@ class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
 
         # Define outputs and relations
         self._defineOutputs(**{outputObjs.coordinates.name: outCoordsSet})
-        self._defineSourceRelation(inTomoSet, outCoordsSet)
+        self._defineSourceRelation(self.importTomograms, outCoordsSet)
 
     # --------------------------- INFO functions ------------------------------
-
     def _validate(self):
         errorList = []
         if not exists(self.sqliteFile.get()):

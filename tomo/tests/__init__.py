@@ -88,6 +88,7 @@ class DataSetEmd10439(Enum):
     coords39Sqlite = 'coordinates/coordinates39_bin8.sqlite'
     coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
     tomoMaskByTardisBin2 = 'tomomaskByTardisBin2/emd_10439.mrc'
+    annotatedTomomask = 'tomomasksAnnotated/emd_10439_materials.mrc'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
@@ -167,8 +168,8 @@ class DataSetRe4STATuto(Enum):
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = tiltAxisAngle
     initialDose = initialDose
-    dosePerTiltImg = 3.05  # Mean dose
-    dosePerTiltImgWithTltFile = dosePerTiltImgWithTltFile
+    dosePerTiltImg = 3.05 # Mean dose
+    dosePerTiltImgWithTltFile = 3.0
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs54 = 'output 01 43 45 03'
     exclusionWordsTs03ts54 = 'output 01 43 45'
@@ -246,6 +247,9 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For IMOD CTF import testing
+    imodCtfFilesPath = 'testImodCtf'
+
     # For gapStopTM testing
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
 
@@ -315,24 +319,26 @@ class DataSetRe4STATuto(Enum):
         return dims + [nImgs]
 
     @classmethod
-    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54)):
+    def genTestTomoDicts(cls,
+                         tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
+                         binning: int = 1) -> Tuple[dict, dict]:
         testAcqObjDict = dict()
         expectedDimensionsDict = dict()
         if TS_01 in tsIdList:
             testAcqObjDict[TS_01] = cls.testAcq01.value
-            expectedDimensionsDict[TS_01] = cls.tomoDimsThk340.value
+            expectedDimensionsDict[TS_01] = (np.array(cls.tomoDimsThk340.value) / binning).tolist()
         if TS_03 in tsIdList:
             testAcqObjDict[TS_03] = cls.testAcq03.value
-            expectedDimensionsDict[TS_03] = cls.tomoDimsThk280.value
+            expectedDimensionsDict[TS_03] = (np.array(cls.tomoDimsThk280.value) / binning).tolist()
         if TS_43 in tsIdList:
             testAcqObjDict[TS_43] = cls.testAcq43.value
-            expectedDimensionsDict[TS_43] = cls.tomoDimsThk300.value
+            expectedDimensionsDict[TS_43] = (np.array(cls.tomoDimsThk300.value) / binning).tolist()
         if TS_45 in tsIdList:
             testAcqObjDict[TS_45] = cls.testAcq45.value
-            expectedDimensionsDict[TS_45] = cls.tomoDimsThk300.value
+            expectedDimensionsDict[TS_45] = (np.array(cls.tomoDimsThk300.value) / binning).tolist()
         if TS_54 in tsIdList:
             testAcqObjDict[TS_54] = cls.testAcq54.value
-            expectedDimensionsDict[TS_54] = cls.tomoDimsThk280.value
+            expectedDimensionsDict[TS_54] = (np.array(cls.tomoDimsThk280.value) / binning).tolist()
 
         return testAcqObjDict, expectedDimensionsDict
 

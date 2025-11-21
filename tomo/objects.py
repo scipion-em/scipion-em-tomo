@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 #  **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# * Authors:     Scipion Team
 # *
-# * [1] SciLifeLab, Stockholm University
+# * National Center of Biotechnology, CSIC, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -26,10 +26,12 @@
 # **************************************************************************
 import logging
 import typing
-from os.path import exists, dirname, basename, join
+from os.path import exists, dirname, join
 from sqlite3 import OperationalError
 from typing import Optional
 import mrcfile
+
+from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem import ALIGN_NONE
 import csv
 import math
@@ -45,7 +47,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pyworkflow.utils import removeBaseExt
+from pyworkflow.utils import removeBaseExt, cyanStr, replaceExt
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +232,11 @@ class TiltImage(data.Image, TiltImageBase):
             fileExtension = extension
 
         return fileName + suffix + fileExtension
+
+    def getRotationAngle(self) -> float:
+        trMatrix = self.getTransform().getMatrix() if self.getTransform() is not None else np.eye(3)
+        rotAngle = np.rad2deg(np.arctan2(trMatrix[0, 1], trMatrix[0, 0]))
+        return rotAngle
 
 
 class TiltSeriesBase(data.SetOfImages):
@@ -444,34 +451,74 @@ class TiltSeries(TiltSeriesBase):
 
         return s
 
-    def applyTransform(self,
-                       outFileName: str,
-                       swapXY: bool = False,
-                       presentAcqOrders: typing.Set[int] = (),
-                       even: typing.Union[bool, None] = None) -> None:
-        """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
-        tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
-        present excluded views at metadata level.
-        :param outFileName: String containing the path of the output file that is created.
-        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
-        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
-        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
-        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
-        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
-        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
-        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
-        ascending order beginning in 1.
-        :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
-        True to the even one and False to the odd one.
-        """
-        inImgFileName= self.__getTsFileName(even=even)
-        excludedViews = len(presentAcqOrders) > 0
-        if excludedViews:
-            logger.info(f'{self.getTsId()}: excluded views detected {self.getTsExcludedViewsIndices(presentAcqOrders)}')
-        if self.hasAlignment():
-            self.__applyTransformAli(inImgFileName, outFileName, swapXY, presentAcqOrders)
+    def getInterpolated(self, setId, binning, folder=None):
+        """ Returns the path to the interpolated file for this tilt series.
+        If exists, it will re-use it, otherwise it will create it.
+            :param setId: objId of the set this tilt series belong to
+            :param binning: binning at which you want he interpolated file
+            :param tmpFolder: folder for the interpolated file"""
+
+        if not self.hasAlignment():
+            return self.__getTsFileName()
         else:
-            self.__applyTransformNoAli(inImgFileName, outFileName, presentAcqOrders)
+            if folder is None:
+                folder = os.path.dirname(self.__getTsFileName())
+            path = self.getInterpolatedFileName(setId, binning, folder)
+            if not os.path.exists(path):
+                self.applyTransformPy(path, binning)
+            return path
+
+    def applyTransformPy(self, outputFile, binning):
+        """ Apply the transformation matrix to the tilt series using python. Use for now for visualization purposes until
+        quality is verified to be enough for processing.
+
+        :param outputFile: output file for the interpolated image
+        :param binning: times smaller you want the output"""
+
+        orig = self.__getTsFileName()
+
+        imgStk = ImageReadersRegistry.open(orig)
+
+        output = ImageStack()
+
+        for ti in self.iterItems():
+
+            transf = ti.getTransform()
+
+            _, _, rot = transf.getEulerAngles()
+            rot = np.rad2deg(-rot)
+
+            # Scale factor
+            factor = 1/binning
+
+            x,y,_ = transf.getShifts()
+            # scale shifts
+            x=x*factor
+            y=y*factor
+            npImage = imgStk.getImage(ti.getIndex()-1)
+
+            if binning != 0:
+                npImage = imgStk.scaleSlice(npImage, factor)
+
+            npImage = imgStk.transformSlice(npImage,(x,y), rot)
+            output.append(npImage)
+
+        output.write(outputFile)
+
+
+
+    def getInterpolatedFileName(self, setId, binning, tmpFolder):
+        """ Returns the interpolated filename for the tilt series
+        at the binning passed and in the tmp folder
+
+            :param setId: objId of the set this tilt series belong to
+            :param binning: binning at which you want he interpolated file
+            :param tmpFolder: folder for the interpolated file
+
+        """
+
+        ext = path.getExt(self.__getTsFileName())
+        return os.path.join(tmpFolder, f"ts_{setId}_{self.getTsId()}_bin{binning}{ext}")
 
     def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
         """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
@@ -485,84 +532,104 @@ class TiltSeries(TiltSeriesBase):
             inImgFileName = self.getOddFileName()
         return inImgFileName
 
+    def applyTransform(self,
+                       outFileName: str,
+                       even: typing.Union[bool, None] = None,
+                       ignoreExcludedViews: bool = False) -> None:
+        """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
+        tilt-series or re-stacks it depending on the value jorgeof the parameter presentAcqOrders, used in the case of
+        present excluded views at metadata level.
+        :param outFileName: String containing the path of the output file that is created.
+        :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
+        True to the even one and False to the odd one.
+        :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
+        (default) or not.
+        """
+        inImgFileName = self.__getTsFileName(even=even)
+        logger.info(cyanStr(f'inImgFileName = {inImgFileName}'))
+        if not ignoreExcludedViews and self.hasExcludedViews():
+            excludedViewsIndices = self.getTsExcludedViewsIndices(self.getTsPresentAcqOrders())
+            logger.info(cyanStr(f'{self.getTsId()}: excluded views detected {excludedViewsIndices}'))
+        if self.hasAlignment():
+            logger.info(cyanStr(f'tsId = {self.getTsId()} -> Applying the transformation matrix with Scipion...'))
+            self.__applyTransformAli(inImgFileName,
+                                     outFileName,
+                                     ignoreExcludedViews=ignoreExcludedViews)
+        else:
+            self.__applyTransformNoAli(inImgFileName,
+                                       outFileName,
+                                       ignoreExcludedViews=ignoreExcludedViews)
+
     def __applyTransformNoAli(self,
                               inFileName: str,
                               outFileName: str,
-                              presentAcqOrders: typing.Set[int] = ()) -> None:
+                              ignoreExcludedViews: bool = False) -> None:
         """Apply transform to a tilt-series without alignment.
-                :param inFileName: String containing the path of the image to which the transformation is going to be applied.
+        :param inFileName: String containing the path of the image to which the transformation is going to be applied.
         :param outFileName: String containing the path of the output file that is created.
-        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
-        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
-        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
-        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
-        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
-        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
-        ascending order beginning in 1.
+        :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
+        (default) or not.
         """
-        excludedViews = len(presentAcqOrders) > 0
-        if excludedViews:
-            self.reStack(outFileName, presentAcqOrders)
+        if self.hasExcludedViews() and not ignoreExcludedViews:
+            presentAcqOrders = self.getTsPresentAcqOrders()
+            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
+            self.reStack(inFileName, outFileName, presentAcqOrders)
         else:
+            logger.info(cyanStr(f'\t--> No re-stack is required. Creating a link...'))
             path.createAbsLink(os.path.abspath(inFileName), outFileName)
 
     def __applyTransformAli(self,
                             inFileName: str,
                             outFileName: str,
-                            swapXY: bool = False,
-                            presentAcqOrders: typing.Set[int] = ()) -> None:
+                            ignoreExcludedViews: bool = False) -> None:
         """Apply transform to a tilt-series with alignment.
         :param inFileName: String containing the path of the image to which the transformation is going to be applied.
         :param outFileName: String containing the path of the output file that is created.
-        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
-        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
-        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
-        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
-        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
-        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
-        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
-        ascending order beginning in 1.
+        :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
+        (default) or not.
         """
-        excludedViews = len(presentAcqOrders) > 0
         firstImg = self.getFirstItem()
         xDim, yDim, _ = firstImg.getDim()
-        if firstImg.hasTransform() and swapXY:
+        # Check if rotation angle is greater than 45º. If so,
+        # swap x and y dimensions to adapt output image sizes to
+        # the final sample disposition.
+        rotationAngle = firstImg.getRotationAngle()
+        swapXY = True if 45 < abs(rotationAngle) < 135 else False
+        if self.hasAlignment() and swapXY:
             xDim, yDim = yDim, xDim
-        if excludedViews:
-            counter = 0
+        if self.hasExcludedViews() and not ignoreExcludedViews:
+            presentAcqOrders = self.getTsPresentAcqOrders()
+            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
+            counter = 1
             for ti in self.iterItems(orderBy=self.INDEX):
                 acqOrder = ti.getAcquisitionOrder()
-                trMatrix = ti.getTransform().getMatrix()
                 if acqOrder in presentAcqOrders:
+                    trMatrix = ti.getTransform().getMatrix()
                     self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, counter)
                     counter += 1
         else:
-            for index, ti in enumerate(self.iterItems()):
+            for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
                 trMatrix = ti.getTransform().getMatrix()
-                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index)
+                self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, index + 1)
 
     def applyTransformToAll(self,
                             outFileName: str,
                             outFileNamesEvenOdd: typing.List[str] = None,
-                            swapXY: bool = False,
-                            presentAcqOrders: typing.Set[int] = ()) -> None:
+                            ignoreExcludedViews: bool = False) -> None:
         """Applies a transform to the main tilt-series, the even and the odd ones. Inputs:
         :param outFileName: String containing the path of the output file that is created.
         :param outFileNamesEvenOdd: List containing the file names of the output tilt-series even and
         odd files that are created. The expected order is [even, odd]. If not provided, these names will be
         generated in the same location as outFileName and with the same base name and extension but with the
         corresponding suffixes _even, _odd.
-        :param swapXY: Boolean indicating X and Y dimensions of the tilt-images should be swapped.
-        :param presentAcqOrders: set containing the present acq orders in both the given TS (it may be also the result
-        of the intersection of the present enabled tilt-images and the enabled CTFTomo in a CTFTomoSeries). If empty,
-        it is assumed that no views are excluded and all the tilt-images will be operated. If not, it indicates that
-        not all the tilt-images should be operated, only the ones whose acquisition order is contained in the given
-        list. If the transformation matrices are not present and presentAcqOrders is not empty, the tilt-series will
-        be re-stacked into a new tilt-series containing only the present acquisition orders, and re-indexed in
-        ascending order beginning in 1.
+        :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
+        (default) or not.
         """
         fPath = dirname(outFileName)
         if outFileNamesEvenOdd:
+            outFileNamesEvenOdd = sorted(outFileNamesEvenOdd)
             evenFName = outFileNamesEvenOdd[0]
             oddFName = outFileNamesEvenOdd[1]
         else:
@@ -571,24 +638,23 @@ class TiltSeries(TiltSeriesBase):
             evenFName = join(fPath, bName + '_even' + ext)
             oddFName = join(fPath, bName + '_odd' + ext)
         self.applyTransform(outFileName,
-                            swapXY=swapXY,
-                            presentAcqOrders=presentAcqOrders,
-                            even=None)
+                            even=None,
+                            ignoreExcludedViews=ignoreExcludedViews)
+        logger.info(cyanStr('Even'))
         self.applyTransform(evenFName,
-                            swapXY=swapXY,
-                            presentAcqOrders=presentAcqOrders,
-                            even=True)
+                            even=True,
+                            ignoreExcludedViews=ignoreExcludedViews)
+        logger.info(cyanStr('Odd'))
         self.applyTransform(oddFName,
-                            swapXY=swapXY,
-                            presentAcqOrders=presentAcqOrders,
-                            even=False)
+                            even=False,
+                            ignoreExcludedViews=ignoreExcludedViews)
 
     @staticmethod
     def _applyTransformToTi(imgFileName, trMatrix, xDim, yDim, outputFilePath, index):
         ih = ImageHandler()
         transformArray = np.array(trMatrix)
-        ih.applyTransform(inputFile=str(index + 1) + ':mrcs@' + imgFileName,
-                          outputFile=str(index + 1) + '@' + outputFilePath,
+        ih.applyTransform(inputFile=str(index) + ':mrcs@' + imgFileName,
+                          outputFile=str(index) + '@' + outputFilePath,
                           transformMatrix=transformArray,
                           shape=(
                               yDim,
@@ -612,12 +678,13 @@ class TiltSeries(TiltSeriesBase):
         return excludeViewsList
 
     def getTsPresentAcqOrders(self) -> typing.Set[int]:
-        """It generates a set containing the acquisition orders that correspond to the enabled tilt images. If there
-        are not any excluded views at metadata level, the output will be an empty set."""
-        presentAcqOrders = set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
-        return () if len(presentAcqOrders) == len(self) else presentAcqOrders
+        """It generates a set containing the acquisition orders that correspond to the enabled tilt images."""
+        return set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
 
-    def getTsExcludedViewsIndices(self, presentAcqOrders: typing.Set[int] = ()) -> typing.Set[int]:
+    def hasExcludedViews(self)  -> bool:
+        return False if len(self.getTsPresentAcqOrders()) == len(self) else True
+
+    def getTsExcludedViewsIndices(self, presentAcqOrders) -> typing.Set[int]:
         """It generates a set containing the indices that correspond to the tilt-images whose acquisition order is
         not contained in a given set of acquisition orders. If presentAcqOrders is empty, it returns an empty set."""
         excludedViewsInds = []
@@ -626,22 +693,25 @@ class TiltSeries(TiltSeriesBase):
                 excludedViewsInds.append(ti.getIndex())
         return set(excludedViewsInds)
 
-    def reStack(self, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
+    def reStack(self, inFileName: str, outFileName: str, presentAcqOrders: typing.Set[int]) -> None:
         """If there aren't any excluded views (presentAcqOrders is empty), it does nothing. In the opposite case,
         it se-stacks a tilt-series into a new one without the excluded views. If the re-stacked file already exists,
         o action is carried out (avoid creating the same file multiple times, even more necessary if calling this
         method from the viewer).
-        :param outFileName: Filename of the re-stacked tilt-series.
+        :param inFileName: Filename of the input tilt-series that will be re-stacked.
+        :param outFileName: Filename of the out re-stacked tilt-series.
         :param presentAcqOrders: set containing the present acq orders in both the given TS.
         """
-        # excludedIndices = self.getExcludedViewsIndex()
-        tsFileName = self.getFirstItem().getFileName()
+        logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
         if exists(outFileName):
-            logger.info(f'reStack: file {outFileName} was skipped. It already exists')
-        if exists(tsFileName):
+            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
+        logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
+        if exists(outFileName):
+            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
+        if exists(inFileName):
             if presentAcqOrders:
                 # Load the file
-                with mrcfile.mmap(tsFileName, mode='r+') as tsMrc:
+                with mrcfile.mmap(inFileName, mode='r+') as tsMrc:
                     tsData = tsMrc.data
                 # Create an empty array in which the re-stacked TS will be stored
                 nImgs, nx, ny = tsData.shape
@@ -662,18 +732,19 @@ class TiltSeries(TiltSeriesBase):
                     reStackedTsMrc.update_header_stats()
                     reStackedTsMrc.voxel_size = self.getSamplingRate()
             else:
-                logger.info(f'reStack: file {tsFileName} was skippedas there are not any excluded views.')
+                logger.info(f'reStack: file {inFileName} was skipped as there are not any excluded views.')
         else:
-            logger.warning(f'reStack: file {tsFileName} was skipped. It does not exist.')
+            logger.warning(f'reStack: file {inFileName} was skipped. It does not exist.')
 
-    def generateTltFile(self, tltFilePath: str, reverse: bool = False, excludeViews: bool = False,
-                        presentAcqOrders: typing.Set[int] = (), includeDose: bool = False) -> None:
+    def generateTltFile(self,
+                        tltFilePath: str,
+                        reverse: bool = False,
+                        presentAcqOrders: typing.Set[int] = None,
+                        includeDose: bool = False) -> None:
         """ Generates an angle file in .tlt format in the specified location. If reverse is set to true the angles in
         file are sorted in the opposite order.
         :param tltFilePath: String containing the path where the file is created.
         :param reverse: Boolean indicating if the angle list must be reversed.
-        :param excludeViews: boolean used to indicate if the tlt file should contain only the data concerning
-        the non-excluded views (True) or all of them (False).
         :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
         filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
         if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
@@ -690,12 +761,10 @@ class TiltSeries(TiltSeriesBase):
                     if includeDose:
                         doseList.append(ti.getAcquisition().getAccumDose())
         else:
-            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                if excludeViews and not ti.isEnabled():
-                    continue
-                angleList.append(ti.getTiltAngle())
-                if includeDose:
-                    doseList.append(ti.getAcquisition().getAccumDose())
+            angleList = [ti.getTiltAngle() for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
+            if includeDose:
+                doseList = [ti.getAcquisition().getAccumDose() for ti
+                            in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
         if reverse:
             angleList.reverse()
             if includeDose:
@@ -706,6 +775,9 @@ class TiltSeries(TiltSeriesBase):
                 f.writelines(f"{angle:0.3f} {dose:0.4f}\n" for angle, dose in zip(angleList, doseList))
             else:
                 f.writelines(f"{angle:0.3f}\n" for angle in angleList)
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeNewstcomFile(self, ts_folder, **kwargs):
         """Writes an artificial newst.com file"""
@@ -733,7 +805,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, pathi,
                                        taperAtFill[1], offsetsInXandY[0],
                                        offsetsInXandY[1], imagesAreBinned,
                                        binByFactor, pathi))
-
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
         return newstcomPath
 
     def writeTiltcomFile(self, ts_folder, **kwargs):
@@ -798,7 +872,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                        actionIfGPUFails[0], actionIfGPUFails[1],
                                        pathi, offset, shift[0], shift[1],
                                        excludedViewsIndexes))
-
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
         return tiltcomPath
 
     def writeTltFile(self, ts_folder, excludeViews=False):
@@ -813,14 +889,20 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                 if excludeViews and not ti.isEnabled():
                     continue
                 f.write(str(ti.getTiltAngle()) + '\n')
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeXtiltFile(self, ts_folder):
         xtiltPath = ts_folder + '/%s.xtilt' % self.getTsId()
         with open(xtiltPath, 'w') as f:
             for ti in self:
                 f.write('0.00\n')
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
-    def writeXfFile(self, transformFilePath, delimiter='\t'):
+    def writeXfFile(self, transformFilePath, delimiter='\t', factor=1):
         """ This method takes a tilt series and the output transformation file
         path and creates an IMOD-based transform
         file in the location indicated. """
@@ -834,8 +916,8 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
                                  '%.7f' % transform[1],
                                  '%.7f' % transform[3],
                                  '%.7f' % transform[4],
-                                 '%.3f' % transform[2],
-                                 '%.3f' % transform[5]]
+                                 '%.3f' % (float(transform[2]) / factor),
+                                 '%.3f' % (float(transform[5]) / factor)]
             else:
                 from pyworkflow.utils import yellowStr
                 logging.info(
@@ -854,6 +936,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         with open(transformFilePath, 'w') as f:
             csvW = csv.writer(f, delimiter=delimiter)
             csvW.writerows(tsMatrixTransformList)
+            # For parallel processing, ensure that the file is completely written and persists on disk
+            f.flush()  # Empty python buffer
+            os.fsync(f.fileno())  # Empty system buffer
 
     def writeImodFiles(self, folderName, **kwargs):
         """Writes the following IMOD files:
@@ -876,7 +961,7 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         self.writeXtiltFile(folderName)
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
-        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'))
+        self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
@@ -1352,6 +1437,19 @@ class Tomogram(data.Volume):
     def setCtfCorrected(self, corrected):
         """ Sets the ctf correction status"""
         self._ctfCorrected.set(corrected)
+
+    def getBinning(self, target_sr, decimals=0):
+        """ Returns the ratio of the sampling rate to target_sr.
+        :param target_sr: Target size you want the binning for.
+            E.g: target_sr=10, this.sr = 2, binning = 5
+        :param decimals: (True) pass False if you want exact ratio
+
+        """
+        binning = target_sr/self.getSamplingRate()
+        binning = round(binning, decimals)
+        if decimals==0:
+            binning=int(binning)
+        return binning
 
 
 class SetOfTomograms(data.SetOfVolumes):
@@ -2026,7 +2124,8 @@ class SubTomogram(data.Volume):
             return self._transform
 
 
-class SetOfSubTomograms(data.SetOfVolumes):
+
+class SetOfSubTomogramsBase(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
     EXPOSE_ITEMS = False
@@ -2173,6 +2272,10 @@ class SetOfSubTomograms(data.SetOfVolumes):
                 self._tomos[tsId] = tomo
 
         return self._tomos
+
+
+class SetOfSubTomograms(SetOfSubTomogramsBase):
+    pass
 
 
 class AverageSubTomogram(SubTomogram):
@@ -2450,6 +2553,21 @@ class SetOfLandmarkModels(data.EMSet):
     def setHasResidualInfo(self, hasResidualInfo):
         self._hasResidualInfo.set(hasResidualInfo)
 
+    def getBinning(self, target_sr, decimals=0):
+        """ Returns the ratio of the sampling rate to target_sr.
+        :param target_sr: Target size you want the binning for.
+            E.g: target_sr=10, this.sr = 2, binning = 5
+        :param decimals: (True) pass False if you want exact ratio
+
+        """
+
+        binning = target_sr/self.getSetOfTiltSeries().getSamplingRate()
+        binning = round(binning, decimals)
+        if decimals==0:
+            binning=int(binning)
+        return binning
+
+
 
 class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
@@ -2677,28 +2795,28 @@ class CTFTomo(data.CTFModel):
 
         This method will assign as the defocus value and angle the median of the estimation list. """
 
-        " DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
+        # DEFOCUS INFORMATION -----------------------------------------------------------------------------------------"
 
-        " Check that at least one list is provided "
+        # Check that at least one list is provided
         if not self.hasEstimationInfoAsList():
             raise Exception("CTFTomo object has no _defocusUList neither _defocusUList argument initialized. No "
                             "list information available.")
 
-        " Get the number of provided list (1 or 2) "
+        # Get the number of provided list (1 or 2)
         numberOfProvidedList = 2 if (hasattr(self, "_defocusUList") and hasattr(self, "_defocusVList")) else 1
 
-        " No astigmatism is estimated (only one list provided) "
+        # No astigmatism is estimated (only one list provided)
         if numberOfProvidedList == 1:
             providedDefocusUList = self.getDefocusUList() if hasattr(self, "_defocusUList") else self.getDefocusVList()
             providedDefocusUList = providedDefocusUList.split(",")
 
-            " DefocusAngle is set to 0 degrees "
+            # DefocusAngle is set to 0 degrees
             self.setDefocusAngle(0)
 
-            " DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list "
+            # DefocusU and DefocusV are set at the same value, equal to the middle estimation of the list
             middlePoint = math.trunc(len(providedDefocusUList) / 2)
 
-            " If the size of the defocus list is even, mean the 2 centre values "
+            # If the size of the defocus list is even, mean the 2 centre values
             if len(providedDefocusUList) % 2 == 0:
                 value = (float(providedDefocusUList[middlePoint]) + float(providedDefocusUList[middlePoint - 1])) / 2
 
@@ -2706,7 +2824,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(value)
 
             else:
-                " If the size of defocus estimation is odd, get the centre value "
+                # If the size of defocus estimation is odd, get the centre value
 
                 value = providedDefocusUList[middlePoint]
 
@@ -2714,7 +2832,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(value)
 
         else:
-            " Astigmatism is estimated (two lists are provided) "
+            # Astigmatism is estimated (two lists are provided)
 
             providedDefocusUList = self.getDefocusUList()
             providedDefocusUList = providedDefocusUList.split(",")
@@ -2725,17 +2843,18 @@ class CTFTomo(data.CTFModel):
             providedDefocusAngleList = self.getDefocusAngleList()
             providedDefocusAngleList = providedDefocusAngleList.split(",")
 
-            " Check that the three list are equally long "
-            if len(providedDefocusUList) != len(providedDefocusVList) or \
-                    len(providedDefocusUList) != len(providedDefocusAngleList) or \
-                    len(providedDefocusVList) != len(providedDefocusAngleList):
+            # Check that the three list are equally long
+            lenProvidedDefocusUList = len(providedDefocusUList)
+            lenProvidedDefocusVList = len(providedDefocusVList)
+            lenProvidedDefocusAngleList = len(providedDefocusAngleList)
+            if (lenProvidedDefocusUList + lenProvidedDefocusVList + lenProvidedDefocusAngleList) % 3 != 0:
                 raise Exception("DefocusUList, DefocusVList and DefocusAngleList lengths must be equal.")
 
-            " DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list "
-            middlePoint = math.trunc(len(providedDefocusUList) / 2)
+            # DefocusU, DefocusV and DefocusAngle are set equal to the middle estimation of the list
+            middlePoint = math.trunc(lenProvidedDefocusUList / 2)
 
-            " If the size of the defocus list is even, mean the 2 centre values "
-            if len(providedDefocusUList) % 2 == 0:
+            # If the size of the defocus list is even, mean the 2 centre values
+            if lenProvidedDefocusUList % 2 == 0:
                 defocusU = (float(providedDefocusUList[middlePoint]) +
                             float(providedDefocusUList[middlePoint - 1])) / 2
                 defocusV = (float(providedDefocusVList[middlePoint]) +
@@ -2748,7 +2867,7 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusAngle(defocusAngle)
 
             else:
-                " If the size of defocus estimation list is odd, get the centre value "
+                # If the size of defocus estimation list is odd, get the centre value
 
                 defocusU = providedDefocusUList[middlePoint]
                 defocusV = providedDefocusVList[middlePoint]
@@ -2758,22 +2877,22 @@ class CTFTomo(data.CTFModel):
                 self.setDefocusV(defocusV)
                 self.setDefocusAngle(defocusAngle)
 
-        " PHASE SHIFT INFORMATION -------------------------------------------------------------------------------------"
+        # PHASE SHIFT INFORMATION -------------------------------------------------------------------------------------
 
-        " Check if phase shift information is also available "
+        # Check if phase shift information is also available
         if hasattr(self, "_phaseShiftList"):
             providedPhaseShiftList = self.getPhaseShiftList()
             providedPhaseShiftList = providedPhaseShiftList.split(",")
 
-            " Check that all the lists are equally long "
+            # Check that all the lists are equally long
             if len(providedDefocusUList) != len(providedPhaseShiftList):
                 raise Exception("PhaseShiftList length must be equal to DefocusUList, DefocusVList and "
                                 "DefocusAngleList lengths.")
 
-            " PhaseShift is set equal to the middle estimation of the list "
+            # PhaseShift is set equal to the middle estimation of the list
             middlePoint = math.trunc(len(providedPhaseShiftList) / 2)
 
-            " If the size of the phase shift list is even, mean the 2 centre values "
+            # If the size of the phase shift list is even, mean the 2 centre values
             if len(providedPhaseShiftList) % 2 == 0:
                 phaseShift = (float(providedPhaseShiftList[middlePoint]) +
                               float(providedPhaseShiftList[middlePoint - 1])) / 2
@@ -2781,28 +2900,28 @@ class CTFTomo(data.CTFModel):
                 self.setPhaseShift(phaseShift)
 
             else:
-                " If the size of phase shift list estimation is odd, get the centre value "
+                # If the size of phase shift list estimation is odd, get the centre value
 
                 phaseShift = providedPhaseShiftList[middlePoint]
 
                 self.setPhaseShift(phaseShift)
 
-        " CUT-ON FREQUENCY INFORMATION --------------------------------------------------------------------------------"
+        # CUT-ON FREQUENCY INFORMATION --------------------------------------------------------------------------------
 
-        " Check if cut-on frequency information is also available "
+        # Check if cut-on frequency information is also available
         if hasattr(self, "_cutOnFreqList"):
             providedCutOnFreqList = self.getCutOnFreqList()
             providedCutOnFreqList = providedCutOnFreqList.split(",")
 
-            " Check that all the lists are equally long "
+            # Check that all the lists are equally long
             if len(providedPhaseShiftList) != len(providedCutOnFreqList):
                 raise Exception("CutOnFreqList length must be equal to PhaseShiftList, DefocusUList, DefocusVList and "
                                 "DefocusAngleList lengths.")
 
-            " Cut-on frequency is set equal to the middle estimation of the list "
+            # Cut-on frequency is set equal to the middle estimation of the list
             middlePoint = math.trunc(len(providedCutOnFreqList) / 2)
 
-            " If the size of the cut-on frequency shift list is even, mean the 2 centre values "
+            # If the size of the cut-on frequency shift list is even, mean the 2 centre values
             if len(providedCutOnFreqList) % 2 == 0:
                 cutOnFreq = (float(providedCutOnFreqList[middlePoint]) +
                              float(providedCutOnFreqList[middlePoint - 1])) / 2
@@ -2810,13 +2929,13 @@ class CTFTomo(data.CTFModel):
                 self.setCutOnFreq(cutOnFreq)
 
             else:
-                " If the size of the cut-on frequency list estimation is odd, get the centre value "
+                # If the size of the cut-on frequency list estimation is odd, get the centre value
 
                 cutOnFreq = providedCutOnFreqList[middlePoint]
 
                 self.setCutOnFreq(cutOnFreq)
 
-        " Standardize the input values "
+        # Standardize the input values "
         self.standardize()
 
 
