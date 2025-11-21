@@ -272,11 +272,11 @@ class TiltSeriesBase(data.SetOfImages):
         return inputStr.split('@')[-1]
 
     def getOddFileName(self):
-        firstItem = self.getFirstEnabledTi()
+        firstItem = self.getFirstEnabledItem()
         return self.extractFileName(firstItem.getOdd())
 
     def getEvenFileName(self):
-        firstItem = self.getFirstEnabledTi()
+        firstItem = self.getFirstEnabledItem()
         return self.extractFileName(firstItem.getEven())
 
     def setAnglesCount(self, value):
@@ -408,15 +408,12 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
-    def getFirstEnabledTi(self) -> typing.Union[TiltImage,None]:
-        # Instead of iterating over the live cursor, force all IDs to be read
-        # into memory first
-        ti_list = list(self.iterItems())
-        for ti in ti_list:
+    def getFirstEnabledItem(self) -> typing.Union[TiltImage, None]:
+        for item in self.iterItems():
+            ti = item.clone()
             if ti.isEnabled():
-                return ti
-        return None
-
+                return item
+        raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
 
 def tiltSeriesToString(tiltSeries):
     s = []
@@ -529,7 +526,7 @@ class TiltSeries(TiltSeriesBase):
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
         True to the even one and False to the odd one."""
         if even is None:
-            inImgFileName = self.getFirstEnabledTi().getFileName()
+            inImgFileName = self.getFirstEnabledItem().getFileName()
         elif even:
             inImgFileName = self.getEvenFileName()
         else:
@@ -593,7 +590,7 @@ class TiltSeries(TiltSeriesBase):
         :param ignoreExcludedViews: Boolean used to indicate if the excluded views (at metadata level) must be ignored
         (default) or not.
         """
-        firstImg = self.getFirstEnabledTi()
+        firstImg = self.getFirstEnabledItem()
         xDim, yDim, _ = firstImg.getDim()
         # Check if rotation angle is greater than 45º. If so,
         # swap x and y dimensions to adapt output image sizes to
@@ -3124,6 +3121,13 @@ class CTFTomoSeries(data.EMSet):
             return ctfTomo
         else:
             return None
+
+    def getFirstEnabledItem(self) -> typing.Union[CTFTomo, None]:
+        for item in self.iterItems():
+            ti = item.clone()
+            if ti.isEnabled():
+                return item
+        raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current CTF.')
 
 
 class SetOfCTFTomoSeries(data.EMSet):
