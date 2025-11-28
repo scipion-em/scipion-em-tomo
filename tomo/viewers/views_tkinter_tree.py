@@ -621,15 +621,50 @@ class TomoDialog(ToolbarListDialog):
                             })
 
         result = d.result
-        if result != RESULT_CANCEL:
+        if result == RESULT_CANCEL:
+            return
 
-            self.update_idletasks()
-            restack = result == RESULT_RESTACK
+        restack = (result == RESULT_RESTACK)
 
-            if isTS:
-                self.createNewSetOfTiltSeries(restack)
-            elif isTomogram:
-                self.createNewSetOfTomogram()
+        # Launch the heavy work in a background thread
+        self.startBackgroundCreate(restack, isTS, isTomogram)
+
+    def startBackgroundCreate(self, restack, isTS, isTomogram):
+        """Start the creation of the new set in a background thread."""
+        self._backgroundDone = False
+        self._backgroundError = None
+
+        def worker():
+            """Code that runs in the background thread."""
+            try:
+                if isTS:
+                    self.createNewSetOfTiltSeries(restack)
+                elif isTomogram:
+                    self.createNewSetOfTomogram()
+            except Exception as e:
+                logger.exception("Error creating new set of objects")
+                self._backgroundError = e
+            finally:
+                self._backgroundDone = True
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        self.checkBackgroundCreate()
+
+    def checkBackgroundCreate(self):
+        """Poll the background flag from the GUI thread using after()."""
+        if getattr(self, "_backgroundDone", False):
+            error = getattr(self, "_backgroundError", None)
+            self.onBackgroundCreateFinished(error)
+        else:
+            self.after(200, self.checkBackgroundCreate)
+
+    def onBackgroundCreateFinished(self, error):
+        """Called in GUI thread when background processing is finished."""
+        if error is not None:
+            showError("Error creating new set", f"There was an error while creating the new set:\n{error}\n\n"
+                      f"Please, check the log for more details.", None)
 
     def createNewSetOfTomogram(self):
         self.info('Processing ...')
@@ -666,60 +701,84 @@ class TomoDialog(ToolbarListDialog):
         for tsIndex, ts in enumerate(inputSet):
             self.info(f'Processing {tsIndex + 1} of {len(inputSet)} tiltseries ...')
             self.update_idletasks()
+            try:
+                tsId = ts.getTsId()
+                _, obj = self._provider.getSelectedObject(tsId)
 
-            tsId = ts.getTsId()
-            _, obj = self._provider.getSelectedObject(tsId)
+                if not obj.isEnabled():
+                    continue  # Skip disabled tilt series
 
-            if not obj.isEnabled():
-                continue  # Skip disabled tilt series
+                newTs = tomo.objects.TiltSeries()
+                newTs.copyInfo(ts)
+                outputSet.append(newTs)
 
-            newTs = tomo.objects.TiltSeries()
-            newTs.copyInfo(ts)
-            outputSet.append(newTs)
-
-            newBinaryName = os.path.join(outputPath, f'{tsId}.mrcs')
-            if hasOddEven:
-                oddFileName = ts.getOddFileName()
-                evenFileName = ts.getEvenFileName()
-                newOddBinaryName = os.path.join(outputPath, f'{tsId}_odd.mrcs')
-                newEvenBinaryName = os.path.join(outputPath, f'{tsId}_even.mrcs')
-
-            # Create new stacks if restacking
-            properties = {"sr": obj.getSamplingRate()}
-            stack, oddStack, evenStack = ImageStack(properties), ImageStack(properties), ImageStack(properties)
-
-            index = 1
-            for ti in ts.iterItems():
-                included = ti.getObjId() not in excludedViews[tsId]
-                if not restack or (included and restack):
-                    newTi = self._cloneTiltImage(ti, included)
-                    if restack:
-                        oldIndex = str(ti.getIndex())
-                        stack.append(ImageReadersRegistry.open(f"{oldIndex}@{ti.getFileName()}"))
-                        newTi.setLocation((index, newBinaryName))
-
-                        if hasOddEven:
-                            oddStack.append(ImageReadersRegistry.open(f"{oldIndex}@{oddFileName}"))
-                            evenStack.append(ImageReadersRegistry.open(f"{oldIndex}@{evenFileName}"))
-                            newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
-
-                        index += 1
-
-                    newTs.append(newTi)
-
-            if restack:
-                ImageReadersRegistry.write(stack, newBinaryName, isStack=True)
+                newBinaryName = os.path.join(outputPath, f'{tsId}.mrcs')
                 if hasOddEven:
-                    ImageReadersRegistry.write(oddStack, newOddBinaryName, isStack=True)
-                    ImageReadersRegistry.write(evenStack, newEvenBinaryName, isStack=True)
+                    oddFileName = ts.getOddFileName()
+                    evenFileName = ts.getEvenFileName()
+                    newOddBinaryName = os.path.join(outputPath, f'{tsId}_odd.mrcs')
+                    newEvenBinaryName = os.path.join(outputPath, f'{tsId}_even.mrcs')
 
-            if len(excludedViews[tsId]) == ts.getSize():
-                newTs.setEnabled(False)
+                # Create new stacks if restacking
+                properties = {"sr": obj.getSamplingRate()}
+                stack, oddStack, evenStack = ImageStack(properties), ImageStack(properties), ImageStack(properties)
 
-            newTs.setDim(ts.getDim())
-            newTs.setAnglesCount(newTs.getSize())
-            newTs.write()
-            outputSet.update(newTs)
+                index = 1
+                validImages = 0  # Number of successfully processed tilt images
+                errorsCount = 0  # Number of tilt images that raised an exception
+                for ti in ts.iterItems():
+                    try:
+                        included = ti.getObjId() not in excludedViews[tsId]
+                        if not restack or (included and restack):
+                            newTi = self._cloneTiltImage(ti, included)
+                            if restack:
+                                oldIndex = str(ti.getIndex())
+                                stack.append(ImageReadersRegistry.open(f"{oldIndex}@{ti.getFileName()}"))
+                                newTi.setLocation((index, newBinaryName))
+
+                                if hasOddEven:
+                                    oddStack.append(ImageReadersRegistry.open(f"{oldIndex}@{oddFileName}"))
+                                    evenStack.append(ImageReadersRegistry.open(f"{oldIndex}@{evenFileName}"))
+                                    newTi.setOddEven([newOddBinaryName, newEvenBinaryName])
+
+                                index += 1
+                            newTs.append(newTi)
+                            validImages += 1
+                    except Exception:
+                        errorsCount += 1
+                        logger.exception("Error processing tilt image in tilt series %s (tilt index %s)", tsId,
+                                         getattr(ti, "getIndex", lambda: "unknown")())
+                        # Skip this tilt image and keep processing the rest
+                        continue
+
+                # If no image was processed successfully and at least one failed,
+                # skip this tilt series completely (do not write or add it to the output set).
+                if validImages == 0 and errorsCount > 0:
+                    logger.warning("Skipping tilt series %s (%d/%d): all tilt images failed. Check log for details.",
+                                   tsId, tsIndex + 1, len(inputSet))
+                    continue
+
+                if restack:
+                    ImageReadersRegistry.write(stack, newBinaryName, isStack=True)
+                    if hasOddEven:
+                        ImageReadersRegistry.write(oddStack, newOddBinaryName, isStack=True)
+                        ImageReadersRegistry.write(evenStack, newEvenBinaryName, isStack=True)
+
+                if len(excludedViews[tsId]) == ts.getSize():
+                    newTs.setEnabled(False)
+
+                newTs.setDim(ts.getDim())
+                newTs.setAnglesCount(newTs.getSize())
+                newTs.write()
+                outputSet.update(newTs)
+            except Exception:
+                # Any unexpected error at tilt series level: log and continue with the next TS
+                logger.exception("Error processing tilt series %s (%d/%d)", tsId or "unknown", tsIndex + 1, len(inputSet))
+                continue
+
+        if not outputSet.getSize():
+            self.info('No output was generated because it cannot be empty')
+            return
 
         outputSet.write()
         protocol._defineOutputs(**{outputName: outputSet})
