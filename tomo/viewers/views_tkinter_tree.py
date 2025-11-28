@@ -621,15 +621,51 @@ class TomoDialog(ToolbarListDialog):
                             })
 
         result = d.result
-        if result != RESULT_CANCEL:
+        if result == RESULT_CANCEL:
+            return
 
-            self.update_idletasks()
-            restack = result == RESULT_RESTACK
+        restack = (result == RESULT_RESTACK)
 
-            if isTS:
-                self.createNewSetOfTiltSeries(restack)
-            elif isTomogram:
-                self.createNewSetOfTomogram()
+        # Launch the heavy work in a background thread
+        self.startBackgroundCreate(restack, isTS, isTomogram)
+
+    def startBackgroundCreate(self, restack, isTS, isTomogram):
+        """Start the creation of the new set in a background thread."""
+        self._backgroundDone = False
+        self._backgroundError = None
+
+        def worker():
+            """Code that runs in the background thread."""
+            try:
+                if isTS:
+                    self.createNewSetOfTiltSeries(restack)
+                elif isTomogram:
+                    self.createNewSetOfTomogram()
+            except Exception as e:
+                logger.exception("Error creating new set of objects")
+                self._backgroundError = e
+            finally:
+                self._backgroundDone = True
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        self.checkBackgroundCreate()
+
+    def checkBackgroundCreate(self):
+        """Poll the background flag from the GUI thread using after()."""
+        if getattr(self, "_backgroundDone", False):
+            error = getattr(self, "_backgroundError", None)
+            self.onBackgroundCreateFinished(error)
+        else:
+            self.after(200, self.checkBackgroundCreate)
+
+    def onBackgroundCreateFinished(self, error):
+        """Called in GUI thread when background processing is finished."""
+        if error is not None:
+            showError("Error creating new set", f"There was an error while creating the new set:\n{error}\n\n"
+                      f"Please, check the log for more details.", None)
+            return
 
     def createNewSetOfTomogram(self):
         self.info('Processing ...')
