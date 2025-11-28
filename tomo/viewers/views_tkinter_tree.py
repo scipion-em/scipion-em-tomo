@@ -665,7 +665,6 @@ class TomoDialog(ToolbarListDialog):
         if error is not None:
             showError("Error creating new set", f"There was an error while creating the new set:\n{error}\n\n"
                       f"Please, check the log for more details.", None)
-            return
 
     def createNewSetOfTomogram(self):
         self.info('Processing ...')
@@ -778,7 +777,7 @@ class TomoDialog(ToolbarListDialog):
                 continue
 
         if not outputSet.getSize():
-            self.info(f'No output was generated because it cannot be empty')
+            self.info('No output was generated because it cannot be empty')
             return
 
         outputSet.write()
