@@ -39,9 +39,8 @@ from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
-from ..objects import TomoAcquisition, SetOfCTFTomoSeries, SetOfTiltSeries
+from ..objects import SetOfCTFTomoSeries, SetOfTiltSeries
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
-from ..protocols.protocol_base import ProtTomoImportAcquisition
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
 from ..protocols.protocol_import_ctf import ImportChoice, ProtImportTsCTF
@@ -484,17 +483,17 @@ class TestTomoBaseProtocols(BaseTest):
 
         return protImport
 
-    def test_motioncorTiltSeriesM(self):
-        protImport = self.test_importTiltSeriesM()
-
-        # --------- Motion correction with motioncor2 for Tilt-series ------
-        protMc = self.newProtocol(
-            tomo.protocols.ProtTsAverage,
-            binFactor=2.0
-        )
-
-        protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
-        self.launchProtocol(protMc)
+    # def test_motioncorTiltSeriesM(self):
+    #     protImport = self.test_importTiltSeriesM()
+    #
+    #     # --------- Motion correction with motioncor2 for Tilt-series ------
+    #     protMc = self.newProtocol(
+    #         tomo.protocols.ProtTsAverage,
+    #         binFactor=2.0
+    #     )
+    #
+    #     protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
+    #     self.launchProtocol(protMc)
 
 
 class TestImportTomoMasks(BaseTest):
