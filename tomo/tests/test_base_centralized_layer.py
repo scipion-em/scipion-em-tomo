@@ -30,7 +30,7 @@ import mrcfile
 import numpy as np
 from pwem import ALIGN_NONE
 from pwem.emlib.image.image_readers import MRCImageReader
-from pwem.objects import Transform, Volume
+from pwem.objects import Transform, Volume, Matrix
 from pyworkflow.tests import BaseTest
 from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
@@ -659,7 +659,9 @@ class TestBaseCentralizedLayer(BaseTest):
                                     expectedBoxSize: int = -1,
                                     expectedSRate: float = -1.0,
                                     convention: Union[str, None] = TR_SCIPION,
-                                    orientedParticles: bool = False) -> None:
+                                    orientedParticles: bool = False,
+                                    positionTol: float = 0.01,
+                                    shiftTol=0.01) -> None:
         """Checks the results of a coordinate extraction protocol.
 
         :param inSet: input set from which the coordinates were extracted. It can be a SetOf3DCoordinates or a
@@ -670,7 +672,12 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py.
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
-        and eye matrix (False) or not (True)."""
+        and eye matrix (False) or not (True).
+        :param positionTol: absolute tolerance to check the position of the extracted coordinates, as it may suffer
+        small variation when combining multiple particle extraction (considers the decimal part) and coordinate
+        extraction (does not consider the decimal part)
+        :param shiftTol: absolute tolerance to check the shifts.
+        """
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
         # First, check the set size, sampling rate, and box size
@@ -679,18 +686,18 @@ class TestBaseCentralizedLayer(BaseTest):
                                                expectedSRate=expectedSRate,
                                                expectedBoxSize=expectedBoxSize)
         # Check the coordinate extremes
-        inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
-        outCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outCoords)
+        inCoordsExtremes = np.sort(self.getMinAndMaxCoordValuesFromSet(inSet))
+        outCoordsExtremes = np.sort(self.getMinAndMaxCoordValuesFromSet(outCoords))
         coordScaleFactor = inSet.getSamplingRate() / outCoords.getSamplingRate()
         shiftsScaleFactor = 1 / coordScaleFactor
-        self.assertTrue(np.array_equal(outCoordsExtremes, coordScaleFactor * inCoordsExtremes))
+        np.testing.assert_allclose(outCoordsExtremes, coordScaleFactor * inCoordsExtremes, atol=positionTol)
         # Other checks per coordinate
         for inElement, outCoord in zip(inSet, outCoords):
             # Check the transformation matrices and shifts
             inSetTrMatrix = inElement.getMatrix(convention=convention)
             outCoordTrMatrix = outCoord.getMatrix(convention=convention)
             self.checkTransformMatrix(outCoordTrMatrix, alignment=orientedParticles)
-            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
+            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor, shiftTol=shiftTol)
             # Check the tomoId
             self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
 
@@ -1036,7 +1043,11 @@ class TestBaseCentralizedLayer(BaseTest):
             else:
                 self.assertTrue(np.array_equal(outMatrix, identityMatrix))
 
-    def checkShiftsScaling(self, inTransform, outTransform, scaleFactor):
+    def checkShiftsScaling(self,
+                           inTransform: Union[Transform, Matrix],
+                           outTransform: Union[Transform, Matrix],
+                           scaleFactor: float,
+                           shiftTol: float = 0.01):
         """Check if the shifts were scaled properly in the case of subtomogram extraction from a different
         tomo source than the tomograms in which the picking was carried out.
 
@@ -1045,11 +1056,12 @@ class TestBaseCentralizedLayer(BaseTest):
         subtomogram.
         :param scaleFactor: Scale factor expected between the shifts corresponding to the outTransform respecting the
         inputTransform.
+        :param shiftTol: absolute tolerance to check the shifts.
         """
         sx, sy, sz = self.getShiftsFromTransformOrMatrix(inTransform)
         osx, osy, osz = self.getShiftsFromTransformOrMatrix(outTransform)
         for inShift, outShift in zip([sx, sy, sz], [osx, osy, osz]):
-            self.assertEqual(outShift, scaleFactor * inShift)
+            self.assertAlmostEqual(outShift, scaleFactor * inShift, delta=shiftTol)
 
     @staticmethod
     def getShiftsFromTransformOrMatrix(inTransform):
