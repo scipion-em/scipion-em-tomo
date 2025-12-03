@@ -191,6 +191,7 @@ class ProtTomoApplyTomoMask(EMProtocol):
         # in the _validate) and the dimensions
         maskSRate = mask.getSamplingRate()
         tomoSRate = tomo.getSamplingRate()
+        # Validate the sampling rate
         if abs(tomoSRate - maskSRate) > self._sRateTol:
             self.failedApixTsIds.append(tsId)
         else:
@@ -198,6 +199,7 @@ class ProtTomoApplyTomoMask(EMProtocol):
             tomoFileName = tomo.getFileName()
             maskDims = MRCImageReader.getDimensions(maskFileName)
             tomoDims = MRCImageReader.getDimensions(tomoFileName)
+            # Validate the dimensions
             if not np.allclose(np.array(maskDims), np.array(tomoDims)):
                 self.failedDimsTsIds.append(tsId)
             else:
