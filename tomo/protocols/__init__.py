@@ -23,6 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+# NOTE: commented protocols are pending to be reviewed, so they are not offered but not deprecated
+
 from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_correct_tilt_offset import ProtCorrectTiltOffset
 from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
@@ -33,10 +35,9 @@ from .protocol_tomo_apply_tomomask import ProtTomoApplyTomoMask
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_from_tomograms import ProtTsFromTomos
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
-from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
+# from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
 from .protocol_ts_correct_motion import ProtTsCorrectMotion
-from .protocol_ts_estimate_ctf import ProtTsEstimateCTF
-from .protocol_ts_consensus_alignment import ProtConsensusAlignmentTS
+# from .protocol_ts_consensus_alignment import ProtConsensusAlignmentTS
 from .protocol_import_tomograms import ProtImportTomograms
 from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
@@ -45,13 +46,12 @@ from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltS
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_project_coordinates import ProtProjectCoordinates
-from .protocol_rotate_astigmatism import ProtRotateAstigmatism
 from .protocol_mesh_from_segmentation import ProtMeshFromSegmentation
-from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
-from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
+# from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
+# from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
 from .protocol_compose_TS import ProtComposeTS
 from .protocol_misalignTS import ProtTomoMisalignTiltSeries
-from .protocol_landmark_to_2d import ProtTomoLandmarksTo2D
 from .protocol_mask_coordinates import ProtMaskCoordinates
 from .protocol_export_coords import ProtExportCoordinates3D
+
 
