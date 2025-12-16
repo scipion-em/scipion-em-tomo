@@ -82,3 +82,6 @@ NAPARI_ENV_ACTIVATION = 'NAPARI_ENV_ACTIVATION'
 
 # --------------------------- Import variables --------------------------------
 TS_LABEL = '{TS}'
+
+# Folder name where IMOD generates the interpolated
+INTERPOLATED_FOLDER = 'interpolated'

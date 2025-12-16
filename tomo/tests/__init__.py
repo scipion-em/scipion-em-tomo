@@ -27,6 +27,8 @@ import math
 from enum import Enum
 from typing import Tuple
 
+import numpy as np
+
 from pyworkflow.tests import DataSet
 from tomo.objects import TomoAcquisition
 
@@ -85,13 +87,19 @@ class DataSetEmd10439(Enum):
     tomoMaskAnnotated = 'tomomasksAnnotated/emd_10439_materials.mrc'
     coords39Sqlite = 'coordinates/coordinates39_bin8.sqlite'
     coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
+    tomoMaskByTardisBin2 = 'tomomaskByTardisBin2/emd_10439.mrc'
+    annotatedTomomask = 'tomomasksAnnotated/emd_10439_materials.mrc'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
     unbinnedBoxSize = 88
     unbinnedSRate = 13.68
     bin2SRate = 27.36
+    unbinnedDims = [928, 928, 500]
 
+    @classmethod
+    def getBinnedDims(cls, binFactor: int) -> list:
+        return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
 
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
 
@@ -160,8 +168,8 @@ class DataSetRe4STATuto(Enum):
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = tiltAxisAngle
     initialDose = initialDose
-    dosePerTiltImg = 3.05  # Mean dose
-    dosePerTiltImgWithTltFile = dosePerTiltImgWithTltFile
+    dosePerTiltImg = 3.05 # Mean dose
+    dosePerTiltImgWithTltFile = 3.0
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs54 = 'output 01 43 45 03'
     exclusionWordsTs03ts54 = 'output 01 43 45'
@@ -239,12 +247,15 @@ class DataSetRe4STATuto(Enum):
     # For Aretomo2 CTF import testing
     aretomoCtfFilesPath = 'testAreTomoCtf'
 
+    # For IMOD CTF import testing
+    imodCtfFilesPath = 'testImodCtf'
+
     # For gapStopTM testing
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
 
     @classmethod
     def genTestTsDicts(cls,
-                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45,  TS_54),
+                       tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
                        unbinnedXYDims: Tuple = (3710, 3838),
                        binFactor: int = 1,
                        swapXY: bool = False,
@@ -308,24 +319,26 @@ class DataSetRe4STATuto(Enum):
         return dims + [nImgs]
 
     @classmethod
-    def genTestTomoDicts(cls, tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54)):
+    def genTestTomoDicts(cls,
+                         tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
+                         binning: int = 1) -> Tuple[dict, dict]:
         testAcqObjDict = dict()
         expectedDimensionsDict = dict()
         if TS_01 in tsIdList:
             testAcqObjDict[TS_01] = cls.testAcq01.value
-            expectedDimensionsDict[TS_01] = cls.tomoDimsThk340.value
+            expectedDimensionsDict[TS_01] = (np.array(cls.tomoDimsThk340.value) / binning).tolist()
         if TS_03 in tsIdList:
             testAcqObjDict[TS_03] = cls.testAcq03.value
-            expectedDimensionsDict[TS_03] = cls.tomoDimsThk280.value
+            expectedDimensionsDict[TS_03] = (np.array(cls.tomoDimsThk280.value) / binning).tolist()
         if TS_43 in tsIdList:
             testAcqObjDict[TS_43] = cls.testAcq43.value
-            expectedDimensionsDict[TS_43] = cls.tomoDimsThk300.value
+            expectedDimensionsDict[TS_43] = (np.array(cls.tomoDimsThk300.value) / binning).tolist()
         if TS_45 in tsIdList:
             testAcqObjDict[TS_45] = cls.testAcq45.value
-            expectedDimensionsDict[TS_45] = cls.tomoDimsThk300.value
+            expectedDimensionsDict[TS_45] = (np.array(cls.tomoDimsThk300.value) / binning).tolist()
         if TS_54 in tsIdList:
             testAcqObjDict[TS_54] = cls.testAcq54.value
-            expectedDimensionsDict[TS_54] = cls.tomoDimsThk280.value
+            expectedDimensionsDict[TS_54] = (np.array(cls.tomoDimsThk280.value) / binning).tolist()
 
         return testAcqObjDict, expectedDimensionsDict
 
@@ -390,4 +403,51 @@ class DataSet_RE_STA_TUTO_MOVIES(Enum):
     dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
 
 
-DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES, files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
+DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES,
+        files={el.name: el.value for el in DataSet_RE_STA_TUTO_MOVIES})
+
+########################################################################################################################
+TOMOSEGMEMTV_TEST_DATASET = 'tomosegmemtv'
+
+class DataSet_Tomosegmemtv(Enum):
+    tomogram = 'emd_1155i.mrc'
+    sRate = 1
+    tomoDims = [141, 281, 91]
+
+DataSet(name=TOMOSEGMEMTV_TEST_DATASET, folder=TOMOSEGMEMTV_TEST_DATASET,
+        files={el.name: el.value for el in DataSet_Tomosegmemtv})
+
+########################################################################################################################
+MICROTUBULES_TOMOS_DATASET = 'microtubulesTomograms'
+
+class DataSet_MicrotubulesTomos(Enum):
+    fPath = ''
+    fPattern = '*.mrc'
+    nTomos = 2
+    unbinnedSRate = 15.8
+    unbinnedDims = [1024, 1024, 200]
+
+    @classmethod
+    def getBinnedDims(cls, binFactor: int) -> list:
+        return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
+
+DataSet(name=MICROTUBULES_TOMOS_DATASET, folder=MICROTUBULES_TOMOS_DATASET,
+        files={el.name: el.value for el in DataSet_MicrotubulesTomos})
+
+########################################################################################################################
+ACTIN_TOMOS_DATASET = 'actinTomograms'
+
+class DataSet_ActinTomos(Enum):
+    fPath = 'EMPIAR-10989_subset'
+    fPattern = '*.rec'
+    nTomos = 2
+    unbinnedSRate = 13.48
+    unbinnedDims = [928, 928, 500]
+
+    @classmethod
+    def getBinnedDims(cls, binFactor: int) -> list:
+        return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
+
+DataSet(name=ACTIN_TOMOS_DATASET, folder=ACTIN_TOMOS_DATASET,
+        files={el.name: el.value for el in DataSet_ActinTomos})
+

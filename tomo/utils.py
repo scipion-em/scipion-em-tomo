@@ -372,7 +372,7 @@ def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
 
 def getNonInterpolatedTsFromRelations(sourceObj, prot):
     def stopSearchCallback(pObj):
-        return type(pObj) == SetOfTiltSeries and pObj.getFirstItem().getFirstItem().hasTransform()
+        return type(pObj) == SetOfTiltSeries and pObj.hasAlignment()
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 

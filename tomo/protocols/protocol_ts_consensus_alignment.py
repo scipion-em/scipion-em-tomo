@@ -529,7 +529,7 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
 
         for i, sots in enumerate(self.inputMultiSoTS):
             ts = sots.get().getFirstItem()
-            if not ts.getFirstItem().hasTransform():
+            if not ts.hasAlignment():
                 validateMsgs.append("Some tilt-series from the input set of tilt-series %d does not have a "
                                     "transformation matrix assigned." % (i + 1))
 

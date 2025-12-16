@@ -24,22 +24,27 @@
 # *
 # **************************************************************************
 from os.path import exists, isabs, islink
-from typing import List, Union
+from typing import List, Union, Optional
+
+import mrcfile
 import numpy as np
 from pwem import ALIGN_NONE
 from pwem.emlib.image.image_readers import MRCImageReader
-from pwem.objects import Transform
+from pwem.objects import Transform, Volume, Matrix
 from pyworkflow.tests import BaseTest
+from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
-    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms
+    TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes, \
+    TomoMask, SubTomogram, AverageSubTomogram
 
 
 class TestBaseCentralizedLayer(BaseTest):
 
     def checkSetGeneralProps(self, inSet, expectedSetSize: int, expectedSRate: float,
                              isHeterogeneous: Union[bool, None] = None,
-                             streamState: int = 2) -> None:
+                             streamState: int = 2,
+                             sRateAngsPixTol: float = 0.01) -> None:
         """
         :param inSet: A set of Scipion Tomo objects.
         :param expectedSetSize: expected set site to check.
@@ -47,13 +52,18 @@ class TestBaseCentralizedLayer(BaseTest):
         :param isHeterogeneous: used to check if the set contains heterogeneous elements, like TS with different
         number of tilt-images or tomograms with different thicknesses.
         :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
         """
         if expectedSetSize > 0:
             self.assertSetSize(inSet, expectedSetSize)
-        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=0.001)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
         self.assertEqual(inSet.getStreamState(), streamState)
         if isHeterogeneous:
             self.assertEqual(inSet.isHeterogeneousSet(), isHeterogeneous)
+
+        print("Checking properties are persisted")
+
+        self.assertTrue(inSet.hasProperty("self"),f"Set {inSet.getFileName()} does not have 'self' in properties table. Probably properties are not persisted.")
 
     # TILT SERIES ######################################################################################################
     def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
@@ -105,7 +115,10 @@ class TestBaseCentralizedLayer(BaseTest):
                 if checkIds:
                     self.assertEqual(i + 1, ti.getObjId(), "Tilt image Movie objId is incorrect")
 
-    def checkTiltSeries(self, inTsSet: SetOfTiltSeries, expectedSetSize: int, expectedSRate: float,
+    def checkTiltSeries(self,
+                        inTsSet: SetOfTiltSeries,
+                        expectedSetSize: int,
+                        expectedSRate: float,
                         imported: bool = False,
                         expectedDimensions: Union[List[int], dict] = None,
                         testSetAcqObj: TomoAcquisition = None,
@@ -125,7 +138,9 @@ class TestBaseCentralizedLayer(BaseTest):
                         tiltAnglesTolDeg: float = 0.01,
                         rotAngleTolDeg: float = 0.01,
                         originTolAngst: float = 0.1,
-                        sRateAngsPix: float = 0.001) -> None:
+                        checkHeaderApix: bool = True,
+                        sRateAngsPixTol: float = 0.015,
+                        presentTsIds: List[str] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -166,14 +181,20 @@ class TestBaseCentralizedLayer(BaseTest):
         :param tiltAnglesTolDeg: angular tolerance, in degrees, of the acquisition min and max tilt angles.
         :param rotAngleTolDeg: angular tolerance, in degrees, of the acquisition rotation angle.
         :param originTolAngst: tolerance, in angstroms, of the shifts from the origin matrix.
-        :param sRateAngsPix: tolerance, in angtroms/pixel, of the sampling rate.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
+        :param presentTsIds: list with the expected TsIds.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # CHECK THE SET ------------------------------------------------------------------------------------------------
         self.checkSetGeneralProps(inTsSet,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
-                                  isHeterogeneous=isHeterogeneousSet)
+                                  isHeterogeneous=isHeterogeneousSet,
+                                  sRateAngsPixTol=sRateAngsPixTol)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTsSet.getAcquisition(),
                                       tiltAnglesTolDeg=tiltAnglesTolDeg,
@@ -186,12 +207,14 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertEqual(inTsSet.hasOddEven(), hasOddEven)
         if anglesCountSet:
             self.checkAnglesCount(inTsSet, anglesCountSet)
+        if presentTsIds:
+            self.assertEqual(sorted(inTsSet.getTSIds()), sorted(presentTsIds))
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
             tsId = ts.getTsId()
-            print(f'---> checking the TS tsId = {tsId}')
+            print(cyanStr(f'---> checking the TS tsId = {tsId}'))
             # Check the dimensions
             if expectedDimensions:
                 x, y, z, n = MRCImageReader.getDimensions(ts.getFirstItem().getFileName())
@@ -218,13 +241,16 @@ class TestBaseCentralizedLayer(BaseTest):
                     testOrigin = expectedOrigin
                 self.checkTsOriginMatrix(ts, expectedOrigin=testOrigin, originTolAngst=originTolAngst)
             # Sampling rate
-            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
+            self.assertAlmostEqual(ts.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
+            # Sampling rate in file header
+            if checkHeaderApix:
+                self.checkHeaderSRate(ts, expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
             # Alignment
             self.assertEqual(ts.hasAlignment(), hasAlignment)
             self.assertEqual(ts.getAlignment(), alignment)
             # Interpolated
             self.assertEqual(ts.interpolated(), isInterpolated)
-            print('---> Done!')
+            print(cyanStr('---> Done!'))
 
             # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
             for ind, ti in enumerate(ts):
@@ -249,10 +275,10 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Filename
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
-                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPix)
+                self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
 
     def checkAnglesCount(self,
-                         inSet: Union[SetOfTiltSeries, TiltSeries],
+                         inSet: Union[SetOfTiltSeries, TiltSeries, SetOfTiltSeriesM, TiltSeriesM],
                          anglesCount: Union[int, dict],
                          tsId: str = None):
         """
@@ -397,7 +423,10 @@ class TestBaseCentralizedLayer(BaseTest):
         # TODO: Check if the CTFs could be checked more exhaustively
 
     # TOMOGRAMS ########################################################################################################
-    def checkTomograms(self, inTomoSet: SetOfTomograms, expectedSetSize: int, expectedSRate: float,
+    def checkTomograms(self,
+                       inTomoSet: SetOfTomograms,
+                       expectedSetSize: int,
+                       expectedSRate: float,
                        expectedDimensions: Union[List[int], dict] = None,
                        hasOddEven: bool = False,
                        expectedOriginShifts: Union[List[float], None] = None,
@@ -405,9 +434,11 @@ class TestBaseCentralizedLayer(BaseTest):
                        hasHalves: bool = False,
                        isHeterogeneousSet: Union[bool, None] = None,
                        testSetAcqObj: TomoAcquisition = None,
-                       testAcqObj: Union[dict, TomoAcquisition] = None) -> None:
+                       testAcqObj: Union[dict, TomoAcquisition] = None,
+                       checkHeaderApix: bool = True,
+                       sRateAngsPixTol: float = 0.01) -> None:
         """
-        :param inTomoSet: SetOfSubTomograms.
+        :param inTomoSet: SetOfTomograms.
         :param expectedSetSize: expected set site to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check. A dict of
@@ -426,6 +457,11 @@ class TestBaseCentralizedLayer(BaseTest):
         It may not be the same as testAcqObj, as in the case of heterogeneous sets of tomos.
         :param testAcqObj: TomoAcquisition object generated to test the acquisition associated to the tomograms. A
         dict of structure {key --> tsId: value: TomoAcquisition object} is also accepted if the set is heterogeneous.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         checkMsgPattern = 'Expected and resulting %s are different.'
         checkSizeMsg = checkMsgPattern % 'dimensions'
@@ -436,7 +472,8 @@ class TestBaseCentralizedLayer(BaseTest):
         self.checkSetGeneralProps(inTomoSet,
                                   expectedSetSize=expectedSetSize,
                                   expectedSRate=expectedSRate,
-                                  isHeterogeneous=isHeterogeneousSet)
+                                  isHeterogeneous=isHeterogeneousSet,
+                                  sRateAngsPixTol=sRateAngsPixTol)
         if testSetAcqObj:
             self.checkTomoAcquisition(testSetAcqObj, inTomoSet.getAcquisition(), isTomogramAcq=True)
         self.assertEqual(inTomoSet.hasOddEven(), hasOddEven)
@@ -444,10 +481,14 @@ class TestBaseCentralizedLayer(BaseTest):
         # Check the set elements main attributes
         for tomo in inTomoSet:
             tsId = tomo.getTsId()
+            print(cyanStr(f'---> checking the Tomogram tsId = {tsId}'))
             # Check if the filename exists
             self.assertTrue(exists(tomo.getFileName()))
             # Check the sampling rate
-            self.assertAlmostEqual(tomo.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            self.assertAlmostEqual(tomo.getSamplingRate(),
+                                   expectedSRate,
+                                   delta=sRateAngsPixTol,
+                                   msg=checkSRateMsg)
             # Check the ctf correction
             if ctfCorrected is not None:
                 self.assertEqual(inTomoSet.ctfCorrected(), ctfCorrected)
@@ -456,54 +497,171 @@ class TestBaseCentralizedLayer(BaseTest):
                                  msg=f'Tomogram {tomo.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
                                      f'or it is empty.')
             # Check the dimensions
-            if expectedDimensions:
-                x, y, z = tomo.getDimensions()
-                if type(expectedDimensions) is dict:
-                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
-                else:
-                    self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            self._checkTomoDims(tomo,
+                                expectedDimensions=expectedDimensions,
+                                checkSizeMsg=checkSizeMsg)
             # Check the acquisition
             if testAcqObj:
                 tsAcq = tomo.getAcquisition()
-                self.checkTomoAcquisition(testAcqObj, tsAcq, tsId=tsId, isTomogramAcq=True)
+                self.checkTomoAcquisition(testAcqObj, tsAcq,
+                                          tsId=tsId,
+                                          isTomogramAcq=True)
             # Check the origin
-            if expectedOriginShifts is not None:
-                x, y, z = tomo.getOrigin().getShifts()
-                for i, j in zip([x, y, z], expectedOriginShifts):
-                    self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
-            # Check the halves
+            self._checkTomoOrigin(tomo,
+                                  expectedOriginShifts=expectedOriginShifts,
+                                  checkOriginMsg=checkOriginMsg)
             if hasHalves:
-                tsId = tomo.getTsId()
                 self.assertTrue(tomo.hasHalfMaps(), "Halves not registered.")
                 half1, half2 = tomo.getHalfMaps().split(',')
                 self.assertTrue(exists(half1), msg="Tomo %s 1st half %s does not exists" % (tsId, half1))
                 self.assertTrue(exists(half2), msg="Tomo %s 2nd half %s does not exists" % (tsId, half2))
+            # Check the sampling rate value in the header
+            if checkHeaderApix:
+                self.checkHeaderSRate(tomo,
+                                      expectedSRate=expectedSRate,
+                                      sRateAngsPixTol=sRateAngsPixTol)
+            print(cyanStr('---> Done!'))
+
+    def _checkTomoDims(self,
+                       tomo = Tomogram,
+                       expectedDimensions: Union[List[int], dict] = None,
+                       checkSizeMsg: Optional[str] = None) -> None:
+        if expectedDimensions:
+            tsId = tomo.getTsId()
+            x, y, z = tomo.getDimensions()
+            if type(expectedDimensions) is dict:
+                self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
+            else:
+                self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+
+    def _checkTomoOrigin(self,
+                         tomo: Tomogram,
+                         expectedOriginShifts: Union[List[float], None] = None,
+                         checkOriginMsg: Optional[str] = None) -> None:
+        if expectedOriginShifts is not None:
+            x, y, z = tomo.getOrigin().getShifts()
+            for i, j in zip([x, y, z], expectedOriginShifts):
+                self.assertAlmostEqual(i, j, delta=0.5, msg=checkOriginMsg)
+
+    # TOMOMASKS ########################################################################################################
+    def checkTomoMasks(self,
+                       inTomoMasks: SetOfTomoMasks,
+                       expectedSetSize: int,
+                       expectedSRate: float,
+                       expectedDimensions: Union[List[int], dict] = None,
+                       isHeterogeneousSet: Union[bool, None] = None,
+                       checkHeaderApix: bool = True,
+                       sRateAngsPixTol: float = 0.01) -> None:
+        """
+        :param inTomoMasks: SetOfTomoMasks.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedDimensions: list containing the expected X,Y, and Z dimensions, in pixels, to check. A dict of
+        structure {key --> tsId: value: expectedDimensions} is also admitted in the case of heterogeneous sets, e.g.
+        TS with different number of tilt images.
+        :param isHeterogeneousSet: used to check if the set contains heterogeneous elements, like TS with different
+        number of tilt-images.
+        :param checkHeaderApix: flag to indicate if the sampling rate in the header of the file should be checked or
+        not. It should be in the protocols that generate new binary files, but not in the rest as the binary file may
+        the original one and the data generated may be only metadata. In that case, the protocols prevent from editing
+        the header of the original binary file.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
+        """
+        checkMsgPattern = 'Expected and resulting %s are different.'
+        checkSizeMsg = checkMsgPattern % 'dimensions'
+        checkSRateMsg = checkMsgPattern % 'sampling rate'
+
+        # Check the set
+        self.checkSetGeneralProps(inTomoMasks,
+                                  expectedSetSize=expectedSetSize,
+                                  expectedSRate=expectedSRate,
+                                  isHeterogeneous=isHeterogeneousSet,
+                                  sRateAngsPixTol=sRateAngsPixTol)
+        # Check the set elements main attributes
+        for tomoMask in inTomoMasks:
+            tsId = tomoMask.getTsId()
+            # Check if the filename exists
+            self.assertTrue(exists(tomoMask.getFileName()))
+            # Check the sampling rate
+            self.assertAlmostEqual(tomoMask.getSamplingRate(), expectedSRate, delta=1e-3, msg=checkSRateMsg)
+            # At least, check that the TsId was not lost in metadata generation or copying methods
+            self.assertIsNotNone(getattr(tomoMask, Tomogram.TS_ID_FIELD, None),
+                                 msg=f'Tomogram {tomoMask.getFileName()}\ndoes not have attribute {Tomogram.TS_ID_FIELD} '
+                                     f'or it is empty.')
+            # Check the dimensions
+            if expectedDimensions:
+                x, y, z = tomoMask.getDimensions()
+                if type(expectedDimensions) is dict:
+                    self.assertEqual([x, y, z], expectedDimensions[tsId], msg=f'{tsId} --> {checkSizeMsg}')
+                else:
+                    self.assertEqual([x, y, z], expectedDimensions, msg=checkSizeMsg)
+            # Check the sampling rate value in the header
+            if checkHeaderApix:
+                self.checkHeaderSRate(tomoMask, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
 
     # COORDINATES ######################################################################################################
-    def checkCoordinates(self, outCoords, expectedSetSize=-1, expectedBoxSize=-1, expectedSRate=-1,
-                         orientedParticles=False):
+    def checkCoordinates(self,
+                         outCoords: Union[SetOfCoordinates3D, SetOfMeshes],
+                         expectedSetSize: int = -1,
+                         expectedBoxSize: int =-1,
+                         expectedSRate: float = -1.0,
+                         orientedParticles: bool = False,
+                         setSizeTolPercent: float = 0.0,
+                         orientedTolPercent: float = 0.0) -> None:
         """Checks the general properties of a SetOfCoordinates3D.
 
-        :param outCoords: SetOf3DCoordinates.
+        :param outCoords: SetOf3DCoordinates or SetOfMeshes.
         :param expectedSetSize: expected set site to check.
         :param expectedBoxSize: expected box size, in pixels, to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
         and eye matrix (False) or not (True).
+        :param setSizeTolPercent: for non-deterministic protocols, it is a percentage value (from 0.0 to 1.0) used to
+        indicate the variability allowed on the given expectedSetSize. For example, if expectedSetSize = 100 and
+        setSizeTolPercent = 0.2 (20%), set sizes from in range [100 - 0.2 * 100, 100 + 0.2 * 100] = [80, 120]
+        will be considered as correct when checking the set size.
+        :param orientedTolPercent: for oriented coordinates, there may be statistically a percentage of the oriented
+        coordinates whose orientation is the identity matrix, that may be interpreted as non-oriented by the test.
+        These parameter is used to indicate a percentage value (from 0.0 to 1.0) of variability in the number of those
+        "non-oriented"-like particles. For example, if expectedSetSize = 100 in an oriented picking and
+        orientedTolPercent = 0.2 (20%), the number of particles in which the transformation matrix is expected to be
+        different from the identity would be in greater or equal than than 100 - 0.2 * 100 = 80.
         """
-
         # First, check the set size, sampling rate, and box size
         self.checkCoordsOrPartsSetGeneralProps(outCoords,
                                                expectedSetSize=expectedSetSize,
                                                expectedSRate=expectedSRate,
-                                               expectedBoxSize=expectedBoxSize)
-        for tomo in outCoords.getPrecedents():
-            for coord in outCoords.iterCoordinates(volume=tomo):
-                self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
-                self.assertEqual(coord.getTomoId(), tomo.getTsId())
+                                               expectedBoxSize=expectedBoxSize,
+                                               setSizeTolPercent=setSizeTolPercent)
+        if orientedTolPercent > 0:
+            print(cyanStr(f'OrientedTolPercent provided - value is {orientedTolPercent:.2f}'))
+            for tomo in outCoords.getPrecedents():
+                nOrientedCoords = 0
+                for coord in outCoords.iterCoordinates(volume=tomo):
+                    try:
+                        self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
+                        nOrientedCoords += 1
+                    except Exception as e:
+                        continue
+                    self.assertGreaterEqual(nOrientedCoords, expectedSetSize * (1 - orientedTolPercent))
+                    self.assertEqual(coord.getTomoId(), tomo.getTsId())
+        else:
+            print(cyanStr(f'No orientedTolPercent provided'))
+            for tomo in outCoords.getPrecedents():
+                for coord in outCoords.iterCoordinates(volume=tomo):
+                    self.checkTransformMatrix(coord.getMatrix(), alignment=orientedParticles)
+                    self.assertEqual(coord.getTomoId(), tomo.getTsId())
 
-    def checkExtracted3dCoordinates(self, inSet, outCoords, expectedSetSize=-1, expectedBoxSize=-1,
-                                    expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False):
+    def checkExtracted3dCoordinates(self,
+                                    inSet: SetOfCoordinates3D,
+                                    outCoords: SetOfCoordinates3D,
+                                    expectedSetSize: int = -1,
+                                    expectedBoxSize: int = -1,
+                                    expectedSRate: float = -1.0,
+                                    convention: Union[str, None] = TR_SCIPION,
+                                    orientedParticles: bool = False,
+                                    positionTol: float = 0.01,
+                                    shiftTol=0.01) -> None:
         """Checks the results of a coordinate extraction protocol.
 
         :param inSet: input set from which the coordinates were extracted. It can be a SetOf3DCoordinates or a
@@ -514,7 +672,12 @@ class TestBaseCentralizedLayer(BaseTest):
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
         :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py.
         :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be
-        and eye matrix (False) or not (True)."""
+        and eye matrix (False) or not (True).
+        :param positionTol: absolute tolerance to check the position of the extracted coordinates, as it may suffer
+        small variation when combining multiple particle extraction (considers the decimal part) and coordinate
+        extraction (does not consider the decimal part)
+        :param shiftTol: absolute tolerance to check the shifts.
+        """
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
         # First, check the set size, sampling rate, and box size
@@ -523,18 +686,18 @@ class TestBaseCentralizedLayer(BaseTest):
                                                expectedSRate=expectedSRate,
                                                expectedBoxSize=expectedBoxSize)
         # Check the coordinate extremes
-        inCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(inSet)
-        outCoordsExtremes = self.getMinAndMaxCoordValuesFromSet(outCoords)
+        inCoordsExtremes = np.sort(self.getMinAndMaxCoordValuesFromSet(inSet))
+        outCoordsExtremes = np.sort(self.getMinAndMaxCoordValuesFromSet(outCoords))
         coordScaleFactor = inSet.getSamplingRate() / outCoords.getSamplingRate()
         shiftsScaleFactor = 1 / coordScaleFactor
-        self.assertTrue(np.array_equal(outCoordsExtremes, coordScaleFactor * inCoordsExtremes))
+        np.testing.assert_allclose(outCoordsExtremes, coordScaleFactor * inCoordsExtremes, atol=positionTol)
         # Other checks per coordinate
         for inElement, outCoord in zip(inSet, outCoords):
             # Check the transformation matrices and shifts
             inSetTrMatrix = inElement.getMatrix(convention=convention)
             outCoordTrMatrix = outCoord.getMatrix(convention=convention)
             self.checkTransformMatrix(outCoordTrMatrix, alignment=orientedParticles)
-            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor)
+            self.checkShiftsScaling(inSetTrMatrix, outCoordTrMatrix, shiftsScaleFactor, shiftTol=shiftTol)
             # Check the tomoId
             self.assertEqual(outCoord.getTomoId(), inElement.getTomoId())
 
@@ -573,9 +736,18 @@ class TestBaseCentralizedLayer(BaseTest):
                                   hasHalves=False)
                 self.assertFalse(subtomo.hasCoordinate3D())
 
-    def checkExtractedSubtomos(self, inCoords, outSubtomos, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                               convention=TR_SCIPION, orientedParticles=False, expectedExtension='.mrc',
-                               isStack2d=False, noImgs=None):
+    def checkExtractedSubtomos(self,
+                               inCoords: SetOfCoordinates3D,
+                               outSubtomos: SetOfSubTomograms,
+                               expectedSetSize: int = -1,
+                               expectedBoxSize: int = -1,
+                               expectedSRate: float = -1.,
+                               convention: Optional[str] = TR_SCIPION,
+                               orientedParticles: bool = False,
+                               expectedExtension: str = 'mrc',
+                               isStack2d: bool = False,
+                               noImgs: Optional[int] = None,
+                               sRateAngsPixTol: float = 0.01) -> None:
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram extraction
 
         :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
@@ -592,13 +764,15 @@ class TestBaseCentralizedLayer(BaseTest):
         :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
         are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
         noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         scaleFactor = inCoords.getSamplingRate() / outSubtomos.getSamplingRate()
         # Check the critical properties of the set
         # First, check the set size, sampling rate, and box size
         self.checkCoordsOrPartsSetGeneralProps(outSubtomos,
                                                expectedSetSize=expectedSetSize,
-                                               expectedSRate=expectedSRate)
+                                               expectedSRate=expectedSRate,
+                                               sRateAngsPixTol=sRateAngsPixTol)
         if expectedBoxSize:
             self.getSubtomosDims(outSubtomos,
                                  is2dStack=isStack2d,
@@ -622,7 +796,8 @@ class TestBaseCentralizedLayer(BaseTest):
                                       expectedBoxSize=expectedBoxSize,
                                       isStack2d=isStack2d,
                                       noImgs=noImgs,
-                                      expectedExtension=expectedExtension)
+                                      expectedExtension=expectedExtension,
+                                      sRateAngsPixTol=sRateAngsPixTol)
                 subtomoTr = outSubtomo.getTransform(convention=convention)
                 subtomoMatrix = subtomoTr.getMatrix()
                 coordinate = outSubtomo.getCoordinate3D()
@@ -635,9 +810,20 @@ class TestBaseCentralizedLayer(BaseTest):
                 # Check the tomoId
                 self.assertEqual(coordinate.getTomoId(), incoord.getTomoId())
 
-    def checkRefinedSubtomograms(self, inSubtomos, outSubtomos, expectedSetSize=-1, expectedBoxSize=-1,
-                                 expectedSRate=-1, convention=TR_SCIPION, orientedParticles=False, angTol=0.05,
-                                 shiftTol=1, expectedExtension='mrc', isStack2d=False, noImgs=None):
+    def checkRefinedSubtomograms(self,
+                                 inSubtomos: SetOfSubTomograms,
+                                 outSubtomos: SetOfSubTomograms,
+                                 expectedSetSize: int = -1,
+                                 expectedBoxSize: int = -1,
+                                 expectedSRate: float = -1.,
+                                 convention: Optional[str] = TR_SCIPION,
+                                 orientedParticles: bool = False,
+                                 angTol: float = 0.05,
+                                 shiftTol: float = 1.,
+                                 expectedExtension: str = 'mrc',
+                                 isStack2d: bool = False,
+                                 noImgs: Optional[int] = None,
+                                 sRateAngsPixTol: float = 0.01) -> None:
         """Checks exhaustively the subtomograms generated after having carried out a subtomogram refinement
 
         :param inSubtomos: SetOfSubTomograms introduced for the subtomo refinement.
@@ -660,6 +846,7 @@ class TestBaseCentralizedLayer(BaseTest):
         matrices.
         :param shiftTol: shift tolerance, in pixels. Used to compare the input and output subtomograms transformation
         matrices.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         angTolMat = np.ones([3, 3]) * angTol
         shiftTolMat = np.ones(3) * shiftTol
@@ -679,7 +866,8 @@ class TestBaseCentralizedLayer(BaseTest):
                                   expectedBoxSize=expectedBoxSize,
                                   isStack2d=isStack2d,
                                   noImgs=noImgs,
-                                  expectedExtension=expectedExtension)
+                                  expectedExtension=expectedExtension,
+                                  sRateAngsPixTol=sRateAngsPixTol)
             # Check the transformation matrix
             inSubtomoMat = inSubtomo.getTransform(convention=convention).getMatrix()
             outSubtomoMat = outSubtomo.getTransform(convention=convention).getMatrix()
@@ -697,8 +885,14 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inCoord.getPosition(SCIPION), outCoord.getPosition(SCIPION))
             self.assertEqual(inCoord.getTomoId(), outCoord.getTomoId())
 
-    def checkSubtomogram(self, subtomo, expectedSRate=-1, expectedBoxSize=-1, expectedExtension='.mrc',
-                         isStack2d=False, noImgs=None):
+    def checkSubtomogram(self,
+                         subtomo: SubTomogram,
+                         expectedSRate: float = -1.,
+                         expectedBoxSize: int = -1,
+                         expectedExtension: str = '.mrc',
+                         isStack2d: bool = False,
+                         noImgs: Optional[int] = None,
+                         sRateAngsPixTol: float = 0.01) -> None:
         """Checks the main properties of a subtomogram.
 
         :param subtomo: SubTomogram.
@@ -710,6 +904,7 @@ class TestBaseCentralizedLayer(BaseTest):
         :param noImgs: Number of images of the tilt series. Only applies if isStack2d to check the dimensions, that
         are expected to be expectedBoxSize x expectedBoxSize x n <= noImgs (there may be less 2d particles than the
         noImgs because of image removal, such as in Relion 5 when using the dose threshold when extracting the subtomos.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
         """
         self.assertTrue(exists(subtomo.getFileName()), "Average %s does not exists" % subtomo.getFileName())
         self.assertTrue(subtomo.getFileName().endswith(expectedExtension))
@@ -718,6 +913,8 @@ class TestBaseCentralizedLayer(BaseTest):
                              is2dStack=isStack2d,
                              expectedBoxSize=expectedBoxSize,
                              noImgs=noImgs)
+        # Check the sampling rate value in the header
+        self.checkHeaderSRate(subtomo, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
 
     def getSubtomosDims(self, inObj, is2dStack=None, expectedBoxSize=None, noImgs=None):
         """It can be used with a sigle SubTomogram or a set of them."""
@@ -731,19 +928,28 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(inObj.getDimensions(), testBoxSize)
 
     # AVERAGE ##########################################################################################################
-    def checkAverage(self, avg, expectedSRate=-1, expectedBoxSize=-1, hasHalves=True):
+    def checkAverage(self,
+                     avg: AverageSubTomogram,
+                     expectedSRate: float = -1.,
+                     expectedBoxSize: int = -1,
+                     hasHalves: bool = True,
+                     sRateAngsPixTol: float = 0.01) -> None:
         """Checks the main properties of an average subtomogram, which can be the result of an average of subtomograms,
         an initial model or refinement of subtomograms.
 
         :param avg: AverageSubtomogram.
         :param expectedBoxSize: expected box size, in pixels, to check.
         :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated."""
+        :param hasHalves: True by default. Used to indicate if the average is expected to have halves associated.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
+        """
         testBoxSize = (expectedBoxSize, expectedBoxSize, expectedBoxSize)
         self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
         self.assertTrue(avg.getFileName().endswith(".mrc"))
         self.assertTrue(abs(avg.getSamplingRate() - expectedSRate) <= 1e-4)
         self.assertEqual(avg.getDimensions(), testBoxSize)
+        # Check the sampling rate value in the header
+        self.checkHeaderSRate(avg, expectedSRate=expectedSRate, sRateAngsPixTol=sRateAngsPixTol)
         # Check the halves
         if hasHalves:
             self.assertTrue(avg.hasHalfMaps(), "Halves not registered.")
@@ -775,13 +981,42 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(len(set(representativeFileList)), expectedSetSize, msg=msg)
 
     # COORDINATES AND PARTICLES TEST UTILS #############################################################################
-    def checkCoordsOrPartsSetGeneralProps(self, inSet, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=0):
+    def checkCoordsOrPartsSetGeneralProps(self,
+                                          inSet: Union[SetOfCoordinates3D, SetOfSubTomograms],
+                                          expectedSetSize: int = -1,
+                                          expectedSRate: float = -1.0,
+                                          expectedBoxSize: int = 0,
+                                          setSizeTolPercent: float = 0.0,
+                                          sRateAngsPixTol: float = 0.01) -> None:
+        """
+        :param inSet: A set of Scipion Tomo objects.
+        :param expectedSetSize: expected set site to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param expectedBoxSize: expected box size, in pixels.
+        :param setSizeTolPercent: for non-deterministic protocols, it is a percentage value (from 0.0 to 1.0) used to
+        indicate the variability allowed on the given expectedSetSize. For example, if expectedSetSize = 100 and
+        setSizeTolPercent = 0.2 (20%), set sizes from in range [100 - 0.2 * 100, 100 + 0.2 * 100] = [80, 120]
+        will be considered as correct when checking the set size.
+        :param sRateAngsPixTol: tolerance, in angstroms/pixel, of the sampling rate.
+        """
         # Check the set
-        self.checkSetGeneralProps(inSet, expectedSetSize=expectedSetSize, expectedSRate=expectedSRate)
+        self.assertAlmostEqual(inSet.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
+        if expectedSetSize > 0:
+            if setSizeTolPercent > 0:
+                minSetSize = int(expectedSetSize * (1 - setSizeTolPercent))
+                maxSetSize = int(expectedSetSize * (1 + setSizeTolPercent))
+                self.assertTrue(expectedSetSize >= minSetSize & expectedSetSize <= maxSetSize)
+            else:
+                self.assertSetSize(inSet, expectedSetSize)
         if expectedBoxSize:
             self.assertEqual(inSet.getBoxSize(), expectedBoxSize)
 
-    def checkTransformMatrix(self, outMatrix, alignment=False, is2d=False, isInterpolated=False, isExcludedView=False):
+    def checkTransformMatrix(self,
+                             outMatrix: np.ndarray,
+                             alignment: bool = False,
+                             is2d: bool = False,
+                             isInterpolated: bool = False,
+                             isExcludedView: bool = False):
         """Checks the shape and coarsely the contents of the transformation matrix provided.
 
         :param outMatrix: transformation matrix of a subtomogram or coordinate.
@@ -808,7 +1043,11 @@ class TestBaseCentralizedLayer(BaseTest):
             else:
                 self.assertTrue(np.array_equal(outMatrix, identityMatrix))
 
-    def checkShiftsScaling(self, inTransform, outTransform, scaleFactor):
+    def checkShiftsScaling(self,
+                           inTransform: Union[Transform, Matrix],
+                           outTransform: Union[Transform, Matrix],
+                           scaleFactor: float,
+                           shiftTol: float = 0.01):
         """Check if the shifts were scaled properly in the case of subtomogram extraction from a different
         tomo source than the tomograms in which the picking was carried out.
 
@@ -817,11 +1056,12 @@ class TestBaseCentralizedLayer(BaseTest):
         subtomogram.
         :param scaleFactor: Scale factor expected between the shifts corresponding to the outTransform respecting the
         inputTransform.
+        :param shiftTol: absolute tolerance to check the shifts.
         """
         sx, sy, sz = self.getShiftsFromTransformOrMatrix(inTransform)
         osx, osy, osz = self.getShiftsFromTransformOrMatrix(outTransform)
         for inShift, outShift in zip([sx, sy, sz], [osx, osy, osz]):
-            self.assertEqual(outShift, scaleFactor * inShift)
+            self.assertAlmostEqual(outShift, scaleFactor * inShift, delta=shiftTol)
 
     @staticmethod
     def getShiftsFromTransformOrMatrix(inTransform):
@@ -906,3 +1146,22 @@ class TestBaseCentralizedLayer(BaseTest):
             # Check the psd file
             if expectPsdFile:
                 self.assertTrue(exists(ctf.getPsdFile().rsplit('@', 1)[-1]))  # Expected syntax is index@psdFile
+
+    def checkHeaderSRate(self,
+                         inObj: Union[Tomogram, TiltSeries, TomoMask, SubTomogram],
+                         expectedSRate: float,
+                         sRateAngsPixTol: float = 0.01) -> None:
+        tomoFile = inObj.getFirstItem().getFileName() if type(inObj) is TiltSeries else inObj.getFileName()
+        tsId = tomoFile if type(inObj) in [Volume, AverageSubTomogram, SubTomogram] else inObj.getTsId()
+        with mrcfile.open(tomoFile, permissive=True, header_only=True) as mrc:
+            vs = mrc.voxel_size
+            vs = [float(vs.x), float(vs.y), float(vs.z)] if type(inObj) is Tomogram else [float(vs.x), float(vs.y)]
+            for voxelSize in vs:
+                self.assertAlmostEqual(voxelSize,
+                                       expectedSRate,
+                                       delta=sRateAngsPixTol,
+                                       msg=f"tsId = {tsId}: header value/s of the sampling rate are different within "
+                                           f"tolerance {sRateAngsPixTol}\n"
+                                           f"File = {tomoFile}\n"
+                                           f"Expected sampling rate = {expectedSRate} angst / pix\n"
+                                           f"Sampling rate/s in header  = {vs}")

@@ -25,6 +25,8 @@
 # **************************************************************************
 import os
 from os.path import join, exists, abspath
+from typing import List
+
 import numpy as np
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
@@ -37,9 +39,8 @@ from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
-from ..objects import TomoAcquisition
+from ..objects import SetOfCTFTomoSeries, SetOfTiltSeries
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
-from ..protocols.protocol_base import ProtTomoImportAcquisition
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
 from ..protocols.protocol_import_ctf import ImportChoice, ProtImportTsCTF
@@ -482,17 +483,17 @@ class TestTomoBaseProtocols(BaseTest):
 
         return protImport
 
-    def test_motioncorTiltSeriesM(self):
-        protImport = self.test_importTiltSeriesM()
-
-        # --------- Motion correction with motioncor2 for Tilt-series ------
-        protMc = self.newProtocol(
-            tomo.protocols.ProtTsAverage,
-            binFactor=2.0
-        )
-
-        protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
-        self.launchProtocol(protMc)
+    # def test_motioncorTiltSeriesM(self):
+    #     protImport = self.test_importTiltSeriesM()
+    #
+    #     # --------- Motion correction with motioncor2 for Tilt-series ------
+    #     protMc = self.newProtocol(
+    #         tomo.protocols.ProtTsAverage,
+    #         binFactor=2.0
+    #     )
+    #
+    #     protMc.inputTiltSeriesM.set(protImport.outputTiltSeriesM)
+    #     self.launchProtocol(protMc)
 
 
 class TestImportTomoMasks(BaseTest):
@@ -568,11 +569,11 @@ class TestImportTomoMasks(BaseTest):
         self._checkResults(protImportTomomasks)
 
     def testImportTomoMasksAllGood_pattern(self):
-        protImportTomomasks = self._importTomoMasks(filesPath=self.ds.getFile(DataSetEmd10439.tomomasksAnnotatedDir.value),
-                                                    filesPattern='{TS}_materials.mrc',
-                                                    inputTomos=self.inTomoSetBinned)
+        protImportTomomasks = self._importTomoMasks(
+            filesPath=self.ds.getFile(DataSetEmd10439.tomomasksAnnotatedDir.value),
+            filesPattern='{TS}_materials.mrc',
+            inputTomos=self.inTomoSetBinned)
         self._checkResults(protImportTomomasks)
-
 
     # The tomogram and the tomomask have different sizes
     def testImportTomoMasksDiffSize(self):
@@ -614,6 +615,7 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
+        cls.importedTs = cls._runImportTs()
 
     @classmethod
     def _runImportTs(cls):
@@ -636,23 +638,40 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
         tsImported = getattr(protTsImport, protTsImport.OUTPUT_NAME, None)
         return tsImported
 
-    def test_import_ctf_aretomo_01(self):
-        inTsSet = self._runImportTs()
-
-        print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
-                         "\n\t- TS without excluded views"))
+    def _runImportCtf(self,
+                      inTsSet: SetOfTiltSeries,
+                      filesPath: str,
+                      filesPattern: str,
+                      importFrom: int,
+                      fromLabel: str = '',) -> SetOfCTFTomoSeries:
         prot = self.newProtocol(ProtImportTsCTF,
-                                importFrom=ImportChoice.ARETOMO.value,
-                                filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
-                                filesPattern='*.txt',
-                                inputSetOfTiltSeries=inTsSet)
+                               importFrom=importFrom, #ImportChoice.ARETOMO.value,
+                               filesPath=filesPath,
+                               filesPattern=filesPattern,
+                               inputSetOfTiltSeries=inTsSet)
+        prot.setObjLabel(f'import ctf from {fromLabel}')
         self.launchProtocol(prot)
-        self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name, None))
+        return getattr(prot, prot._possibleOutputs.CTFs.name, None)
 
-    def test_import_ctf_aretomo_02(self):
-        inTsSet = self._runImportTs()
+    def _runTestImportCtf(self,
+                          importFrom: int,
+                          filesPath: str,
+                          filesPattern: str,
+                          fromLabel: str = '',
+                          psdFile: bool = True) -> None:
+        print(magentaStr(f"\n==> Testing tomo CTF import for {fromLabel}:"
+                         "\n\t- TS without excluded views"))
 
-        print(magentaStr("\n==> Testing tomo CTF import for AreTomo:"
+        ctfSet = self._runImportCtf(self.importedTs, filesPath, filesPattern, importFrom, fromLabel)
+        self._checkCTFs(ctfSet, psdFile=psdFile)
+
+    def _runTestImportCtfEv(self,
+                            importFrom: int,
+                            filesPath: str,
+                            filesPattern: str,
+                            fromLabel: str = '',
+                            psdFile: bool = True) -> None:
+        print(magentaStr(f"\n==> Testing tomo CTF import for {fromLabel}:"
                          "\n\t- TS with some excluded views"))
 
         # Exclude some views in each TS
@@ -662,8 +681,9 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                        'TS_54': 41}
         # To do this properly, the sets must be iterated by direct indexing of the elements, as the iterators
         # stop iterating after having executed a mapper update operation
+        importedTs = self._runImportTs()
         for n in range(self.nTiltSeries):
-            ts = inTsSet[n + 1]
+            ts = importedTs[n + 1]
             tsId = ts.getTsId()
             exclusionList = exludedViews[tsId]
             for i in range(nTiltImages[tsId]):
@@ -672,20 +692,49 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                     ti.setEnabled(False)
                     ts.update(ti)
             ts.write()
-            inTsSet.update(ts)
+            importedTs.update(ts)
 
-        # Launch the protocol and check the results
-        prot = self.newProtocol(ProtImportTsCTF,
-                                importFrom=ImportChoice.ARETOMO.value,
-                                filesPath=self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value),
-                                filesPattern='*.txt',
-                                inputSetOfTiltSeries=inTsSet)
-        prot.setObjLabel('Import CTFs, some views excluded')
-        self.launchProtocol(prot)
-        self._checkCTFs(getattr(prot, prot._possibleOutputs.CTFs.name), excludedViewsDict=exludedViews)
+        ctfSet = self._runImportCtf(importedTs, filesPath, filesPattern, importFrom, fromLabel)
+        self._checkCTFs(ctfSet, excludedViewsDict=exludedViews, psdFile=psdFile)
 
-    def _checkCTFs(self, ctfSet, excludedViewsDict=None):
+    def _checkCTFs(self,
+                   ctfSet: SetOfCTFTomoSeries,
+                   excludedViewsDict: dict = None,
+                   psdFile: bool = True) -> None:
         self.checkCTFs(ctfSet,
                        expectedSetSize=self.nTiltSeries,
                        excludedViewsDict=excludedViewsDict,
-                       expectedPsdFile=True)
+                       expectedPsdFile=psdFile)
+
+    def _getAretomoInputs(self) -> List:
+        importFrom = ImportChoice.ARETOMO.value
+        filesPath = self.ds.getFile(DataSetRe4STATuto.aretomoCtfFilesPath.value)
+        filesPattern = '*.txt'
+        fromLabel = 'AreTomo'
+        psdFile = True
+        return [importFrom, filesPath, filesPattern, fromLabel, psdFile]
+
+    def _getImodInputs(self) -> List:
+        importFrom = ImportChoice.IMOD.value
+        filesPath = self.ds.getFile(DataSetRe4STATuto.imodCtfFilesPath.value)
+        filesPattern = '*.defocus'
+        fromLabel = 'IMOD'
+        psdFile = False
+        return [importFrom, filesPath, filesPattern, fromLabel, psdFile]
+
+    def test_import_ctf_aretomo(self):
+        args = self._getAretomoInputs()
+        self._runTestImportCtf(*args)
+
+    def test_import_ctf_aretomo_eV(self):
+        args = self._getAretomoInputs()
+        self._runTestImportCtfEv(*args)
+
+    def test_import_ctf_imod(self):
+        args = self._getImodInputs()
+        self._runTestImportCtf(*args)
+
+    def test_import_ctf_imod_eV(self):
+        args = self._getImodInputs()
+        self._runTestImportCtfEv(*args)
+

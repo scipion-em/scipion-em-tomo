@@ -40,7 +40,7 @@ import tomo.constants as const
 COORDINATES = 'Coordinates'
 
 class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
-    """ TODO
+    """ To be filled by Oier HAHAHA
     """
     _label = 'mask 3d coordinates'
     _devStatus = BETA
