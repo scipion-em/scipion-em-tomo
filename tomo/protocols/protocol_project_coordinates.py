@@ -41,7 +41,8 @@ import numpy as np
 
 class OutputProjectCoordinates(enum.Enum):
     landmarkModels = SetOfLandmarkModels
-    
+
+
 class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
     """
     Project 3D coordinates into a set of landmarks.

@@ -524,29 +524,29 @@ class ProtTsCorrectMotion(ProtTsProcess):
         return False
 
 
-class ProtTsAverage(ProtTsCorrectMotion):
-    """
-    Simple protocol to average TiltSeries movies as basic
-    motion correction. It is used mainly for testing purposes.
-    """
-    _label = 'average tilt-series movies'
-    _devStatus = pw.BETA
-
-    def _processTiltImageM(self, workingFolder, tiltImageM, *args):
-        """ Simple add all frames and divide by its number. """
-        ih = ImageHandler()
-        sumImg = ih.createImage()
-        img = ih.createImage()
-
-        n = tiltImageM.getNumberOfFrames()
-        fn = tiltImageM.getFileName()
-
-        sumImg.read((1, fn))
-
-        for frame in range(2, n + 1):
-            img.read((frame, fn))
-            sumImg.inplaceAdd(img)
-
-        # sumImg.inplaceDivide(float(n))
-        outputFn = self._getOutputTiltImagePaths(tiltImageM)[0]
-        sumImg.write(outputFn)
+# class ProtTsAverage(ProtTsCorrectMotion):
+#     """
+#     Simple protocol to average TiltSeries movies as basic
+#     motion correction. It is used mainly for testing purposes.
+#     """
+#     _label = 'average tilt-series movies'
+#     _devStatus = pw.BETA
+#
+#     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
+#         """ Simple add all frames and divide by its number. """
+#         ih = ImageHandler()
+#         sumImg = ih.createImage()
+#         img = ih.createImage()
+#
+#         n = tiltImageM.getNumberOfFrames()
+#         fn = tiltImageM.getFileName()
+#
+#         sumImg.read((1, fn))
+#
+#         for frame in range(2, n + 1):
+#             img.read((frame, fn))
+#             sumImg.inplaceAdd(img)
+#
+#         # sumImg.inplaceDivide(float(n))
+#         outputFn = self._getOutputTiltImagePaths(tiltImageM)[0]
+#         sumImg.write(outputFn)

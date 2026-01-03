@@ -83,15 +83,11 @@ class ProtCorrectTiltOffset(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions ----------------------------
     def correctOffSetStep(self):
         inputData = self.inputTiltSeries.get()
-        print(inputData)
-
         offset = self.tiltOffset.get()
-
         suffix = '_offset_corr'
         newSetTs = self._createSet(SetOfTiltSeries, 'tiltseries%s.sqlite', suffix)
         newSetTs.copyInfo(inputData)
         newSetTs.copyAttributes(inputData)
-        print(newSetTs)
 
         for ts in inputData:
             newTs = TiltSeries(tsId=ts.getTsId())

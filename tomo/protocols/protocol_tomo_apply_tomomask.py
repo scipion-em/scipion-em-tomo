@@ -162,9 +162,7 @@ class ProtTomoApplyTomoMask(EMProtocol):
             maskFileName = mask.getFileName()
             # Read the mask
             with mrcfile.mmap(maskFileName, mode='r', permissive=True) as mrc:
-                # Invert if required
-                invertMask = self._getFormAttrib(ApplyTomoMaskFormParams.INVERT_MASK.value)
-                data = 1 - mrc.data if invertMask else mrc.data
+                data = mrc.data
             # Dilate the mask
             dilationPixels = self._getFormAttrib(ApplyTomoMaskFormParams.DILATION_PX.value)
             if dilationPixels > 0:
@@ -174,6 +172,9 @@ class ProtTomoApplyTomoMask(EMProtocol):
             data = np.array(data, dtype=float)  # Required to be cast from uint8 to float for the gaussian filtering
             sigma = self._getFormAttrib(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value)
             smoothData = gaussian_filter(data, sigma=sigma)
+            # Invert if required
+            invertMask = self._getFormAttrib(ApplyTomoMaskFormParams.INVERT_MASK.value)
+            smoothData = 1 - smoothData if invertMask else smoothData
             # Write the result
             smoothMaskFn = self._getSmoothedMaskFn(tsId)
             with mrcfile.new_mmap(smoothMaskFn, overwrite=True, shape=smoothData.shape,
@@ -191,6 +192,7 @@ class ProtTomoApplyTomoMask(EMProtocol):
         # in the _validate) and the dimensions
         maskSRate = mask.getSamplingRate()
         tomoSRate = tomo.getSamplingRate()
+        # Validate the sampling rate
         if abs(tomoSRate - maskSRate) > self._sRateTol:
             self.failedApixTsIds.append(tsId)
         else:
@@ -198,6 +200,7 @@ class ProtTomoApplyTomoMask(EMProtocol):
             tomoFileName = tomo.getFileName()
             maskDims = MRCImageReader.getDimensions(maskFileName)
             tomoDims = MRCImageReader.getDimensions(tomoFileName)
+            # Validate the dimensions
             if not np.allclose(np.array(maskDims), np.array(tomoDims)):
                 self.failedDimsTsIds.append(tsId)
             else:

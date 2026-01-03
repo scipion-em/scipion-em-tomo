@@ -1,3 +1,7 @@
+v3.11.1:
+ Users:
+    - Skipping failed tiltseries or tiltimages in the tomography viewer
+
 v3.11.0:
  Users:
     - Fixing an error sorting in the CTF viewer.
@@ -6,20 +10,22 @@ v3.11.0:
         * Invert tilt angles on tilt-series.
         * Apply tomomasks to tomograms.
         * Get tilt-series from tomograms.
-    - Tomo Viewer applies orientation to the images
-    - Tomo viewer is capable of managing tomograms
+    - Tomo Viewer applies orientation to the images.
+    - Tomo viewer is capable of managing tomograms.
     - Improve the matching method in protocol tilt-series assign alignment.
+    - Deprecate unused and obsolete protocols.
  Developers:
     - Changes in the TiltSeries data model.
     - Expand the TCL:
         * For non-deterministic protocols that generates coordinates.
         * To add a tolerance to the checking of oriented coordinates of particles allowing some percentage with
           the identity matrix.
-        * Checks set properties
+        * Checks set properties.
         * Check the sampling rate in the header of the binary files created.
-    - Adding delimiter parameter to generate xf files
-    - SetOfLandmarkMOdels.getBinning() to be used in viewers
-    - SetOfSubtomogramsBase available to inherit from it in RelionPseudoSubtomograms
+        * Add tolerance in position and shift for coordinates.
+    - Adding delimiter parameter to generate xf files.
+    - SetOfLandmarkMOdels.getBinning() to be used in viewers.
+    - SetOfSubtomogramsBase available to inherit from it in RelionPseudoSubtomograms.
     - For parallel processing, ensure that the file is completely written and persists on disk
 v3.10.0:
  Users:

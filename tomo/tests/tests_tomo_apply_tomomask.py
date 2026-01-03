@@ -153,7 +153,7 @@ class TestApplyTomoMask(TestBaseCentralizedLayer):
 
     def testApplyTomoMasks_03(self):
         maskedTomos = self._runApplyTomoMask(invertMask=False,
-                                             dilationPixels=12,
+                                             dilationPixels=6,
                                              sigmaGaussian=4)
         self.checkTomos(maskedTomos)
 
