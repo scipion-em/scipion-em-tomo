@@ -47,7 +47,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pyworkflow.utils import removeBaseExt, cyanStr, replaceExt
+from pyworkflow.utils import removeBaseExt, cyanStr, replaceExt, yellowStr
 
 logger = logging.getLogger(__name__)
 
@@ -3229,7 +3229,8 @@ class SetOfCTFTomoSeries(data.EMSet):
 
             ts = self._getTiltSeriesFromTsId(item.getTsId())
             if ts is None:
-                raise Exception("Could not find tilt-series with tsId = %s" % item.getTsId())
+                logger.error(yellowStr("Could not find tilt-series with tsId = %s" % item.getTsId()))
+                continue
 
             item.setTiltSeries(ts)
             self._setItemMapperPath(item)
