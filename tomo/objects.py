@@ -3238,11 +3238,11 @@ class SetOfCTFTomoSeries(data.EMSet):
             yield item
 
     def _getTiltSeriesFromTsId(self, tsId):
-        if self._idDict:
-            return self._idDict.get(tsId, None)
-        else:
+        ts = self._idDict.get(tsId, None)
+        if ts is None:
             self._idDict = {ts.getTsId(): ts.clone() for ts in self.getSetOfTiltSeries()}
-            return self._idDict.get(tsId, None)
+            ts = self._idDict.get(tsId, None)
+        return ts
 
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
