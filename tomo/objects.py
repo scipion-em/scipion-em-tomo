@@ -3241,7 +3241,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         if self._idDict:
             return self._idDict.get(tsId, None)
         else:
-            self._idDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.getSetOfTiltSeries()}
+            self._idDict = {ts.getTsId(): ts.clone() for ts in self.getSetOfTiltSeries()}
             return self._idDict.get(tsId, None)
 
     def getTSIds(self):
