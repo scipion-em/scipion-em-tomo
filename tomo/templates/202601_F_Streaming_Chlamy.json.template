@@ -156,7 +156,7 @@ You'll need to download its dataset -> scipion3 testdata --download chlamy_visua
         "scannedPixelSize": 7.0,
         "doseInitial": 0.0,
         "dosePerFrame": 3.0,
-        "gainFile": "~Gain File|%(SCIPION_TESTS)s/chlamy_visual_proteomics/20211216_124009_EER_GainReference.gain/|2|gainFile~",
+        "gainFile": "~Gain File|%(SCIPION_TESTS)s/chlamy_visual_proteomics/20211216_124009_EER_GainReference.gain|2|gainFile~",
         "darkFile": null,
         "dataStreaming": true,
         "timeout": "12h",
