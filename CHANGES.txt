@@ -1,7 +1,9 @@
+v3.11.2:
+ Users:
+    - Update the templates of STA (Apoferritin, Chlamidomones, HIV) and removing old ones
 v3.11.1:
  Users:
     - Skipping failed tiltseries or tiltimages in the tomography viewer
-
 v3.11.0:
  Users:
     - Fixing an error sorting in the CTF viewer.
