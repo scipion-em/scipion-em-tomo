@@ -31,6 +31,7 @@ from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFro
 from .protocol_import_tomomasks import ProtImportTomomasks
 from .protocol_import_ctf import ProtImportTsCTF
 from .protocol_invert_tilt_angles import ProtInvertTiltAngles
+from .protocol_landmark_to_2d import ProtTomoLandmarksTo2D
 from .protocol_tomo_apply_tomomask import ProtTomoApplyTomoMask
 from .protocol_ts_base import ProtTomoReconstruct
 from .protocol_ts_from_tomograms import ProtTsFromTomos
@@ -48,7 +49,7 @@ from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_project_coordinates import ProtProjectCoordinates
 from .protocol_mesh_from_segmentation import ProtMeshFromSegmentation
 # from .protocol_tomo_to_mics import ProtTomoToMics, Prot2DcoordsTo3DCoords
-# from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
+from .protocol_ts_convert_coords3d import ProtTsConvertCoordinates3d
 from .protocol_compose_TS import ProtComposeTS
 from .protocol_misalignTS import ProtTomoMisalignTiltSeries
 from .protocol_mask_coordinates import ProtMaskCoordinates
