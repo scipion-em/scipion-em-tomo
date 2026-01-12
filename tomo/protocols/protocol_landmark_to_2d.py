@@ -169,12 +169,12 @@ class ProtTomoLandmarksTo2D(EMProtocol):
 
         firstItem = landmarks.getFirstItem()
 
-        coords.setBoxSize(firstItem.getSize())
         coords.setMicrographs(Pointer(self, extended=self.OUTPUT_MICS_NAME))
+        micrographs: SetOfMicrographs = coords.getMicrographs()
+        coords.setBoxSize(round(firstItem.getSize() / micrographs.getSamplingRate()))
 
         # Iterate the landmark models
         for landmark_model in landmarks.iterItems():
-
             landmarks.completeLandmarkModel(landmark_model)
             ts = landmark_model.getTiltSeries()
             self.info("Creating 2d coordinates from %s landmark model." % ts.getTsId())

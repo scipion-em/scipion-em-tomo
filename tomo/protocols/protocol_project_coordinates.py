@@ -90,7 +90,7 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         inputSetOfTiltSeries = self._getInputSetOfTiltSeries()
         inputCoodinates = self._getInputSetOfCoordinates3d()
-        landmarkSize = inputCoodinates.getBoxSize() * inputSetOfTiltSeries.getSamplingRate()
+        landmarkSize = round(inputCoodinates.getBoxSize() * inputCoodinates.getSamplingRate())
         offset = np.array(inputSetOfTiltSeries.getDim()[:2]) / 2
         scale = inputCoodinates.getSamplingRate() / inputSetOfTiltSeries.getSamplingRate()
         detectionSigma = self.detectionSigma.get()
