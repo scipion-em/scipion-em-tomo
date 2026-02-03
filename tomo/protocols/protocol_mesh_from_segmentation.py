@@ -54,6 +54,12 @@ class ProtMeshFromSegmentation(EMProtocol, ProtTomoBase):
     _devStatus = BETA
     _possibleOutputs = OutputMeshesFromSegmentation
 
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.itemTsIdReadList = []
+        self.failedItems = []
+
     # --------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
