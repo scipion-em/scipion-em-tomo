@@ -89,6 +89,7 @@ class DataSetEmd10439(Enum):
     coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
     tomoMaskByTardisBin2 = 'tomomaskByTardisBin2/emd_10439.mrc'
     annotatedTomomask = 'tomomasksAnnotated/emd_10439_materials.mrc'
+    generatedMask = 'tomoMaskGeneratedRef/mask_bin8.mrc'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
