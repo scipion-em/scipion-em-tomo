@@ -26,7 +26,6 @@
 import logging
 import emtable
 import numpy as np
-from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR)
 import pyworkflow.utils as pwutils
 import tomo.constants as const
 
@@ -38,23 +37,20 @@ class TomoImport:
         self.protocol = protocol
         self.copyOrLink = protocol.getCopyOrLink()
 
-    def importCoordinates3D(self, fileName, addCoordinate):
+    @staticmethod
+    def importCoordinates3D(fileName, addCoordinate):
         from tomo.objects import Coordinate3D
         if pwutils.exists(fileName):
             ext = pwutils.getExt(fileName)
-
-        if ext == ".txt":
-            md = MetaData()
-            md.readPlain(fileName, "xcoor ycoor zcoor")
-            for objId in md:
-                x = md.getValue(MDL_XCOOR, objId)
-                y = md.getValue(MDL_YCOOR, objId)
-                z = md.getValue(MDL_ZCOOR, objId)
-                coord = Coordinate3D()
-                addCoordinate(coord, x, y, z)
-
+            if ext == ".txt":
+                coords = np.loadtxt(fileName)
+                for iCoord in coords:
+                    coord = Coordinate3D()
+                    addCoordinate(coord, *iCoord)
+            else:
+                raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
         else:
-            raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
+            raise Exception('File %s does not exist' % fileName)
 
 class EmTableCoordImport:
 
