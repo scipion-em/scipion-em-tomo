@@ -27,7 +27,6 @@
 # **************************************************************************
 import logging
 import time
-import traceback
 from glob import glob
 from os.path import join, getmtime, basename, exists
 from statistics import mean
@@ -58,8 +57,6 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     _label = 'Compose Tilt Series'
     _possibleOutputs = {OUT_STS: SetOfTiltSeries}
     percentsTilts = ['50', '60', '70', '80', '90', '100']
-    separator = '-----------------'
-    separator2 = '#################'
 
     def __init__(self, **args):
         ProtImport.__init__(self, **args)
@@ -172,23 +169,10 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                                                   prerequisites=[],
                                                   needsGPU=False)
                 closeSetStepDeps.append(cTsPid)
-
-                try:
-                    self.readMdoc(mdocFile)
-                except Exception as e:
-                    logger.error(redStr(f'mdocFile = {mdocFile} reading failed with the '
-                                        f'exception {e}. Skipping...'))
-                    logger.error(traceback.format_exc())
-                    continue
+                self.processedMdocs.append(mdocFile)
+                logger.info(cyanStr(f"Steps created for mdoc file = {mdocFile}"))
 
             self._sleepAndRefresh()
-            # time.sleep(10)
-            # inputSet.loadAllProperties() # refresh status for the streaming
-
-        # self.info('The set of micrographs is closed')
-        # self._insertFunctionStep(self._closeOutputSet,
-        #                          needsGPU=False,
-        #                          wait=False)
 
     def composeTsStep(self, mdocFn: str):
         if self.isMdocBanned(mdocFn):
@@ -210,6 +194,12 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
         if not matchOk:
             return
         # Generate the tilt-series
+        try:
+            self.generateOutTs(mdoc, tiltMdSorted, micsSorted)
+        except Exception as e:
+            logger.error(redStr(f'tsId = {mdoc.getTsId()} - the output generation '
+                                f'failed with the exception {e}. '
+                                f'Skipping...'))
 
     # --------------------------- UTILS functions -----------------------------
     def _sleepAndRefresh(self):
@@ -389,6 +379,7 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                     output.close()
 
         # Mounting the stacks
+        logger.info(cyanStr(f'{tsId} - mounting the stack/s...'))
         ImageReadersRegistry.write(tsStack, tsFn, isStack=True)
         ImageReadersRegistry.write(tsStackOdd, tsFnOdd, isStack=True)
         ImageReadersRegistry.write(tsStackEven, tsFnEven, isStack=True)
@@ -435,102 +426,21 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
     def _getOutTsFName(self, tsId: str, suffix: str = '') -> str:
         return self._getExtraPath(f'{tsId}{suffix}.mrcs')
 
-    # def settingTS(self,
-    #               tsSet: SetOfTiltSeries,
-    #               ts: TiltSeries,
-    #               file_ordered_angle_list: List[Tuple[str, int, float]],
-    #               incoming_dose_list: List[float]) -> None:
+    # def _getOutputTiltSeriesPath(self, ts, suffix=''):
+    #     return self._getExtraPath('%s%s.mrcs' % (ts.getTsId(), suffix))
+    #
+    # def _getOutputTiltImagePaths(self, tilt_image):
+    #     """ Return expected output path for correct movie and DW one.
     #     """
-    #     Set all the info in each tilt and set the ts_obj information with all
-    #     the tilts
+    #     base = self._getExtraPath(self._getTiltImageMRoot(tilt_image))
+    #     return base + '.mrc', base + '_Out.mrc'
     #
-    #     :param tsSet: Set of tilt series.
-    #     :param ts: Tilt series object to add tilts too.
-    #     :param file_ordered_angle_list: list of files sorted by angle.
-    #     :param incoming_dose_list: list of dose per tilt.
-    #     :return:
-    #     """
-    #     try:
-    #         ts_fn = self._getOutputTiltSeriesPath(ts)
-    #         counter_ti = 0
+    # @staticmethod
+    # def _getTiltImageMRoot(ti):
+    #     return '%s_%02d' % (ti.getTsId(), ti.getObjId())
     #
-    #         TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts.getTsId()))
-    #         TSAngleFile = open(TSAngleFile, "a")
-    #         for n in file_ordered_angle_list:
-    #             TSAngleFile.write('{}\n'.format(str(n[2])))
-    #         TSAngleFile.close()
-    #         sr = self.listOfMics[0].getSamplingRate()
-    #         properties = {"sr": sr}
-    #         newStack = ImageStack(properties=properties)
-    #         ti = None
-    #         tsAcq = ts.getAcquisition()
-    #         tsAccumDose = -999
-    #         tsInitialDose = 999
-    #         angleList = []
-    #         for f, to, ta in file_ordered_angle_list:
-    #             try:
-    #                 to = int(to)
-    #                 for mic in self.listOfMics:
-    #                     if ts.getSamplingRate() is None:
-    #                         ts.setSamplingRate(sr)
-    #                     if tsSet.getSamplingRate() is None:
-    #                         tsSet.setSamplingRate(sr)
-    #                     if basename(f) in mic.getMicName():
-    #                         ti = TiltImage()
-    #                         ti.setTsId(ts.getTsId())
-    #                         new_location = (counter_ti + 1, ts_fn)
-    #                         ti.setLocation(new_location)
-    #                         # ti.setObjId(counter_ti + 1)
-    #                         ti.setAcquisition(ts.getAcquisition())
-    #                         ti.setAcquisitionOrder(to)
-    #                         ti.setTiltAngle(ta)
-    #                         ti.setSamplingRate(sr)
-    #                         ti.setAcquisition(ts.getAcquisition().clone())
-    #                         dosePerFrame = incoming_dose_list[to - 1]  # To begins in 1 because of MDoc class
-    #                         accumDose = to * dosePerFrame
-    #                         initialDose = (to - 1) * dosePerFrame
-    #                         ti.getAcquisition().setDosePerFrame(dosePerFrame)
-    #                         ti.getAcquisition().setAccumDose(accumDose)
-    #                         ti.getAcquisition().setDoseInitial(initialDose)
-    #                         newStack.append(ImageReadersRegistry.open(mic.getFileName()))
-    #                         ts.append(ti)
-    #
-    #                         tsInitialDose = min(tsInitialDose, initialDose)
-    #                         tsAccumDose = max(tsAccumDose, accumDose)
-    #                         angleList.append(float(ta))
-    #
-    #                         counter_ti += 1
-    #             except Exception as e:
-    #                 self.error(e)
-    #                 return
-    #         ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
-    #
-    #         tsAcq.setAccumDose(tsAccumDose)
-    #         tsAcq.setDoseInitial(tsInitialDose)
-    #         tsAcq.setAngleMin(min(angleList))
-    #         tsAcq.setAngleMax(max(angleList))
-    #         ts.setAcquisition(tsAcq)
-    #         ts._setFirstDim(ti)
-    #         tsSet.update(ts)
-    #     except Exception as e:
-    #         self.error(e)
-
-    # -------------------------- AUXILIARY FUNCTIONS -----------------------
-    def _getOutputTiltSeriesPath(self, ts, suffix=''):
-        return self._getExtraPath('%s%s.mrcs' % (ts.getTsId(), suffix))
-
-    def _getOutputTiltImagePaths(self, tilt_image):
-        """ Return expected output path for correct movie and DW one.
-        """
-        base = self._getExtraPath(self._getTiltImageMRoot(tilt_image))
-        return base + '.mrc', base + '_Out.mrc'
-
-    @staticmethod
-    def _getTiltImageMRoot(ti):
-        return '%s_%02d' % (ti.getTsId(), ti.getObjId())
-
-    def _validate(self):
-        pass
+    # def _validate(self):
+    #     pass
 
     def _summary(self):
         summary = [f'Path with the *.mdoc files for each tilt series:{self.filesPath.get()}\n']
