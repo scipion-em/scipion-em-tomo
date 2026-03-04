@@ -1,3 +1,6 @@
+v3.11.5:
+ - Users: protocol meshes from segmentation: protocol parallelized.
+ - Developers: remove xmipp dependencies.
 v3.11.4: Hotfix - Fix an error generating subsets from the ctftomo-viewer
 v3.11.3: Deploy test.
 v3.11.2:

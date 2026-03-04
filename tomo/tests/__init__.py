@@ -253,6 +253,8 @@ class DataSetRe4STATuto(Enum):
 
     # For gapStopTM testing
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
+    maskHivBin8 = 'maskHivBin8.mrc'
+    referenceHivBin8 = 'referenceHivBin8.mrc'
 
     @classmethod
     def genTestTsDicts(cls,
