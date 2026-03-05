@@ -43,6 +43,7 @@ from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
+from tomo.tests import initialDose
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "TiltSeries"
@@ -364,6 +365,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tsSet.append(ts)
 
             index = 1
+            minAngle = 999
+            maxAngle = -999
+            initialDose = 999
+            accumDose = 999
             for tiltMd in tiltsMd:
                 # Register the tilt-image
                 ti = TiltImage()
@@ -372,10 +377,13 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 ti.setFileName(tsFn)
                 # Acquisition
                 tiAcq = acq.clone()
-                tiAcq.setDoseInitial(tiltMd.getIncomingDose())
-                tiAcq.setAccumDose(tiltMd.getAccumDose())
+                inDose = tiltMd.getIncomingDose()
+                cumDose = tiltMd.getAccumDose()
+                tiltAngle = tiltMd.getTiltAngle()
+                tiAcq.setDoseInitial(inDose)
+                tiAcq.setAccumDose(cumDose)
                 ti.setAcquisition(acq)
-                ti.setTiltAngle(tiltMd.getTiltAngle())
+                ti.setTiltAngle(tiltAngle)
                 ti.setAcquisitionOrder(tiltMd.getAcqOrder())
                 # Odd / even
                 if oddEvenMics:
@@ -384,8 +392,19 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     ti.setOddEven([])
                 ts.append(ti)
                 index += 1
+                minAngle = min(tiltAngle, minAngle)
+                maxAngle = max(tiltAngle, maxAngle)
+                initialDose = min(inDose, initialDose)
+                accumDose = max(cumDose, accumDose)
 
-            # ts._setFirstDim(ti)
+            tsAcq = ts.getAcquisition()
+            tsAcq.setDoseInitial(initialDose)
+            tsAcq.setAccumDose(accumDose)
+            tsAcq.setMinAngle(minAngle)
+            tsAcq.setMaxAngle(maxAngle)
+            tsAcq.setTiltAxisAngle(mdoc.getTiltAxisAngle())
+            ts.setAcquisition(tsAcq)
+            # Data persistence
             ts.write()
             tsSet.update(ts)
             tsSet.write()

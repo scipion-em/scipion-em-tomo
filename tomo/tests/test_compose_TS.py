@@ -30,7 +30,7 @@ from pwem.objects import SetOfMovies, SetOfMicrographs
 from pyworkflow.tests import setupTestProject
 from pyworkflow.utils import magentaStr, cyanStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, DataSet_RE_STA_TUTO_MOVIES
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, DataSet_RE_STA_TUTO_MOVIES, TS_03, TS_54
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from tomo.protocols.protocol_compose_TS import ProtComposeTS, OUT_TS_SET
 from motioncorr.protocols import ProtMotionCorrNewStreaming
@@ -38,7 +38,7 @@ from ..objects import SetOfTiltSeries
 
 
 class TestTestTomoComposeTS(TestBaseCentralizedLayer):
-    """ This class check if the protocol to compose TiltSeries works properly."""
+    binFactor = 2
 
     @classmethod
     def setUpClass(cls):
@@ -106,6 +106,16 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
     def testComposeTs01(self):
         tsSet = self._runComposeTS()
+        self.checkTiltSeries(tsSet,
+                             expectedSetSize=2,
+                             expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value * self.binFactor,
+                             hasAlignment=False,
+                             isHeterogeneousSet=True,
+                             hasOddEven=True,
+                             imported=True,
+                             expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTsBin2Dict.value,
+                             testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value,
+                             anglesCount={TS_03: 5, TS_54: 6})
 
     # def test_composeTSBasic(self):
     #     print(magentaStr(f"\n==> Running the basic Test: \n"))
