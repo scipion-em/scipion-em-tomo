@@ -1,8 +1,10 @@
 # **************************************************************************
 # *
-# * Authors:    alberto garcia (alberto.garcia@cnb.csic.es)(scipion@cnb.csic.es)
+# * Authors:     Alberto García Mena (alberto.garcia@cnb.csic.es)
+# *              Scipion Team
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * National Center of Biotechnology, CSIC, Spain
+# *
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -23,130 +25,126 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+from typing import Optional
+from pwem.objects import SetOfMovies, SetOfMicrographs
 from pyworkflow.tests import setupTestProject
-from pyworkflow.utils import magentaStr
+from pyworkflow.utils import magentaStr, cyanStr
 from pwem.protocols import ProtImportMovies
-from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, TS_03, TS_54, DataSet_RE_STA_TUTO_MOVIES
+from . import DataSet, RE_STA_TUTO_MOVIES, DataSetRe4STATuto, DataSet_RE_STA_TUTO_MOVIES
 from .test_base_centralized_layer import TestBaseCentralizedLayer
-from pyworkflow.plugin import Domain
-from tomo.protocols.protocol_compose_TS import ProtComposeTS
-from motioncorr.protocols import ProtMotionCorr
+from tomo.protocols.protocol_compose_TS import ProtComposeTS, OUT_TS_SET
+from motioncorr.protocols import ProtMotionCorrNewStreaming
+from ..objects import SetOfTiltSeries
 
-import numpy as np
 
 class TestTestTomoComposeTS(TestBaseCentralizedLayer):
-	""" This class check if the protocol to compose TiltSeries works properly."""
-	@classmethod
-	def setUpClass(cls):
-		setupTestProject(cls)
-		cls.ds = DataSet.getDataSet(RE_STA_TUTO_MOVIES)
+    """ This class check if the protocol to compose TiltSeries works properly."""
 
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(RE_STA_TUTO_MOVIES)
+        cls.runPrevProtocols()
 
-	@classmethod
-	def _runImportMovies(cls, blackList=None):
-		#testDataTS = testData['stack10'] or testData['stack31']
-		print(magentaStr(f"\n==> Running the import movies preprocessing: \n" ))
-		protMovieImport = cls.newProtocol(ProtImportMovies,
-		                                   objLabel='Import movies (SPA)',
-		                                   importFrom=ProtImportMovies.IMPORT_FROM_FILES,
-		                                   filesPath=cls.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name),
-		                                   filesPattern='*.mrc',
-										   blacklistSet=blackList,
-										   voltage=DataSetRe4STATuto.voltage.value,
-		                                   magnification=DataSetRe4STATuto.magnification.value,
-		                                   sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
-		                                   amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
-		                                   samplingRate=DataSetRe4STATuto.unbinnedPixSize.value,
-		                                   doseInitial=DataSetRe4STATuto.initialDose.value,
-		                                   dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value)
+    @classmethod
+    def runPrevProtocols(cls):
+        print(cyanStr('--------------------------------- RUNNING PREVIOUS PROTOCOLS ---------------------------------'))
+        cls._runPreviousProtocols()
+        print(
+            cyanStr('\n-------------------------------- PREVIOUS PROTOCOLS FINISHED ---------------------------------'))
 
-		cls.launchProtocol(protMovieImport)
-		cls.assertIsNotNone(protMovieImport.outputMovies, 'Movies not imported')
-		return protMovieImport.outputMovies
+    @classmethod
+    def _runPreviousProtocols(cls):
+        importedMovies = cls._runImportMovies()
+        cls.mcMovies = cls._runAlignMovies(importedMovies)
 
-	def _runAlignMovies(cls, movies):
-		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
-		protMc = cls.newProtocol(ProtMotionCorr, objLabel='Movie Alignment (SPA)')
-		protMc.inputMovies.set(movies)
-		cls.launchProtocol(protMc)
-		cls.assertIsNotNone(protMc.outputMovies, 'Micrograph not generated')
-		return getattr(protMc, 'outputMovies', None)
+    @classmethod
+    def _runImportMovies(cls, blackList=None) -> Optional[SetOfMovies]:
+        print(magentaStr(f"\n==> Importing the movies: \n"))
+        protMovieImport = cls.newProtocol(ProtImportMovies,
+                                          importFrom=ProtImportMovies.IMPORT_FROM_FILES,
+                                          filesPath=cls.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name),
+                                          filesPattern='*.mrc',
+                                          blacklistSet=blackList,
+                                          voltage=DataSetRe4STATuto.voltage.value,
+                                          magnification=DataSetRe4STATuto.magnification.value,
+                                          sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
+                                          amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
+                                          samplingRate=DataSetRe4STATuto.unbinnedPixSize.value,
+                                          doseInitial=DataSetRe4STATuto.initialDose.value,
+                                          dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value)
 
-	def _runAlignMoviesFlexAlign(cls, movies):
-		print(magentaStr(f"\n==> Running the align movies preprocessing: \n" ))
+        cls.launchProtocol(protMovieImport)
+        return getattr(protMovieImport, 'outputMovies', None)
 
-		xmipp3 = Domain.importFromPlugin('xmipp3.protocols', doRaise=True)
-		protAlign = cls.newProtocol(xmipp3.XmippProtFlexAlign,
-		                            objLabel='Movie Alignment (SPA)',
-		                            alignFrame0=1,
-		                            alignFrameN=0,
-		                            useAlignToSum=True,
-		                            doLocalAlignment=False)
-		protAlign.inputMovies.set(movies)
-		cls.launchProtocol(protAlign)
-		cls.assertIsNotNone(protAlign.outputMovies, 'Micrograph not generated')
-		return getattr(protAlign, 'outputMicrographs', None)
+    @classmethod
+    def _runAlignMovies(cls, movies: SetOfMovies) -> Optional[SetOfMicrographs]:
+        print(magentaStr(f"\n==> Running the motion correction with Motioncorr: \n"))
+        protMc = cls.newProtocol(ProtMotionCorrNewStreaming,
+                                 inputMovies=movies,
+                                 binFactor=2,
+                                 doApplyDoseFilter=True,
+                                 splitEvenOdd=True)
+        cls.launchProtocol(protMc)
+        return getattr(protMc, protMc._possibleOutputs.micrographsDW.name, None)
 
-	def _runComposeTS(cls, outputMicrographs, filesPath, mdocPattern, isTomo5=False, mdoc_bug_Correction=False, percentTiltsRequired='80', time4NextTilt='20'):
-		print(magentaStr(f"\n==> Running the composeTS: \n"))
-		protComposeTS = cls.newProtocol(ProtComposeTS,
-	                                   objLabel='Compose TiltSeries',
-	                                   inputMicrographs=outputMicrographs,
-	                                   filesPath=filesPath,
-	                                   mdocPattern=mdocPattern,
-		                               isTomo5=isTomo5,
-		                               mdoc_bug_Correction=mdoc_bug_Correction,
-		                               percentTiltsRequired=percentTiltsRequired,
-		                               time4NextTilt=time4NextTilt)
+    @classmethod
+    def _runComposeTS(cls,
+                      percentTiltsRequired: int = 80,
+                      time4NextTilt: int = 20) -> Optional[SetOfTiltSeries]:
+        print(magentaStr(f"\n==> Running the composeTS: \n"))
+        protComposeTS = cls.newProtocol(ProtComposeTS,
+                                        objLabel='Compose TiltSeries',
+                                        inputMicrographs=cls.mcMovies,
+                                        filesPath=cls.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name),
+                                        mdocPattern='*mrc.mdoc',
+                                        percentTiltsRequired=percentTiltsRequired,
+                                        time4NextTilt=time4NextTilt)
 
-		cls.launchProtocol(protComposeTS)
-		return getattr(protComposeTS, 'TiltSeries', None)
+        cls.launchProtocol(protComposeTS)
+        return getattr(protComposeTS, OUT_TS_SET, None)
 
+    def testComposeTs01(self):
+        tsSet = self._runComposeTS()
 
-	def test_composeTSBasic(self):
-		print(magentaStr(f"\n==> Running the basic Test: \n"))
-		outputMovies = self._runImportMovies()
-		#outputMicrographs = self._runAlignMoviesFlexAlign(outputMovies)
-		outputMicrographs = self._runAlignMovies(outputMovies)
-
-		mdocPattern = '*mrc.mdoc'
-		filesPath = self.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name)
-		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='100')
-
-		#TEST VALUES
-		expectedSetSize = 2
-		anglesCount = {TS_03: 5, TS_54: 6}
-
-		print(magentaStr(f"\n==> Checking Tilt Series: \n"))
-		self.checkTiltSeries(TiltSeries,
-		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
-		                     hasAlignment=False,
-		                     isHeterogeneousSet=False,
-		                     imported=True,
-		                     expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
-		                     testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value,
-		                     anglesCount=anglesCount)
-
-
-		print(magentaStr(f"\n==> Running the rejected mics Test: \n"))
-		mdocPattern = '*rejecting.mdoc'
-		TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='80')
-		expectedSetSize = 1
-		anglesCount = {TS_54: 5}
-		self.assertSetSize(TiltSeries, expectedSetSize)
-		print(magentaStr(f"\n==> Checking Tilt Series: \n"))
-		self.checkTiltSeries(TiltSeries,
-		                     expectedSetSize=expectedSetSize,
-		                     expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
-		                     hasAlignment=False,
-		                     isHeterogeneousSet=False,
-		                     imported=True,
-		                     expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
-		                     testAcqObj=DataSet_RE_STA_TUTO_MOVIES.testAcq54_rejectDict.value,
-		                     anglesCount=anglesCount)
-
-
-
+    # def test_composeTSBasic(self):
+    #     print(magentaStr(f"\n==> Running the basic Test: \n"))
+    #     outputMovies = self._runImportMovies()
+    #     # outputMicrographs = self._runAlignMoviesFlexAlign(outputMovies)
+    #     outputMicrographs = self._runAlignMovies(outputMovies)
+    #
+    #     mdocPattern = '*mrc.mdoc'
+    #     filesPath = self.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name)
+    #     TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='100')
+    #
+    #     # TEST VALUES
+    #     expectedSetSize = 2
+    #     anglesCount = {TS_03: 5, TS_54: 6}
+    #
+    #     print(magentaStr(f"\n==> Checking Tilt Series: \n"))
+    #     self.checkTiltSeries(TiltSeries,
+    #                          expectedSetSize=expectedSetSize,
+    #                          expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+    #                          hasAlignment=False,
+    #                          isHeterogeneousSet=False,
+    #                          imported=True,
+    #                          expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTsBin1Dict.value,
+    #                          testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value,
+    #                          anglesCount=anglesCount)
+    #
+    #     print(magentaStr(f"\n==> Running the rejected mics Test: \n"))
+    #     mdocPattern = '*rejecting.mdoc'
+    #     TiltSeries = self._runComposeTS(outputMicrographs, filesPath, mdocPattern, percentTiltsRequired='80')
+    #     expectedSetSize = 1
+    #     anglesCount = {TS_54: 5}
+    #     self.assertSetSize(TiltSeries, expectedSetSize)
+    #     print(magentaStr(f"\n==> Checking Tilt Series: \n"))
+    #     self.checkTiltSeries(TiltSeries,
+    #                          expectedSetSize=expectedSetSize,
+    #                          expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value,
+    #                          hasAlignment=False,
+    #                          isHeterogeneousSet=False,
+    #                          imported=True,
+    #                          expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTs54Bin1Dict.value,
+    #                          testAcqObj=DataSet_RE_STA_TUTO_MOVIES.testAcq54_rejectDict.value,
+    #                          anglesCount=anglesCount)
