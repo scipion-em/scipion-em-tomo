@@ -27,6 +27,7 @@
 # **************************************************************************
 import logging
 import time
+import traceback
 from collections import Counter
 from glob import glob
 from os.path import join, getmtime, basename, exists
@@ -40,13 +41,14 @@ from pyworkflow.object import Pointer, Set
 from pyworkflow.protocol import ProtStreamingBase, BooleanParam, LEVEL_ADVANCED, StringParam, \
     PathParam, PointerParam, IntParam, GE, LE
 from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
-from tomo.tests import initialDose
+
 
 logger = logging.getLogger(__name__)
-OUT_TS_SET = "TiltSeries"
+OUT_TS_SET = "tiltSeries"
 MC_EVEN_ODD_ATTRIBUTE = '_mcEvenOddMics'
 
 
@@ -160,7 +162,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             mdocList = self.findMdocs()
             if not inputSet.isStreamOpen() and Counter(self.processedMdocs) == Counter(mdocList):
                 logger.info(cyanStr('Input set closed.'))
-                self._insertFunctionStep(self._closeOutputSet,
+                self._insertFunctionStep(self.closeOutputSetsStep,
                                          prerequisites=closeSetStepDeps,
                                          needsGPU=False)
                 break
@@ -195,9 +197,14 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                                                   needsGPU=False)
                 closeSetStepDeps.append(cTsPid)
                 logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
+                self.processedMdocs.append(mdocFn)
 
-            self._sleepAndRefresh(inputSet)
+            time.sleep(10)
+            if inputSet.isStreamOpen():
+                with self._lock:
+                    inputSet.loadAllProperties()  # refresh status for the streaming
 
+    @retry_on_sqlite_lock(log=logger)
     def composeTsStep(self,
                       mdoc: MDoc,
                       tiltMd: Tuple[TiltMetadata],
@@ -208,15 +215,24 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             logger.error(redStr(f'tsId = {mdoc.getTsId()} - the output generation '
                                 f'failed with the exception {e}. '
                                 f'Skipping...'))
-        self.processedMdocs.append(mdoc.getFileName())
+            logger.error(traceback.format_exc())
+
+    def closeOutputSetsStep(self):
+        self._closeOutputSet()
+        outTsSet = getattr(self, OUT_TS_SET, None)
+        if not outTsSet or (outTsSet and len(outTsSet) == 0):
+            raise Exception(f'No output {OUT_TS_SET} were generated. Please check the '
+                            f'Output Log > run.stdout and run.stderr')
+        # The set is generated and the tilt-series are added, but they are empty (error
+        # during the data registering process
+        if outTsSet and len(outTsSet) > 0:
+            if all([len(ts) == 0 for ts in outTsSet]):
+                raise Exception(f'Output {OUT_TS_SET} is empty. This may happen if there '
+                                f'was an error during the data registering. Please check the '
+                                f'Output Log > run.stdout and run.stderr')
+
 
     # --------------------------- UTILS functions -----------------------------
-    def _sleepAndRefresh(self, inputSet: SetOfMicrographs) -> None:
-        time.sleep(10)
-        if inputSet.isStreamOpen():
-            with self._lock:
-                inputSet.loadAllProperties()  # refresh status for the streaming
-
     def getInMics(self, asPointer: bool = False) -> Union[Pointer, SetOfMicrographs]:
         return self.inputMicrographs if asPointer else self.inputMicrographs.get()
 
@@ -323,7 +339,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                       tiltsMd: Tuple[TiltMetadata],
                       mics: Tuple[Micrograph]):
         tsId = mdoc.getTsId()
-
         # MOUNT THE STACKS -----------------------------------------------------------------
         logger.info(cyanStr(f'{tsId} - mounting the stack/s...'))
         tsFn = self._getOutTsFName(tsId)
@@ -359,7 +374,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         logger.info(cyanStr(f'{tsId} - composing the tilt series...'))
         with self._lock:
             acq = self._genTomoAcquisition(mdoc, tiltsMd)
-            tsSet = self._getOutputTsSet(acq)
+            tsSet = self._getOutputTsSet()
             ts = TiltSeries(tsId=tsId)
             tsSet.setAcquisition(acq)
             tsSet.append(ts)
@@ -368,23 +383,27 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             minAngle = 999
             maxAngle = -999
             initialDose = 999
-            accumDose = 999
-            for tiltMd in tiltsMd:
-                # Register the tilt-image
+            accumDose = -999
+            for tiltMd, mic in zip(tiltsMd, mics):
                 ti = TiltImage()
+                acqOrder = int(tiltMd.getAcqOrder())
+                tiltAngle = float(tiltMd.getTiltAngle())
                 ti.setTsId(tsId)
+                ti.setTiltAngle(tiltAngle)
                 ti.setIndex(index)
                 ti.setFileName(tsFn)
+                ti.setSamplingRate(self.sRate)
+                ti.setAcquisitionOrder(acqOrder)
                 # Acquisition
+                micAcq = mic.getAcquisition()
                 tiAcq = acq.clone()
-                inDose = tiltMd.getIncomingDose()
-                cumDose = tiltMd.getAccumDose()
-                tiltAngle = tiltMd.getTiltAngle()
+                # Initial and accumulated doses may be zero if the mdoc does not contain the data
+                # needed to calculate it.
+                inDose = max(tiltMd.getIncomingDose(), micAcq.getDosePerFrame() * (acqOrder - 1))
+                cumDose = max(tiltMd.getAccumDose(), micAcq.getDosePerFrame() * acqOrder)
                 tiAcq.setDoseInitial(inDose)
                 tiAcq.setAccumDose(cumDose)
-                ti.setAcquisition(acq)
-                ti.setTiltAngle(tiltAngle)
-                ti.setAcquisitionOrder(tiltMd.getAcqOrder())
+                ti.setAcquisition(tiAcq)
                 # Odd / even
                 if oddEvenMics:
                     ti.setOddEven([tsFnOdd, tsFnEven])
@@ -392,6 +411,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     ti.setOddEven([])
                 ts.append(ti)
                 index += 1
+                # Update the values needed for the acquisition of the tilt-series
                 minAngle = min(tiltAngle, minAngle)
                 maxAngle = max(tiltAngle, maxAngle)
                 initialDose = min(inDose, initialDose)
@@ -400,8 +420,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tsAcq = ts.getAcquisition()
             tsAcq.setDoseInitial(initialDose)
             tsAcq.setAccumDose(accumDose)
-            tsAcq.setMinAngle(minAngle)
-            tsAcq.setMaxAngle(maxAngle)
+            tsAcq.setAngleMin(minAngle)
+            tsAcq.setAngleMax(maxAngle)
             tsAcq.setTiltAxisAngle(mdoc.getTiltAxisAngle())
             ts.setAcquisition(tsAcq)
             # Data persistence
@@ -440,13 +460,12 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         acq.setTiltAxisAngle(tiltAxisAngle)
         return acq
 
-    def _getOutputTsSet(self, acq: TomoAcquisition) -> SetOfTiltSeries:
+    def _getOutputTsSet(self) -> SetOfTiltSeries:
         tsSet = getattr(self, OUT_TS_SET, None)
         if tsSet:
             tsSet.enableAppend()
         else:
             tsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix='_composed')
-            tsSet.setAcquisition(acq)
             tsSet.setSamplingRate(self.sRate)
             tsSet.setStreamState(Set.STREAM_OPEN)
             self._defineOutputs(**{OUT_TS_SET: tsSet})
