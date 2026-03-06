@@ -90,14 +90,17 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
     @classmethod
     def _runComposeTS(cls,
+                      doEvenOdd: bool = False,
                       percentTiltsRequired: int = 80,
                       time4NextTilt: int = 20) -> Optional[SetOfTiltSeries]:
-        print(magentaStr(f"\n==> Running the composeTS: \n"))
+        print(magentaStr(f"\n==> Running the composeTS:"))
+        print(magentaStr(f"\n\t- Odd/Even: {doEvenOdd}\n"))
         protComposeTS = cls.newProtocol(ProtComposeTS,
-                                        objLabel='Compose TiltSeries',
+                                        objLabel=f'Compose ts, oe = {doEvenOdd}',
                                         inputMicrographs=cls.mcMovies,
                                         filesPath=cls.ds.getFile(DataSet_RE_STA_TUTO_MOVIES.framesDir.name),
                                         mdocPattern='*mrc.mdoc',
+                                        doEvenOdd=doEvenOdd,
                                         percentTiltsRequired=percentTiltsRequired,
                                         time4NextTilt=time4NextTilt)
 
@@ -106,12 +109,21 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
 
     def testComposeTs01(self):
         tsSet = self._runComposeTS()
+        self._checkTs(tsSet)
+
+    def testComposeTs02(self):
+        tsSet = self._runComposeTS(doEvenOdd=True)
+        self._checkTs(tsSet, hasOddEven=True)
+
+    def _checkTs(self,
+                 tsSet: SetOfTiltSeries,
+                 hasOddEven: bool = False):
         self.checkTiltSeries(tsSet,
                              expectedSetSize=2,
                              expectedSRate=DataSet_RE_STA_TUTO_MOVIES.unbinnedPixSize.value * self.binFactor,
                              hasAlignment=False,
                              isHeterogeneousSet=True,
-                             hasOddEven=True,
+                             hasOddEven=hasOddEven,
                              imported=True,
                              expectedDimensions=DataSet_RE_STA_TUTO_MOVIES.dimsTsBin2Dict.value,
                              testAcqObj=DataSet_RE_STA_TUTO_MOVIES.tsAcqDict.value,

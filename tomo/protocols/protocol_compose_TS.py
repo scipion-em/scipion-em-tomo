@@ -111,6 +111,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                            "axis angle, check this box to ensure it is converted "
                            "properly: -1 * TiltAxisAngle - 90.")
 
+        form.addParam('doEvenOdd', BooleanParam,
+                      default=False,
+                      label='Compose the odd/even tilt-series?')
+
         form.addParam('minNumTilts', IntParam,
                       default=3,
                       label='Min number of tilts allowed in a mdoc file',
@@ -344,12 +348,13 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         tsFn = self._getOutTsFName(tsId)
         properties = {"sr": self.sRate}
         tsStack = ImageStack(properties=properties)
+        doEvenOdd = self.doEvenOdd.get()
         oddEvenMics = getattr(mics[0], MC_EVEN_ODD_ATTRIBUTE, None)
         tsStackEven = []
         tsStackOdd = []
         tsFnEven = ''
         tsFnOdd = ''
-        if oddEvenMics:
+        if doEvenOdd:
             tsFnEven = self._getOutTsFName(tsId, suffix='_even')
             tsFnOdd = self._getOutTsFName(tsId, suffix='_odd')
             tsStackEven = ImageStack(properties=properties)
@@ -358,9 +363,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         for mic in mics:
             # Add immage to the stack
             tsStack.append(ImageReadersRegistry.open(mic.getFileName()))
-            if oddEvenMics:
+            if doEvenOdd:
                 # Odd / even
-                oddEvenMics = getattr(mics[0], MC_EVEN_ODD_ATTRIBUTE, None)
                 tsStackOdd.append(ImageReadersRegistry.open(oddEvenMics[0]))
                 tsStackEven.append(ImageReadersRegistry.open(oddEvenMics[1]))
 
@@ -393,6 +397,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 ti.setFileName(tsFn)
                 ti.setSamplingRate(self.sRate)
                 ti.setAcquisitionOrder(acqOrder)
+                ti.setOddEven([tsFnOdd, tsFnEven] if doEvenOdd else [])
                 # Acquisition
                 micAcq = mic.getAcquisition()
                 tiAcq = acq.clone()
@@ -403,11 +408,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tiAcq.setDoseInitial(inDose)
                 tiAcq.setAccumDose(cumDose)
                 ti.setAcquisition(tiAcq)
-                # Odd / even
-                if oddEvenMics:
-                    ti.setOddEven([tsFnOdd, tsFnEven])
-                else:
-                    ti.setOddEven([])
                 ts.append(ti)
                 self.processedIds.append(mic.getObjId())
                 index += 1
@@ -474,6 +474,15 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
     def _getOutTsFName(self, tsId: str, suffix: str = '') -> str:
         return self._getExtraPath(f'{tsId}{suffix}.mrcs')
+
+    def _validate(self):
+        errorMsgs = []
+        oddEvenMics = getattr(self.getInMics()[1], MC_EVEN_ODD_ATTRIBUTE, None)
+        if self.doEvenOdd.get() and not oddEvenMics:
+            errorMsgs.append('Odd/Even tilt-series were requested to be composed, '
+                             'but the motion-corrected micrographs introduced do '
+                             'not have the in their metadata.')
+        return errorMsgs
 
     def _summary(self):
         summary = [f'Path with the *.mdoc files for each tilt series:{self.filesPath.get()}\n']
