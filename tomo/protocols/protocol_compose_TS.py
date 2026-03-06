@@ -137,7 +137,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         form.addSection('Streaming')
         form.addParam('time4NextTilt', StringParam,
                       default="3m",
-                      label="Time for next Tilt",
+                      label="Time for the next tilt",
                       help="When the protocol runs in streaming; this parameter determine the delay "
                            "until the next tilt is "
                            "registered in the mdoc file. After "
@@ -356,7 +356,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tsStackOdd = ImageStack(properties=properties)
 
         for mic in mics:
-            self.processedIds.append(mic.getObjId())
             # Add immage to the stack
             tsStack.append(ImageReadersRegistry.open(mic.getFileName()))
             if oddEvenMics:
@@ -410,6 +409,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 else:
                     ti.setOddEven([])
                 ts.append(ti)
+                self.processedIds.append(mic.getObjId())
                 index += 1
                 # Update the values needed for the acquisition of the tilt-series
                 minAngle = min(tiltAngle, minAngle)
