@@ -422,7 +422,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tsAcq.setAccumDose(accumDose)
             tsAcq.setAngleMin(minAngle)
             tsAcq.setAngleMax(maxAngle)
-            tsAcq.setTiltAxisAngle(mdoc.getTiltAxisAngle())
             ts.setAcquisition(tsAcq)
             # Data persistence
             ts.write()
