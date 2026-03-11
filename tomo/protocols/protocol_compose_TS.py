@@ -173,7 +173,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
             self.listOfMics = [mic.clone() for mic in inputSet if mic.getObjId() not in self.processedIds]
             nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
-            logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
+            if nonProcessedMdocs:
+                logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
             for mdocFn in nonProcessedMdocs:
                 if self.isMdocBanned(mdocFn):
                     self.processedMdocs.append(mdocFn)
@@ -181,7 +182,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 # Check the time from the last mdoc file update to consider it closed
                 time4NextTilt = self.time4NextTilt.toSeconds()
                 if time.time() - getmtime(mdocFn) < time4NextTilt:
-                    logger.info(cyanStr(f'Waiting next tilt of {mdocFn}'))
+                    logger.info(cyanStr(f'Waiting for the next tilt of {mdocFn}'))
                     continue
                 # Read the mdoc contents
                 errorMsg, mdoc = self.readMdocContents(mdocFn)
@@ -275,9 +276,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         tiltsMdList = mdoc.getTiltsMetadata()
         nImgs = len(tiltsMdList)
         minNumTilts = self.minNumTilts.get()
-        logger.info(cyanStr(f'mdoc file {basename(mdocFn)} with {nImgs} '
-                            f'tilts is considered closed.'))
-
         if nImgs < minNumTilts:
             errorMsg = (f'Mdoc error -> Mdoc file {mdocFn} contains less [{nImgs}] '
                         f'than minimum allowed [{minNumTilts}].')
@@ -298,9 +296,9 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         mdocFn = mdoc.getFileName()
         tiltsMdList = mdoc.getTiltsMetadata()
         nTilts = len(tiltsMdList)
-        logger.info(cyanStr(f'Matching {mdocFn}...'))
-        logger.info(cyanStr(f'Tilts on the mdoc file: {nTilts}'))
-        logger.info(cyanStr(f'Micrographs available: {len(self.listOfMics)}'))
+        # logger.info(cyanStr(f'Matching {mdocFn}...'))
+        # logger.info(cyanStr(f'Tilts on the mdoc file: {nTilts}'))
+        # logger.info(cyanStr(f'Micrographs available: {len(self.listOfMics)}'))
 
         micsBNamesDict = {removeBaseExt(mic.getMicName()): mic for mic in self.listOfMics}
         tiltsMdListFiltered = []
@@ -313,8 +311,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
         nMicsMatched = len(tiltsMdListFiltered)
         if nMicsMatched < nTilts:
-            logger.info(cyanStr(f"{nTilts - nMicsMatched} micrographs are not yet available "
+            logger.info(cyanStr(f"{mdocFn} -> {nTilts - nMicsMatched} micrographs are not yet available "
                                 f"to compose the TiltSeries. Waiting for the tilts to compose..."))
+            logger.info(cyanStr(f'Tilts on the mdoc file: {nTilts}'))
+            logger.info(cyanStr(f'Motion-corrected tilts found: {nMicsMatched}'))
             return False, None, None
         else:
             percentTiltsAvailable = int(100 * nMicsMatched / nTilts)
