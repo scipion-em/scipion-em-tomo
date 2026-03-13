@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Federico P. de Isidro Gomez (fp.deisidro@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es) [1]
 # *
 # * [1] Centro Nacional de Biotecnologia, CSIC, Spain
 # *
@@ -24,20 +25,19 @@
 # *
 # **************************************************************************
 import logging
+import time
 import traceback
+from collections import Counter
 from enum import Enum
-from typing import Tuple, Set, List, OrderedDict
-
+from typing import Set, List, Union
 import numpy as np
-
 from pwem.objects import Transform
 from pyworkflow import BETA
-import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
-from pyworkflow.object import String
-from pyworkflow.utils import Message, cyanStr, redStr
+from pyworkflow.object import Pointer
+from pyworkflow.protocol import STEPS_PARALLEL, ProtStreamingBase, PointerParam
+from pyworkflow.utils import Message, cyanStr, redStr, yellowStr
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
-from tomo.protocols import ProtTomoBase
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class outputObjects(Enum):
     tiltSeries = SetOfTiltSeries
 
 
-class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
+class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
     """
     Assign the transformation matrices from an input set of tilt-series to a target one.
     """
@@ -54,51 +54,166 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
     _label = 'Tilt-series assign alignment'
     _devStatus = BETA
     _possibleOutputs = outputObjects
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.fromTsDict = None
-        self.toTsDict = None
-        self.nonMatchingTsIdsMsg = String()
+        self.tsIdsReadFrom = []
+        self.tsIdsReadTo = []
+        self.sRateRatio = None
+
+    @classmethod
+    def worksInStreaming(cls):
+        return True
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(Message.LABEL_INPUT)
         form.addParam('getTMSetOfTiltSeries',
-                      params.PointerParam,
+                      PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series from which transformation matrices will be obtained.',
                       label='Tilt-series from which to take the alignment')
 
         form.addParam('setTMSetOfTiltSeries',
-                      params.PointerParam,
+                      PointerParam,
                       pointerClass='SetOfTiltSeries',
                       important=True,
                       help='Set of tilt-series on which transformation matrices will be assigned.',
                       label='Tilt-series to assign the alignment to')
 
+        form.addParallelSection(threads=3, mpi=0)
+
     # -------------------------- INSERT steps functions ---------------------
-    def _insertAllSteps(self):
-        commonTsIds = self._initialize()
-        for tsId in commonTsIds:
-            self._insertFunctionStep(self.assignTrMat, tsId,
-                                     needsGPU=False)
-        self._insertFunctionStep(self.closeOutputSetStep,
-                                 needsGPU=False)
+    def stepsGeneratorStep(self) -> None:
+        closeSetStepDeps = []
+        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
+        inTsSetFrom = self.getInTsSetFrom()
+        self.readingOutput(outTsSet)
+        inTsSetTo = self.getInTsSetTo()
+        self.readingOutput(outTsSet, tsSetFrom=False)
+        self.sRateRatio = inTsSetTo.getSamplingRate() / inTsSetFrom.getSamplingRate()
+
+        while True:
+            with self._lock:
+                inTsIdsFrom = set(inTsSetFrom.getTSIds())
+                inTsIdsTo = set(inTsSetTo.getTSIds())
+                presentTsIds = inTsIdsFrom & inTsIdsTo
+
+            if ((not inTsSetFrom.isStreamOpen() and Counter(self.tsIdsReadFrom) == Counter(presentTsIds)) and
+                    (not inTsSetTo.isStreamOpen() and Counter(self.tsIdsReadTo) == Counter(presentTsIds))):
+                logger.info(cyanStr('Input set closed.\n'))
+                self._insertFunctionStep(self.closeOutputSetsStep,
+                                         prerequisites=closeSetStepDeps,
+                                         needsGPU=False)
+                break
+
+            nonProcessedTsIdsFrom = inTsIdsFrom - set(self.tsIdsReadFrom)
+            nonProcessedTsIdsTo = inTsIdsTo - set(self.tsIdsReadTo)
+            tsFrom2ProcessDict = {tsId: ts.clone() for ts in inTsSetFrom.iterItems()
+                                  if (tsId := ts.getTsId()) in nonProcessedTsIdsFrom  # Only not processed tsIds (from)
+                                  and ts.getSize() > 0}  # Avoid processing empty TS
+            tsTo2ProcessDict = {tsId: ts.clone() for ts in inTsSetTo.iterItems()
+                                if (tsId := ts.getTsId()) in nonProcessedTsIdsTo  # Only not processed tsIds (to)
+                                and ts.getSize() > 0}  # Avoid processing empty CTFs
+
+            for tsId, tsFrom in tsFrom2ProcessDict.items():
+                tsTo = tsTo2ProcessDict.get(tsId, None)
+                if not tsTo:
+                    logger.info(yellowStr(f'tsId = {tsId} - no corresponding tsTo to tsFrom was found...'))
+                    continue
+                pId = self._insertFunctionStep(self.assignTrMatStep,
+                                               tsId,
+                                               tsFrom,
+                                               tsTo,
+                                               prerequisites=[],
+                                               needsGPU=False)
+                closeSetStepDeps.append(pId)
+                logger.info(cyanStr(f"Steps created for tsId = {tsId}"))
+                self.tsIdsReadFrom.append(tsId)
+                self.tsIdsReadTo.append(tsId)
+
+            self.refreshStreaming(inTsSetFrom)
+            self.refreshStreaming(inTsSetTo)
+
+    def refreshStreaming(self, inSet: SetOfTiltSeries) -> None:
+        # Refresh status for the streaming
+        time.sleep(10)
+        if inSet.isStreamOpen():
+            with self._lock:
+                inSet.loadAllProperties()  # refresh status for the streaming
 
     # --------------------------- STEPS functions ----------------------------
-    def _initialize(self) -> Set[str]:
-        fromTsSet = self.getTMSetOfTiltSeries.get()
-        toTsSet = self.setTMSetOfTiltSeries.get()
-        commonTsIds, nonCommonTsIds = self._matchTsIds(fromTsSet, toTsSet)
-        self.fromTsDict = {ts.getTsId(): ts.clone() for ts in fromTsSet if ts.getTsId() in commonTsIds}
-        self.toTsDict = {ts.getTsId(): ts.clone() for ts in toTsSet if ts.getTsId() in commonTsIds}
-        if nonCommonTsIds:
-            msg = f'Non-matching tsIds: *{nonCommonTsIds}*'
-            logger.info(cyanStr(msg))
-            self.nonMatchingTsIdsMsg.set(msg)
-        return commonTsIds
+    def assignTrMatStep(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
+        logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
+        try:
+            outTsSet = self.getOutTsSet()
+            newTs = TiltSeries(tsId=tsId)
+            newTs.copyInfo(tsTo)
+            # The tilt axis angle may have been re-assigned, so it must be updated
+            # to keep the coherence with thevalues of the transformation matrix assigned
+            fromTsTAx = tsFrom.getAcquisition().getTiltAxisAngle()
+            newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
+            outTsSet.append(newTs)
+
+            # Manage the possible previously excluded views or previous ts re-stacking
+            matchingAcqOrders = self._getCommonAcqOrderInTsPair(tsFrom, tsTo)
+            fromTsSize = self._getTsSize(tsFrom)
+            toTsSize = self._getTsSize(tsTo)
+            if fromTsSize != toTsSize:
+                logger.info(cyanStr(f"tsId = {tsId} - The number of enabled tilt-images in the "
+                                    f"source [{fromTsSize}] and target [{toTsSize}] tilt-series "
+                                    f"is different. Present acquisition orders in both are "
+                                    f"{matchingAcqOrders}"))
+
+            fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in tsFrom}
+            for i, tiTo in enumerate(tsTo.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+                acqOrder = tiTo.getAcquisitionOrder()
+                tiToFileName = tiTo.getFileName()
+                if tiTo.getAcquisitionOrder() in matchingAcqOrders:
+                    tiFrom = fromTsAcqDict[acqOrder]
+                    newTi = TiltImage()
+                    newTi.copyInfo(tiFrom)
+                    newTi.setFileName(tiToFileName)
+                    newTi.setAcquisition(tiTo.getAcquisition())
+
+                    # The tilt axis angle may have been re-assigned or even refined at tilt-image
+                    # level (and updated consequently in the tilt axis angle field in the metadata),
+                    # so it must be updated to keep the coherence with the values of the transformation
+                    # matrix assigned
+                    fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+                    newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
+                    newTi.setTiltAngle(tiFrom.getTiltAngle())
+                    self.updateTiTrMatrix(newTi)
+                else:
+                    t = Transform()
+                    newTi = tiTo.clone()
+                    # An identity matrix is set so both the non-active views has the same fields as the
+                    # active ones, preventing problems when writing the sqlite files
+                    t.setMatrix(np.identity(3))
+                    newTi.setTransform(t)
+                    newTi.setEnabled(False)
+                newTs.append(newTi)
+
+            newTs.setDim(tsTo.getDim())
+            newTs.write()
+            outTsSet.update(newTs)
+            outTsSet.write()
+            self._store()
+
+        except Exception as e:
+            logger.error(redStr(f'tsId = {tsId} -> transformation matrix assignment failed '
+                                f'with the exception -> {e}'))
+            logger.error(traceback.format_exc())
+
+    def closeOutputSetsStep(self):
+        self._closeOutputSet()
+        attribName = self._possibleOutputs.tiltSeries.name
+        output = getattr(self, attribName, None)
+        if not output or (output and len(output) == 0):
+            raise Exception(f'No output/s {attribName} were generated. Please check the '
+                            f'Output Log > run.stdout and run.stderr')
 
     def assignTrMat(self, tsId: str):
         try:
@@ -173,6 +288,34 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         self._closeOutputSet()
 
     # --------------------------- UTILS functions ----------------------------
+    def getInTsSetFrom(self, asPointer: bool = False) -> Union[Pointer, SetOfTiltSeries]:
+        return self.getTMSetOfTiltSeries if asPointer else self.getTMSetOfTiltSeries.get()
+
+    def getInTsSetTo(self, asPointer: bool = False) -> Union[Pointer, SetOfTiltSeries]:
+        return self.setTMSetOfTiltSeries if asPointer else self.setTMSetOfTiltSeries.get()
+
+    def readingOutput(self,
+                      outSet: SetOfTiltSeries,
+                      tsSetFrom: bool = True) -> None:
+        if outSet:
+            if tsSetFrom:
+                tsIdList = self.tsIdsReadFrom
+                inObjStr = 'tsFrom'
+            else:
+                tsIdList = self.tsIdsReadTo
+                inObjStr = 'tsTo'
+            for item in outSet:
+                tsIdList.append(item.getTsId())
+            self.info(cyanStr(f'{inObjStr}: items processed {tsIdList}'))
+        else:
+            self.info(cyanStr('No items have been processed yet'))
+
+    @staticmethod
+    def _getCommonAcqOrderInTsPair(ts1: TiltSeries, ts2: TiltSeries) -> Set[int]:
+        tsAcqOrderSet1 = {ti.getAcquisitionOrder() for ti in ts1}
+        tsAcqOrderSet2 = {ti.getAcquisitionOrder() for ti in ts2}
+        return tsAcqOrderSet1 & tsAcqOrderSet2
+
     def getOutTsSet(self):
         outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
         if outTsSet:
@@ -180,92 +323,55 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtTomoBase):
         else:
             outTsSet = SetOfTiltSeries.create(self._getPath(),
                                               template='tiltseries',
-                                              suffix='AssignedTransform')
-            toTsSet = self.setTMSetOfTiltSeries.get()
-            fromTsSet = self.getTMSetOfTiltSeries.get()
+                                              suffix='assignedTransform')
+            fromTsSet = self.getInTsSetFrom()
+            toTsSet = self.getInTsSetTo()
             outTsSet.copyInfo(toTsSet)
             outTsSet.setDim(toTsSet.getDim())
-            # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
-            # values of the transformation matrix assigned
+            # The tilt axis angle may have been re-assigned, so it must be updated to
+            # keep the coherence with the values of the transformation matrix assigned
             fromTsSetTAx = fromTsSet.getAcquisition().getTiltAxisAngle()
             outTsSet.getAcquisition().setTiltAxisAngle(fromTsSetTAx)
 
             self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet})
-            self._defineSourceRelation(self.getTMSetOfTiltSeries, outTsSet)
-            self._defineSourceRelation(self.setTMSetOfTiltSeries, outTsSet)
+            self._defineSourceRelation(self.getInTsSetFrom(asPointer=True), outTsSet)
+            self._defineSourceRelation(self.getInTsSetTo(asPointer=True), outTsSet)
         return outTsSet
 
-    def getSamplingRatio(self):
-        return self.setTMSetOfTiltSeries.get().getSamplingRate() / self.getTMSetOfTiltSeries.get().getSamplingRate()
+    @staticmethod
+    def _getTsSize(ts: TiltSeries) -> int:
+        stackSize = ts.getSize()
+        metadataSize = len([enabled for ti in ts.iterItems() if (enabled := ti.isEnabled())])
+        return min(stackSize, metadataSize)
 
-    def updateTiTrMatrix(self, ti: TiltImage):
+    def updateTiTrMatrix(self, ti: TiltImage) -> None:
         """ Scale the transform matrix shifts. """
         transform = ti.getTransform()
         matrix = transform.getMatrix()
-        sr = self.getSamplingRatio()
-        matrix[0][2] /= sr
-        matrix[1][2] /= sr
+        matrix[0][2] /= self.sRateRatio
+        matrix[1][2] /= self.sRateRatio
         transform.setMatrix(matrix)
         ti.setTransform(transform)
-
-    @staticmethod
-    def _matchTsIds(fromTsSet: SetOfTiltSeries, toTsSet: SetOfTiltSeries) -> Tuple[Set[str], Set[str]]:
-        fromTsIds = fromTsSet.getTSIds()
-        toTsIds = toTsSet.getTSIds()
-        setCastedFromTsIds = set(fromTsIds)
-        setCastedToTsIds = set(toTsIds)
-        commonTsIds = setCastedFromTsIds & setCastedToTsIds  # Intersection, common elements
-        nonCommonTsIds = setCastedFromTsIds ^ setCastedToTsIds  # Symmetric difference, non-common elements
-        return commonTsIds, nonCommonTsIds
-
-    @staticmethod
-    def _getTiltAnglesAcqOrderMappingDict(ts: TiltSeries, presentAcqOrders) -> dict:
-        mappingDict = OrderedDict()
-        for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-            acqOrder = ti.getAcquisitionOrder()
-            if acqOrder in presentAcqOrders:
-                mappingDict[ti.getTiltAngle()] = acqOrder
-        return mappingDict
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self) -> List[str]:
         validateMsgs = []
-        # The from TS set is expected to have aligment
-        for tsGetTM in self.getTMSetOfTiltSeries.get():
-            if not tsGetTM.hasAlignment():
+        fromTsSet = self.getInTsSetFrom()
+        # The "from" TS set is expected to have alignment
+        for ts in fromTsSet.iterItems():
+            if not ts.hasAlignment():
                 validateMsgs.append("Tilt-series %s from the input set do not have a "
-                                    "transformation matrix assigned." % tsGetTM.getTsId())
+                                    "transformation matrix assigned." % ts.getTsId())
                 break
-        # Check the tsId matching between the from and to TS sets
-        fromTsSet = self.getTMSetOfTiltSeries.get()
-        toTsSet = self.setTMSetOfTiltSeries.get()
-        commonTsIds, _ = self._matchTsIds(fromTsSet, toTsSet)
-        if not commonTsIds:
-            validateMsgs.append('There are no matching tsIds between the sets of tilt-series introduced.')
         return validateMsgs
 
     def _summary(self):
         summary = []
-        nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
         outputTSName = self._possibleOutputs.tiltSeries.name
-        if nonMatchingTsIdsMsg:
-            summary.append(nonMatchingTsIdsMsg)
         if hasattr(self, outputTSName):
             outTsSet = getattr(self, outputTSName)
-            summary.append(f"Input tilt-series:"
-                           f"\n\t- Get Transform: {self.getTMSetOfTiltSeries.get().getSize()}"
-                           f"\n\t- Set Transform: {self.setTMSetOfTiltSeries.get().getSize()}"
-                           f"\nTransformation matrices assigned: {outTsSet.getSize()}\n")
+            summary.append(f"\nTransformation matrices assigned: {outTsSet.getSize()}\n")
         else:
             summary.append("Outputs are not ready yet.")
         return summary
 
-    def _methods(self):
-        methods = []
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name)
-        if outTsSet:
-            methods.append("The transformation matrix has been assigned to %d tilt-series from the input set.\n"
-                           % (outTsSet.getSize()))
-        else:
-            methods.append("Outputs are not ready yet.")
-        return methods
