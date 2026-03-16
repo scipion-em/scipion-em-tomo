@@ -28,9 +28,8 @@
 import logging
 import time
 import traceback
-from collections import Counter
 from glob import glob
-from os.path import join, getmtime, basename, exists
+from os.path import join, getmtime, exists
 from statistics import mean
 from typing import Union, List, Tuple, Optional
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
@@ -176,9 +175,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                                          needsGPU=False)
                 break
 
-            logger.info(cyanStr(f'Number of processed micrographies: {len(self.processedIds)}'))
             self.listOfMics = [mic.clone() for mic in inputSet if mic.getObjId() not in self.processedIds]
-            logger.info(cyanStr(f'Current number of non-processed micrographies: {len(self.listOfMics)}'))
             nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
             if nonProcessedMdocs:
                 logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
@@ -198,8 +195,14 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     self.processedMdocs.append(mdocFn)
                     continue
                 # Match the stack files from the motion-corrected mics and from the mdoc
-                matchOk, tiltMdSorted, micsSorted = self.matchTs(mdoc)
+                matchOk, failedTs, tiltMdSorted, micsSorted = self.matchTs(mdoc)
+                if failedTs:
+                    # The tilt-series won't be considered anymore to generate the steps
+                    self.processedMdocs.append(mdocFn)
+                    continue
                 if not matchOk:
+                    # The tilt-series will not be discarded because there may be data
+                    # still pending to come
                     continue
                 cTsPid = self._insertFunctionStep(self.composeTsStep,
                                                   mdoc,
@@ -297,10 +300,22 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
     #     return filepath, tiltA
 
     def matchTs(self, mdoc: MDoc) \
-            -> Tuple[bool, Optional[Tuple[TiltMetadata]], Optional[Tuple[Micrograph]]]:
+            -> Tuple[bool, bool, Optional[Tuple[TiltMetadata]], Optional[Tuple[Micrograph]]]:
+        """
+        matchOk, failedTs, tiltMdSorted, micsSorted
+        :param mdoc: MDoc object containing the mdoc file data
+        :return: Tuple[matchOk, failedTs, tiltMdSorted, micsSorted], where:
+            - matchOK: bool to indicate if a tilt-series was successfully matched to a mdoc file.
+            - failedTs: bool used to register if there was a problem with the tilt-series matched, e.g.
+              the percentage of tilts is lower than the allowed by the user and no new data is expected
+              to come as the set is closed.
+            - tiltMdSorted: list of TiltMetadata, sorted by angle.
+            - micsSorted: list of Micrograph, sorted to follow the same order as the tiltMdSorted.
+        """
         mdocFn = mdoc.getFileName()
         tiltsMdList = mdoc.getTiltsMetadata()
         nTilts = len(tiltsMdList)
+        inMicsSet = self.getInMics()
 
         micsBNamesDict = {removeBaseExt(mic.getMicName()): mic for mic in self.listOfMics}
         tiltsMdListFiltered = []
@@ -312,13 +327,14 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 micsFilteredList.append(micsBNamesDict[micNameFromMdoc])
 
         nMicsMatched = len(tiltsMdListFiltered)
-        if nMicsMatched < nTilts:
+        if nMicsMatched < nTilts and inMicsSet.isStreamOpen():
             logger.info(cyanStr(f"{mdocFn} -> {nTilts - nMicsMatched} micrographs are not yet available "
                                 f"to compose the TiltSeries. Waiting for the tilts to compose..."))
             logger.info(cyanStr(f'Tilts on the mdoc file: {nTilts}'))
             logger.info(cyanStr(f'Motion-corrected tilts found: {nMicsMatched}'))
-            return False, None, None
-        else:
+            return False, False, None, None
+
+        if not inMicsSet.isStreamOpen():
             percentTiltsAvailable = int(100 * nMicsMatched / nTilts)
             percentTiltsReq = self.percentTiltsRequired.get()
             logger.info(cyanStr(f'Percent tilts available: {percentTiltsAvailable}'))
@@ -331,14 +347,14 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     f'"Percent of tilts required" parameter (advanced) if you want this '
                     f'TiltSeries to be generated.'))
                 self.processedMdocs.append(mdocFn)
-                return False, None, None
+                return False, True, None, None
 
         logger.info(cyanStr(f'Micrographs matched for the mdoc file: {nMicsMatched}'))
         # Ensure the tilt metadata list is sorted by angle
         zippedLists = list(zip(tiltsMdListFiltered, micsFilteredList))
         zippedLists.sort(key=lambda x: float(x[0].getTiltAngle()), reverse=False)
         tiltsMdSorted, micsSorted = zip(*zippedLists)
-        return True, tiltsMdSorted, micsSorted
+        return True, False, tiltsMdSorted, micsSorted
 
     def _getTiltAxisAngle(self, mdoc: MDoc) -> float:
         # Manually introduced
