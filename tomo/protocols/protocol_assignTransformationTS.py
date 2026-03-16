@@ -27,14 +27,15 @@
 import logging
 import time
 import traceback
+import typing
 from collections import Counter
 from enum import Enum
-from typing import Set, List, Union
+from typing import List, Union
 import numpy as np
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pwem.protocols import EMProtocol
-from pyworkflow.object import Pointer
+from pyworkflow.object import Pointer, Set
 from pyworkflow.protocol import STEPS_PARALLEL, ProtStreamingBase, PointerParam
 from pyworkflow.utils import Message, cyanStr, redStr, yellowStr
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
@@ -311,7 +312,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             self.info(cyanStr('No items have been processed yet'))
 
     @staticmethod
-    def _getCommonAcqOrderInTsPair(ts1: TiltSeries, ts2: TiltSeries) -> Set[int]:
+    def _getCommonAcqOrderInTsPair(ts1: TiltSeries, ts2: TiltSeries) -> typing.Set[int]:
         tsAcqOrderSet1 = {ti.getAcquisitionOrder() for ti in ts1}
         tsAcqOrderSet2 = {ti.getAcquisitionOrder() for ti in ts2}
         return tsAcqOrderSet1 & tsAcqOrderSet2
@@ -332,6 +333,9 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             # keep the coherence with the values of the transformation matrix assigned
             fromTsSetTAx = fromTsSet.getAcquisition().getTiltAxisAngle()
             outTsSet.getAcquisition().setTiltAxisAngle(fromTsSetTAx)
+            outTsSet.setStreamState(Set.STREAM_OPEN)
+            # Write set properties, otherwise it may expose the set (sqlite) without properties.
+            outTsSet.write()
 
             self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet})
             self._defineSourceRelation(self.getInTsSetFrom(asPointer=True), outTsSet)
