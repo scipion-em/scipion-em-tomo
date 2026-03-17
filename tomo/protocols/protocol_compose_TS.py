@@ -31,7 +31,7 @@ import traceback
 from glob import glob
 from os.path import join, getmtime, exists
 from statistics import mean
-from typing import Union, List, Tuple, Optional
+from typing import Union, List, Tuple, Optional, Counter
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.objects import SetOfMicrographs
 from pwem.protocols import EMProtocol
@@ -168,7 +168,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
         while True:
             mdocList = self.findMdocs()
-            if not inputSet.isStreamOpen():  # and Counter(self.processedMdocs) == Counter(mdocList):
+            if not inputSet.isStreamOpen() and Counter(self.processedMdocs) == Counter(mdocList):
                 logger.info(cyanStr('Input set closed.'))
                 self._insertFunctionStep(self.closeOutputSetsStep,
                                          prerequisites=closeSetStepDeps,
