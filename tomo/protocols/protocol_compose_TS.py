@@ -180,30 +180,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             if nonProcessedMdocs:
                 logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
             for mdocFn in nonProcessedMdocs:
-                # if self.isMdocBanned(mdocFn):
-                #     self.processedMdocs.append(mdocFn)
-                #     continue
-                # # Check the time from the last mdoc file update to consider it closed
-                # time4NextTilt = self.time4NextTilt.toSeconds()
-                # if time.time() - getmtime(mdocFn) < time4NextTilt:
-                #     logger.info(cyanStr(f'Waiting for the next tilt of {mdocFn}'))
-                #     continue
-                # # Read the mdoc contents
-                # errorMsg, mdoc = self.readMdocContents(mdocFn)
-                # if errorMsg:
-                #     logger.info(yellowStr(errorMsg))
-                #     self.processedMdocs.append(mdocFn)
-                #     continue
-                # # Match the stack files from the motion-corrected mics and from the mdoc
-                # matchOk, failedTs, tiltMdSorted, micsSorted = self.matchTs(mdoc)
-                # if failedTs:
-                #     # The tilt-series won't be considered anymore to generate the steps
-                #     self.processedMdocs.append(mdocFn)
-                #     continue
-                # if not matchOk:
-                #     # The tilt-series will not be discarded because there may be data
-                #     # still pending to come
-                #     continue
                 matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = self._isMdocOk(mdocFn)
                 if failedTs:
                     # The tilt-series won't be considered anymore to generate the steps
