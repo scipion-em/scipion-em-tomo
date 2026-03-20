@@ -153,47 +153,17 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             newTs = TiltSeries(tsId=tsId)
             newTs.copyInfo(tsTo)
             # The tilt axis angle may have been re-assigned, so it must be updated
-            # to keep the coherence with thevalues of the transformation matrix assigned
+            # to keep the coherence with the values of the transformation matrix assigned
             fromTsTAx = tsFrom.getAcquisition().getTiltAxisAngle()
             newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
             outTsSet.append(newTs)
 
             # Manage the possible previously excluded views or previous ts re-stacking
             matchingAcqOrders = self._getCommonAcqOrderInTsPair(tsFrom, tsTo)
-            fromTsSize = self._getTsSize(tsFrom)
-            toTsSize = self._getTsSize(tsTo)
-            if fromTsSize != toTsSize:
-                logger.info(cyanStr(f"tsId = {tsId} - The number of enabled tilt-images in the "
-                                    f"source [{fromTsSize}] and target [{toTsSize}] tilt-series "
-                                    f"is different. Present acquisition orders in both are "
-                                    f"{matchingAcqOrders}"))
-
             fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in tsFrom}
-            for i, tiTo in enumerate(tsTo.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
-                acqOrder = tiTo.getAcquisitionOrder()
-                if tiTo.getAcquisitionOrder() in matchingAcqOrders:
-                    tiFrom = fromTsAcqDict[acqOrder]
-                    newTi = TiltImage()
-                    newTi.copyInfo(tiFrom)
-                    newTi.setFileName(tiTo.getFileName())
-                    newTi.setAcquisition(tiTo.getAcquisition())
 
-                    # The tilt axis angle may have been re-assigned or even refined at tilt-image
-                    # level (and updated consequently in the tilt axis angle field in the metadata),
-                    # so it must be updated to keep the coherence with the values of the transformation
-                    # matrix assigned
-                    fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-                    newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-                    newTi.setTiltAngle(tiFrom.getTiltAngle())
-                    self.updateTiTrMatrix(newTi)
-                else:
-                    t = Transform()
-                    newTi = tiTo.clone()
-                    # An identity matrix is set so both the non-active views has the same fields as the
-                    # active ones, preventing problems when writing the sqlite files
-                    t.setMatrix(np.identity(3))
-                    newTi.setTransform(t)
-                    newTi.setEnabled(False)
+            for tiTo in tsTo.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                newTi = self._processTiltImage(tiTo, fromTsAcqDict, matchingAcqOrders)
                 newTs.append(newTi)
 
             newTs.setDim(tsTo.getDim())
@@ -203,9 +173,36 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             self._store()
 
         except Exception as e:
-            logger.error(redStr(f'tsId = {tsId} -> transformation matrix assignment failed '
-                                f'with the exception -> {e}'))
+            logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
             logger.error(traceback.format_exc())
+
+    def _processTiltImage(self, tiTo, fromTsAcqDict, matchingAcqOrders):
+        acqOrder = tiTo.getAcquisitionOrder()
+
+        if acqOrder in matchingAcqOrders:
+            tiFrom = fromTsAcqDict[acqOrder]
+            newTi = TiltImage()
+            newTi.copyInfo(tiFrom)
+            newTi.setFileName(tiTo.getFileName())
+            newTi.setAcquisition(tiTo.getAcquisition())
+
+            # The tilt axis angle may have been re-assigned or even refined at tilt-image
+            # level (and updated consequently in the tilt axis angle field in the metadata),
+            # so it must be updated to keep the coherence with the values of the transformation
+            # matrix assigned
+            fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
+            newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
+            newTi.setTiltAngle(tiFrom.getTiltAngle())
+            self.updateTiTrMatrix(newTi)
+            return newTi
+
+        # Case of disabled views
+        newTi = tiTo.clone()
+        t = Transform()
+        t.setMatrix(np.identity(3))
+        newTi.setTransform(t)
+        newTi.setEnabled(False)
+        return newTi
 
     def closeOutputSetsStep(self):
         self._closeOutputSet()
