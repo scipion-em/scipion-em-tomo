@@ -311,15 +311,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             return errorMsg, None
         return '', mdoc
 
-    # @staticmethod
-    # def fixingMdocBug(filepath: str, tiltA: float) -> Tuple[str, float]:
-    #     idx = filepath.find(']_')
-    #     filepath = filepath[:idx + 2] + filepath[idx + 2].upper() + filepath[idx + 3:]
-    #     if float(tiltA) - round(float(tiltA), 0) != 0:
-    #         filepath = filepath.replace(str(tiltA), str(round(float(tiltA))) + '.00')
-    #         tiltA = str(round(float(tiltA))) + '.00'
-    #     return filepath, tiltA
-
     def matchTs(self, mdoc: MDoc) \
             -> Tuple[bool, bool, Optional[Tuple[TiltMetadata]], Optional[Tuple[Micrograph]]]:
         """
