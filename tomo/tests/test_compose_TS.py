@@ -94,7 +94,7 @@ class TestTestTomoComposeTS(TestBaseCentralizedLayer):
                       percentTiltsRequired: int = 80,
                       time4NextTilt: int = 20) -> Optional[SetOfTiltSeries]:
         print(magentaStr(f"\n==> Running the composeTS:"))
-        print(magentaStr(f"\n\t- Odd/Even: {doEvenOdd}\n"))
+        print(magentaStr(f"\t- Odd/Even: {doEvenOdd}\n"))
         protComposeTS = cls.newProtocol(ProtComposeTS,
                                         objLabel=f'Compose ts, oe = {doEvenOdd}',
                                         inputMicrographs=cls.mcMovies,

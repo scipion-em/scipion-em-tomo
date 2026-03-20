@@ -171,12 +171,11 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in tsFrom}
             for i, tiTo in enumerate(tsTo.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
                 acqOrder = tiTo.getAcquisitionOrder()
-                tiToFileName = tiTo.getFileName()
                 if tiTo.getAcquisitionOrder() in matchingAcqOrders:
                     tiFrom = fromTsAcqDict[acqOrder]
                     newTi = TiltImage()
                     newTi.copyInfo(tiFrom)
-                    newTi.setFileName(tiToFileName)
+                    newTi.setFileName(tiTo.getFileName())
                     newTi.setAcquisition(tiTo.getAcquisition())
 
                     # The tilt axis angle may have been re-assigned or even refined at tilt-image
@@ -215,78 +214,6 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
         if not output or (output and len(output) == 0):
             raise Exception(f'No output/s {attribName} were generated. Please check the '
                             f'Output Log > run.stdout and run.stderr')
-
-    def assignTrMat(self, tsId: str):
-        try:
-            logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
-            fromTs = self.fromTsDict[tsId]
-            toTs = self.toTsDict[tsId]
-            outTsSet = self.getOutTsSet()
-
-            newTs = TiltSeries(tsId=tsId)
-            newTs.copyInfo(toTs)
-            # The tilt axis angle may have been re-assigned, so it must be updated to keep the coherence with the
-            # values of the transformation matrix assigned
-            fromTsTAx = fromTs.getAcquisition().getTiltAxisAngle()
-            newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
-            outTsSet.append(newTs)
-
-            # Manage the possible previously excluded views or previous ts re-stacking
-            fromTsSize = fromTs.getSize()
-            toTsSize = toTs.getSize()
-            presentAcqOrdersFrom = fromTs.getTsPresentAcqOrders()
-            presentAcqOrdersTo = toTs.getTsPresentAcqOrders()
-            matchingAcqOrders = presentAcqOrdersFrom & presentAcqOrdersTo
-            if fromTsSize != toTsSize:
-                logger.info(cyanStr(f"tsId = {tsId} - The number of tilt-images in the source [{fromTsSize}] "
-                                    f"and target [{toTsSize}] tilt-series is different. Present acquisition "
-                                    f"orders in both are {matchingAcqOrders}"))
-
-            fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in fromTs}
-
-            for i, tiTo in enumerate(toTs.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
-                acqOrder = tiTo.getAcquisitionOrder()
-                tiToFileName = tiTo.getFileName()
-                if tiTo.getAcquisitionOrder() in matchingAcqOrders:
-                    tiFrom = fromTsAcqDict[acqOrder]
-                    newTi = TiltImage()
-                    newTi.copyInfo(tiFrom)
-                    newTi.setFileName(tiToFileName)
-                    newTi.setAcquisition(tiTo.getAcquisition())
-
-                    # The tilt axis angle may have been re-assigned or even refined at tilt-image level (and updated
-                    # consequently in the tilt axis angle field in the metadata), so it must be updated to keep the
-                    # coherence with the values of the transformation matrix assigned
-                    fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-                    newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-                    newTi.setTiltAngle(tiFrom.getTiltAngle())
-                    self.updateTiTrMatrix(newTi)
-                else:
-                    t = Transform()
-                    newTi = tiTo.clone()
-                    # An identity matrix is set so both the non-active views has the same fields as the active ones,
-                    # preventing problems when writing the sqlite files
-                    t.setMatrix(np.identity(3))
-                    newTi.setTransform(t)
-                    newTi.setEnabled(False)
-                newTs.append(newTi)
-
-            newTs.setDim(toTs.getDim())
-            newTs.write()
-            outTsSet.update(newTs)
-            outTsSet.write()
-            self._store()
-        except Exception as e:
-            logger.error(redStr(f'tsId = {tsId} -> transformation matrix assignment failed '
-                                f'with the exception -> {e}'))
-            logger.error(traceback.format_exc())
-
-    def closeOutputSetStep(self):
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
-        if not outTsSet:
-            raise Exception('No transformation matrix assignment was carried out. Please '
-                            'check the Output Log > run.stdout and run.stderr')
-        self._closeOutputSet()
 
     # --------------------------- UTILS functions ----------------------------
     def getInTsSetFrom(self, asPointer: bool = False) -> Union[Pointer, SetOfTiltSeries]:
