@@ -30,6 +30,7 @@ from os.path import exists, dirname, join
 from sqlite3 import OperationalError
 from typing import Optional
 import mrcfile
+from scipy.ndimage import affine_transform, map_coordinates
 
 from pwem.emlib.image.image_readers import ImageReadersRegistry, ImageStack
 from pwem import ALIGN_NONE
@@ -415,6 +416,7 @@ class TiltSeriesBase(data.SetOfImages):
                 return item
         raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
 
+
 def tiltSeriesToString(tiltSeries):
     s = []
 
@@ -492,18 +494,18 @@ class TiltSeries(TiltSeriesBase):
             rot = np.rad2deg(-rot)
 
             # Scale factor
-            factor = 1/binning
+            factor = 1 / binning
 
-            x,y,_ = transf.getShifts()
+            x, y, _ = transf.getShifts()
             # scale shifts
-            x=x*factor
-            y=y*factor
-            npImage = imgStk.getImage(ti.getIndex()-1)
+            x = x * factor
+            y = y * factor
+            npImage = imgStk.getImage(ti.getIndex() - 1)
 
             if binning != 0:
                 npImage = imgStk.scaleSlice(npImage, factor)
 
-            npImage = imgStk.transformSlice(npImage,(x,y), rot)
+            npImage = imgStk.transformSlice(npImage, (x, y), rot)
             output.append(npImage)
 
         output.write(outputFile)
@@ -538,7 +540,7 @@ class TiltSeries(TiltSeriesBase):
                        even: typing.Union[bool, None] = None,
                        ignoreExcludedViews: bool = False) -> None:
         """It applies the transformation matrices to the tilt-images. If they don't have it yet, it simply links the
-        tilt-series or re-stacks it depending on the value jorgeof the parameter presentAcqOrders, used in the case of
+        tilt-series or re-stacks it depending on the value of the parameter presentAcqOrders, used in the case of
         present excluded views at metadata level.
         :param outFileName: String containing the path of the output file that is created.
         :param even: boolean used to indicate which file should be processed: None will apply to the main tilt-series,
@@ -573,7 +575,7 @@ class TiltSeries(TiltSeriesBase):
         """
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
-            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            tsExcludedIndices = self.getTsExcludedViewsIndices(presentAcqOrders)
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             self.reStack(inFileName, outFileName, presentAcqOrders)
         else:
@@ -599,22 +601,161 @@ class TiltSeries(TiltSeriesBase):
         swapXY = True if 45 < abs(rotationAngle) < 135 else False
         if self.hasAlignment() and swapXY:
             xDim, yDim = yDim, xDim
+        # try:
+        #     self._tsApplyTransformXmipp(inFileName, outFileName, xDim, yDim, ignoreExcludedViews=ignoreExcludedViews)
+        # except:
+        self._tsApplyTransform(inFileName, outFileName, xDim, yDim, ignoreExcludedViews=ignoreExcludedViews)
+        # finally:
+        #     raise Exception(f'tsId = {self.getTsId()}: Unable to apply the transformation with Xmipp nor SciPy.')
+
+    def _tsApplyTransformXmipp(self,
+                               inFileName: str,
+                               outFileName: str,
+                               xDim: int,
+                               yDim: int,
+                               ignoreExcludedViews: bool = False) -> None:
+        logger.info(cyanStr('\t--> The interpolation will be carried out using Xmipp...'))
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
-            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            tsExcludedIndices = self.getTsExcludedViewsIndices(presentAcqOrders)
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             counter = 1
-            for ti in self.iterItems(orderBy=self.INDEX):
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 acqOrder = ti.getAcquisitionOrder()
                 if acqOrder in presentAcqOrders:
                     trMatrix = ti.getTransform().getMatrix()
                     self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, ti.getIndex(), counter)
                     counter += 1
         else:
-            for index, ti in enumerate(self.iterItems(orderBy=self.INDEX)):
+            for index, ti in enumerate(self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
                 trMatrix = ti.getTransform().getMatrix()
                 ind = index + 1
                 self._applyTransformToTi(inFileName, trMatrix, xDim, yDim, outFileName, ind, ind)
+
+    def _tsApplyTransform(self,
+                          inFileName: str,
+                          outFileName: str,
+                          xDim: int,
+                          yDim: int,
+                          fillValue=None,
+                          doWrap=False,
+                          ignoreExcludedViews: bool = False) -> None:
+        logger.info(cyanStr('\t--> The interpolation will be carried out using scipy...'))
+        presentAcqOrders = self.getTsPresentAcqOrders()
+
+        # Edges configuration
+        cval = 0.0 if fillValue is None else fillValue
+
+        # Read the tilt-series file
+        with mrcfile.mmap(inFileName, permissive=True, mode='r+') as mrc:
+            dataStack = mrc.data
+
+        # Create an empty array in which the stack of images will be stored
+        finalNoImgs = len(presentAcqOrders) if self.hasExcludedViews() and not ignoreExcludedViews else len(self)
+        shape = (finalNoImgs, yDim, xDim)
+        finalStackArray = np.empty(shape, dtype=dataStack.dtype)
+
+        # Fill it with the interpolated images sorted by angle
+        newImgIndex = 0
+        if self.hasExcludedViews() and not ignoreExcludedViews:
+            for ti in self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
+                acqOrder = ti.getAcquisitionOrder()
+                if acqOrder in presentAcqOrders:
+                    inImgData = dataStack[ti.getIndex()]
+                    trMatrix = ti.getTransform().getMatrix()
+                    self._applyTransformToTiScipy(inImgData,
+                                                  trMatrix,
+                                                  newImgIndex,
+                                                  finalStackArray,
+                                                  xDim,
+                                                  yDim,
+                                                  doWrap=doWrap,
+                                                  borderValue=cval)
+                    newImgIndex += 1
+        else:
+            for newImgIndex, ti in enumerate(self.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+                acqOrder = ti.getAcquisitionOrder()
+                if acqOrder in presentAcqOrders:
+                    inImgData = dataStack[ti.getIndex()]
+                    trMatrix = ti.getTransform().getMatrix()
+                    self._applyTransformToTiScipy(inImgData,
+                                                  trMatrix,
+                                                  newImgIndex,
+                                                  finalStackArray,
+                                                  xDim,
+                                                  yDim,
+                                                  doWrap=doWrap,
+                                                  borderValue=cval)
+
+        # Save the data
+        with mrcfile.new(outFileName, overwrite=True) as mrc:
+            mrc.set_data(finalStackArray)
+            mrc.update_header_from_data()
+            mrc.update_header_stats()
+            mrc.voxel_size = self.getSamplingRate()
+
+    @staticmethod
+    def _applyTransformToTiScipy(inImgData: np.ndarray,
+                                 transformMatrix: np.ndarray,
+                                 index: int,
+                                 finalStackArray: np.ndarray,
+                                 xDim: int,
+                                 yDim: int,
+                                 doWrap: bool = True,
+                                 borderValue: float = 1.0) -> None:
+
+        # Cast to double precision
+        image = np.asarray(inImgData, dtype=np.float64)
+        matrix = transformMatrix.astype(np.float64)
+
+        # Ensure that the rotation axis is the real geometric center: center = (dimension - 1) / 2.0
+        src_yc = (image.shape[0] - 1) / 2.0
+        src_xc = (image.shape[1] - 1) / 2.0
+        dst_yc = (yDim - 1) / 2.0
+        dst_xc = (xDim - 1) / 2.0
+
+        # Create the destination mesh
+        y_dst, x_dst = np.indices((yDim, xDim), dtype=np.float64)
+
+        # Transformation to the centered space
+        x_dst_c = x_dst - dst_xc
+        y_dst_c = y_dst - dst_yc
+
+        # Prepare the coordinates for the matrix product (X, Y, 1)
+        coords_dst_c = np.stack([
+            x_dst_c.ravel(),
+            y_dst_c.ravel(),
+            np.ones_like(x_dst_c).ravel()
+        ])
+
+        # Mapping from destination to origin --> invert the matrix
+        try:
+            if matrix.shape == (2, 3):
+                matrix = np.vstack([matrix, [0, 0, 1]])
+            matrix_inv = np.linalg.inv(matrix)
+        except np.linalg.LinAlgError:
+            matrix_inv = np.eye(3)
+
+        # Apply the geometric transformation
+        coords_src_c = matrix_inv @ coords_dst_c
+
+        # Come back to the origin space with subpixel precision
+        x_src = coords_src_c[0].reshape((yDim, xDim)) + src_xc
+        y_src = coords_src_c[1].reshape((yDim, xDim)) + src_yc
+
+        # Interpolation
+        mode = 'wrap' if doWrap else 'constant'
+        warped_image = map_coordinates(
+            image,
+            [y_src, x_src],
+            order=5,
+            mode=mode,
+            cval=borderValue,
+            prefilter=True
+        )
+
+        # Assign to the output stack in the correct position
+        finalStackArray[index] = warped_image.astype(finalStackArray.dtype)
 
     def applyTransformToAll(self,
                             outFileName: str,
@@ -689,7 +830,7 @@ class TiltSeries(TiltSeriesBase):
         """It generates a set containing the acquisition orders that correspond to the enabled tilt images."""
         return set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
 
-    def hasExcludedViews(self)  -> bool:
+    def hasExcludedViews(self) -> bool:
         return False if len(self.getTsPresentAcqOrders()) == len(self) else True
 
     def getTsExcludedViewsIndices(self, presentAcqOrders) -> typing.Set[int]:
@@ -1453,10 +1594,10 @@ class Tomogram(data.Volume):
         :param decimals: (True) pass False if you want exact ratio
 
         """
-        binning = target_sr/self.getSamplingRate()
+        binning = target_sr / self.getSamplingRate()
         binning = round(binning, decimals)
-        if decimals==0:
-            binning=int(binning)
+        if decimals == 0:
+            binning = int(binning)
         return binning
 
 
@@ -2132,7 +2273,6 @@ class SubTomogram(data.Volume):
             return self._transform
 
 
-
 class SetOfSubTomogramsBase(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
@@ -2569,12 +2709,11 @@ class SetOfLandmarkModels(data.EMSet):
 
         """
 
-        binning = target_sr/self.getSetOfTiltSeries().getSamplingRate()
+        binning = target_sr / self.getSetOfTiltSeries().getSamplingRate()
         binning = round(binning, decimals)
-        if decimals==0:
-            binning=int(binning)
+        if decimals == 0:
+            binning = int(binning)
         return binning
-
 
 
 class MeshPoint(Coordinate3D):
@@ -3261,7 +3400,7 @@ class TiltSeriesCoordinate(data.EMObject):
         self._y = Float()
         self._z = Float()
         self._score = Float()
-        
+
         # Used to access to the corresponding tilt series from each coord (it's the tsId)
         self._tsId = String(kwargs.get('tsId', None))
 
@@ -3318,10 +3457,11 @@ class TiltSeriesCoordinate(data.EMObject):
 
     def getScore(self):
         return self._score.get()
-    
+
     def setScore(self, score):
         self._score.set(score)
-    
+
+
 class SetOfTiltSeriesCoordinates(data.EMSet):
     """ Encapsulate the logic of a set of tilt series coordinates.
     Each coordinate has a (x,y,z) position in scipion's convention.
