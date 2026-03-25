@@ -323,7 +323,7 @@ class MDoc:
 
         # Calculated from fields DoseRate and ExposureTime
         doseRate = float(zSlice.get(DOSE_RATE, 0))
-        expTime = float(zSlice.get(EXPOSURE_DOSE, 0))
+        expTime = float(zSlice.get(EXPOSURE_TIME, 0))
         if doseRate and expTime:
             return doseRate * expTime / pixelSize ** 2
 
