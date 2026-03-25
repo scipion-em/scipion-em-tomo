@@ -1,6 +1,9 @@
 # **************************************************************************
 # *
 # * Authors:     Alberto García Mena (alberto.garcia@cnb.csic.es)
+# *              Scipion Team
+# *
+# * National Center of Biotechnology, CSIC, Spain
 # *
 # *
 # * This program is free software; you can redistribute it and/or modify
@@ -22,472 +25,507 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import logging
 import time
-import os
-from dbm.dumb import error
+import traceback
 from glob import glob
-from logging import exception
+from os.path import join, getmtime, exists
 from statistics import mean
-
+from typing import Union, List, Tuple, Optional, Counter
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
-from pwem.protocols.protocol_import.base import ProtImport
-import pyworkflow as pw
-from pyworkflow.protocol import params, ProtStreamingBase
-from tomo.convert.mdoc import MDoc
-import pwem.objects as emobj
-import tomo.objects as tomoObj
-from tomo.objects import SetOfTiltSeries
-from pwem.objects.data import Transform
-from tomo.protocols import ProtTomoBase
-from pwem.emlib.image import ImageHandler
+from pwem.objects import SetOfMicrographs
+from pwem.protocols import EMProtocol
+from pyworkflow import BETA
+from pyworkflow.object import Pointer, Set
+from pyworkflow.protocol import ProtStreamingBase, BooleanParam, LEVEL_ADVANCED, StringParam, \
+    PathParam, PointerParam, IntParam, GE, LE, FloatParam
+from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
+from tomo.convert.mdoc import MDoc, TiltMetadata
+from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
+from pwem.objects.data import Micrograph
 
-OUT_STS = "TiltSeries"
+logger = logging.getLogger(__name__)
+OUT_TS_SET = "tiltSeries"
+MC_EVEN_ODD_ATTRIBUTE = '_mcEvenOddMics'
 
 
-class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
+class ProtComposeTS(EMProtocol, ProtStreamingBase):
     """ Compose in streaming a set of tilt series based on a set of micrographs and mdoc files.
     A time parameter is available for the streaming behaviour: Time to next tilt
     """
-    _devStatus = pw.BETA
+    _devStatus = BETA
     _label = 'Compose Tilt Series'
-    _possibleOutputs = {OUT_STS: SetOfTiltSeries}
-    percentsTilts = ['50', '60', '70', '80', '90', '100']
-    separator  = '-----------------'
-    separator2 = '#################'
+    _possibleOutputs = {OUT_TS_SET: SetOfTiltSeries}
 
     def __init__(self, **args):
-        ProtImport.__init__(self, **args)
-        self.MDOC_DATA_SOURCE = None
-        self.TiltSeries = None
+        super().__init__(**args)
         self.time4NextTS_current = time.time()
-        self.timeNextLoop = 30
-        self.listTSComposed = []
-        self.ih = None
+        self.processedMdocs = []
+        self.processedIds = []
+        self.listOfMics = None
         self.inMicsAcq = None
+        self.sRate = None
+        self.numberOfThreads.set(3)
+
+    @classmethod
+    def worksInStreaming(cls):
+        return True
 
     # -------------------------- DEFINES AND STEPS -----------------------
     def _defineParams(self, form):
         form.addSection(label='Import')
 
-        form.addParam('inputMicrographs', params.PointerParam, allowsNull=False,
+        form.addParam('inputMicrographs', PointerParam,
                       pointerClass='SetOfMicrographs',
                       important=True,
                       label="Input micrographs",
-                      help='Select the SetOfMicrographs to import')
+                      help='Select the SetOfMicrographs to import.')
 
-        form.addParam('filesPath', params.PathParam,
+        form.addParam('filesPath', PathParam,
                       label="Path with the *.mdoc files for each tilt series",
                       help="Root directory of the tilt-series. "
-                           "Use of * will work for multiple characters or ? for a single one. Also [ ] can specify ranges.")
-        form.addParam('mdocPattern', params.PathParam,
+                           "Use of * will work for multiple characters or ? for a single one. "
+                           "Also [ ] can specify ranges.")
+
+        form.addParam('mdocPattern', PathParam,
                       label="Mdoc pattern",
                       default="*.mdoc",
                       help="Pattern that should match for mdoc files."
-                           "Use of * will work for multiple characters or ? for a single one. Also [ ] can specify ranges.")
-        form.addParam('excludedWords', params.StringParam,
+                           "Use of * will work for multiple characters or ? for a single one. "
+                           "Also [ ] can specify ranges.")
+
+        form.addParam('excludedWords', StringParam,
                       label="Exclusion words",
                       default="",
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help="Space separated words that will be used to exclude mdoc files that could be listed with the above parameters.")
+                      help="Space separated words that will be used to exclude mdoc files that "
+                           "could be listed with the above parameters.")
 
-        form.addParam('isTomo5', params.BooleanParam, default=False,
-                      label="Tomography 5 mdoc?",
-                        help = "If these mdocs were generated by the Tomography 5 software, check this box to ensure that "
-                        "the tilt axis angle is converted properly: -1 * TiltAxisAngle - 90")
+        group = form.addGroup('Tilt axis angle')
+        group.addParam('isTomo5', BooleanParam,
+                       default=False,
+                       label="Rotate the tilt axis (only if read from mdoc)?",
+                       help="If these mdocs were generated by Tomography 5  or other "
+                            "software packages that have a different definition of the tilt "
+                            "axis angle, check this box to ensure it is converted "
+                            "properly: -1 * TiltAxisAngle - 90.")
+        group.addParam('manualTiltAxisAngle', FloatParam,
+                       allowsNull=True,
+                       label="Tilt axis angle (deg.)",
+                       help="The tilt axis angle value read from the mdoc files will be "
+                            "ignored and the value considered will be the introduced one.")
 
-        form.addParam('mdoc_bug_Correction', params.BooleanParam, default=False,
-                      label="mdoc bug Correction",
-                      help="Setting True, the mdoc generated by SerialEM "
-                           "will be read considering the bug: filepath formatting and ensures tiltA is rounded and consistent.")
+        form.addParam('doEvenOdd', BooleanParam,
+                      default=False,
+                      label='Compose the odd/even tilt-series?')
 
-        form.addParam('percentTiltsRequired', params.EnumParam,
-                      choices=self.percentsTilts, default=3,
-                      display=params.EnumParam.DISPLAY_COMBO,
+        form.addParam('minNumTilts', IntParam,
+                      default=3,
+                      label='Min number of tilts allowed in a mdoc file',
+                      help='If the number of tilts is lower than the value provided, the corresponding '
+                           'mdoc file will be skipped.')
+
+        # form.addParam('mdoc_bug_Correction', BooleanParam,
+        #               default=False,
+        #               label="mdoc bug Correction",
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help="Setting True, the mdoc generated by SerialEM "
+        #                    "will be read considering the bug: filepath formatting "
+        #                    "and ensures tiltA is rounded and consistent.")
+
+        form.addParam('percentTiltsRequired', IntParam,
+                      default=50,
                       label="Percent of tilts required (%)",
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help="Percentage of tilts in a TiltSeries required to compose the TiltSeries. With this parameter, it is possible to generate a TiltSeries without certain tilts, caused by a faulty movie or a failure in alignment.")
+                      expertLevel=LEVEL_ADVANCED,
+                      validators=[GE(50), LE(100)],
+                      help="Percentage of tilts in a TiltSeries required to compose the TiltSeries. "
+                           "With this parameter, it is possible to generate a TiltSeries without certain tilts, "
+                           "caused by a faulty movie or a failure in alignment.")
 
         form.addSection('Streaming')
-        form.addParam('time4NextTilt', params.StringParam, default="3m",
-                      label="Time for next Tilt",
-                      help="When the protocol runs in streaming; this parameter determine the delay until the next tilt is "
+        form.addParam('time4NextTilt', StringParam,
+                      default="3m",
+                      label="Time for the next tilt",
+                      help="When the protocol runs in streaming; this parameter determine the delay "
+                           "until the next tilt is "
                            "registered in the mdoc file. After "
                            "timeout, the mdoc file is not updated, the tilt series "
-                           "is considered as proccessed. "
-                           "Minimum time recommended 20 secs (20s). For PACEtomo propose, please increase this time acording your acquisition. "
+                           "is considered as processed. "
+                           "The minimum time recommended is 20 secs (20s). "
+                           "For PACEtomo acquisiton, please "
+                           "increase this time according to your acquisition. "
                            "A correct format is an integer number in "
                            "seconds or the following syntax: {days}d {hours}h "
                            "{minutes}m {seconds}s separated by spaces "
                            "e.g: 1d 2h 20m 15s,  10m 3s, 1h, 20s or 25")
 
-    def _initialize(self):
-        self.ih = ImageHandler()
-        self.inMicsAcq = self.inputMicrographs.get().getAcquisition()
-
-
-    def isMdocBanned(self, mdoc):
-        for bannedWord in self.excludedWords.getListFromValues(caster=str):
-            if bannedWord in mdoc:
-                self.info("mdoc %s contains the exclusion word %s. Skipping it." % (mdoc, bannedWord))
-                return True
-        return False
-
+    # -------------------------- STEPS functions ------------------------------
     def stepsGeneratorStep(self):
-        """
-        This step should be implemented by any streaming protocol.
-        It should check its input and when ready conditions are met
-        call the self._insertFunctionStep method.
-        """
-        self._initialize()
-        inputSet = self.inputMicrographs.get()
-        streamOpen = True
+        closeSetStepDeps = []
+        inputSet = self.getInMics()
+        self.sRate = inputSet.getSamplingRate()
+        self.inMicsAcq = inputSet.getAcquisition()
 
-        while streamOpen:
-            streamOpen = inputSet.isStreamOpen()
-            list_current = self.findMdocs()
-            self._loadInputList()
-            list_current = [f for f in list_current if f not in self.listTSComposed]
-            self.info(f'\n{self.separator2}\nList of mdocs available to compose: {list_current}')
-            for mdocFile in list_current:
-                # Exclusion
-                if self.isMdocBanned(mdocFile):
-                    self.info(f'Mdoc banned: {mdocFile}')
+        while True:
+            mdocList = self.findMdocs()
+            if not inputSet.isStreamOpen() and Counter(self.processedMdocs) == Counter(mdocList):
+                logger.info(cyanStr('Input set closed.'))
+                self._insertFunctionStep(self.closeOutputSetsStep,
+                                         prerequisites=closeSetStepDeps,
+                                         needsGPU=False)
+                break
+
+            self.listOfMics = [mic.clone() for mic in inputSet if mic.getObjId() not in self.processedIds]
+            nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
+            if nonProcessedMdocs:
+                logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
+            for mdocFn in nonProcessedMdocs:
+                matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = self._isMdocOk(mdocFn)
+                if failedTs:
+                    # The tilt-series won't be considered anymore to generate the steps
+                    self.processedMdocs.append(mdocFn)
                     continue
-                try:
-                    self.readMdoc(mdocFile, streamOpen)
-                except Exception as e:
-                    print(f'mdocFile = {mdocFile} reading failed! Error message {e} Skipping...')
+                if not matchOk:
+                    # The tilt-series will not be discarded because there may be data
+                    # still pending to come
                     continue
-            if streamOpen:
-                time.sleep(self.timeNextLoop)
-                inputSet.loadAllProperties()
+                cTsPid = self._insertFunctionStep(self.composeTsStep,
+                                                  mdoc,
+                                                  tiltMdSorted,
+                                                  micsSorted,
+                                                  prerequisites=[],
+                                                  needsGPU=False)
+                closeSetStepDeps.append(cTsPid)
+                logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
+                self.processedMdocs.append(mdocFn)
 
-        self.info('The set of micrographs is closed')
-        self._insertFunctionStep(self._closeOutputSet,
-                                 needsGPU=False,
-                                 wait=False)
+            time.sleep(10)
+            if inputSet.isStreamOpen():
+                with self._lock:
+                    inputSet.loadAllProperties()  # refresh status for the streaming
 
+    @retry_on_sqlite_lock(log=logger)
+    def composeTsStep(self,
+                      mdoc: MDoc,
+                      tiltMd: Tuple[TiltMetadata],
+                      mics: Tuple[Micrograph]):
+        try:
+            self.generateOutTs(mdoc, tiltMd, mics)
+        except Exception as e:
+            logger.error(redStr(f'tsId = {mdoc.getTsId()} - the output generation '
+                                f'failed with the exception {e}. '
+                                f'Skipping...'))
+            logger.error(traceback.format_exc())
 
-    # -------------------------- MAIN FUNCTIONS -----------------------
-    def findMdocs(self):
+    def closeOutputSetsStep(self):
+        self._closeOutputSet()
+        outTsSet = getattr(self, OUT_TS_SET, None)
+        if not outTsSet or (outTsSet and len(outTsSet) == 0):
+            raise Exception(f'No output {OUT_TS_SET} were generated. Please check the '
+                            f'Output Log > run.stdout and run.stderr')
+        # The set is generated and the tilt-series are added, but they are empty (error
+        # during the data registering process
+        if outTsSet and len(outTsSet) > 0:
+            if all([len(ts) == 0 for ts in outTsSet]):
+                raise Exception(f'Output {OUT_TS_SET} is empty. This may happen if there '
+                                f'was an error during the data registering. Please check the '
+                                f'Output Log > run.stdout and run.stderr')
+
+    # --------------------------- UTILS functions -----------------------------
+    def getInMics(self, asPointer: bool = False) -> Union[Pointer, SetOfMicrographs]:
+        return self.inputMicrographs if asPointer else self.inputMicrographs.get()
+
+    def _isMdocOk(self, mdocFn: str) \
+            -> Tuple[bool, bool, Optional[MDoc], Optional[Tuple[TiltMetadata]], Optional[Tuple[Micrograph]]]:
+        """
+        matchOk, failedTs, tiltMdSorted, micsSorted
+        :param mdocFn: mdoc filename.
+        :return: Tuple[matchOk, failedTs, tiltMdSorted, micsSorted], where:
+            - matchOK: bool to indicate if a tilt-series was successfully matched to a mdoc file.
+            - failedTs: bool used to register if there was a problem with the tilt-series matched, e.g.
+              the percentage of tilts is lower than the allowed by the user and no new data is expected
+              to come as the set is closed.
+            - mdoc: MDoc object containing the mdoc file data.
+            - tiltMdSorted: list of TiltMetadata, sorted by angle.
+            - micsSorted: list of Micrograph, sorted to follow the same order as the tiltMdSorted.
+        """
+        matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = False, True, None, None, None
+        # Check the exclusion words
+        if self.isMdocBanned(mdocFn):
+            self.processedMdocs.append(mdocFn)
+
+        # Check the time from the last mdoc file update to consider it closed
+        time4NextTilt = self.time4NextTilt.toSeconds()
+        if time.time() - getmtime(mdocFn) < time4NextTilt:
+            logger.info(cyanStr(f'Waiting for the next tilt of {mdocFn}'))
+            failedTs = False
+            return matchOk, failedTs, mdoc, tiltMdSorted, micsSorted
+
+        # Read the mdoc contents
+        errorMsg, mdoc = self.readMdocContents(mdocFn)
+        if errorMsg:
+            logger.info(yellowStr(errorMsg))
+            self.processedMdocs.append(mdocFn)
+
+        # Match the stack files from the motion-corrected mics and from the mdoc
+        matchOk, failedTs, tiltMdSorted, micsSorted = self.matchTs(mdoc)
+        return matchOk, failedTs, mdoc, tiltMdSorted, micsSorted
+
+    def findMdocs(self) -> List[str]:
         """
         :return: return a sorted by date list of all mdoc files in the path
         """
         fpath = self.filesPath.get()
-        self.MDOC_DATA_SOURCE = glob(os.path.join(fpath, self.mdocPattern.get()))
-        self.MDOC_DATA_SOURCE.sort(key=os.path.getmtime)
-        return self.MDOC_DATA_SOURCE
-
-    def readMdoc(self, file2read, streamOpen):
-        """
-        Main function to launch the match with the set of micrographs and
-        launch the creation of the SetOfTiltSeries and each tilt series
-
-        :param file2read: mdoc file in the path
-        :param streamOpen: Bool for the setOfMics status (open or closed)
-
-        """
-        self.info(f'\n{self.separator}\nReading mdoc file: {file2read}')
-        # checking time after last mdoc file update to consider it closed
-        time4NextTilt = self.time4NextTilt.toSeconds()
-        if streamOpen and time.time() - self.readDateFile(file2read) < time4NextTilt:
-            self.info(f'Waiting next tilt of {file2read}\n{self.separator}')
-            return
-
-        statusMdoc, mdoc_order_angle_list, mdoc_obj = self.readingMdocTiltInfo(file2read)
-        self.info(f'mdoc file {os.path.basename(file2read)} with {len(mdoc_order_angle_list)} tilts is considered closed')
-        if statusMdoc:
-            if len(mdoc_order_angle_list) < 3:
-                self.info(f'Mdoc error. Less than 3 tilts {len(mdoc_order_angle_list)} on the mdoc {file2read}\n{self.separator}\n')
-            else:
-                if self.matchTS(mdoc_order_angle_list, file2read, streamOpen):
-                    self.createTS(mdoc_obj, mdoc_order_angle_list, file2read)
+        mdocList = glob(join(fpath, self.mdocPattern.get()))
+        if mdocList:
+            mdocList.sort(key=getmtime)
         else:
-            self.info(f'Mdoc file did not pass the format validation{self.separator}\n')
+            logger.info(cyanStr(f'No .mdoc files found in path = {fpath}'))
+        return mdocList
 
+    def isMdocBanned(self, mdocFn: str) -> bool:
+        for bannedWord in self.excludedWords.getListFromValues(caster=str):
+            if bannedWord in mdocFn:
+                logger.info(yellowStr(f"mdoc {mdocFn} contains the exclusion "
+                                      f"word {bannedWord}. Skipping..."))
+                return True
+        return False
 
-    def readingMdocTiltInfo(self, file2read):
-        """
-        :param file2read: mdoc file to read
-        :return: Bool: if the validation of the mdoc goes good or bad
-                 mdoc_order_angle_list: list with info for each tilt
-                    file, acquisition order and tilt Angle
-        """
-        mdoc_order_angle_list = []
-        mdoc_obj = MDoc(file2read)
-        mdoc_obj.read(ignoreFilesValidation=True)
-        print('readingMdocTiltInfo')
-        for tilt_metadata in mdoc_obj.getTiltsMetadata():
-            filepath = tilt_metadata.getAngleMovieFile()
-            tiltA = tilt_metadata.getTiltAngle()
-            if self.mdoc_bug_Correction.get():
-                filepath, tiltA = self.fixingMdocBug(filepath, tiltA)
-
-            mdoc_order_angle_list.append((filepath,
-                                          '{:03d}'.format(tilt_metadata.getAcqOrder()), tiltA))
-        print(f'mdoc_order_angle_list: {mdoc_order_angle_list}')
-        return True, mdoc_order_angle_list, mdoc_obj
-
-
-    @staticmethod
-    def fixingMdocBug(filepath, tiltA):
-        idx = filepath.find(']_')
-        filepath = filepath[:idx + 2] + filepath[idx + 2].upper() + filepath[idx + 3:]
-        if float(tiltA) - round(float(tiltA), 0) != 0:
-            filepath = filepath.replace(str(tiltA), str(round(float(tiltA))) + '.00')
-            tiltA = str(round(float(tiltA))) + '.00'
-        return filepath, tiltA
-
-    @staticmethod
-    def readDateFile(file):
-        return os.path.getmtime(file)
-
-    def matchTS(self, mdoc_order_angle_list, file2read, streamOpen):
-        """
-        Edit the self.listOfMics with the ones in the mdoc file
-
-        :param mdoc_order_angle_list: for each tilt:
-                filename, acquisitionOrder, Angle
-
-        :param file2read: mdoc file to read
-        :param streamOpen: Bool for the setOfMics status (open or closed)
-
-        """
-        self.info(f'Matching {file2read}...')
-        self.info(f'Tilts on the mdoc file: {len(mdoc_order_angle_list)}\n'
-                  f'Micrographs available: {len(self.listOfMics)}')
-
-        list_mdoc_files = [os.path.splitext(os.path.basename(fp[0]))[0] for fp in mdoc_order_angle_list]
-        list_mics_matched = []
-        for x, mic in enumerate(self.listOfMics):
-            if os.path.splitext(mic.getMicName())[0] in list_mdoc_files:
-                list_mics_matched.append(mic)
-
-        if streamOpen:
-            if len(list_mics_matched) < len(mdoc_order_angle_list):
-                    self.info(f"{len(mdoc_order_angle_list) - len(list_mics_matched)} micrographs are not available to compose the TiltSeries. "
-                              f'Waitting for the tilts to compose...\n{self.separator}\n')
-                    return False
-        else:
-            percentTiltsAvailable = int((100 * len(list_mics_matched)) / len(mdoc_order_angle_list))
-            self.info(f'Percent tilts available: {percentTiltsAvailable}%\nPercent tilts required: {self.percentTiltsRequired.get()}%')
-            if percentTiltsAvailable < self.percentTiltsRequired.get():
-                self.info(f'The mdoc file {file2read} will not provide a TiltSerie because {len(mdoc_order_angle_list) - len(list_mics_matched)} '
-                      f'micrographs ({percentTiltsAvailable}%) are not available to compose the TiltSeries. '
-                      f'Modify the \'Percent of tilts required\' parameter (advance) if you want this TiltSeries to be generated\n{self.separator}\n')
-                return False
-
-        self.info(f'Micrographs matched for the mdoc file: {len(list_mics_matched)}')
-        return True
-
-
-    def _loadInputList(self):
-        """ Load the input set of mics and create a list. """
-        mic_file = self.inputMicrographs.get().getFileName()
-        self.debug("Loading input db: %s" % mic_file)
-        mic_set = emobj.SetOfMicrographs(filename=mic_file)
-        mic_set.loadAllProperties()
-        self.listOfMics = [m.clone() for m in mic_set]
-        mic_set.close()
-
-
-    def createTS(self, mdoc_obj, mdoc_order_angle_list, file2read):
-        """
-        Create the SetOfTiltSeries and each tilt series. IMPORTANT: data from the import protocol is considered more
-        reliable than data from mdoc. Thus, in case both data sources provide valid data, the data from the import
-        will be used.
-        :param mdoc_obj: mdoc object to manage
-        """
-        tsId = mdoc_obj.getTsId()
-        tiltAxisAngle = mdoc_obj.getTiltAxisAngle()
-        dosePerFrame = self.inMicsAcq.getDosePerFrame()
-        if not tiltAxisAngle:
-            raise Exception(f'tsId = {tsId} --> Unable to read the tilt axis angle!')
-        self.info('Tilt series {} being composed...'.format(tsId))
-        with self._lock:
-            if self.TiltSeries is None:
-                SOTS = self._createSetOfTiltSeries(suffix='_composed')
-                SOTS.setStreamState(SOTS.STREAM_OPEN)
-                SOTS.enableAppend()
-                self._defineOutputs(TiltSeries=SOTS)
-                self._defineSourceRelation(self.inputMicrographs, SOTS)
-            else:
-                SOTS = self.TiltSeries
-                SOTS.setStreamState(SOTS.STREAM_OPEN)
-                SOTS.enableAppend()
-
-            file_order_angle_list = []
-            accumulated_dose_list = []
-            incoming_dose_list = []
-            for tilt_metadata in mdoc_obj.getTiltsMetadata():
-                filepath = tilt_metadata.getAngleMovieFile()
-                acqOrder = tilt_metadata.getAcqOrder()
-                tiltAngle = tilt_metadata.getTiltAngle()
-                accumDose = tilt_metadata.getAccumDose()
-                incomingDose = tilt_metadata.getIncomingDose()
-                if dosePerFrame:
-                    accumDose = dosePerFrame * acqOrder # MDoc class makes it to start in 1
-                    incomingDose = dosePerFrame * (acqOrder - 1)
-                if self.mdoc_bug_Correction.get():
-                    filepath, tiltAngle = self.fixingMdocBug(filepath, tiltAngle)
-
-                file_order_angle_list.append((filepath,  # Filename
-                                              '{:03d}'.format(acqOrder),  # Acquisition
-                                              tiltAngle))
-                accumulated_dose_list.append(accumDose)
-                incoming_dose_list.append(incomingDose)
-
-            file_ordered_angle_list = sorted(file_order_angle_list,
-                                             key=lambda angle: float(angle[2]))
-            # Tilt series object
-            ts_obj = tomoObj.TiltSeries()
-            ts_obj.setTsId(tsId)
-            acq = ts_obj.getAcquisition()
-            mdocVoltage = mdoc_obj.getVoltage()
-            mdocMaginfication = mdoc_obj.getMagnification()
-            inMicsVoltage = self.inMicsAcq.getVoltage()
-            inMicsMagnification = self.inMicsAcq.getMagnification()
-
-            voltage = inMicsVoltage if inMicsVoltage else mdocVoltage
-            magnification = inMicsMagnification if inMicsMagnification else mdocMaginfication
-            acq.setVoltage(voltage)
-            acq.setMagnification(magnification)
-            acq.setSphericalAberration(self.inMicsAcq.getSphericalAberration())
-            acq.setAmplitudeContrast(self.inMicsAcq.getAmplitudeContrast())
-            acq.setDosePerFrame(dosePerFrame)
-            acq.setAngleMin(float(file_ordered_angle_list[0][2]))
-            acq.setAngleMax(float(file_ordered_angle_list[-1][2]))
-            step = round(mean([float(file_ordered_angle_list[i + 1][2]) - float(file_ordered_angle_list[i][2]) for i in range(len(file_ordered_angle_list) - 1)]))
-            acq.setStep(step)
-            acq.setAccumDose(accumDose)
-            if self.isTomo5.get():
-                acq.setTiltAxisAngle(-1 * tiltAxisAngle - 90)
-            else:
-                acq.setTiltAxisAngle(tiltAxisAngle)
-
-            origin = Transform()
-            ts_obj.setOrigin(origin)
-            SOTS.setAcquisition(acq)
-            SOTS.append(ts_obj)
-
-            self.settingTS(SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list)
-            try:
-                SOTS.write()
-            except Exception as e:
-                self.error(e)
-            self._store(SOTS)
-            self.info(
-                f"Tilt series ({len(mdoc_order_angle_list)} tilts) composed from mdoc file: {os.path.basename(file2read)}\n{self.separator}\n")
-            summaryF = self._getExtraPath("summary.txt")
-            summaryF = open(summaryF, "w")
-            summaryF.write(f'{self.TiltSeries.getSize()} TiltSeries added')
-            self.listTSComposed.append(file2read)
-
-
-    def settingTS(self, SOTS, ts_obj, file_ordered_angle_list, incoming_dose_list):
-        """
-        Set all the info in each tilt and set the ts_obj information with all
-        the tilts
-
-        :param SOTS: Set of tilt series.
-        :param ts_obj: Tilt series object to add tilts too.
-        :param file_ordered_angle_list: list of files sorted by angle.
-        :param incoming_dose_list: list of dose per tilt.
-        :return:
-        """
+    def readMdocContents(self, mdocFn: str) -> Tuple[str, Optional[MDoc]]:
+        logger.info(cyanStr(f'Reading mdoc file: {mdocFn}...'))
+        mdoc = MDoc(mdocFn)
         try:
-            ts_fn = self._getOutputTiltSeriesPath(ts_obj)
-            counter_ti = 0
-
-            TSAngleFile = self._getExtraPath("{}.rawtlt".format(ts_obj.getTsId()))
-            TSAngleFile = open(TSAngleFile, "a")
-            for n in file_ordered_angle_list:
-                TSAngleFile.write('{}\n'.format(str(n[2])))
-            TSAngleFile.close()
-            sr = self.listOfMics[0].getSamplingRate()
-            properties = {"sr": sr}
-            newStack = ImageStack(properties=properties)
-            ti = None
-            tsAcq = ts_obj.getAcquisition()
-            tsAccumDose = -999
-            tsInitialDose = 999
-            angleList = []
-            for f, to, ta in file_ordered_angle_list:
-                try:
-                    to = int(to)
-                    for mic in self.listOfMics:
-                        if ts_obj.getSamplingRate() is None:
-                            ts_obj.setSamplingRate(sr)
-                        if SOTS.getSamplingRate() is None:
-                            SOTS.setSamplingRate(sr)
-                        if os.path.basename(f) in mic.getMicName():
-                            ti = tomoObj.TiltImage()
-                            ti.setTsId(ts_obj.getTsId())
-                            new_location = (counter_ti + 1, ts_fn)
-                            ti.setLocation(new_location)
-                            # ti.setObjId(counter_ti + 1)
-                            ti.setAcquisition(ts_obj.getAcquisition())
-                            ti.setAcquisitionOrder(to)
-                            ti.setTiltAngle(ta)
-                            ti.setSamplingRate(sr)
-                            ti.setAcquisition(ts_obj.getAcquisition().clone())
-                            dosePerFrame = incoming_dose_list[to - 1]  # To begins in 1 because of MDoc class
-                            accumDose = to * dosePerFrame
-                            initialDose = (to - 1) * dosePerFrame
-                            ti.getAcquisition().setDosePerFrame(dosePerFrame)
-                            ti.getAcquisition().setAccumDose(accumDose)
-                            ti.getAcquisition().setDoseInitial(initialDose)
-                            newStack.append(ImageReadersRegistry.open(mic.getFileName()))
-                            ts_obj.append(ti)
-
-                            tsInitialDose = min(tsInitialDose, initialDose)
-                            tsAccumDose = max(tsAccumDose, accumDose)
-                            angleList.append(float(ta))
-
-                            counter_ti += 1
-                except Exception as e:
-                    self.error(e)
-                    return
-            ImageReadersRegistry.write(newStack, ts_fn, isStack=True)
-
-            tsAcq.setAccumDose(tsAccumDose)
-            tsAcq.setDoseInitial(tsInitialDose)
-            tsAcq.setAngleMin(min(angleList))
-            tsAcq.setAngleMax(max(angleList))
-            ts_obj.setAcquisition(tsAcq)
-            ts_obj._setFirstDim(ti)
-            SOTS.update(ts_obj)
+            mdoc.read(ignoreFilesValidation=True)
+            # Check the tilt axis
+            self._getTiltAxisAngle(mdoc)
         except Exception as e:
-            self.error(e)
+            errorMsg = f'Mdoc file {mdocFn} did not pass the format validation with exception {e}'
+            return errorMsg, None
 
-    # -------------------------- AUXILIARY FUNCTIONS -----------------------
-    def _getOutputTiltSeriesPath(self, ts, suffix=''):
-        return self._getExtraPath('%s%s.mrcs' % (ts.getTsId(), suffix))
+        tiltsMdList = mdoc.getTiltsMetadata()
+        nImgs = len(tiltsMdList)
+        minNumTilts = self.minNumTilts.get()
+        if nImgs < minNumTilts:
+            errorMsg = (f'Mdoc error -> Mdoc file {mdocFn} contains less [{nImgs}] '
+                        f'than minimum allowed [{minNumTilts}].')
+            return errorMsg, None
+        return '', mdoc
 
-    def _getOutputTiltImagePaths(self, tilt_image):
-        """ Return expected output path for correct movie and DW one.
+    def matchTs(self, mdoc: MDoc) \
+            -> Tuple[bool, bool, Optional[Tuple[TiltMetadata]], Optional[Tuple[Micrograph]]]:
         """
-        base = self._getExtraPath(self._getTiltImageMRoot(tilt_image))
-        return base + '.mrc', base + '_Out.mrc'
+        matchOk, failedTs, tiltMdSorted, micsSorted
+        :param mdoc: MDoc object containing the mdoc file data
+        :return: Tuple[matchOk, failedTs, tiltMdSorted, micsSorted], where:
+            - matchOK: bool to indicate if a tilt-series was successfully matched to a mdoc file.
+            - failedTs: bool used to register if there was a problem with the tilt-series matched, e.g.
+              the percentage of tilts is lower than the allowed by the user and no new data is expected
+              to come as the set is closed.
+            - tiltMdSorted: list of TiltMetadata, sorted by angle.
+            - micsSorted: list of Micrograph, sorted to follow the same order as the tiltMdSorted.
+        """
+        mdocFn = mdoc.getFileName()
+        tiltsMdList = mdoc.getTiltsMetadata()
+        nTilts = len(tiltsMdList)
+        inMicsSet = self.getInMics()
 
+        micsBNamesDict = {removeBaseExt(mic.getMicName()): mic for mic in self.listOfMics}
+        tiltsMdListFiltered = []
+        micsFilteredList = []
+        for tiltMd in tiltsMdList:
+            micNameFromMdoc = removeBaseExt(tiltMd.getAngleMovieFile())
+            if micNameFromMdoc in micsBNamesDict.keys():
+                tiltsMdListFiltered.append(tiltMd)
+                micsFilteredList.append(micsBNamesDict[micNameFromMdoc])
 
-    @staticmethod
-    def _getTiltImageMRoot(ti):
-        return '%s_%02d' % (ti.getTsId(), ti.getObjId())
+        nMicsMatched = len(tiltsMdListFiltered)
+        if nMicsMatched < nTilts and inMicsSet.isStreamOpen():
+            logger.info(cyanStr(f"{mdocFn} -> {nTilts - nMicsMatched} micrographs are not yet available "
+                                f"to compose the TiltSeries. Waiting for the tilts to compose..."))
+            logger.info(cyanStr(f'Tilts on the mdoc file: {nTilts}'))
+            logger.info(cyanStr(f'Motion-corrected tilts found: {nMicsMatched}'))
+            return False, False, None, None
 
+        if not inMicsSet.isStreamOpen():
+            percentTiltsAvailable = int(100 * nMicsMatched / nTilts)
+            percentTiltsReq = self.percentTiltsRequired.get()
+            logger.info(cyanStr(f'Percent tilts available: {percentTiltsAvailable}'))
+            logger.info(cyanStr(f'Percent tilts required: {percentTiltsReq}'))
+            if percentTiltsAvailable < percentTiltsReq:
+                logger.info(yellowStr(
+                    f'The mdoc file {mdocFn} will not provide a TiltSeries because'
+                    f' {nTilts - nMicsMatched} micrographs ({percentTiltsAvailable}%) are '
+                    f'not available to compose the TiltSeries. Modify the parameter '
+                    f'"Percent of tilts required" parameter (advanced) if you want this '
+                    f'TiltSeries to be generated.'))
+                self.processedMdocs.append(mdocFn)
+                return False, True, None, None
+
+        logger.info(cyanStr(f'Micrographs matched for the mdoc file: {nMicsMatched}'))
+        # Ensure the tilt metadata list is sorted by angle
+        zippedLists = list(zip(tiltsMdListFiltered, micsFilteredList))
+        zippedLists.sort(key=lambda x: float(x[0].getTiltAngle()), reverse=False)
+        tiltsMdSorted, micsSorted = zip(*zippedLists)
+        return True, False, tiltsMdSorted, micsSorted
+
+    def _getTiltAxisAngle(self, mdoc: MDoc) -> float:
+        # Manually introduced
+        manualTiltAxisAngle = self.manualTiltAxisAngle.get()
+        if manualTiltAxisAngle:
+            return manualTiltAxisAngle
+        # Read from mdoc
+        mdocTiltAxisAngle = mdoc.getTiltAxisAngle()
+        if not mdocTiltAxisAngle:
+            raise Exception(f'Unable to read the tilt axis angle from the mdoc file {mdoc.getFileName()}.')
+        return -1 * mdocTiltAxisAngle - 90 if self.isTomo5.get() else mdocTiltAxisAngle
+
+    def generateOutTs(self,
+                      mdoc: MDoc,
+                      tiltsMd: Tuple[TiltMetadata],
+                      mics: Tuple[Micrograph]):
+        tsId = mdoc.getTsId()
+        # MOUNT THE STACKS -----------------------------------------------------------------
+        logger.info(cyanStr(f'{tsId} - mounting the stack/s...'))
+        tsFn = self._getOutTsFName(tsId)
+        properties = {"sr": self.sRate}
+        tsStack = ImageStack(properties=properties)
+        doEvenOdd = self.doEvenOdd.get()
+        oddEvenMics = getattr(mics[0], MC_EVEN_ODD_ATTRIBUTE, None)
+        tsStackEven = []
+        tsStackOdd = []
+        tsFnEven = ''
+        tsFnOdd = ''
+        if doEvenOdd:
+            tsFnEven = self._getOutTsFName(tsId, suffix='_even')
+            tsFnOdd = self._getOutTsFName(tsId, suffix='_odd')
+            tsStackEven = ImageStack(properties=properties)
+            tsStackOdd = ImageStack(properties=properties)
+
+        for mic in mics:
+            # Add immage to the stack
+            tsStack.append(ImageReadersRegistry.open(mic.getFileName()))
+            if doEvenOdd:
+                # Odd / even
+                tsStackOdd.append(ImageReadersRegistry.open(oddEvenMics[0]))
+                tsStackEven.append(ImageReadersRegistry.open(oddEvenMics[1]))
+
+        ImageReadersRegistry.write(tsStack, tsFn, isStack=True)
+        if oddEvenMics:
+            ImageReadersRegistry.write(tsStackOdd, tsFnOdd, isStack=True)
+            ImageReadersRegistry.write(tsStackEven, tsFnEven, isStack=True)
+
+        # COMPOSE THE TILT-SERIES ---------------------------------------------------------
+        logger.info(cyanStr(f'{tsId} - composing the tilt series...'))
+        with self._lock:
+            acq = self._genTomoAcquisition(mdoc, tiltsMd)
+            tsSet = self._getOutputTsSet()
+            ts = TiltSeries(tsId=tsId)
+            tsSet.setAcquisition(acq)
+            tsSet.append(ts)
+
+            index = 1
+            minAngle = 999
+            maxAngle = -999
+            initialDose = 999
+            accumDose = -999
+            for tiltMd, mic in zip(tiltsMd, mics):
+                ti = TiltImage()
+                acqOrder = int(tiltMd.getAcqOrder())
+                tiltAngle = float(tiltMd.getTiltAngle())
+                ti.setTsId(tsId)
+                ti.setTiltAngle(tiltAngle)
+                ti.setIndex(index)
+                ti.setFileName(tsFn)
+                ti.setSamplingRate(self.sRate)
+                ti.setAcquisitionOrder(acqOrder)
+                ti.setOddEven([tsFnOdd, tsFnEven] if doEvenOdd else [])
+                # Acquisition
+                micAcq = mic.getAcquisition()
+                tiAcq = acq.clone()
+                # Initial and accumulated doses may be zero if the mdoc does not contain the data
+                # needed to calculate it.
+                inDose = max(tiltMd.getIncomingDose(), micAcq.getDosePerFrame() * (acqOrder - 1))
+                cumDose = max(tiltMd.getAccumDose(), micAcq.getDosePerFrame() * acqOrder)
+                tiAcq.setDoseInitial(inDose)
+                tiAcq.setAccumDose(cumDose)
+                ti.setAcquisition(tiAcq)
+                ts.append(ti)
+                self.processedIds.append(mic.getObjId())
+                index += 1
+                # Update the values needed for the acquisition of the tilt-series
+                minAngle = min(tiltAngle, minAngle)
+                maxAngle = max(tiltAngle, maxAngle)
+                initialDose = min(inDose, initialDose)
+                accumDose = max(cumDose, accumDose)
+
+            tsAcq = ts.getAcquisition()
+            tsAcq.setDoseInitial(initialDose)
+            tsAcq.setAccumDose(accumDose)
+            tsAcq.setAngleMin(minAngle)
+            tsAcq.setAngleMax(maxAngle)
+            ts.setAcquisition(tsAcq)
+            # Data persistence
+            ts.write()
+            tsSet.update(ts)
+            tsSet.write()
+            self._store(tsSet)
+            for outputName in self._possibleOutputs.keys():
+                output = getattr(self, outputName, None)
+                if output:
+                    output.close()
+
+    def _genTomoAcquisition(self,
+                            mdoc: MDoc,
+                            tiltsMdList: Tuple[TiltMetadata]) -> TomoAcquisition:
+        nImgs = len(tiltsMdList)
+        inMicsVoltage = self.inMicsAcq.getVoltage()
+        inMicsMagnification = self.inMicsAcq.getMagnification()
+        voltage = inMicsVoltage if inMicsVoltage else mdoc.getVoltage()
+        magnification = inMicsMagnification if inMicsMagnification else mdoc.getMagnification()
+        acq = TomoAcquisition()
+        acq.setVoltage(voltage)
+        acq.setMagnification(magnification)
+        acq.setSphericalAberration(self.inMicsAcq.getSphericalAberration())
+        acq.setAmplitudeContrast(self.inMicsAcq.getAmplitudeContrast())
+        acq.setDosePerFrame(self.inMicsAcq.getDosePerFrame())
+        acq.setAngleMin(float(tiltsMdList[0].getTiltAngle()))
+        acq.setAngleMax(float(tiltsMdList[-1].getTiltAngle()))
+        step = round(mean([float(tiltsMdList[i + 1].getTiltAngle()) -
+                           float(tiltsMdList[i].getTiltAngle()) for i in
+                           range(nImgs - 1)]))
+        acq.setStep(step)
+        acq.setAccumDose(float(tiltsMdList[-1].getAccumDose()))
+        acq.setTiltAxisAngle(self._getTiltAxisAngle(mdoc))
+        return acq
+
+    def _getOutputTsSet(self) -> SetOfTiltSeries:
+        tsSet = getattr(self, OUT_TS_SET, None)
+        if tsSet:
+            tsSet.enableAppend()
+        else:
+            tsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix='_composed')
+            tsSet.setSamplingRate(self.sRate)
+            tsSet.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{OUT_TS_SET: tsSet})
+            self._defineSourceRelation(self.inputMicrographs, tsSet)
+        return tsSet
+
+    def _getOutTsFName(self, tsId: str, suffix: str = '') -> str:
+        return self._getExtraPath(f'{tsId}{suffix}.mrcs')
 
     def _validate(self):
-        pass
-
+        errorMsgs = []
+        oddEvenMics = getattr(self.getInMics()[1], MC_EVEN_ODD_ATTRIBUTE, None)
+        if self.doEvenOdd.get() and not oddEvenMics:
+            errorMsgs.append('Odd/Even tilt-series were requested to be composed, '
+                             'but the motion-corrected micrographs introduced do '
+                             'not have the in their metadata.')
+        return errorMsgs
 
     def _summary(self):
-
-        summary = []
-        summary.append(f'Path with the *.mdoc files for each tilt serie:{self.filesPath.get()}\n')
-
+        summary = [f'Path with the *.mdoc files for each tilt series:{self.filesPath.get()}\n']
         summaryF = self._getExtraPath("summary.txt")
-        if not os.path.exists(summaryF):
+        if not exists(summaryF):
             summary.append("No summary file yet.")
         else:
             summaryF = open(summaryF, "r")
@@ -495,6 +533,3 @@ class ProtComposeTS(ProtImport, ProtTomoBase, ProtStreamingBase):
                 summary.append(line.rstrip())
             summaryF.close()
         return summary
-
-
-

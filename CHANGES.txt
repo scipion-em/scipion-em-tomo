@@ -1,7 +1,17 @@
+v3.11.5:
+ Users:
+  - Protocol meshes from segmentation: protocol parallelized.
+  - Protocol compose tilt-series improved and renewed.
+  - Protocol tilt-series assign alignment streamified.
+ Developers: remove xmipp dependencies.
+v3.11.4: Hotfix - Fix an error generating subsets from the ctftomo-viewer
+v3.11.3: Deploy test.
+v3.11.2:
+ Users:
+    - Update the templates of STA (Apoferritin, Chlamidomones, HIV) and removing old ones
 v3.11.1:
  Users:
     - Skipping failed tiltseries or tiltimages in the tomography viewer
-
 v3.11.0:
  Users:
     - Fixing an error sorting in the CTF viewer.

@@ -47,7 +47,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pyworkflow.utils import removeBaseExt, cyanStr, replaceExt, yellowStr
+from pyworkflow.utils import removeBaseExt, cyanStr, yellowStr
 
 logger = logging.getLogger(__name__)
 

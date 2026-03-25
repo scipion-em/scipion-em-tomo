@@ -1649,12 +1649,12 @@ class CtfEstimationTreeProvider(TreeProvider, ttk.Treeview):
 
         orderBy = self.ORDER_DICT.get(self.COL_CTF_SERIE)
 
-        for ctfSerie in self.ctfSeries.iterItems(orderBy=orderBy):
+        for ctfSerie in self.ctfSeries.iterItems(orderBy=orderBy, iterate=False):
             ctfEstObj = ctfSerie.clone()
             ctfEstObj._allowsSelection = True
             ctfEstObj._parentObject = None
             objects.append(ctfEstObj)
-            for item in ctfSerie.iterItems(orderBy='id'):
+            for item in ctfSerie.iterItems(orderBy='id', iterate=False):
                 ctfEstItem = item.clone()
                 ctfEstItem._allowsSelection = False
                 ctfEstItem._parentObject = ctfEstObj
@@ -1942,7 +1942,7 @@ class CtfEstimationListDialog(ListDialog):
             outputSetOfbadCTFTomoSeries = String()
             outputSetOfbadCTFTomoSeries.set('')
             ctfSerieSeek = 0
-            for ctfSerie in ctfSeries.iterItems():
+            for ctfSerie in ctfSeries.iterItems(orderBy='_tsId', iterate=False):
                 ctfSerieClon = ctfSerie.clone()
                 ctfSerieClon.setEnabled(True)
                 goodCTF = CTFSerieStates.UNCHECKED in self.tree.item(ctfSerie.getTsId(), 'tags')
@@ -1952,7 +1952,7 @@ class CtfEstimationListDialog(ListDialog):
                     outputSetOfgoodCTFTomoSeries.append(ctfSerieClon)
                     outputSetOfgoodCTFTomoSeries.setSetOfTiltSeries(self._inputSetOfTiltSeries)
                     objList = list(self.tree._objDict)
-                    for item in ctfSerie.iterItems():
+                    for item in ctfSerie.iterItems(orderBy='id', iterate=False):
                         ctfEstItem = item.clone()
                         obj = self.tree.getObjectFromId(objList[ctfSerieSeek + ctfSeek])
                         ctfEstItem.setEnabled(obj.isEnabled())
@@ -1967,7 +1967,7 @@ class CtfEstimationListDialog(ListDialog):
                     outputSetOfbadCTFTomoSeries.set(outputSetOfbadCTFTomoSeries.get() + ctfSerie.getTsId() + ' ')
                     ctfSeek += ctfSerie.getSize()
 
-                ctfSerieSeek = ctfSeek
+                ctfSerieSeek += ctfSeek
 
             outputgoodCTFSetName = 'goodSetOfCTFTomoSeries%s' % suffix
             outputbadCTFSetName = 'badSetOfCTFTomoSeries%s' % suffix
