@@ -181,8 +181,11 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
             for mdocFn in nonProcessedMdocs:
                 matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = self._isMdocOk(mdocFn)
-                if failedTs:
-                    # The tilt-series won't be considered anymore to generate the steps
+                if failedTs or (not matchOk and not inputSet.isStreamOpen()):
+                    # If failedTs --> The tilt-series won't be considered anymore to generate the steps
+                    # If not matchOk and the input set is closed, that mdoc will be considered as processed
+                    # to avoid neverending executions in case of more mdocs than files are present in the
+                    # working directory
                     self.processedMdocs.append(mdocFn)
                     continue
                 if not matchOk:
