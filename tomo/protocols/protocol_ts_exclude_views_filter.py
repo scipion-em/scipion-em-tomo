@@ -32,8 +32,8 @@ from typing import Union, Counter, Tuple
 from pyworkflow import BETA
 from pyworkflow.protocol import STEPS_PARALLEL
 from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
-from pyworkflow.object import Set, Pointer
-from pyworkflow.utils import cyanStr, Message, redStr
+from pyworkflow.object import Set, Pointer, String
+from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
 from pwem.protocols import EMProtocol
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.objects import TiltSeries, TiltImage, SetOfTiltSeries
@@ -69,6 +69,7 @@ class ProtExclViewFilter(EMProtocol):
         self.itemTsIdReadList = []
         self.failedItems = []
         self.sRate = -1
+        self.removedTsIds = String('')
 
     @classmethod
     def worksInStreaming(cls):
@@ -130,7 +131,7 @@ class ProtExclViewFilter(EMProtocol):
             # ['ts_a', 'ts_b'] != ['ts_b', 'ts_a'], but they are the same with Counter.
             if not inTsSet.isStreamOpen() and Counter(self.itemTsIdReadList) == Counter(inTsIds):
                 logger.info(cyanStr('Input set closed.\n'))
-                self._insertFunctionStep(self._closeOutputSet,
+                self._insertFunctionStep(self.closeOutputSetsStep,
                                          prerequisites=closeSetStepDeps,
                                          needsGPU=False)
                 break
@@ -163,6 +164,10 @@ class ProtExclViewFilter(EMProtocol):
 
     @retry_on_sqlite_lock(log=logger)
     def _registerOutput(self, ts: TiltSeries):
+        # angleMin = 999
+        # angleMax = -999
+        # accumDose = 0
+        # initialDose = 999
         xdimThreshold, ydimThreshold, minTiltThreshold, maxTiltThreshold, minDoseThreshold, maxDoseThreshold = (
             self._getThresholds(ts))
         with self._lock:
@@ -172,44 +177,62 @@ class ProtExclViewFilter(EMProtocol):
             outTs = TiltSeries()
             outTs.copyInfo(ts)
             outTsSet.append(outTs)
-            counter = 0
+            finalNoImgs = 0
             # Tilt-images
             for ti in ts:
                 newTi = TiltImage()
                 newTi.copyInfo(ti)
                 tiltAngle = ti.getTiltAngle()
-
                 dose = ti.getAcquisition().getAccumDose()
-
+                # Filter by tilt angle
                 if tiltAngle > maxTiltThreshold or tiltAngle < minTiltThreshold:
                     newTi.setEnabled(False)
+                    continue
+                # Filter by max shift
                 if ts.hasAlignment():
                     tm = ti.getTransform().getMatrix()
                     sx = tm[0, 2]
                     sy = tm[1, 2]
                     if sx > xdimThreshold or sy > ydimThreshold:
                         newTi.setEnabled(False)
-
+                        continue
+                # Filter by dose
                 if dose < minDoseThreshold or dose > maxDoseThreshold:
                     newTi.setEnabled(False)
+                    continue
 
-                newTs.append(newTi)
-                counter = counter + 1
+                # angleMin = min(tiltAngle, angleMin)
+                # angleMax = max(tiltAngle, angleMax)
+                # accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
+                # initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
 
-            if counter >= self.minViews.get():
-                newTs.setDim(ts.getDim())
-                newTs.write()
-                newSetTs.update(ts)
+                outTs.append(newTi)
+                finalNoImgs += 1
 
-        # TODO: Acquisition update (dose / angles)
-        newSetTs.write()
-        self._store()
+            minNoViewsAllowed = self.minViews.get()
+            if finalNoImgs >= minNoViewsAllowed:
+                # TODO: Acquisition update (dose / angles)
+                outTs.write()
+                outTsSet.update(outTs)
+                outTsSet.write()
+                self._store(outTsSet)
+            else:
+                tsId = ts.getTsId()
+                logger.info(yellowStr(f'tsId = {tsId} was removed because the number '
+                                      f'of tilt-images after filtering [{finalNoImgs}] '
+                                      f'is lower than the minimum specified [{minNoViewsAllowed}].'))
+                self._updateRemovedTsIds(tsId)
+            # Close explicitly the outputs (for streaming)
+            self.closeOutputsForStreaming()
 
     def closeOutputSetsStep(self):
-        for _, output in self.iterOutputAttributes():
-            output.setStreamState(Set.STREAM_CLOSED)
-            output.write()
-        self._store()
+        self._closeOutputSet()
+        outputName = self._possibleOutputs.tiltSeries.name
+        output = getattr(self, outputName, None)
+        if not output or (output and len(output) == 0):
+            raise Exception(f'No output {outputName} was generated. Please check the '
+                            f'Output Log > run.stdout and run.stderr')
+
 
     # --------------------------- UTILS functions ----------------------------
     def readingOutput(self) -> None:
@@ -253,8 +276,21 @@ class ProtExclViewFilter(EMProtocol):
         maxDoseThreshold = self.maxDose.get()
         return xdimThreshold, ydimThreshold, minTiltThreshold, maxTiltThreshold, minDoseThreshold, maxDoseThreshold
 
+    def _updateRemovedTsIds(self, tsId: str) -> None:
+        updatedMsg = self.removedTsIds.get() + f' {tsId}'
+        self.removedTsIds.set(updatedMsg)
+        self._store(self.removedTsIds)
+
+    def closeOutputsForStreaming(self):
+        # Close explicitly the outputs (for streaming)
+        for output in self._possibleOutputs:
+            output = getattr(self, output.name, None)
+            if output:
+                output.close()
+
     # --------------------------- INFO functions ----------------------------
     def _summary(self):
         summary = []
-
+        if self.isFinished() and self.removedTsIds.get():
+            summary.append(f'Some tilt-series were removed: *{self.removedTsIds.get()}*')
         return summary
