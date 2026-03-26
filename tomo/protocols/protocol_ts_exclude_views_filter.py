@@ -30,6 +30,7 @@ import time
 from typing import Union, Counter, Tuple
 
 from pyworkflow import BETA
+from pyworkflow.protocol import STEPS_PARALLEL
 from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
 from pyworkflow.object import Set, Pointer
 from pyworkflow.utils import cyanStr, Message, redStr
@@ -61,6 +62,7 @@ class ProtExclViewFilter(EMProtocol):
     _label = 'exclude views filter'
     _devStatus = BETA
     _possibleOutputs = outputObjects
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -109,6 +111,8 @@ class ProtExclViewFilter(EMProtocol):
                       default=30,
                       label="Min number of views",
                       help='Minimum number of views to include a tilt series.')
+
+        form.addParallelSection(threads=3, mpi=0)
 
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
@@ -159,25 +163,17 @@ class ProtExclViewFilter(EMProtocol):
 
     @retry_on_sqlite_lock(log=logger)
     def _registerOutput(self, ts: TiltSeries):
+        xdimThreshold, ydimThreshold, minTiltThreshold, maxTiltThreshold, minDoseThreshold, maxDoseThreshold = (
+            self._getThresholds(ts))
         with self._lock:
+            # Set of tilt-series
             outTsSet = self.getOutputSetOfTS()
+            # Tilt-series
             outTs = TiltSeries()
             outTs.copyInfo(ts)
             outTsSet.append(outTs)
-
-        xdimThreshold, ydimThreshold, minTiltThreshold, maxTiltThreshold, minDoseThreshold, maxDoseThreshold = (
-            self._getThresholds(ts))
-
-        for ts in inputData:
-
-            newTs = TiltSeries(tsId=ts.getTsId())
-            newTs.copyInfo(ts)
-            newSetTs.append(newTs)
-            tomoAcq = ts.getAcquisition()
-            tomoAcq.setAngleMax(tomoAcq.getAngleMax())
-            tomoAcq.setAngleMax(tomoAcq.getAngleMin())
-            newTs.setAcquisition(tomoAcq)
             counter = 0
+            # Tilt-images
             for ti in ts:
                 newTi = TiltImage()
                 newTi.copyInfo(ti)
@@ -205,11 +201,9 @@ class ProtExclViewFilter(EMProtocol):
                 newTs.write()
                 newSetTs.update(ts)
 
+        # TODO: Acquisition update (dose / angles)
         newSetTs.write()
         self._store()
-
-        self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: newSetTs})
-        self._defineSourceRelation(inputData, newSetTs)
 
     def closeOutputSetsStep(self):
         for _, output in self.iterOutputAttributes():
