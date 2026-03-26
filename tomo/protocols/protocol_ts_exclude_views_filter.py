@@ -30,7 +30,7 @@ import time
 from typing import Union, Counter, Tuple
 
 from pyworkflow import BETA
-from pyworkflow.protocol import STEPS_PARALLEL
+from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam
 from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
 from pyworkflow.object import Set, Pointer, String
 from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
@@ -48,7 +48,8 @@ OUTPUT_TS_FAILED_NAME = "FailedTiltSeries"
 
 
 class outputObjects(Enum):
-    tiltSeries = SetOfTiltSeries
+    tiltSeries = SetOfTiltSeries()
+    failedTiltSeries = SetOfTiltSeries()
 
 
 class ProtExclViewFilter(EMProtocol):
@@ -112,6 +113,12 @@ class ProtExclViewFilter(EMProtocol):
                       default=30,
                       label="Min number of views",
                       help='Minimum number of views to include a tilt series.')
+
+        form.addParam('doReStack', BooleanParam,
+                      default=False,
+                      label='Re-stack the output tilt-series?',
+                      help='If set to No, the output tilt-series will be filtered at metadata level '
+                           'instead of generating a new re-stacked file for each tilt-series.')
 
         form.addParallelSection(threads=3, mpi=0)
 
@@ -212,6 +219,7 @@ class ProtExclViewFilter(EMProtocol):
             minNoViewsAllowed = self.minViews.get()
             if finalNoImgs >= minNoViewsAllowed:
                 # TODO: Acquisition update (dose / angles)
+                # TODO: generate a yaml with the error cause of each ti...
                 outTs.write()
                 outTsSet.update(outTs)
                 outTsSet.write()
