@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Federico P. de Isidro Gomez (fp.deisidro@cnb.csic.es) [1]
+# * Authors:     Scipion Team
 # *
-# * [1] Centro Nacional de Biotecnologia, CSIC, Spain
+# * National Center of Biotechnology, CSIC, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -27,11 +28,12 @@ import logging
 import traceback
 from enum import Enum
 import time
-from typing import Union, Counter, Tuple
-
+from typing import Union, Counter, Tuple, List
+import numpy as np
+from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
 from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam
-from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
+from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam, GE
 from pyworkflow.object import Set, Pointer, String
 from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
 from pwem.protocols import EMProtocol
@@ -41,6 +43,12 @@ from tomo.objects import TiltSeries, TiltImage, SetOfTiltSeries
 logger = logging.getLogger(__name__)
 
 EXCL_VIEWS_SUFFIX = '_exclViews'
+
+# Tilt-series annotation keys
+BY_MAX_SHIFT = 'byMaxShift'
+BY_TILT_ANGLE = 'byTiltAngle'
+BY_DOSE = 'byDose'
+BY_DARK = 'byDark'
 
 # Form variables
 IN_TS_SET = 'inTsSet'
@@ -71,6 +79,17 @@ class ProtExclViewFilter(EMProtocol):
         self.failedItems = []
         self.sRate = -1
         self.removedTsIds = String('')
+        self.removedTsIdsDict = {
+            BY_MAX_SHIFT: [],
+            BY_TILT_ANGLE: [],
+            BY_DOSE: [],
+            BY_DARK: [],
+        }
+        # Thresholds
+        self.minTiltThreshold = None
+        self.maxTiltThreshold = None
+        self.minDoseThreshold = None
+        self.maxDoseThreshold = None
 
     @classmethod
     def worksInStreaming(cls):
@@ -88,30 +107,48 @@ class ProtExclViewFilter(EMProtocol):
                       help='Select several sets of tilt-series where to evaluate the consensus in their alignment. '
                            'Output set will bring the information from the first selected set.')
 
-        lineShift = form.addLine('Filter by max shift (px)',
-                                 help='This is the minimum/maximum shift allowed along the X or Y direction.'
-                                      ' A value of 0.1 means that a 10% of the dimensions of the tilt image '
-                                      'is allowed.')
-        lineShift.addParam('maxShiftX', FloatParam, default=0.1, label="X")
-        lineShift.addParam('maxShiftY', FloatParam, default=0.1, label="Y")
+        group = form.addGroup('Filter criteria')
+        lineShift = group.addLine('Filter by max shift (px)',
+                                  help='This is the minimum/maximum shift allowed along the X or Y direction.'
+                                       ' A value of 0.1 means that a 10% of the dimensions of the tilt image '
+                                       'is allowed.')
+        lineShift.addParam('maxShiftX', FloatParam, default=0.1, label="X   ")
+        lineShift.addParam('maxShiftY', FloatParam, default=0.1, label="Y    ")
 
-        lineTilt = form.addLine('Filter by tilt angle (deg)',
-                                help='This is the minimum/maximum tilt angle allowed.'
-                                     'Only the tilt images with tilt angles in the range min<tilt<max are'
-                                     'allowed.')
+        lineTilt = group.addLine('Filter by tilt angle (deg)',
+                                 help='This is the minimum/maximum tilt angle allowed.'
+                                      'Only the tilt images with tilt angles in the range min<tilt<max are'
+                                      'allowed.')
         lineTilt.addParam('mintilt', FloatParam, default=-30.0, label="Min")
         lineTilt.addParam('maxtilt', FloatParam, default=30.0, label="Max")
 
-        lineDose = form.addLine('Filter by dose (e/A^2)',
-                                help='This is the minimum/maximum dose per tilt image.'
-                                     'Only the tilt images with accumulated dose in this range will be kept.')
+        lineDose = group.addLine('Filter by dose (e/A^2)',
+                                 help='This is the minimum/maximum dose per tilt image.'
+                                      'Only the tilt images with accumulated dose in this range will be kept.')
         lineDose.addParam('minDose', FloatParam, default=0.0, label="Min")
         lineDose.addParam('maxDose', FloatParam, default=70.0, label="Max")
+
+        lineDark = group.addLine('Filter by dark sensitivity',
+                                 help='If set to Yes, the dark images will be discarded based on a '
+                                      'sensitivity factor. Values lower than 0 means that no dark filter '
+                                      'will be applied:\n\n'
+                                      '- *High Sensitivity: Low Factor --> 1.0 - 1.5.* It might flag images '
+                                      'that are just slightly darker than the average, such as high-tilt images '
+                                      'where the ice is naturally thicker.\n\n'
+                                      '- *Balanced: around 2.0.* It ignores the natural darkening of high '
+                                      'tilts but will catch "heavy" shadows or partial grid bars.\n\n'
+                                      '- *Low Sensitivity: High Factor --> greater than 3.0.* It will only flag '
+                                      '"catastrophic" failures, like a solid copper grid bar completely blocking the '
+                                      'electron beam (total blackouts).'
+                                 )
+        lineDark.addParam('darkSensitivity', FloatParam,
+                       default=2.0,
+                       label='Dark sensitivity factor',)
 
         form.addParam('minViews',
                       IntParam,
                       default=30,
-                      label="Min number of views",
+                      label="Minimum number of tilts allowed",
                       help='Minimum number of views to include a tilt series.')
 
         form.addParam('doReStack', BooleanParam,
@@ -125,6 +162,7 @@ class ProtExclViewFilter(EMProtocol):
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
         closeSetStepDeps = []
+        self._initialize()
         inTsSet = self._getInTsSet()
         self.sRate = self._getInTsSet().getSamplingRate()
         self.readingOutput()
@@ -161,6 +199,12 @@ class ProtExclViewFilter(EMProtocol):
                     inTsSet.loadAllProperties()  # refresh status for the streaming
 
     # --------------------------- STEPS functions ----------------------------
+    def _initialize(self):
+        self.minTiltThreshold = self.mintilt.get()
+        self.maxTiltThreshold = self.maxtilt.get()
+        self.minDoseThreshold = self.minDose.get()
+        self.maxDoseThreshold = self.maxDose.get()
+
     def excludeViewFilteringStep(self, ts: TiltSeries):
         try:
             self._registerOutput(ts)
@@ -171,12 +215,12 @@ class ProtExclViewFilter(EMProtocol):
 
     @retry_on_sqlite_lock(log=logger)
     def _registerOutput(self, ts: TiltSeries):
-        # angleMin = 999
-        # angleMax = -999
-        # accumDose = 0
-        # initialDose = 999
-        xdimThreshold, ydimThreshold, minTiltThreshold, maxTiltThreshold, minDoseThreshold, maxDoseThreshold = (
-            self._getThresholds(ts))
+        angleMin = 999
+        angleMax = -999
+        accumDose = 0
+        initialDose = 999
+        sxThreshold, syThreshold = self._getMaxShiftThresholds(ts)
+        darkImgIndices = self._getDarkImgIndices(ts)
         with self._lock:
             # Set of tilt-series
             outTsSet = self.getOutputSetOfTS()
@@ -185,41 +229,38 @@ class ProtExclViewFilter(EMProtocol):
             outTs.copyInfo(ts)
             outTsSet.append(outTs)
             finalNoImgs = 0
+            tiList = []
             # Tilt-images
             for ti in ts:
                 newTi = TiltImage()
                 newTi.copyInfo(ti)
                 tiltAngle = ti.getTiltAngle()
-                dose = ti.getAcquisition().getAccumDose()
                 # Filter by tilt angle
-                if tiltAngle > maxTiltThreshold or tiltAngle < minTiltThreshold:
-                    newTi.setEnabled(False)
-                    continue
+                self._filterByTiltAngle(newTi)
                 # Filter by max shift
                 if ts.hasAlignment():
-                    tm = ti.getTransform().getMatrix()
-                    sx = tm[0, 2]
-                    sy = tm[1, 2]
-                    if sx > xdimThreshold or sy > ydimThreshold:
-                        newTi.setEnabled(False)
-                        continue
+                    self._filterByMaxShifts(newTi, sxThreshold, syThreshold)
                 # Filter by dose
-                if dose < minDoseThreshold or dose > maxDoseThreshold:
-                    newTi.setEnabled(False)
-                    continue
+                self._filterByDose(newTi)
+                # Filter dark images
+                self._filterByDarkImgs(ti, darkImgIndices)
 
-                # angleMin = min(tiltAngle, angleMin)
-                # angleMax = max(tiltAngle, angleMax)
-                # accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
-                # initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
+                angleMin = min(tiltAngle, angleMin)
+                angleMax = max(tiltAngle, angleMax)
+                accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
+                initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
 
-                outTs.append(newTi)
+                tiList.append(ti)
                 finalNoImgs += 1
 
             minNoViewsAllowed = self.minViews.get()
             if finalNoImgs >= minNoViewsAllowed:
-                # TODO: Acquisition update (dose / angles)
                 # TODO: generate a yaml with the error cause of each ti...
+                if self.doReStack.get():
+                    self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
+                else:
+                    self._populateFinalTs(outTs, tiList)
+
                 outTs.write()
                 outTsSet.update(outTs)
                 outTsSet.write()
@@ -240,7 +281,6 @@ class ProtExclViewFilter(EMProtocol):
         if not output or (output and len(output) == 0):
             raise Exception(f'No output {outputName} was generated. Please check the '
                             f'Output Log > run.stdout and run.stderr')
-
 
     # --------------------------- UTILS functions ----------------------------
     def readingOutput(self) -> None:
@@ -274,20 +314,83 @@ class ProtExclViewFilter(EMProtocol):
             self._defineSourceRelation(self._getInTsSet(returnPointer=True), outputSet)
         return outputSet
 
-    def _getThresholds(self, ts: TiltSeries) -> Tuple[int, int, float, float, float, float]:
+    def _getMaxShiftThresholds(self, ts: TiltSeries) -> Tuple[int, int]:
         xdim, ydim, _ = ts.getFirstItem().getDim()
         xdimThreshold = self.maxShiftX.get() * xdim
         ydimThreshold = self.maxShiftY.get() * ydim
-        minTiltThreshold = self.mintilt.get()
-        maxTiltThreshold = self.maxtilt.get()
-        minDoseThreshold = self.minDose.get()
-        maxDoseThreshold = self.maxDose.get()
-        return xdimThreshold, ydimThreshold, minTiltThreshold, maxTiltThreshold, minDoseThreshold, maxDoseThreshold
+        return xdimThreshold, ydimThreshold
+
+    def _getDarkImgIndices(self, ts: TiltSeries) -> List[int]:
+        imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
+        # Statistic indicators
+        medians = np.array([np.median(img) for img in imgStack])
+        q1, q3 = np.percentile(medians, [25, 75])
+        iqr = q3 - q1
+        lowLimit = q1 - (self.darkSensitivity.get() * iqr)
+        # Dark images indices
+        darkImgsIndices = np.where(medians < lowLimit)[0]
+        return darkImgsIndices.tolist()
+
+    def _filterByTiltAngle(self, ti: TiltImage) -> None:
+        tiltAngle = ti.getTiltAngle()
+        if tiltAngle > self.maxTiltThreshold or tiltAngle < self.minTiltThreshold:
+            ti.setEnabled(False)
+            self.removedTsIdsDict[BY_TILT_ANGLE].append(ti.getTsId())
+
+    def _filterByMaxShifts(self, ti: TiltImage, sxThreshold: int, syThreshold: int) -> None:
+        tm = ti.getTransform().getMatrix()
+        sx = tm[0, 2]
+        sy = tm[1, 2]
+        if sx > sxThreshold or sy > syThreshold:
+            ti.setEnabled(False)
+            self.removedTsIdsDict[BY_MAX_SHIFT].append(ti.getTsId())
+
+    def _filterByDose(self, ti: TiltImage) -> None:
+        dose = ti.getAcquisition().getAccumDose()
+        if dose < self.minDoseThreshold or dose > self.maxDoseThreshold:
+            ti.setEnabled(False)
+            self.removedTsIdsDict[BY_DOSE].append(ti.getTsId())
+
+    def _filterByDarkImgs(self, ti: TiltImage, darkImgIndices: List[int]) -> None:
+        if ti.getIndex() in darkImgIndices:
+            ti.setEnabled(False)
+            self.removedTsIdsDict[BY_DARK].append(ti.getTsId())
 
     def _updateRemovedTsIds(self, tsId: str) -> None:
         updatedMsg = self.removedTsIds.get() + f' {tsId}'
         self.removedTsIds.set(updatedMsg)
         self._store(self.removedTsIds)
+
+    @staticmethod
+    def _populateRestackedTs(
+                    outTs: TiltSeries,
+                    tiList: List[TiltImage],
+                    angleMin: float,
+                    angleMax: float,
+                    accumDose: float,
+                    initialDose: float) -> None:
+        # Update the acquisition minAngle and maxAngle values of the tilt-series
+        acq = outTs.getAcquisition()
+        acq.setAngleMin(angleMin)
+        acq.setAngleMax(angleMax)
+        acq.setAccumDose(accumDose)
+        acq.setDoseInitial(initialDose)
+        outTs.setAcquisition(acq)
+        # Update the acquisition minAngle and maxAngle values of each tilt-image acq while preserving their
+        # specific accum and initial dose values
+        for tiOut in tiList:
+            if tiOut.isEnabled():
+                tiAcq = tiOut.getAcquisition()
+                tiAcq.setAngleMin(angleMin)
+                tiAcq.setAngleMax(angleMax)
+                tiOut.setAcquisition(tiAcq)
+                outTs.append(tiOut)
+        outTs.setAnglesCount(len(outTs))
+
+    @staticmethod
+    def _populateFinalTs(outTs: TiltSeries, tiList: List[TiltImage]) -> None:
+        for tiOut in tiList:
+            outTs.append(tiOut)
 
     def closeOutputsForStreaming(self):
         # Close explicitly the outputs (for streaming)
