@@ -66,7 +66,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         self.listOfMics = None
         self.inMicsAcq = None
         self.sRate = None
-        self.numberOfThreads.set(3)
 
     @classmethod
     def worksInStreaming(cls):
