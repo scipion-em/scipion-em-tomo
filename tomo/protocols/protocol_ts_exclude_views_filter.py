@@ -28,12 +28,13 @@ import logging
 import traceback
 from enum import Enum
 import time
-from typing import Union, Counter, Tuple, List
+from typing import Counter, Tuple, List, Optional
 import numpy as np
+import yaml
 from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
 from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam
-from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam, GE
+from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
 from pyworkflow.object import Set, Pointer, String
 from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
 from pwem.protocols import EMProtocol
@@ -52,7 +53,15 @@ BY_DARK = 'byDark'
 
 # Form variables
 IN_TS_SET = 'inTsSet'
-OUTPUT_TS_FAILED_NAME = "FailedTiltSeries"
+MIN_TILT = 'mintilt'
+MAX_TILT = 'maxtilt'
+MAX_SX = 'maxShiftX'
+MAX_SY = 'maxShiftY'
+MIN_DOSE = 'minDose'
+MAX_DOSE = 'maxDose'
+DARK_TH = 'darkSensitivity'
+MIN_VIEWS = 'minViews'
+DO_RESTACK = 'doReStack'
 
 
 class outputObjects(Enum):
@@ -85,11 +94,6 @@ class ProtExclViewFilter(EMProtocol):
             BY_DOSE: [],
             BY_DARK: [],
         }
-        # Thresholds
-        self.minTiltThreshold = None
-        self.maxTiltThreshold = None
-        self.minDoseThreshold = None
-        self.maxDoseThreshold = None
 
     @classmethod
     def worksInStreaming(cls):
@@ -112,26 +116,24 @@ class ProtExclViewFilter(EMProtocol):
                                   help='This is the minimum/maximum shift allowed along the X or Y direction.'
                                        ' A value of 0.1 means that a 10% of the dimensions of the tilt image '
                                        'is allowed.')
-        lineShift.addParam('maxShiftX', FloatParam, default=0.1, label="X   ")
-        lineShift.addParam('maxShiftY', FloatParam, default=0.1, label="Y    ")
+        lineShift.addParam(MAX_SX, FloatParam, default=0.1, label="X   ")
+        lineShift.addParam(MAX_SY, FloatParam, default=0.1, label="Y    ")
 
         lineTilt = group.addLine('Filter by tilt angle (deg)',
                                  help='This is the minimum/maximum tilt angle allowed.'
                                       'Only the tilt images with tilt angles in the range min<tilt<max are'
                                       'allowed.')
-        lineTilt.addParam('mintilt', FloatParam, default=-30.0, label="Min")
-        lineTilt.addParam('maxtilt', FloatParam, default=30.0, label="Max")
+        lineTilt.addParam(MIN_TILT, FloatParam, default=-30.0, label="Min")
+        lineTilt.addParam(MAX_TILT, FloatParam, default=30.0, label="Max")
 
         lineDose = group.addLine('Filter by dose (e/A^2)',
                                  help='This is the minimum/maximum dose per tilt image.'
                                       'Only the tilt images with accumulated dose in this range will be kept.')
-        lineDose.addParam('minDose', FloatParam, default=0.0, label="Min")
-        lineDose.addParam('maxDose', FloatParam, default=70.0, label="Max")
+        lineDose.addParam(MIN_DOSE, FloatParam, default=0.0, label="Min")
+        lineDose.addParam(MAX_DOSE, FloatParam, default=70.0, label="Max")
 
         lineDark = group.addLine('Filter by dark sensitivity',
-                                 help='If set to Yes, the dark images will be discarded based on a '
-                                      'sensitivity factor. Values lower than 0 means that no dark filter '
-                                      'will be applied:\n\n'
+                                 help='Values lower than 0 means that no dark filter will be applied. Behavior:\n\n'
                                       '- *High Sensitivity: Low Factor --> 1.0 - 1.5.* It might flag images '
                                       'that are just slightly darker than the average, such as high-tilt images '
                                       'where the ice is naturally thicker.\n\n'
@@ -139,19 +141,19 @@ class ProtExclViewFilter(EMProtocol):
                                       'tilts but will catch "heavy" shadows or partial grid bars.\n\n'
                                       '- *Low Sensitivity: High Factor --> greater than 3.0.* It will only flag '
                                       '"catastrophic" failures, like a solid copper grid bar completely blocking the '
-                                      'electron beam (total blackouts).'
-                                 )
-        lineDark.addParam('darkSensitivity', FloatParam,
-                       default=2.0,
-                       label='Dark sensitivity factor',)
+                                      'electron beam (total blackouts).')
 
-        form.addParam('minViews',
+        lineDark.addParam(DARK_TH, FloatParam,
+                          default=2.0,
+                          label='Dark sensitivity factor', )
+
+        form.addParam(MIN_VIEWS,
                       IntParam,
                       default=30,
                       label="Minimum number of tilts allowed",
                       help='Minimum number of views to include a tilt series.')
 
-        form.addParam('doReStack', BooleanParam,
+        form.addParam(DO_RESTACK, BooleanParam,
                       default=False,
                       label='Re-stack the output tilt-series?',
                       help='If set to No, the output tilt-series will be filtered at metadata level '
@@ -162,9 +164,8 @@ class ProtExclViewFilter(EMProtocol):
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
         closeSetStepDeps = []
-        self._initialize()
         inTsSet = self._getInTsSet()
-        self.sRate = self._getInTsSet().getSamplingRate()
+        self.sRate = inTsSet.getSamplingRate()
         self.readingOutput()
 
         while True:
@@ -199,12 +200,6 @@ class ProtExclViewFilter(EMProtocol):
                     inTsSet.loadAllProperties()  # refresh status for the streaming
 
     # --------------------------- STEPS functions ----------------------------
-    def _initialize(self):
-        self.minTiltThreshold = self.mintilt.get()
-        self.maxTiltThreshold = self.maxtilt.get()
-        self.minDoseThreshold = self.minDose.get()
-        self.maxDoseThreshold = self.maxDose.get()
-
     def excludeViewFilteringStep(self, ts: TiltSeries):
         try:
             self._registerOutput(ts)
@@ -215,10 +210,10 @@ class ProtExclViewFilter(EMProtocol):
 
     @retry_on_sqlite_lock(log=logger)
     def _registerOutput(self, ts: TiltSeries):
-        angleMin = 999
-        angleMax = -999
-        accumDose = 0
-        initialDose = 999
+        angleMin = 999.
+        angleMax = -999.
+        accumDose = 0.
+        initialDose = 999.
         sxThreshold, syThreshold = self._getMaxShiftThresholds(ts)
         darkImgIndices = self._getDarkImgIndices(ts)
         with self._lock:
@@ -253,10 +248,9 @@ class ProtExclViewFilter(EMProtocol):
                 tiList.append(ti)
                 finalNoImgs += 1
 
-            minNoViewsAllowed = self.minViews.get()
+            minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
             if finalNoImgs >= minNoViewsAllowed:
-                # TODO: generate a yaml with the error cause of each ti...
-                if self.doReStack.get():
+                if self.getAttribValue(DO_RESTACK):
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:
                     self._populateFinalTs(outTs, tiList)
@@ -277,29 +271,36 @@ class ProtExclViewFilter(EMProtocol):
     def closeOutputSetsStep(self):
         self._closeOutputSet()
         outputName = self._possibleOutputs.tiltSeries.name
-        output = getattr(self, outputName, None)
+        output = getattr(self, outputName, [])
         if not output or (output and len(output) == 0):
             raise Exception(f'No output {outputName} was generated. Please check the '
                             f'Output Log > run.stdout and run.stderr')
+        # Generate a report with the results
+        self._genYamlReport()
 
     # --------------------------- UTILS functions ----------------------------
+    def getAttribValue(self, attribName: str):
+        return getattr(self, attribName).get()
+
     def readingOutput(self) -> None:
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
+        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None) or []
+        for item in outTsSet:
+            self.itemTsIdReadList.append(item.getTsId())
         if outTsSet:
-            for item in outTsSet:
-                self.itemTsIdReadList.append(item.getTsId())
             self.info(cyanStr(f'TsIds processed: {self.itemTsIdReadList}'))
         else:
             self.info(cyanStr('No tilt-series have been processed yet'))
 
-    def _getInTsSet(self, returnPointer: bool = False) -> Union[SetOfTiltSeries, Pointer]:
-        inTsPointer = getattr(self, IN_TS_SET)
-        return inTsPointer if returnPointer else inTsPointer.get()
+    def _getInTsSetPointer(self) -> Pointer:
+        return getattr(self, IN_TS_SET)
+
+    def _getInTsSet(self) -> SetOfTiltSeries:
+        return self._getInTsSetPointer().get()
 
     def getOutputSetOfTS(self) -> SetOfTiltSeries:
         attrName = self._possibleOutputs.tiltSeries.name
         outputSet = getattr(self, attrName, None)
-        if outputSet:
+        if isinstance(outputSet, SetOfTiltSeries):
             outputSet.enableAppend()
         else:
             outputSet = SetOfTiltSeries.create(self._getPath(),
@@ -311,29 +312,32 @@ class ProtExclViewFilter(EMProtocol):
             outputSet.write()
             # Define outputs and relations
             self._defineOutputs(**{attrName: outputSet})
-            self._defineSourceRelation(self._getInTsSet(returnPointer=True), outputSet)
+            self._defineSourceRelation(self._getInTsSetPointer(), outputSet)
         return outputSet
 
     def _getMaxShiftThresholds(self, ts: TiltSeries) -> Tuple[int, int]:
         xdim, ydim, _ = ts.getFirstItem().getDim()
-        xdimThreshold = self.maxShiftX.get() * xdim
-        ydimThreshold = self.maxShiftY.get() * ydim
+        xdimThreshold = self.getAttribValue(MAX_SX) * xdim
+        ydimThreshold = self.getAttribValue(MAX_SY) * ydim
         return xdimThreshold, ydimThreshold
 
-    def _getDarkImgIndices(self, ts: TiltSeries) -> List[int]:
-        imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
-        # Statistic indicators
-        medians = np.array([np.median(img) for img in imgStack])
-        q1, q3 = np.percentile(medians, [25, 75])
-        iqr = q3 - q1
-        lowLimit = q1 - (self.darkSensitivity.get() * iqr)
-        # Dark images indices
-        darkImgsIndices = np.where(medians < lowLimit)[0]
-        return darkImgsIndices.tolist()
+    def _getDarkImgIndices(self, ts: TiltSeries) -> Optional[List[int]]:
+        darkSensitivity = self.getAttribValue(DARK_TH)
+        if darkSensitivity > 0.0:
+            imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
+            # Statistic indicators
+            medians = np.fromiter((np.median(img) for img in imgStack), dtype=np.float64)
+            q1, q3 = np.percentile(medians, [25.0, 75.0])
+            iqr = q3 - q1
+            lowLimit = q1 - (darkSensitivity * iqr)
+            # Dark images indices
+            darkImgsIndices = np.where(medians < lowLimit)[0]
+            return darkImgsIndices.tolist()
+        return None
 
     def _filterByTiltAngle(self, ti: TiltImage) -> None:
         tiltAngle = ti.getTiltAngle()
-        if tiltAngle > self.maxTiltThreshold or tiltAngle < self.minTiltThreshold:
+        if tiltAngle > self.getAttribValue(MAX_TILT) or tiltAngle < self.getAttribValue(MIN_TILT):
             ti.setEnabled(False)
             self.removedTsIdsDict[BY_TILT_ANGLE].append(ti.getTsId())
 
@@ -347,11 +351,13 @@ class ProtExclViewFilter(EMProtocol):
 
     def _filterByDose(self, ti: TiltImage) -> None:
         dose = ti.getAcquisition().getAccumDose()
-        if dose < self.minDoseThreshold or dose > self.maxDoseThreshold:
+        if dose < self.getAttribValue(MIN_DOSE) or dose > self.getAttribValue(MAX_DOSE):
             ti.setEnabled(False)
             self.removedTsIdsDict[BY_DOSE].append(ti.getTsId())
 
-    def _filterByDarkImgs(self, ti: TiltImage, darkImgIndices: List[int]) -> None:
+    def _filterByDarkImgs(self, ti: TiltImage, darkImgIndices: Optional[List[int]]) -> None:
+        if not isinstance(darkImgIndices, list):
+            return
         if ti.getIndex() in darkImgIndices:
             ti.setEnabled(False)
             self.removedTsIdsDict[BY_DARK].append(ti.getTsId())
@@ -363,12 +369,12 @@ class ProtExclViewFilter(EMProtocol):
 
     @staticmethod
     def _populateRestackedTs(
-                    outTs: TiltSeries,
-                    tiList: List[TiltImage],
-                    angleMin: float,
-                    angleMax: float,
-                    accumDose: float,
-                    initialDose: float) -> None:
+            outTs: TiltSeries,
+            tiList: List[TiltImage],
+            angleMin: float,
+            angleMax: float,
+            accumDose: float,
+            initialDose: float) -> None:
         # Update the acquisition minAngle and maxAngle values of the tilt-series
         acq = outTs.getAcquisition()
         acq.setAngleMin(angleMin)
@@ -392,11 +398,19 @@ class ProtExclViewFilter(EMProtocol):
         for tiOut in tiList:
             outTs.append(tiOut)
 
+    def _genYamlReport(self):
+        fileName = self._getExtraPath('exclude_tilt_series.yaml')
+        try:
+            with open(fileName, 'w', encoding='utf-8') as file:
+                yaml.dump(self.removedTsIdsDict, file, sort_keys=False, default_flow_style=False)
+        except Exception as e:
+            print(f"Error generating the yaml report {fileName} with the exception -> {e}")
+
     def closeOutputsForStreaming(self):
         # Close explicitly the outputs (for streaming)
         for output in self._possibleOutputs:
             output = getattr(self, output.name, None)
-            if output:
+            if isinstance(output, Set):
                 output.close()
 
     # --------------------------- INFO functions ----------------------------
