@@ -39,7 +39,7 @@ from pyworkflow import BETA
 from pyworkflow.object import Pointer, Set
 from pyworkflow.protocol import ProtStreamingBase, BooleanParam, LEVEL_ADVANCED, StringParam, \
     PathParam, PointerParam, IntParam, GE, LE, FloatParam
-from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr
+from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr, magentaStr
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
@@ -170,6 +170,9 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         while True:
             mdocList = self.findMdocs()
             if not inputSet.isStreamOpen() and Counter(self.processedMdocs) == Counter(mdocList):
+                logger.info(magentaStr('Counter(self.processedMdocs) == Counter(mdocList)'))
+                logger.info(magentaStr(f'{Counter(self.processedMdocs)} | {Counter(mdocList)}'))
+                logger.info(magentaStr(f'{self.processedMdocs} | {mdocList}'))
                 logger.info(cyanStr('Input set closed.'))
                 self._insertFunctionStep(self.closeOutputSetsStep,
                                          prerequisites=closeSetStepDeps,
