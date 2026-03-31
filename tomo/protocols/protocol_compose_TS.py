@@ -57,6 +57,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
     _devStatus = BETA
     _label = 'Compose Tilt Series'
     _possibleOutputs = {OUT_TS_SET: SetOfTiltSeries}
+    numberOfThreads = 3
 
     def __init__(self, **args):
         super().__init__(**args)
@@ -157,8 +158,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                            "seconds or the following syntax: {days}d {hours}h "
                            "{minutes}m {seconds}s separated by spaces "
                            "e.g: 1d 2h 20m 15s,  10m 3s, 1h, 20s or 25")
-
-        form.addHidden('numberOfThreads', IntParam, default=2)
 
     # -------------------------- STEPS functions ------------------------------
     def stepsGeneratorStep(self):
