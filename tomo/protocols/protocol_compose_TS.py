@@ -36,7 +36,7 @@ from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.objects import SetOfMicrographs
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
-from pyworkflow.object import Pointer, Set
+from pyworkflow.object import Pointer, Set, Integer
 from pyworkflow.protocol import ProtStreamingBase, BooleanParam, LEVEL_ADVANCED, StringParam, \
     PathParam, PointerParam, IntParam, GE, LE, FloatParam
 from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr, magentaStr
@@ -57,7 +57,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
     _devStatus = BETA
     _label = 'Compose Tilt Series'
     _possibleOutputs = {OUT_TS_SET: SetOfTiltSeries}
-    numberOfThreads = 3
+    numberOfThreads = Integer(3)
 
     def __init__(self, **args):
         super().__init__(**args)
