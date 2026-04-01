@@ -27,13 +27,13 @@
 import logging
 import traceback
 from enum import Enum
-import time
 from typing import Counter, Tuple, List, Optional
 import numpy as np
 import yaml
+import time
 from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
-from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam
+from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam, ProtStreamingBase
 from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
 from pyworkflow.object import Set, Pointer, String
 from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
@@ -69,7 +69,7 @@ class outputObjects(Enum):
     failedTiltSeries = SetOfTiltSeries()
 
 
-class ProtExclViewFilter(EMProtocol):
+class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     """
     This protocol allows to filter a set of aligned tilt series according to a set of parameter as they are:
      * Maximum allowed shift after the tilt series alignment
@@ -229,7 +229,6 @@ class ProtExclViewFilter(EMProtocol):
             for ti in ts:
                 newTi = TiltImage()
                 newTi.copyInfo(ti)
-                tiltAngle = ti.getTiltAngle()
                 # Filter by tilt angle
                 self._filterByTiltAngle(newTi)
                 # Filter by max shift
@@ -240,6 +239,7 @@ class ProtExclViewFilter(EMProtocol):
                 # Filter dark images
                 self._filterByDarkImgs(ti, darkImgIndices)
 
+                tiltAngle = ti.getTiltAngle()
                 angleMin = min(tiltAngle, angleMin)
                 angleMax = max(tiltAngle, angleMax)
                 accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
@@ -335,11 +335,15 @@ class ProtExclViewFilter(EMProtocol):
             return darkImgsIndices.tolist()
         return None
 
+    @staticmethod
+    def _getTiId(ti: TiltImage) -> str:
+        return f'{ti.getAcquisitionOrder()}@{ti.getTsId()}'
+
     def _filterByTiltAngle(self, ti: TiltImage) -> None:
         tiltAngle = ti.getTiltAngle()
         if tiltAngle > self.getAttribValue(MAX_TILT) or tiltAngle < self.getAttribValue(MIN_TILT):
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_TILT_ANGLE].append(ti.getTsId())
+            self.removedTsIdsDict[BY_TILT_ANGLE].append(self._getTiId(ti))
 
     def _filterByMaxShifts(self, ti: TiltImage, sxThreshold: int, syThreshold: int) -> None:
         tm = ti.getTransform().getMatrix()
@@ -347,20 +351,20 @@ class ProtExclViewFilter(EMProtocol):
         sy = tm[1, 2]
         if sx > sxThreshold or sy > syThreshold:
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_MAX_SHIFT].append(ti.getTsId())
+            self.removedTsIdsDict[BY_MAX_SHIFT].append(self._getTiId(ti))
 
     def _filterByDose(self, ti: TiltImage) -> None:
         dose = ti.getAcquisition().getAccumDose()
         if dose < self.getAttribValue(MIN_DOSE) or dose > self.getAttribValue(MAX_DOSE):
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_DOSE].append(ti.getTsId())
+            self.removedTsIdsDict[BY_DOSE].append(self._getTiId(ti))
 
     def _filterByDarkImgs(self, ti: TiltImage, darkImgIndices: Optional[List[int]]) -> None:
         if not isinstance(darkImgIndices, list):
             return
         if ti.getIndex() in darkImgIndices:
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_DARK].append(ti.getTsId())
+            self.removedTsIdsDict[BY_DARK].append(self._getTiId(ti))
 
     def _updateRemovedTsIds(self, tsId: str) -> None:
         updatedMsg = self.removedTsIds.get() + f' {tsId}'
