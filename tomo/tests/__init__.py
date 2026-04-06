@@ -102,6 +102,7 @@ class DataSetEmd10439(Enum):
     def getBinnedDims(cls, binFactor: int) -> list:
         return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
 
+
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
 
 ########################################################################################################################
@@ -169,7 +170,7 @@ class DataSetRe4STATuto(Enum):
     croppedBoxSizeBin2 = 128
     tiltAxisAngle = tiltAxisAngle
     initialDose = initialDose
-    dosePerTiltImg = 3.05 # Mean dose
+    dosePerTiltImg = 3.05  # Mean dose
     dosePerTiltImgWithTltFile = 3.0
     exclusionWordsTs03 = 'output 01 43 45 54'
     exclusionWordsTs54 = 'output 01 43 45 03'
@@ -372,7 +373,6 @@ DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSet
 EMPIAR_10491 = 'empiar_10491'
 DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
 
-
 ########################################################################################################################
 RE_STA_TUTO_MOVIES = 'relion_sta_tutorial_movies'
 
@@ -390,6 +390,7 @@ testAcq03.setDosePerFrame(DosePerFrame)
 testAcq54.setDosePerFrame(DosePerFrame)
 testAcq54_reject = testAcq54.clone()
 testAcq54_reject.setDoseInitial(3.05)
+
 
 class DataSet_RE_STA_TUTO_MOVIES(Enum):
     unbinnedPixSize = 1.35
@@ -413,16 +414,19 @@ DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES,
 ########################################################################################################################
 TOMOSEGMEMTV_TEST_DATASET = 'tomosegmemtv'
 
+
 class DataSet_Tomosegmemtv(Enum):
     tomogram = 'emd_1155i.mrc'
     sRate = 1
     tomoDims = [141, 281, 91]
+
 
 DataSet(name=TOMOSEGMEMTV_TEST_DATASET, folder=TOMOSEGMEMTV_TEST_DATASET,
         files={el.name: el.value for el in DataSet_Tomosegmemtv})
 
 ########################################################################################################################
 MICROTUBULES_TOMOS_DATASET = 'microtubulesTomograms'
+
 
 class DataSet_MicrotubulesTomos(Enum):
     fPath = ''
@@ -435,11 +439,13 @@ class DataSet_MicrotubulesTomos(Enum):
     def getBinnedDims(cls, binFactor: int) -> list:
         return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
 
+
 DataSet(name=MICROTUBULES_TOMOS_DATASET, folder=MICROTUBULES_TOMOS_DATASET,
         files={el.name: el.value for el in DataSet_MicrotubulesTomos})
 
 ########################################################################################################################
 ACTIN_TOMOS_DATASET = 'actinTomograms'
+
 
 class DataSet_ActinTomos(Enum):
     fPath = 'EMPIAR-10989_subset'
@@ -452,6 +458,55 @@ class DataSet_ActinTomos(Enum):
     def getBinnedDims(cls, binFactor: int) -> list:
         return (np.array(cls.unbinnedDims.value) / binFactor).tolist()
 
+
 DataSet(name=ACTIN_TOMOS_DATASET, folder=ACTIN_TOMOS_DATASET,
         files={el.name: el.value for el in DataSet_ActinTomos})
 
+########################################################################################################################
+FILTER_EXCLUDED_TS = 'filter_views_ts'
+
+# tsIds
+TS_POS6 = 'TS_02122021_BrnoKrios_Arctis_lam1_pos6'
+TS_POS8 = 'TS_02122021_BrnoKrios_Arctis_lam1_pos8'
+
+# Acquisition
+voltage = 300
+sphericalAb = 2.7
+amplitudeContrast = 0.1
+magnification = 50000
+tiltAxisAngle = -95.
+tiltStep = 3
+initialDose = 0
+dosePerTiltImgWithTltFile = -999  # 1.686
+accumDose = -999  # 75.88
+angleMax = 999
+angleMin = -999
+testAcq = TomoAcquisition(voltage=voltage,
+                          sphericalAberration=sphericalAb,
+                          amplitudeContrast=amplitudeContrast,
+                          magnification=magnification,
+                          doseInitial=initialDose,
+                          dosePerFrame=dosePerTiltImg,
+                          accumDose=accumDose,
+                          tiltAxisAngle=tiltAxisAngle,
+                          angleMin=angleMin,
+                          angleMax=angleMax,
+                          step=tiltStep)
+
+tsAcqPos6 = testAcq.clone()
+tsAcqPos6.setAngleMin(-70.01)
+tsAcqPos6.setAngleMax(49.98)
+tsAcqPos6.setDosePerFrame(2.17)  # Check this, variable dose
+tsAcqPos6.setAccumDose(75.88)
+
+tsAcqPos8 = testAcq.clone()
+# tsAcqPos6.setAngleMin(-70.01)
+# tsAcqPos6.setAngleMax(49.98)
+# tsAcqPos6.setDosePerFrame(2.17)  # Check this, variable dose
+# tsAcqPos6.setAccumDose(75.88)
+
+
+class DataSet_FilterExcludedTs(Enum):
+    tsMotionCorrBin4Dir = 'ts_motion_corrected_all_views_bin4'
+    tsAliBin4Dir = 'ts_aligned_all_views_bin4'
+    tomo5Mdoc = True

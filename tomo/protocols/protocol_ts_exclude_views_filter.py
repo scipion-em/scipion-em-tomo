@@ -26,6 +26,7 @@
 # **************************************************************************
 import logging
 import traceback
+from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Counter, Tuple, List, Optional
 import numpy as np
@@ -34,7 +35,7 @@ import time
 from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
 from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam, ProtStreamingBase
-from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam
+from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam, GE, LE
 from pyworkflow.object import Set, Pointer, String
 from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
 from pwem.protocols import EMProtocol
@@ -44,12 +45,6 @@ from tomo.objects import TiltSeries, TiltImage, SetOfTiltSeries
 logger = logging.getLogger(__name__)
 
 EXCL_VIEWS_SUFFIX = '_exclViews'
-
-# Tilt-series annotation keys
-BY_MAX_SHIFT = 'byMaxShift'
-BY_TILT_ANGLE = 'byTiltAngle'
-BY_DOSE = 'byDose'
-BY_DARK = 'byDark'
 
 # Form variables
 IN_TS_SET = 'inTsSet'
@@ -62,6 +57,21 @@ MAX_DOSE = 'maxDose'
 DARK_TH = 'darkSensitivity'
 MIN_VIEWS = 'minViews'
 DO_RESTACK = 'doReStack'
+
+# Tilt-series annotation keys
+@dataclass
+class TiMetadata:
+    by_max_shift: bool = False
+    by_tilt_angle: bool = False
+    by_dose: bool = False
+    by_dark: bool = False
+
+
+class TiLabel(Enum):
+    BY_MAX_SHIFT = 'by_max_shift'
+    BY_TILT_ANGLE = 'by_tilt_angle'
+    BY_DOSE = 'by_dose'
+    BY_DARK = 'by_dark'
 
 
 class outputObjects(Enum):
@@ -88,12 +98,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         self.failedItems = []
         self.sRate = -1
         self.removedTsIds = String('')
-        self.removedTsIdsDict = {
-            BY_MAX_SHIFT: [],
-            BY_TILT_ANGLE: [],
-            BY_DOSE: [],
-            BY_DARK: [],
-        }
+        self.tiLabelDict = dict()
 
     @classmethod
     def worksInStreaming(cls):
@@ -112,12 +117,12 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                            'Output set will bring the information from the first selected set.')
 
         group = form.addGroup('Filter criteria')
-        lineShift = group.addLine('Filter by max shift (px)',
-                                  help='This is the minimum/maximum shift allowed along the X or Y direction.'
-                                       ' A value of 0.1 means that a 10% of the dimensions of the tilt image '
+        lineShift = group.addLine('Filter by max shift (%)',
+                                  help='This is the minimum/maximum shift allowed along the X or Y direction. '
+                                       'A value of 0.1 means that a 10% of the dimensions of the tilt image '
                                        'is allowed.')
-        lineShift.addParam(MAX_SX, FloatParam, default=0.1, label="X   ")
-        lineShift.addParam(MAX_SY, FloatParam, default=0.1, label="Y    ")
+        lineShift.addParam(MAX_SX, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="X   ")
+        lineShift.addParam(MAX_SY, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="Y    ")
 
         lineTilt = group.addLine('Filter by tilt angle (deg)',
                                  help='This is the minimum/maximum tilt angle allowed.'
@@ -229,13 +234,14 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             for ti in ts:
                 newTi = TiltImage()
                 newTi.copyInfo(ti)
+                self._genTiDict(ti)
                 # Filter by tilt angle
-                self._filterByTiltAngle(newTi)
+                self._filterByTiltAngle(ti)
                 # Filter by max shift
                 if ts.hasAlignment():
-                    self._filterByMaxShifts(newTi, sxThreshold, syThreshold)
+                    self._filterByMaxShifts(ti, sxThreshold, syThreshold)
                 # Filter by dose
-                self._filterByDose(newTi)
+                self._filterByDose(ti)
                 # Filter dark images
                 self._filterByDarkImgs(ti, darkImgIndices)
 
@@ -339,32 +345,38 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _getTiId(ti: TiltImage) -> str:
         return f'{ti.getAcquisitionOrder()}@{ti.getTsId()}'
 
+    def _genTiDict(self, ti:TiltImage) -> None:
+        self.tiLabelDict[self._getTiId(ti)] = TiMetadata()
+
+    def _updateTiDict(self, ti:TiltImage, label: str) -> None:
+        setattr(self.tiLabelDict[self._getTiId(ti)], label, True)
+
     def _filterByTiltAngle(self, ti: TiltImage) -> None:
         tiltAngle = ti.getTiltAngle()
         if tiltAngle > self.getAttribValue(MAX_TILT) or tiltAngle < self.getAttribValue(MIN_TILT):
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_TILT_ANGLE].append(self._getTiId(ti))
+            self._updateTiDict(ti, TiLabel.BY_TILT_ANGLE.value)
 
     def _filterByMaxShifts(self, ti: TiltImage, sxThreshold: int, syThreshold: int) -> None:
         tm = ti.getTransform().getMatrix()
         sx = tm[0, 2]
         sy = tm[1, 2]
-        if sx > sxThreshold or sy > syThreshold:
+        if abs(sx) > sxThreshold or abs(sy) > syThreshold:
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_MAX_SHIFT].append(self._getTiId(ti))
+            self._updateTiDict(ti, TiLabel.BY_MAX_SHIFT.value)
 
     def _filterByDose(self, ti: TiltImage) -> None:
         dose = ti.getAcquisition().getAccumDose()
         if dose < self.getAttribValue(MIN_DOSE) or dose > self.getAttribValue(MAX_DOSE):
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_DOSE].append(self._getTiId(ti))
+            self._updateTiDict(ti, TiLabel.BY_DOSE.value)
 
     def _filterByDarkImgs(self, ti: TiltImage, darkImgIndices: Optional[List[int]]) -> None:
         if not isinstance(darkImgIndices, list):
             return
         if ti.getIndex() in darkImgIndices:
             ti.setEnabled(False)
-            self.removedTsIdsDict[BY_DARK].append(self._getTiId(ti))
+            self._updateTiDict(ti, TiLabel.BY_DARK.value)
 
     def _updateRemovedTsIds(self, tsId: str) -> None:
         updatedMsg = self.removedTsIds.get() + f' {tsId}'
@@ -406,7 +418,9 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         fileName = self._getExtraPath('exclude_tilt_series.yaml')
         try:
             with open(fileName, 'w', encoding='utf-8') as file:
-                yaml.dump(self.removedTsIdsDict, file, sort_keys=False, default_flow_style=False)
+                data_to_save = {k: asdict(v) for k, v in self.tiLabelDict.items()}
+                with open(fileName, 'w', encoding='utf-8') as f:
+                    yaml.dump(data_to_save, f, default_flow_style=False, sort_keys=False)
         except Exception as e:
             print(f"Error generating the yaml report {fileName} with the exception -> {e}")
 
