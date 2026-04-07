@@ -89,6 +89,7 @@ class DataSetEmd10439(Enum):
     coords39Bin4Sqlite = 'coordinates/coordinates39_bin4.sqlite'
     tomoMaskByTardisBin2 = 'tomomaskByTardisBin2/emd_10439.mrc'
     annotatedTomomask = 'tomomasksAnnotated/emd_10439_materials.mrc'
+    generatedMask = 'tomoMaskGeneratedRef/mask_bin8.mrc'
     nParticles = 39
     binFactor = 2
     bin2BoxSize = 44
@@ -252,6 +253,8 @@ class DataSetRe4STATuto(Enum):
 
     # For gapStopTM testing
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
+    maskHivBin8 = 'maskHivBin8.mrc'
+    referenceHivBin8 = 'referenceHivBin8.mrc'
 
     @classmethod
     def genTestTsDicts(cls,
@@ -381,8 +384,8 @@ testAcq03.setAngleMin(-6)
 testAcq03.setAngleMax(6)
 testAcq54.setAngleMin(-6)
 testAcq54.setAngleMax(9)
-testAcq03.setAccumDose(61.0)
-testAcq54.setAccumDose(91.5)
+testAcq03.setAccumDose(15.25)  # Only 5 tilts
+testAcq54.setAccumDose(18.3)  # Only 6 tilts
 testAcq03.setDosePerFrame(DosePerFrame)
 testAcq54.setDosePerFrame(DosePerFrame)
 testAcq54_reject = testAcq54.clone()
@@ -399,8 +402,9 @@ class DataSet_RE_STA_TUTO_MOVIES(Enum):
     testAcq54_rejectDict = {TS_54: testAcq54_reject}
 
     dimsTsBin1Dict = {TS_03: [7420, 7676, 5], TS_54: [7420, 7676, 6]}
+    dimsTsBin2Dict = {TS_03: [3710, 3838, 5], TS_54: [3710, 3838, 6]}
     dimsTs03Bin1Dict = {TS_03: [7420, 7676, 5]}
-    dimsTs54Bin1Dict = {TS_54: [7420, 7676, 5]}
+    dimsTs54Bin1Dict = {TS_54: [7420, 7676, 6]}
 
 
 DataSet(name=RE_STA_TUTO_MOVIES, folder=RE_STA_TUTO_MOVIES,
