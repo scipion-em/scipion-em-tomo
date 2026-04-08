@@ -48,8 +48,8 @@ EXCL_VIEWS_SUFFIX = '_exclViews'
 
 # Form variables
 IN_TS_SET = 'inTsSet'
-MIN_TILT = 'mintilt'
-MAX_TILT = 'maxtilt'
+MIN_TILT = 'minTilt'
+MAX_TILT = 'maxTilt'
 MAX_SX = 'maxShiftX'
 MAX_SY = 'maxShiftY'
 MIN_DOSE = 'minDose'
@@ -121,7 +121,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                                   help='This is the minimum/maximum shift allowed along the X or Y direction. '
                                        'A value of 0.1 means that a 10% of the dimensions of the tilt image '
                                        'is allowed.')
-        lineShift.addParam(MAX_SX, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="X   ")
+        lineShift.addParam(MAX_SX, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="X    ")
         lineShift.addParam(MAX_SY, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="Y    ")
 
         lineTilt = group.addLine('Filter by tilt angle (deg)',
@@ -168,6 +168,18 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
+        # JORGE
+        import os
+        fname = "/home/jjimenez/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
         closeSetStepDeps = []
         inTsSet = self._getInTsSet()
         self.sRate = inTsSet.getSamplingRate()
@@ -231,7 +243,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             finalNoImgs = 0
             tiList = []
             # Tilt-images
-            for ti in ts:
+            for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 newTi = TiltImage()
                 newTi.copyInfo(ti)
                 self._genTiDict(ti)
@@ -255,7 +267,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 finalNoImgs += 1
 
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
-            if finalNoImgs >= minNoViewsAllowed:
+            if finalNoImgs <= minNoViewsAllowed:
                 if self.getAttribValue(DO_RESTACK):
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:

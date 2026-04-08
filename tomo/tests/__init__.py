@@ -500,13 +500,33 @@ tsAcqPos6.setDosePerFrame(2.17)  # Check this, variable dose
 tsAcqPos6.setAccumDose(75.88)
 
 tsAcqPos8 = testAcq.clone()
-# tsAcqPos6.setAngleMin(-70.01)
-# tsAcqPos6.setAngleMax(49.98)
-# tsAcqPos6.setDosePerFrame(2.17)  # Check this, variable dose
-# tsAcqPos6.setAccumDose(75.88)
+tsAcqPos6.setAngleMin(-70.)
+tsAcqPos6.setAngleMax(49.99)
+tsAcqPos6.setDosePerFrame(2.03)  # Check this, variable dose
+tsAcqPos6.setAccumDose(69.11)
 
 
 class DataSet_FilterExcludedTs(Enum):
     tsMotionCorrBin4Dir = 'ts_motion_corrected_all_views_bin4'
     tsAliBin4Dir = 'ts_aligned_all_views_bin4'
+    # Acquisition
+    aPixBin4 = 7.64
+    voltage = voltage
+    sphericalAb = sphericalAb
+    amplitudeContrast = amplitudeContrast
+    magnification = magnification
+    tiltAxisAngle = tiltAxisAngle
+    tsAcqPos6 = tsAcqPos6
+    tsAcqPos8 = tsAcqPos8
+    tsAcqDict = {
+        TS_POS6: tsAcqPos6,
+        TS_POS8: tsAcqPos8,
+    }
+    # Tilt-series
     tomo5Mdoc = True
+    nTs = 2
+    dimsTsBin4 = [1024, 1024, 41]
+
+DataSet(name=FILTER_EXCLUDED_TS, folder=FILTER_EXCLUDED_TS,
+        files={el.name: el.value for el in DataSet_FilterExcludedTs})
+

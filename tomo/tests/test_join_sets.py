@@ -22,17 +22,18 @@
 # *  e-mail address 'scipion-users@lists.sourceforge.net'
 # *
 # **************************************************************************
-from imod.constants import OUTPUT_TILTSERIES_NAME
-from imod.protocols import ProtImodTsNormalization, ProtImodImportTransformationMatrix
 from pwem import ALIGN_2D
 from pwem.protocols import ProtUnionSet
 from pyworkflow.tests import setupTestProject, DataSet
-from pyworkflow.utils import magentaStr
+from pyworkflow.utils import magentaStr, weakImport
 from tomo.protocols import ProtImportTs, ProtImportTomograms
 from tomo.protocols.protocol_base import ProtTomoImportAcquisition
 from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
-from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto, TS_43, TS_45, TS_54, TS_01, TS_03
+from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto, TS_43, TS_45, TS_54
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
+with weakImport("imod"):
+    from imod.constants import OUTPUT_TILTSERIES_NAME
+    from imod.protocols import ProtImodTsNormalization, ProtImodImportTransformationMatrix
 
 
 class TestJoinTomoSets(TestBaseCentralizedLayer):
