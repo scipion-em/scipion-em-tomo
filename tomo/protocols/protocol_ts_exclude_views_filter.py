@@ -244,8 +244,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             tiList = []
             # Tilt-images
             for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                newTi = TiltImage()
-                newTi.copyInfo(ti)
+                # newTi = TiltImage()
+                # newTi.copyInfo(ti)
                 self._genTiDict(ti)
                 # Filter by tilt angle
                 self._filterByTiltAngle(ti)
@@ -263,7 +263,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
                 initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
 
-                tiList.append(ti)
+                newTi = ti.clone()
+                tiList.append(newTi)
                 finalNoImgs += 1
 
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
