@@ -28,10 +28,13 @@ import logging
 import traceback
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import Counter, Tuple, List, Optional
+from typing import Counter, Tuple, List, Optional, Dict
 import numpy as np
 import yaml
 import time
+
+from skimage.filters.edges import sobel
+
 from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
 from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam, ProtStreamingBase
@@ -168,18 +171,18 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
-        # JORGE
-        import os
-        fname = "/home/jjimenez/test_JJ.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        import time
-        time.sleep(10)
-        # JORGE_END
+        # # JORGE
+        # import os
+        # fname = "/home/jjimenez/test_JJ.txt"
+        # if os.path.exists(fname):
+        #     os.remove(fname)
+        # fjj = open(fname, "a+")
+        # fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        # fjj.close()
+        # print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        # import time
+        # time.sleep(10)
+        # # JORGE_END
         closeSetStepDeps = []
         inTsSet = self._getInTsSet()
         self.sRate = inTsSet.getSamplingRate()
@@ -340,19 +343,45 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         ydimThreshold = self.getAttribValue(MAX_SY) * ydim
         return xdimThreshold, ydimThreshold
 
-    def _getDarkImgIndices(self, ts: TiltSeries) -> Optional[List[int]]:
-        darkSensitivity = self.getAttribValue(DARK_TH)
-        if darkSensitivity > 0.0:
-            imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
-            # Statistic indicators
-            medians = np.fromiter((np.median(img) for img in imgStack), dtype=np.float64)
-            q1, q3 = np.percentile(medians, [25.0, 75.0])
-            iqr = q3 - q1
-            lowLimit = q1 - (darkSensitivity * iqr)
-            # Dark images indices
-            darkImgsIndices = np.where(medians < lowLimit)[0]
-            return darkImgsIndices.tolist()
-        return None
+    @staticmethod
+    def _getDarkImgIndices(ts: TiltSeries) -> Optional[List[int]]:
+        imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
+        zeroTiltImgData = imgStack.getCentralImage()
+        zeroTiltMedian = float(np.median(zeroTiltImgData))
+        tiltAngleList = [ti.getTiltAngle() for ti in ts.iterItems()]
+        indices = []
+        counter = 1
+        for tiltAngle, tiData in zip(tiltAngleList, imgStack):
+            tqd = TiltImageQualityDetector(tiData)
+            metricsDict = tqd.analyze_image(zeroTiltMedian, tiltAngle)
+            isBad = tqd.is_trash(metricsDict)
+            if isBad:
+                indices.append(counter)
+            counter += 1
+        return indices
+
+        # # Statistic indicators
+        # medians = np.fromiter((np.median(img) for img in imgStack), dtype=np.float64)
+        # q1, q3 = np.percentile(medians, [25.0, 75.0])
+        # iqr = q3 - q1
+        # lowLimit = q1 - (darkSensitivity * iqr)
+        # # Dark images indices
+        # darkImgsIndices = np.where(medians < lowLimit)[0]
+        # return darkImgsIndices.tolist()
+
+    # def _getDarkImgIndices(self, ts: TiltSeries) -> Optional[List[int]]:
+    #     darkSensitivity = self.getAttribValue(DARK_TH)
+    #     if darkSensitivity > 0.0:
+    #         imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
+    #         # Statistic indicators
+    #         medians = np.fromiter((np.median(img) for img in imgStack), dtype=np.float64)
+    #         q1, q3 = np.percentile(medians, [25.0, 75.0])
+    #         iqr = q3 - q1
+    #         lowLimit = q1 - (darkSensitivity * iqr)
+    #         # Dark images indices
+    #         darkImgsIndices = np.where(medians < lowLimit)[0]
+    #         return darkImgsIndices.tolist()
+    #     return None
 
     @staticmethod
     def _getTiId(ti: TiltImage) -> str:
@@ -450,3 +479,124 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         if self.isFinished() and self.removedTsIds.get():
             summary.append(f'Some tilt-series were removed: *{self.removedTsIds.get()}*')
         return summary
+
+
+class TiltImageQualityDetector:
+    """
+    A utility class to detect low-quality images in a cryo-ET tilt-series.
+    """
+
+    def __init__(self, image_data: np.ndarray) -> None:
+        self.raw_image = image_data
+
+        img_min = np.min(image_data)
+        img_max = np.max(image_data)
+        self.norm_image = (image_data - img_min) / (img_max - img_min + 1e-8)
+
+    def get_intensity_metrics(self, zero_tilt_median: float, tilt_angle_deg: float) -> Dict[str, float]:
+        """Calculates intensity metrics relative to the zero-degree tilt image."""
+        current_median = float(np.median(self.raw_image))
+        relative_ratio = current_median / (zero_tilt_median + 1e-8)
+
+        angle_rad = np.radians(abs(tilt_angle_deg))
+        cos_val = np.cos(angle_rad)
+
+        # Compensated Ratio: Normalized for ice thickness increase at high tilts
+        compensated_ratio = relative_ratio / (cos_val + 1e-8)
+
+        return {
+            "median": current_median,
+            "relative_ratio": relative_ratio,
+            "compensated_ratio": float(compensated_ratio)
+        }
+
+    def get_extreme_contrast_metrics(self, grid_size: Tuple[int, int] = (6, 6)) -> Dict[str, float]:
+        """
+        Detects extreme partial obstructions (e.g., grid bars, mass contamination)
+        by analyzing the variation of local Inter-Percentile Ranges (IPR).
+        """
+        h, w = self.raw_image.shape
+        ph, pw = h // grid_size[0], w // grid_size[1]
+
+        patch_contrast_ranges = []
+        for i in range(grid_size[0]):
+            for j in range(grid_size[1]):
+                p = self.raw_image[i * ph:(i + 1) * ph, j * pw:(j + 1) * pw]
+                # Calculate Inter-Percentile Range (IPR) to avoid noise extremes
+                p10, p90 = np.percentile(p, [10, 90])
+                patch_contrast_ranges.append(float(p90 - p10))
+
+        mean_contrast = float(np.mean(patch_contrast_ranges))
+        std_contrast = float(np.std(patch_contrast_ranges))
+
+        # Score: How much does local contrast vary across the image?
+        extreme_contrast_score = std_contrast / (mean_contrast + 1e-8)
+
+        return {
+            "mean_patch_contrast": mean_contrast,
+            "std_patch_contrast": std_contrast,
+            "extreme_contrast_score": extreme_contrast_score
+        }
+
+    def get_entropy(self) -> float:
+        """Calculates Shannon Entropy for texture analysis."""
+        img_8bit = (self.norm_image * 255).astype(np.uint8)
+        hist, _ = np.histogram(img_8bit, bins=256, range=(0, 256))
+        prob = hist / hist.sum()
+        prob = prob[prob > 0]
+        return float(-np.sum(prob * np.log2(prob)))
+
+    def get_edge_energy(self) -> float:
+        """Calculates mean edge energy using a Sobel filter."""
+        edges = sobel(self.norm_image)
+        return float(np.mean(edges))
+
+    def analyze_image(self, zero_tilt_median: float, tilt_angle: float) -> Dict[str, float]:
+        """Returns all quality metrics in a single dictionary."""
+        intensity = self.get_intensity_metrics(zero_tilt_median, tilt_angle)
+        extreme_contrast = self.get_extreme_contrast_metrics()
+
+        return {
+            "median": intensity["median"],
+            "rel_ratio": intensity["relative_ratio"],
+            "comp_ratio": intensity["compensated_ratio"],
+            "entropy": self.get_entropy(),
+            "edge_energy": self.get_edge_energy(),
+            "extreme_contrast_score": extreme_contrast["extreme_contrast_score"]
+        }
+
+    @staticmethod
+    def is_trash(metrics: Dict[str, float]) -> bool:
+        """Returns all quality metrics in a single dictionary."""
+        if metrics["comp_ratio"] < 0.25:
+            return True
+
+        if metrics["extreme_contrast_score"] > 1: #1.25:
+            return True
+
+        if metrics["entropy"] < 3.0:
+            return True
+
+        if metrics["edge_energy"] == 0:
+            return True
+
+        return False
+
+    # def is_trash(self, metrics: Dict[str, float]) -> Tuple[bool, str]:
+    #     """
+    #     Decide si una imagen es basura basándose en los umbrales razonados.
+    #     Retorna (True, razón) si es basura, (False, "") si es aceptable.
+    #     """
+    #     if metrics["comp_ratio"] < 0.25:
+    #         return True, "Too dark / Blocked beam"
+    #
+    #     if metrics["patch_ratio"] > 12.0:
+    #         return True, "Extreme contrast split (Grid bar)"
+    #
+    #     if metrics["entropy"] < 3.0:
+    #         return True, "Flat image / Low information"
+    #
+    #     if metrics["edge_energy"] == 0:
+    #         return True, "No structural features"
+    #
+    #     return False, ""

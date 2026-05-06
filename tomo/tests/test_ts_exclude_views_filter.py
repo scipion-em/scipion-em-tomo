@@ -31,7 +31,7 @@ from tomo.tests import FILTER_EXCLUDED_TS, DataSet_FilterExcludedTs
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
 
-class TestTsExcludeViewsFilterMC(TestBaseCentralizedLayer):
+class TestTsExcludeViewsFilterBase(TestBaseCentralizedLayer):
     ds = None
 
     @classmethod
@@ -105,7 +105,10 @@ class TestTsExcludeViewsFilterMC(TestBaseCentralizedLayer):
         outTsSet = getattr(protExcViewsFilter, protExcViewsFilter._possibleOutputs.tiltSeries.name, None)
         return outTsSet
 
-    def testTsExcludeViewsFilter01(self):
+
+class TestTsExcludeViewsFilterMC(TestTsExcludeViewsFilterBase):
+
+    def testTsExcludeViewsFilterMC_01(self):
         importedTsSet = self._runImportTs()
         self._runTsExcludeViewsFilter(importedTsSet)
 
