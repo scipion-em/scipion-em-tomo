@@ -25,7 +25,6 @@
 # *
 # **************************************************************************
 import logging
-import time
 import typing
 from os.path import exists, dirname, join
 from sqlite3 import OperationalError
