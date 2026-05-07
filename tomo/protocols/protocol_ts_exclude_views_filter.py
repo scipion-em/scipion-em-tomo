@@ -175,6 +175,19 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
+        # JORGE
+        import os
+        fname = "/home/jjimenez/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
+
         closeSetStepDeps = []
         inTsSet = self._getInTsSet()
         self.sRate = inTsSet.getSamplingRate()
@@ -249,7 +262,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             # Filter by dose
             self._filterByDose(ti)
             # Filter by quality
-            tiData = ti[:, :, i]
+            tiData = imgStack.getImage(i)
             tqd = TiltImageQualityDetector(tiData)
             metricsDict = tqd.analyze_image(zeroTiltMedian, tiltAngle)
             self._filterByImgQuality(ti, metricsDict)
