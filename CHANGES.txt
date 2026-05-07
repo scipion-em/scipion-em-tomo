@@ -1,3 +1,6 @@
+V3.12.6:
+  - Fix: Fixing an error crating subsets
+  - Fix: Prevent duplicated object insertion
 v3.11.5:
  Users:
   - Protocol meshes from segmentation: protocol parallelized.
