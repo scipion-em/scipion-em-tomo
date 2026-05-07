@@ -46,10 +46,186 @@ class InvertTiltsOutputs(Enum):
 
 
 class ProtInvertTiltAngles(EMProtocol):
-    """This protocol inverts the physical handedness of the introduced tilt-series by inverting the tilt angles
-    in the metadata associated to each tilt-series. Introducing the CTFs will update the pointer from introduced
-    CTFs to the tilt-series with the inverted tilt-angles in order to keep the coherence in the
-    relationship between both objects after the angle inversion operation."""
+    """
+    Invert Tilt Angles (ProtInvertTiltAngles) — User Manual
+
+    Overview
+
+    The Invert Tilt Angles protocol reverses the physical handedness of a tilt-series
+    dataset by multiplying all tilt angles by -1.
+
+    Its main purpose is to generate a new tilt-series set in which the angular metadata
+    are inverted while preserving the original image data and tilt ordering.
+
+    For a biological user, this protocol is useful when a dataset has been imported
+    with an incorrect tilt-angle convention or when handedness needs to be corrected
+    before tomographic reconstruction or downstream subtomogram analysis.
+
+    In cryo-electron tomography, the sign convention of tilt angles directly affects
+    the geometric interpretation of the acquisition. An incorrect handedness may lead
+    to mirrored reconstructions or biologically misleading spatial interpretations.
+
+    Inputs and General Workflow
+
+    The protocol requires one principal input:
+
+    - A `SetOfTiltSeries`
+
+    Optionally, it can also receive:
+
+    - A `SetOfCTFTomoSeries`
+
+    During execution, the protocol processes each tilt series independently.
+
+    For every tilt series:
+
+    - a new output tilt series is created,
+    - each tilt image is copied,
+    - the tilt angle stored in the metadata is multiplied by -1.
+
+    The image files themselves are not modified.
+
+    This means the protocol changes only metadata interpretation and not the actual
+    experimental image content.
+
+    Handedness Correction
+
+    The biological relevance of this protocol lies in handedness correction.
+
+    By inverting the tilt angles, the protocol changes the geometric interpretation
+    of the tilt acquisition.
+
+    This operation may be required when:
+
+    - data have been imported using the wrong tilt-angle sign convention,
+    - external acquisition software uses a different angular convention,
+    - reconstruction results suggest a mirrored handedness.
+
+    In tomography workflows, correcting handedness at the metadata level is often
+    preferable to manipulating reconstructed volumes afterward.
+
+    Optional CTF Handling
+
+    If a set of tomography CTF estimations is provided, the protocol also generates
+    a new CTF output set.
+
+    This is biologically important because CTF metadata remain meaningful only if they
+    stay linked to the correct tilt-series geometry.
+
+    During execution:
+
+    - only tilt-series identifiers present in both input sets are considered;
+    - matching CTF series are copied to the output;
+    - the CTF output is linked to the newly generated tilt-series set.
+
+    This preserves coherence between angular metadata and optical metadata after
+    angle inversion.
+
+    Matching Between Tilt Series and CTFs
+
+    When CTFs are provided, the protocol compares the tilt-series identifiers from
+    both inputs.
+
+    Three cases are possible.
+
+    Complete match:
+    - all tilt series have corresponding CTFs.
+
+    Partial match:
+    - only common tilt-series identifiers are processed.
+
+    No match:
+    - execution stops with an error.
+
+    If some identifiers are present only in one input set, the protocol reports
+    these non-matching tilt-series identifiers.
+
+    This is particularly useful in large tomography datasets where tilt-series and
+    CTF estimations may have been generated at different stages of preprocessing.
+
+    Tilt-Series Output Generation
+
+    For every processed tilt series, the protocol creates a new `TiltSeries` object.
+
+    The output tilt series preserves:
+
+    - the original identity,
+    - the original metadata,
+    - the original image references.
+
+    The only modified parameter is the tilt angle.
+
+    Each output tilt image therefore remains physically linked to the same image data
+    but interpreted with inverted angular geometry.
+
+    CTF Output Generation
+
+    When CTFs are provided, the protocol also creates a new
+    `SetOfCTFTomoSeries`.
+
+    Each imported CTF series is copied into the output set and linked to the new
+    tilt-series output.
+
+    Importantly, the CTF estimations themselves are not recalculated.
+
+    Only the relational consistency between CTFs and tilt-series metadata is updated.
+
+    From a biological perspective, this ensures that downstream CTF-aware processing
+    remains coherent after handedness inversion.
+
+    Parallel Execution
+
+    The protocol runs with parallel step execution.
+
+    This means that each tilt series is processed independently.
+
+    In practical terms, this makes the protocol efficient for experiments involving
+    many tomograms or large tilt-series collections.
+
+    Since no image recalculation is performed, execution is usually lightweight and
+    primarily limited by metadata writing.
+
+    Output Interpretation
+
+    After completion, the protocol produces:
+
+    - a new `SetOfTiltSeries` with inverted tilt angles;
+    - optionally, a new `SetOfCTFTomoSeries` linked to the inverted tilt series.
+
+    If partial mismatches between input tilt series and CTFs were detected, the
+    summary reports the non-matching tilt-series identifiers.
+
+    This helps users quickly identify incomplete metadata associations.
+
+    Practical Recommendations
+
+    In routine cryo-electron tomography workflows, this protocol is especially useful
+    when handedness inconsistencies are detected before reconstruction or subtomogram
+    extraction.
+
+    A few practical considerations are important:
+
+    - Verify that handedness inversion is truly required before applying the protocol.
+    - If CTF metadata exist, provide them during execution so relational consistency
+      is preserved automatically.
+    - Carefully inspect reported non-matching tilt-series identifiers when working
+      with partially processed datasets.
+
+    In most biological applications, correcting handedness early in the workflow is
+    preferable to correcting downstream reconstructed maps.
+
+    Final Perspective
+
+    The Invert Tilt Angles protocol is a metadata-level geometric correction tool.
+
+    Rather than modifying image data, it changes the angular interpretation of the
+    tilt acquisition while preserving internal consistency across tilt-series and
+    optional CTF metadata.
+
+    In modern cryo-ET workflows, this protocol provides a simple but biologically
+    important mechanism for ensuring that tomographic geometry reflects the correct
+    physical handedness before downstream analysis.
+    """
     _label = 'invert tilt angles'
     _devStatus = BETA
     _possibleOutputs = InvertTiltsOutputs
