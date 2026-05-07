@@ -44,11 +44,137 @@ class OutputsTsFromTomos(Enum):
 
 
 class ProtTsFromTomos(EMProtocol):
-    """This protocol gets the tilt-series that corresponds to a given set of tomograms. It is very useful for
-    fiducial-less samples, when the quality of alignment results is difficult to be observed from
-    the tilt-series, but the tomograms. In that case, the undesired data objects would be discarded
-    at tomogram level, but further processing may be desired to be carried out with the corresponding
-    tilt-series before getting the final tomograms."""
+    """
+    Retrieves the tilt-series corresponding to a selected set of tomograms.
+
+    AI Generated:
+
+    Tilt-Series from Tomograms (ProtTsFromTomos) — User Manual
+        Overview
+
+        The Tilt-Series from Tomograms protocol extracts from an input set of tilt-series
+        only those whose tilt-series identifiers (tsId) match the tomograms provided
+        as input.
+
+        This protocol is especially useful in cryo-electron tomography workflows where
+        quality inspection is easier to perform at the tomogram level than directly on
+        the tilt-series. This situation is particularly common in fiducial-less datasets,
+        where reconstruction artifacts or alignment problems become more evident once
+        tomograms have already been generated.
+
+        In practical workflows, users often discard low-quality tomograms after visual
+        inspection. However, later processing steps may still need to continue from the
+        corresponding tilt-series rather than from the tomograms themselves. This protocol
+        solves that problem by recovering only the tilt-series associated with the
+        selected tomograms.
+
+        Inputs and General Workflow
+
+        The protocol requires two input datasets:
+
+        - A set of tomograms
+        - A set of tilt-series
+
+        Both datasets must contain tilt-series identifiers (tsId), which define the
+        correspondence between tomograms and tilt-series.
+
+        The protocol compares the identifiers present in both inputs and computes
+        their intersection. Only tilt-series whose tsId is present in both datasets
+        are preserved in the output.
+
+        Since both inputs may already represent subsets of larger datasets, the protocol
+        only considers the common identifiers. Any non-matching identifiers are reported
+        in the execution log for user awareness.
+
+        Matching Strategy
+
+        Matching is performed entirely through the tilt-series identifier (tsId).
+
+        This means that:
+
+        - If a tomogram and a tilt-series share the same tsId, they are considered related.
+        - If an identifier appears only in one dataset, it is ignored.
+
+        From a practical perspective, this makes the protocol very robust for curated
+        workflows in which intermediate subsets are frequently created.
+
+        However, it also means that correctness depends on proper metadata consistency.
+        If tsIds are missing, duplicated, or inconsistent across datasets, expected
+        matches may not occur.
+
+        Validation and Error Handling
+
+        The protocol performs an important validation step before generating output.
+
+        If no common tsIds exist between the tomogram set and the tilt-series set,
+        execution stops with an exception.
+
+        This prevents producing empty outputs caused by accidental mismatch between
+        datasets.
+
+        When only partial overlap exists, execution continues normally. The protocol
+        simply reports which identifiers were not common between the two inputs.
+
+        Output Generation
+
+        For every matching tsId, the protocol creates a new output tilt-series.
+
+        The output preserves:
+
+        - General metadata from the original tilt-series
+        - The original tilt-images
+        - The original tilt-image ordering
+
+        Each selected tilt-series is cloned into the new output set and written to disk.
+
+        From a workflow perspective, this means the resulting output is not merely a
+        list of references, but a proper Scipion output object that can be used
+        directly by downstream protocols.
+
+        Biological Interpretation
+
+        This protocol does not modify alignment, geometry, or image content.
+
+        Its role is purely organizational, but biologically important.
+
+        In cryo-ET workflows, selecting the correct subset of data is often critical.
+        Poor-quality tomograms may reflect bad alignment, contamination, missing wedges,
+        or reconstruction artifacts. Removing these problematic tomograms and then
+        recovering the corresponding tilt-series allows users to continue processing
+        only biologically meaningful data.
+
+        Typical use cases include:
+
+        - Discarding low-quality tomograms after visual inspection
+        - Recovering the corresponding tilt-series for refinement
+        - Restricting downstream analysis to curated subsets
+        - Preparing clean datasets for subtomogram averaging pipelines
+
+        Practical Recommendations
+
+        Before running the protocol, verify that both datasets originate from compatible
+        processing branches and preserve the same tsId convention.
+
+        This protocol is especially useful after tomogram cleaning or manual curation,
+        when users want to return to tilt-series space without manually tracing
+        dataset correspondences.
+
+        If the output is unexpectedly empty, the first thing to inspect should be
+        metadata consistency rather than image content.
+
+        Final Perspective
+
+        The Tilt-Series from Tomograms protocol is a lightweight but very practical
+        utility for cryo-electron tomography workflows.
+
+        Although it performs no image processing itself, it solves a common workflow
+        problem: recovering the exact tilt-series corresponding to a curated tomogram
+        subset.
+
+        In real biological projects, this can simplify data management considerably
+        and helps maintain consistency between tomogram-level curation and subsequent
+        tilt-series-based processing.
+    """
 
     _label = 'tilt-series from tomograms'
     _devStatus = BETA
