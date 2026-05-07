@@ -271,7 +271,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 finalNoImgs += 1
 
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
-            if finalNoImgs <= minNoViewsAllowed:
+            if finalNoImgs >= minNoViewsAllowed:
                 if self.getAttribValue(DO_RESTACK):
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:
