@@ -29,12 +29,10 @@ import traceback
 from dataclasses import dataclass, asdict
 from enum import Enum
 from typing import Counter, Tuple, List, Optional, Dict
-import numpy as np
 import yaml
+import numpy as np
 import time
-
 from skimage.filters.edges import sobel
-
 from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
 from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam, ProtStreamingBase
@@ -68,6 +66,9 @@ class TiMetadata:
     by_tilt_angle: bool = False
     by_dose: bool = False
     by_dark: bool = False
+    by_extreme_contrast_split: bool = False
+    by_low_info_or_flat_image: bool = False
+    by_edge_energy: bool = False
 
 
 class TiLabel(Enum):
@@ -75,6 +76,9 @@ class TiLabel(Enum):
     BY_TILT_ANGLE = 'by_tilt_angle'
     BY_DOSE = 'by_dose'
     BY_DARK = 'by_dark'
+    BY_EXTREME_CONTRAST_SPLIT = 'by_extreme_contrast_split'
+    BY_LOW_INFO = 'by_low_info_or_flat_image'
+    BY_EDGE_ENERGY = 'by_edge_energy'  # Very unfocused or lack of sample
 
 
 class outputObjects(Enum):
@@ -171,18 +175,6 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
-        # # JORGE
-        # import os
-        # fname = "/home/jjimenez/test_JJ.txt"
-        # if os.path.exists(fname):
-        #     os.remove(fname)
-        # fjj = open(fname, "a+")
-        # fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        # fjj.close()
-        # print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        # import time
-        # time.sleep(10)
-        # # JORGE_END
         closeSetStepDeps = []
         inTsSet = self._getInTsSet()
         self.sRate = inTsSet.getSamplingRate()
@@ -235,43 +227,53 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         accumDose = 0.
         initialDose = 999.
         sxThreshold, syThreshold = self._getMaxShiftThresholds(ts)
-        darkImgIndices = self._getDarkImgIndices(ts)
+        # darkImgIndices = self._getDarkImgIndices(ts)
+
+        imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
+        zeroTiltImgData = imgStack.getCentralImage()
+        zeroTiltMedian = float(np.median(zeroTiltImgData))
+        finalNoImgs = 0
+        tiList = []
+        # Tilt-images
+        for i, ti in enumerate(ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+            # newTi = TiltImage()
+            # newTi.copyInfo(ti)
+            tiltAngle = ti.getTiltAngle()
+
+            self._genTiDict(ti)
+            # Filter by tilt angle
+            self._filterByTiltAngle(ti)
+            # Filter by max shift
+            if ts.hasAlignment():
+                self._filterByMaxShifts(ti, sxThreshold, syThreshold)
+            # Filter by dose
+            self._filterByDose(ti)
+            # Filter by quality
+            tiData = ti[:, :, i]
+            tqd = TiltImageQualityDetector(tiData)
+            metricsDict = tqd.analyze_image(zeroTiltMedian, tiltAngle)
+            self._filterByImgQuality(ti, metricsDict)
+
+            angleMin = min(tiltAngle, angleMin)
+            angleMax = max(tiltAngle, angleMax)
+            accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
+            initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
+
+            newTi = ti.clone()
+            tiList.append(newTi)
+            finalNoImgs += 1
+
         with self._lock:
             # Set of tilt-series
             outTsSet = self.getOutputSetOfTS()
+            failedTsSet = self.getOutputSetOfTS(attrName=self._possibleOutputs.failedTiltSeries.name)
             # Tilt-series
             outTs = TiltSeries()
             outTs.copyInfo(ts)
-            outTsSet.append(outTs)
-            finalNoImgs = 0
-            tiList = []
-            # Tilt-images
-            for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                # newTi = TiltImage()
-                # newTi.copyInfo(ti)
-                self._genTiDict(ti)
-                # Filter by tilt angle
-                self._filterByTiltAngle(ti)
-                # Filter by max shift
-                if ts.hasAlignment():
-                    self._filterByMaxShifts(ti, sxThreshold, syThreshold)
-                # Filter by dose
-                self._filterByDose(ti)
-                # Filter dark images
-                self._filterByDarkImgs(ti, darkImgIndices)
-
-                tiltAngle = ti.getTiltAngle()
-                angleMin = min(tiltAngle, angleMin)
-                angleMax = max(tiltAngle, angleMax)
-                accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
-                initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
-
-                newTi = ti.clone()
-                tiList.append(newTi)
-                finalNoImgs += 1
 
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
             if finalNoImgs >= minNoViewsAllowed:
+                outTsSet.append(outTs)
                 if self.getAttribValue(DO_RESTACK):
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:
@@ -282,11 +284,17 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 outTsSet.write()
                 self._store(outTsSet)
             else:
+                failedTsSet.append(outTs)
                 tsId = ts.getTsId()
                 logger.info(yellowStr(f'tsId = {tsId} was removed because the number '
                                       f'of tilt-images after filtering [{finalNoImgs}] '
                                       f'is lower than the minimum specified [{minNoViewsAllowed}].'))
                 self._updateRemovedTsIds(tsId)
+                outTs.write()
+                failedTsSet.update(outTs)
+                failedTsSet.write()
+                self._store(failedTsSet)
+
             # Close explicitly the outputs (for streaming)
             self.closeOutputsForStreaming()
 
@@ -319,14 +327,13 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _getInTsSet(self) -> SetOfTiltSeries:
         return self._getInTsSetPointer().get()
 
-    def getOutputSetOfTS(self) -> SetOfTiltSeries:
-        attrName = self._possibleOutputs.tiltSeries.name
+    def getOutputSetOfTS(self, attrName: str = outputObjects.tiltSeries.name) -> SetOfTiltSeries:
         outputSet = getattr(self, attrName, None)
         if isinstance(outputSet, SetOfTiltSeries):
             outputSet.enableAppend()
         else:
             outputSet = SetOfTiltSeries.create(self._getPath(),
-                                               template='tiltseries',
+                                               template=attrName,
                                                suffix=EXCL_VIEWS_SUFFIX)
             outputSet.copyInfo(self._getInTsSet())
             outputSet.setStreamState(Set.STREAM_OPEN)
@@ -360,29 +367,6 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             counter += 1
         return indices
 
-        # # Statistic indicators
-        # medians = np.fromiter((np.median(img) for img in imgStack), dtype=np.float64)
-        # q1, q3 = np.percentile(medians, [25.0, 75.0])
-        # iqr = q3 - q1
-        # lowLimit = q1 - (darkSensitivity * iqr)
-        # # Dark images indices
-        # darkImgsIndices = np.where(medians < lowLimit)[0]
-        # return darkImgsIndices.tolist()
-
-    # def _getDarkImgIndices(self, ts: TiltSeries) -> Optional[List[int]]:
-    #     darkSensitivity = self.getAttribValue(DARK_TH)
-    #     if darkSensitivity > 0.0:
-    #         imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
-    #         # Statistic indicators
-    #         medians = np.fromiter((np.median(img) for img in imgStack), dtype=np.float64)
-    #         q1, q3 = np.percentile(medians, [25.0, 75.0])
-    #         iqr = q3 - q1
-    #         lowLimit = q1 - (darkSensitivity * iqr)
-    #         # Dark images indices
-    #         darkImgsIndices = np.where(medians < lowLimit)[0]
-    #         return darkImgsIndices.tolist()
-    #     return None
-
     @staticmethod
     def _getTiId(ti: TiltImage) -> str:
         return f'{ti.getAcquisitionOrder()}@{ti.getTsId()}'
@@ -413,12 +397,22 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_DOSE.value)
 
-    def _filterByDarkImgs(self, ti: TiltImage, darkImgIndices: Optional[List[int]]) -> None:
-        if not isinstance(darkImgIndices, list):
-            return
-        if ti.getIndex() in darkImgIndices:
+    def _filterByImgQuality(self, ti: TiltImage, tiMetricsDict: Dict) -> None:
+        if tiMetricsDict["comp_ratio"] < 0.25:
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_DARK.value)
+
+        if tiMetricsDict["extreme_contrast_score"] > 1: #1.25:
+            ti.setEnabled(False)
+            self._updateTiDict(ti, TiLabel.BY_EXTREME_CONTRAST_SPLIT.value)
+
+        if tiMetricsDict["entropy"] < 3.0:
+            ti.setEnabled(False)
+            self._updateTiDict(ti, TiLabel.BY_LOW_INFO.value)
+
+        if tiMetricsDict["edge_energy"] == 0:
+            ti.setEnabled(False)
+            self._updateTiDict(ti, TiLabel.BY_EDGE_ENERGY.value)
 
     def _updateRemovedTsIds(self, tsId: str) -> None:
         updatedMsg = self.removedTsIds.get() + f' {tsId}'
@@ -565,38 +559,3 @@ class TiltImageQualityDetector:
             "extreme_contrast_score": extreme_contrast["extreme_contrast_score"]
         }
 
-    @staticmethod
-    def is_trash(metrics: Dict[str, float]) -> bool:
-        """Returns all quality metrics in a single dictionary."""
-        if metrics["comp_ratio"] < 0.25:
-            return True
-
-        if metrics["extreme_contrast_score"] > 1: #1.25:
-            return True
-
-        if metrics["entropy"] < 3.0:
-            return True
-
-        if metrics["edge_energy"] == 0:
-            return True
-
-        return False
-
-    # def is_trash(self, metrics: Dict[str, float]) -> Tuple[bool, str]:
-    #     """
-    #     Decide si una imagen es basura basándose en los umbrales razonados.
-    #     Retorna (True, razón) si es basura, (False, "") si es aceptable.
-    #     """
-    #     if metrics["comp_ratio"] < 0.25:
-    #         return True, "Too dark / Blocked beam"
-    #
-    #     if metrics["patch_ratio"] > 12.0:
-    #         return True, "Extreme contrast split (Grid bar)"
-    #
-    #     if metrics["entropy"] < 3.0:
-    #         return True, "Flat image / Low information"
-    #
-    #     if metrics["edge_energy"] == 0:
-    #         return True, "No structural features"
-    #
-    #     return False, ""
