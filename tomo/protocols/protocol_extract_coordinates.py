@@ -47,6 +47,70 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     original dimensions. It can be also handy to visualize the resulting
     subtomograms in their location on the tomograms.
     """
+    """
+    Correct Tilt Offset (ProtCorrectTiltOffset) — User Manual
+
+    Overview
+
+    The Correct Tilt Offset protocol adjusts the tilt angles of a tilt series to account
+    for discrepancies between the nominal tilt of the sample holder and the actual tilt
+    of the sample (e.g., lamellae). This correction is essential when the sample's
+    physical orientation deviates from the expected nominal angle, ensuring accurate
+    alignment and downstream analysis. Biologically, this step improves the spatial
+    consistency of tilt-series data for tomographic reconstruction, averaging, or
+    correlation analyses.
+
+    Typical use cases include correcting tilt series acquired from lamellae or
+    samples mounted with unknown offsets, enabling meaningful comparison between
+    datasets or improving the quality of 3D reconstructions.
+
+    Inputs and General Workflow
+
+    The protocol requires one or more input tilt series sets and a tilt offset value
+    (in degrees). The input tilt series can consist of multiple images representing
+    different angles of the sample. The tilt offset represents the angular correction
+    needed to align the actual sample orientation with the nominal tilt frame.
+
+    The workflow consists of the following main steps:
+
+    1. Parameter definition: select input tilt series and provide the tilt offset.
+    2. Tilt correction: each tilt image in the series has its angle incremented by
+       the specified offset. Tilt acquisition parameters are updated accordingly.
+    3. Output management: the corrected tilt series are saved in a new set with
+       updated metadata, and original input sets remain unchanged.
+    4. Stream closure: all output sets are marked as closed to finalize the
+       processing pipeline.
+
+    Correction Details
+
+    For a tilt series with nominal angles ranging from -60° to 60° in 3° steps,
+    applying a tilt offset of 15° would result in a corrected range of -45° to 75°.
+    This ensures that downstream reconstructions use geometrically accurate tilt
+    angles for improved structural interpretation.
+
+    Outputs and Their Interpretation
+
+    The protocol produces a new set of tilt series, each containing images with
+    corrected tilt angles and updated acquisition parameters. The output set retains
+    information from the first input set, facilitating consistency in subsequent
+    analyses. Corrected tilt series can then be used for tomographic reconstruction,
+    alignment evaluation, or further processing in cryo-EM pipelines.
+
+    Practical Recommendations
+
+    For routine biological applications, carefully estimate the tilt offset based
+    on sample mounting or prior measurements. Over- or under-correction can affect
+    reconstruction quality. The protocol is particularly useful when working with
+    lamellae or samples where the physical tilt may differ significantly from the
+    nominal holder angle.
+
+    Final Perspective
+
+    Correcting tilt offsets is not merely a geometric adjustment but a critical
+    preprocessing step for tomographic workflows. Proper application ensures that
+    structural features are accurately represented, improving both visualizations
+    and quantitative analyses in cryo-EM research.
+    """
 
     _label = 'extract 3D coordinates'
     _devStatus = BETA
@@ -295,3 +359,4 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             errors.append('The input particles do not have coordinates!!!')
 
         return errors
+
