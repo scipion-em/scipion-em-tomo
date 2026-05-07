@@ -53,7 +53,237 @@ logger = logging.getLogger(__name__)
 
 
 class ProtImportTsBase(ProtTomoImportFiles):
-    """ Base class for Tilt-Series and Tilt-SeriesMovies import protocols.
+    """
+    Base class for importing tilt-series and tilt-series movies from either
+    filename patterns or mdoc metadata files.
+
+    AI Generated:
+
+    Import Tilt-Series Base (ProtImportTsBase) — User Manual
+        Overview
+
+        The ProtImportTsBase class provides the common import framework used by
+        both tilt-series and tilt-series-movies protocols. Its purpose is to
+        identify raw tomography acquisition files, organize them into coherent
+        tilt-series objects, assign angular and acquisition metadata, and store
+        them in a Scipion-compatible structure for downstream tomographic
+        processing.
+
+        From a biological perspective, this protocol represents the first
+        formal entry point of tomography data into the workflow. A correct
+        import is essential because subsequent steps such as alignment,
+        CTF correction, reconstruction, and subtomogram averaging depend
+        entirely on the integrity of the imported metadata.
+
+        Input Modes
+
+        The protocol supports two main import strategies.
+
+        1. Import from filename patterns
+
+        In this mode, files are detected using a user-defined pattern
+        containing special tags:
+
+            {TS} → tilt-series identifier
+            {TO} → acquisition order
+            {TA} → tilt angle
+
+        This is the most flexible strategy and is commonly used when tilt
+        images or movies have already been exported with informative filenames.
+
+        2. Import from mdoc files
+
+        If the filename pattern contains ".mdoc", metadata are extracted
+        directly from SerialEM-style mdoc files. In this case, angular
+        information, acquisition order, sampling rate, accumulated dose,
+        and tilt-axis angle can all be read from metadata.
+
+        This is usually the most reliable strategy because experimental
+        metadata are preserved directly from acquisition.
+
+        General Workflow
+
+        The import process consists of several stages.
+
+        First, the protocol scans the user-provided directory and groups
+        files according to tilt-series identity.
+
+        Then, for each tilt-series:
+
+            - A TiltSeries object is created.
+            - Tilt images (or movie stacks) are identified.
+            - Acquisition order and tilt angles are assigned.
+            - Per-image acquisition metadata are calculated.
+            - The tilt-series origin is centered.
+            - Images are copied or linked into the project.
+
+        Finally, the output set is updated and closed.
+
+        Angle Assignment
+
+        The protocol supports several ways of defining tilt angles.
+
+        Filename-based angles
+
+            Angles are extracted directly from the filename through the
+            {TA} pattern tag.
+
+        Header-based angles
+
+            Angles are read from image headers. This requires the IMOD plugin.
+
+        Mdoc-based angles
+
+            Angles are extracted from the corresponding mdoc metadata.
+
+        TLT-based angles
+
+            Angles are read from .tlt or .rawtlt files. These files may
+            optionally contain dose values and acquisition order.
+
+        Range-based angles
+
+            The user manually specifies minimum angle, maximum angle,
+            and angular step.
+
+        From a biological standpoint, correct angular assignment is critical.
+        Even a small inconsistency can lead to failed alignment or incorrect
+        tomographic reconstruction.
+
+        Dose and Acquisition Metadata
+
+        For each tilt image, the protocol stores:
+
+            - Initial accumulated dose
+            - Dose per frame
+            - Total accumulated dose
+
+        If mdoc files are used, these values are imported directly.
+        Otherwise, they are calculated from user-defined acquisition parameters.
+
+        This metadata becomes particularly important in dose-weighting,
+        exposure filtering, and high-resolution reconstruction.
+
+        File Handling
+
+        The protocol offers three strategies for incorporating raw data
+        into the project:
+
+            - Copy files
+            - Create absolute symbolic links
+            - Create relative symbolic links
+
+        In large tomography datasets, symbolic links are usually preferred
+        because they avoid raw-data duplication and reduce storage overhead.
+
+        Validation
+
+        Before importing, the protocol performs multiple consistency checks.
+
+            - Ensures that files match the expected pattern
+            - Verifies that tilt angles are valid
+            - Checks that angular metadata match the number of images
+            - Validates required acquisition parameters
+            - Detects malformed mdoc files
+            - Reports skipped or failed tilt-series
+
+        These checks are particularly important because metadata mismatches
+        often remain unnoticed until much later in reconstruction.
+
+        Output
+
+        The protocol generates a SetOfTiltSeries (or SetOfTiltSeriesM
+        in the movie subclass).
+
+        Each tilt-series contains:
+
+            - Ordered tilt images
+            - Tilt angles
+            - Acquisition order
+            - Dose metadata
+            - Sampling rate
+            - Tilt-axis geometry
+            - Centered spatial origin
+
+        This output becomes the standard input for all subsequent
+        tomography processing steps.
+
+        ProtImportTs — Import Tilt-Series
+
+        ProtImportTs specializes the base importer for standard tilt-series.
+
+        Additional Features
+
+            - Supports tilt-angle import from:
+                - user-defined angular ranges
+                - image headers
+                - tlt/rawtlt files
+
+            - Allows users to specify whether images have already been:
+                - CTF corrected
+                - interpolated/aligned
+
+        Biological Relevance
+
+        These annotations are especially useful because downstream
+        reconstruction or alignment protocols may interpret already-corrected
+        or already-interpolated data differently.
+
+        Validation
+
+        For stacked tilt-series, ProtImportTs verifies that the number of
+        images matches the number of available tilt angles.
+
+        This is critical because inconsistent stack geometry can cause
+        downstream reconstruction failures.
+
+        Output
+
+        Produces a SetOfTiltSeries object.
+
+        ProtImportTsMovies — Import Tilt-Series Movies
+
+        ProtImportTsMovies specializes the base importer for raw tilt-series
+        movies rather than already-integrated tilt images.
+
+        Movie-Specific Features
+
+            - Output is stored as SetOfTiltSeriesM
+            - Supports gain and dark references
+            - Angles must be provided in the filename pattern
+            - Tracks frame ranges for movie stacks
+
+        Biological Relevance
+
+        This protocol is usually the preferred starting point when
+        performing motion correction, frame alignment, or dose-weighting
+        before generating final tilt images.
+
+        Validation
+
+        For movies imported from filename patterns, the protocol requires
+        the filename to contain:
+
+            {TS}, {TA}, and {TO}
+
+        This guarantees unambiguous assignment of tilt identity,
+        acquisition order, and tilt angle.
+
+        Final Perspective
+
+        Importing tilt-series is not merely a file-copying operation.
+        It establishes the geometrical, angular, and acquisition metadata
+        that define the physical meaning of the tomography dataset.
+
+        In practical cryo-ET workflows, the quality of the import step
+        directly determines the robustness of all downstream processing.
+
+        For most users, the safest strategy is:
+
+            - use mdoc metadata whenever available
+            - verify angular consistency carefully
+            - prefer symbolic linking for large datasets
+            - inspect failed or skipped tilt-series before proceeding
     """
     IMPORT_FROM_FILES = 0
 

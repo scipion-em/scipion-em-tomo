@@ -34,11 +34,238 @@ from .protocol_base import ProtTomoBase
 
 class ProtTsProcess(EMProtocol, ProtTomoBase):
     """
-    Base class for Tilt-Series (images or movies) processing protocols.
-    This class should be used by protocols that receive tilt-series as input
-    and produce tilt-series as output. This class will contain some common
-    functionality about the steps execution (also in streaming) and
-    the output generation.
+    Base framework for protocols that process tilt-series and generate new
+    tilt-series or tomogram-related outputs.
+
+    AI Generated:
+
+    Tilt-Series Processing Base Framework (ProtTsProcess) — User Manual
+        Overview
+
+        ProtTsProcess is the generic processing backbone for tomography
+        protocols that take tilt-series as input and execute computations
+        either per tilt image, per tilt-series, or both.
+
+        Rather than implementing a specific biological operation,
+        this class defines the execution model shared by many tomography
+        protocols.
+
+        Typical derived protocols include:
+
+            - tilt-series filtering
+            - tilt-series correction
+            - CTF estimation
+            - tomogram reconstruction
+
+        Its main role is to organize task scheduling, parallel execution,
+        streaming-aware processing, and output generation.
+
+        General Processing Model
+
+        The protocol follows a hierarchical execution strategy.
+
+        Processing is divided into three conceptual levels:
+
+            1. Input preparation
+            2. Tilt-image processing
+            3. Tilt-series finalization
+
+        This allows derived protocols to decide whether the operation
+        should be performed:
+
+            - image-by-image
+            - once per tilt-series
+            - or both
+
+        The class uses parallel execution by default.
+
+        Workflow Initialization
+
+        At execution start, the protocol performs an initialization step.
+
+        It then inserts:
+
+            - one input conversion step
+            - one final output-closing step
+
+        Between these two, all processing tasks are inserted dynamically.
+
+        Internally, a TiltSeriesDict object tracks:
+
+            - discovered tilt-series
+            - tilt images belonging to each tilt-series
+            - completed processing tasks
+            - finished tilt-series ready to be written
+
+        This makes the protocol suitable for both standard and
+        incremental processing workflows.
+
+        Dynamic Step Insertion
+
+        One of the most important features of ProtTsProcess is that
+        processing steps are inserted dynamically as new tilt-series
+        become available.
+
+        For each newly discovered tilt-series:
+
+            - optional per-tilt-image steps are inserted
+            - one final per-tilt-series step is inserted
+
+        This means subclasses do not need to explicitly manage task
+        dependencies.
+
+        The framework automatically ensures that:
+
+            - all tilt-image steps finish first
+            - the tilt-series step runs afterward
+            - output writing waits until the tilt-series is complete
+
+        Tilt Image vs Tilt-Series Processing
+
+        By default, the protocol inserts one step per tilt image.
+
+        This behavior is controlled by:
+
+            _doInsertTiltImageSteps()
+
+        Default behavior:
+
+            True
+
+        Derived protocols can disable per-image execution if their logic
+        naturally works at tilt-series level.
+
+        This is particularly useful for reconstruction algorithms,
+        where processing is normally performed on the whole tilt-series
+        rather than projection-by-projection.
+
+        Output Generation
+
+        Output generation is incremental.
+
+        Whenever one or more tilt-series are completed:
+
+            - the output set is created if necessary
+            - the finished tilt-series are appended
+            - metadata is updated
+            - the output remains in STREAM_OPEN state
+
+        This allows partially completed results to become available
+        during execution.
+
+        Once all tilt-series are done:
+
+            - the final output step is unlocked
+            - the output stream is closed
+
+        This streaming-aware design is particularly useful in large
+        tomography datasets.
+
+        Subclass Responsibilities
+
+        ProtTsProcess only provides the workflow skeleton.
+
+        Derived protocols are expected to implement the actual logic.
+
+        The most commonly overridden methods are:
+
+            convertInputStep(...)
+                Performs input preparation before processing.
+
+            processTiltImageStep(...)
+                Performs per-image operations.
+
+            processTiltSeriesStep(...)
+                Performs final per-series operations.
+
+        Additional customization is possible through:
+
+            _createOutputSet(...)
+            _updateOutputSet(...)
+            _getArgs(...)
+            _initialize(...)
+
+        This modular design makes the framework highly reusable.
+
+        Practical Interpretation
+
+        Biologically, ProtTsProcess should not be interpreted as a
+        scientific protocol itself.
+
+        It does not modify data directly.
+
+        Instead, it provides the computational orchestration required
+        by many tomography processing tasks.
+
+        Its practical importance lies in:
+
+            - consistent scheduling
+            - robust parallelization
+            - correct dependency management
+            - safe incremental output writing
+
+        For developers of tomography protocols, it provides a standard
+        execution architecture that avoids reimplementing processing
+        logistics in every protocol.
+
+        ------------------------------------------------------------
+
+        Tomogram Reconstruction Variant (ProtTomoReconstruct)
+        Overview
+
+        ProtTomoReconstruct is a specialization of ProtTsProcess
+        designed for tomogram reconstruction.
+
+        Unlike general tilt-series processing protocols, reconstruction
+        normally operates on the complete tilt-series as a single unit.
+
+        For this reason:
+
+            _doInsertTiltImageSteps() -> False
+
+        No per-image processing steps are inserted.
+
+        Reconstruction Output
+
+        Instead of generating a new SetOfTiltSeries,
+        this subclass produces a SetOfTomograms.
+
+        For each completed tilt-series:
+
+            - a Tomogram object is created
+            - the reconstructed file is linked using the expected name
+            - the tomogram is appended to the output set
+
+        Output sampling rate is inherited from the input tilt-series.
+
+        If binning is applied:
+
+            output_sampling = input_sampling × bin
+
+        This ensures geometric consistency between the input data and
+        the reconstructed tomograms.
+
+        Output Naming
+
+        Each reconstructed tomogram follows the convention:
+
+            <tsId>_tomo.mrc
+
+        This makes the output directly traceable to the original
+        tilt-series.
+
+        Final Perspective
+
+        ProtTomoReconstruct adapts the general ProtTsProcess execution
+        framework to the specific logic of tomographic reconstruction.
+
+        Its main difference is conceptual:
+
+            - process the tilt-series as a whole
+            - generate tomograms instead of tilt-series
+
+        This class therefore serves as the common reconstruction base
+        for tomography reconstruction protocols in Scipion.
     """
     stepsExecutionMode = STEPS_PARALLEL
 
