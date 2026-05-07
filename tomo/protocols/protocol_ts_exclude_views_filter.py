@@ -199,7 +199,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                                if (tsId := ts.getTsId()) in nonProcessedTsIds  # Only not processed tsIds
                                and ts.getSize() > 0}  # Avoid processing empty TS
             for tsId, ts in tsToProcessDict.items():
-                excId = self._insertFunctionStep(self.excludeViewFilteringStep, ts,
+                excId = self._insertFunctionStep(self.excludeViewFilteringStep,
+                                                 ts,
                                                  prerequisites=[],
                                                  needsGPU=False)
                 closeSetStepDeps.append(excId)
@@ -227,7 +228,6 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         accumDose = 0.
         initialDose = 999.
         sxThreshold, syThreshold = self._getMaxShiftThresholds(ts)
-        # darkImgIndices = self._getDarkImgIndices(ts)
 
         imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
         zeroTiltImgData = imgStack.getCentralImage()
@@ -236,10 +236,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         tiList = []
         # Tilt-images
         for i, ti in enumerate(ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
-            # newTi = TiltImage()
-            # newTi.copyInfo(ti)
             tiltAngle = ti.getTiltAngle()
-
             self._genTiDict(ti)
             # Filter by tilt angle
             self._filterByTiltAngle(ti)
