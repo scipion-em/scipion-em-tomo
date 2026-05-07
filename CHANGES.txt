@@ -1,9 +1,12 @@
+V3.12.6:
+  - Fix: Fixing an error crating subsets
+  - Fix: Prevent duplicated object insertion
 v3.11.5:
  Users:
   - Protocol meshes from segmentation: protocol parallelized.
   - Protocol compose tilt-series improved and renewed.
   - Protocol tilt-series assign alignment streamified.
- Developers: remove xmipp dependencies.
+ Developers: remove part of the dependencies on Xmipp.
 v3.11.4: Hotfix - Fix an error generating subsets from the ctftomo-viewer
 v3.11.3: Deploy test.
 v3.11.2:
