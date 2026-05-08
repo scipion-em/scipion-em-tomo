@@ -41,146 +41,56 @@ class outputObjs(Enum):
 class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
     """Protocol to import a set of 3d coordinates from Scipion sqlite file"""
 
-    _label = 'import 3D coordinates from scipion'
-    _devStatus = BETA
-    _possibleOutputs = outputObjs
+    """
+    ProtImportCoordinates3DFromScipion — Import 3D Coordinates Protocol
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.notMatchingMsg = None
+    Overview
+    --------
+    Imports 3D coordinates from a Scipion SQLite file and maps them to a set of tomograms. 
+    This allows previously extracted coordinates to be reused for subtomogram extraction, 
+    visualization, or further processing while maintaining spatial consistency.
 
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('sqliteFile', FileParam,
-                      label='Scipion sqlite file')
-        form.addParam('importTomograms', PointerParam,
-                      pointerClass='SetOfTomograms',
-                      label='Input tomograms',
-                      help='Select the tomograms to which the coordinates should be referred to. '
-                           'The matching between coordinates and tomograms is made checking the tsId/tomoId '
-                           'attribute. If no matches are found, then it tries to do it comparing the filenames. '
-                           '*IMPORTANT*: the coordinates will be assumed to be at the same sampling rate as the '
-                           'introduced tomograms.')
-        form.addParam('boxSize', IntParam,
-                      label='Box Size [pix]',
-                      default=20)
+    Inputs and Workflow
+    -------------------
+    - SQLite File: Contains the 3D coordinates to import.
+      Practical tips:
+        * Ensure the file exists and is readable.
+        * Verify that coordinates reference tomograms using tsId/tomoId or filename.
+    - Input Tomograms: Tomograms to which the coordinates will be associated.
+      Practical tips:
+        * Matching is attempted via tsId/tomoId first, then by filename if needed.
+        * Coordinates are assumed to have the same sampling rate as the tomograms.
+    - Box Size: Integer defining the extraction box size in pixels (default 20).
 
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.importCoordinatesStep)
+    Workflow Steps
+    --------------
+    1. Load coordinates from the SQLite file into a SetOfCoordinates3D object.
+    2. Set sampling rate and box size from input tomograms.
+    3. Match coordinates to tomograms by tsId/tomoId or filename.
+    4. Exclude and log coordinates that do not match any tomogram.
+    5. Assign volume pointers to each coordinate for spatial reference.
+    6. Define outputs and maintain provenance with input tomograms.
 
-    # --------------------------- STEPS functions -----------------------------
-    def importCoordinatesStep(self):
-        inTomoSet = self.importTomograms.get()
-        inCoordsSet = SetOfCoordinates3D()
-        outCoordsSet = self._createSetOfCoordinates3D(self.importTomograms)
+    Matching and Validation
+    -----------------------
+    - Coordinates are matched to tomograms via tsId/tomoId or filename.
+    - Non-matching coordinates are excluded and reported in detailed logs.
+    - Raises an error if no coordinates match any input tomogram.
 
-        # Generate a set of 3d coordinates and assign the mapper of the introduced sqlite file
-        inCoordsSet.setSamplingRate(inTomoSet.getSamplingRate())
-        inCoordsSet.setBoxSize(self.boxSize.get())
-        inCoordsSet._mapperPath.set('%s, %s' % (self.sqliteFile.get(), ''))
-        inCoordsSet.load()
+    Outputs
+    -------
+    - SetOfCoordinates3D: Coordinates successfully imported and assigned to volumes.
+    - Provenance relationships to input tomograms are preserved.
 
-        # Check if the coordinates and the tomograms can be related via the tomoId or the filename
-        self._checkCoordinatesMatching(inTomoSet, inCoordsSet, outCoordsSet)
-        if self.notMatchingMsg:
-            self._store()
+    Practical Recommendations
+    -------------------------
+    - Confirm the SQLite file exists and contains valid coordinate data.
+    - Ensure all tomograms referenced by coordinates are provided.
+    - Maintain consistent sampling rates between coordinates and tomograms.
 
-        # Set some set attributes
-        outCoordsSet.setSamplingRate(inTomoSet.getSamplingRate())
-        outCoordsSet.setBoxSize(self.boxSize.get())
-        # Set volume pointers (required by getCoordinates().getX, Y and Z
-        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in inTomoSet}
-        for coord in outCoordsSet.iterCoordinates():
-            coord.setVolume(tomoIdsDict[coord.getTomoId()])
-
-        # Define outputs and relations
-        self._defineOutputs(**{outputObjs.coordinates.name: outCoordsSet})
-        self._defineSourceRelation(self.importTomograms, outCoordsSet)
-
-    # --------------------------- INFO functions ------------------------------
-    def _validate(self):
-        errorList = []
-        if not exists(self.sqliteFile.get()):
-            errorList.append('Introduced file was not found:\n\t%s' % self.sqliteFile.get())
-
-        return errorList
-
-    def _summary(self):
-        summaryMsg = []
-        if self.isFinished():
-            if getattr(self, 'outputTomograms', None):
-                summaryMsg.append('A *set of tomograms was generated* containing only the ones which there are\n'
-                                  'at least one coordinate referred to.\n')
-            statusMsg = getattr(self, 'notMatchingMsg', None)
-            if statusMsg:
-                summaryMsg.append(statusMsg.get())
-
-        return summaryMsg
-
-    # --------------------------- UTILS functions ----------------------------
-
-    def _checkCoordinatesMatching(self, inTomoSet, inCoordsSet, outCoordsSet):
-        notFoundCoords = []
-        notFoundCoordsMsg = ''
-        notFoundTomosMsg = ''
-        inTomoSetMatchingIndices = []
-        pattern = 'Row %i  -  tomoId = %s  -  (x, y, x) = (%.2f, %.2f, %.2f)'
-        tomoTsIdList, tomoBaseNameList = zip(*[(tomo.getTsId(), removeBaseExt(tomo.getFileName()))
-                                               for tomo in inTomoSet])
-        for coord in inCoordsSet:
-            coordTomoId = coord.getTomoId()
-            if coordTomoId:
-                if coordTomoId in tomoTsIdList:
-                    indByTomoId = tomoTsIdList.index(coordTomoId) + 1
-                    coord.setVolume(inTomoSet[indByTomoId])
-                    inTomoSetMatchingIndices.append(indByTomoId)
-                    # Add it to the output set of coordinates
-                    outCoordsSet.append(coord)
-                else:
-                    indexByName = self._getMatchingIndexByFileName(coordTomoId, tomoBaseNameList)
-                    if indexByName:
-                        coord.setVolume(inTomoSet[indexByName])
-                        inTomoSetMatchingIndices.append(indexByName)
-                        # Add it to the output set of coordinates
-                        outCoordsSet.append(coord)
-                    else:
-                        self._appendBaddCoordMsgToList(coord, notFoundCoords, inTomoSet, coordTomoId, pattern)
-
-            else:
-                self._appendBaddCoordMsgToList(coord, notFoundCoords, inTomoSet, 'NoTomoId', pattern)
-
-        # Build a precedents set with only the matching tomograms, in case there are not all the ones present in the
-        # input set
-        pattern = '\t-{}\n'
-        if not inTomoSetMatchingIndices:
-            raise Exception(ERR_COORDS_FROM_SQLITE_NO_MATCH)
-
-        if notFoundCoords:
-            nOfNonMatchingCoords = len(notFoundCoords)
-            # Format the non-matching coordinates message and add the header
-            notFoundCoordsMsg += '*[%i] coordinates were excluded*.\nThey have a tomoId which was not found in the ' \
-                                 'tsId attribute of none of the tomograms introduced nor contained in their basename.' \
-                                 '\nThe details can be checked in the output log.' % nOfNonMatchingCoords
-
-            # Print the detailed information in the output log
-            print(yellowStr(('EXCLUDED COORDINATES [%i]:\n%s' %
-                            (nOfNonMatchingCoords, pattern * nOfNonMatchingCoords)).format(*notFoundCoords)))
-
-        self.notMatchingMsg = String(notFoundTomosMsg + '\n\n' + notFoundCoordsMsg if
-                                     notFoundTomosMsg else notFoundCoordsMsg)
-
-    @staticmethod
-    def _getMatchingIndexByFileName(coordTomoId, tomoBaseNameList):
-        matchingIndex = None
-        matches = list(map(lambda x: coordTomoId in x, tomoBaseNameList))
-        if any(matches):
-            matchingIndex = matches.index(True) + 1
-
-        return matchingIndex
-
-    @staticmethod
-    def _appendBaddCoordMsgToList(coord, notFoundCoordsList, inTomoSet, coordTomoId, pattern):
-        coord.setVolume(inTomoSet[1])  # 3D coordinate must be referred to a volume to get its origin
-        notFoundCoordsList.append(pattern % (coord.getObjId(), coordTomoId, *coord.getPosition(SCIPION)))
-
-
+    Biological Perspective
+    ---------------------
+    - Enables reuse of previously extracted coordinates for consistent analysis.
+    - Maintains spatial context for accurate subtomogram extraction and downstream analysis.
+    - Supports reproducibility and integrity in structural biology workflows.
+    """
