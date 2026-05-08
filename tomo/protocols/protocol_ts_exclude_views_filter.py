@@ -45,8 +45,6 @@ from tomo.objects import TiltSeries, TiltImage, SetOfTiltSeries
 
 logger = logging.getLogger(__name__)
 
-EXCL_VIEWS_SUFFIX = '_exclViews'
-
 # Form variables
 IN_TS_SET = 'inTsSet'
 MIN_TILT = 'minTilt'
@@ -262,26 +260,29 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
         with self._lock:
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
+            # Successful TS
             if finalNoImgs >= minNoViewsAllowed:
                 # Set of tilt-series
                 outTsSet = self.getOutputSetOfTS()
                 # Tilt-series
                 outTs = TiltSeries()
                 outTs.copyInfo(ts)
-
                 outTsSet.append(outTs)
+
                 if self.getAttribValue(DO_RESTACK):
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:
                     self._populateFinalTs(outTs, tiList)
 
+            # Failed TS
             else:
                 # Set of tilt-series
                 outTsSet = self.getOutputSetOfTS(attrName=self._possibleOutputs.failedTiltSeries.name)
                 # Tilt-series
-                outTs = TiltSeries()
-                outTs.copyInfo(ts)
+                outTs = ts.clone()
+                # outTs.copyInfo(ts)
                 outTsSet.append(outTs)
+                outTs.copyItems(ts)
 
                 tsId = ts.getTsId()
                 logger.info(yellowStr(f'tsId = {tsId} was removed because the number '
@@ -331,13 +332,11 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         if isinstance(outputSet, SetOfTiltSeries):
             outputSet.enableAppend()
         else:
-            outputSet = SetOfTiltSeries.create(self._getPath(),
-                                               template=attrName,
-                                               suffix=EXCL_VIEWS_SUFFIX)
+            outputSet = SetOfTiltSeries.create(self._getPath(), template=attrName)
             outputSet.copyInfo(self._getInTsSet())
             outputSet.setStreamState(Set.STREAM_OPEN)
-            # Write set properties, otherwise it may expose the set (sqlite) without properties.
-            outputSet.write()
+            # # Write set properties, otherwise it may expose the set (sqlite) without properties.
+            # outputSet.write()
             # Define outputs and relations
             self._defineOutputs(**{attrName: outputSet})
             self._defineSourceRelation(self._getInTsSetPointer(), outputSet)
