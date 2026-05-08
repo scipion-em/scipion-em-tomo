@@ -28,6 +28,7 @@ import logging
 import traceback
 from dataclasses import dataclass, asdict
 from enum import Enum
+from random import shuffle
 from typing import Counter, Tuple, List, Optional, Dict
 import yaml
 import numpy as np
@@ -281,7 +282,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             # Failed TS
             else:
                 # Set of tilt-series
-                outTsSet = self.getOutputSetOfTS(attrName=self._possibleOutputs.failedTiltSeries.name)
+                outTsSet = self.getOutputSetOfTS(failedTs=True)
                 # Tilt-series
                 outTs = ts.clone()
                 outTsSet.append(outTs)
@@ -330,18 +331,27 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _getInTsSet(self) -> SetOfTiltSeries:
         return self._getInTsSetPointer().get()
 
-    def getOutputSetOfTS(self, attrName: str = outputObjects.tiltSeries.name) -> SetOfTiltSeries:
-        outputSet = getattr(self, attrName, None)
+    def getOutputSetOfTS(self, failedTs: bool = False) -> SetOfTiltSeries:
+        if failedTs:
+            attribName = self._possibleOutputs.failedTiltSeries.name
+            suffix = 'failed'
+        else:
+            attribName = self._possibleOutputs.tiltSeries.name
+            suffix = ''
+
+        outputSet = getattr(self, attribName, None)
         if isinstance(outputSet, SetOfTiltSeries):
             outputSet.enableAppend()
         else:
-            outputSet = SetOfTiltSeries.create(self._getPath(), template=attrName)
+            outputSet = SetOfTiltSeries.create(self._getPath(),
+                                               template='tiltseries',
+                                               suffix=suffix)
             outputSet.copyInfo(self._getInTsSet())
             outputSet.setStreamState(Set.STREAM_OPEN)
             # # Write set properties, otherwise it may expose the set (sqlite) without properties.
             # outputSet.write()
             # Define outputs and relations
-            self._defineOutputs(**{attrName: outputSet})
+            self._defineOutputs(**{attribName: outputSet})
             self._defineSourceRelation(self._getInTsSetPointer(), outputSet)
         return outputSet
 
