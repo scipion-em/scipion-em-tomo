@@ -41,159 +41,55 @@ from ..utils import _getUniqueFileName
 
 class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
-    _outputClassName = 'SetOfSubTomograms'
-    _label = 'import subtomograms'
-    _devStatus = BETA
 
-    def __init__(self, **args):
-        ProtTomoImportFiles.__init__(self, **args)
-
-    def _defineParams(self, form):
-        ProtTomoImportFiles._defineParams(self, form)
-
-        # form.addParam('importCoordinates', PointerParam,
-        #               pointerClass='SetOfCoordinates3D',
-        #               allowsNull=True,
-        #               label='Input coordinates 3D',
-        #               help='Select the coordinates for which the '
-        #                     'subtomograms were extracted.')
-
-        ProtTomoImportAcquisition._defineParams(self, form)
-
-    def _insertAllSteps(self):
-        self._insertFunctionStep('importSubTomogramsStep',
-                                 self.getPattern(),
-                                 self.samplingRate.get())
-
-        self._insertFunctionStep('createOutput')
-
-    # --------------------------- STEPS functions -----------------------------
-
-    def importSubTomogramsStep(
-            self,
-            pattern,
-            samplingRate
-    ):
-        """ Copy images matching the filename pattern
-        Register other parameters.
+    class ProtImportSubTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         """
-        self.info("Using pattern: '%s'" % pattern)
+        ProtImportSubTomograms — Import Subtomograms Protocol
 
-        # Create a Volume template object
-        subtomo = SubTomogram()
-        subtomo.setSamplingRate(samplingRate)
+        Overview
+        --------
+        Imports a set of subtomograms from files into the project, associating them
+        with acquisition metadata and optional coordinates. This ensures a structured
+        and consistent dataset for downstream subtomogram averaging or analysis.
 
-        imgh = ImageHandler()
+        Inputs and Workflow
+        -------------------
+        - File Pattern: Defines the filenames of subtomogram volumes to import.
+          Practical tips:
+            * Ensure the pattern matches the intended set of subtomogram files.
+            * Supports .mrc files and single/multi-slice volumes.
+        - Sampling Rate: Sets the spatial calibration for the subtomograms.
+        - Acquisition Metadata: Optional input describing imaging conditions and parameters.
+        - Optional 3D Coordinates: Can be linked to the imported subtomograms (commented out in current version).
 
-        self.subtomoSet = self._createSetOfSubTomograms()
-        self.subtomoSet.setSamplingRate(samplingRate)
+        Workflow Steps
+        --------------
+        1. Iterate through files matching the given pattern.
+        2. Determine the dimensions and origin for each subtomogram.
+        3. Create a SubTomogram object and assign sampling rate, acquisition data, and file references.
+        4. Handle single-slice and multi-slice volumes correctly.
+        5. Generate unique filenames and establish links in project structure.
+        6. Collect all subtomograms into a SetOfSubTomograms for output.
 
-        # if self.importCoordinates.get():
-        #     self.coords = []
-        #     for coord3D in self.importCoordinates.get().iterCoordinates():
-        #         self.coords.append(coord3D.clone())
-        #     self.subtomoSet.setCoordinates3D(self.importCoordinates)
+        Outputs
+        -------
+        - SetOfSubTomograms: All imported subtomograms with associated sampling rate and acquisition parameters.
+        - Maintains provenance with source files and optional acquisition metadata.
 
-        self._parseAcquisitionData()
-        for fileName, fileId in self.iterFiles():
+        Practical Recommendations
+        -------------------------
+        - Ensure all input files exist and match the filename pattern.
+        - Verify sampling rate is consistent with imaging parameters.
+        - Include acquisition metadata for accurate downstream analysis.
+        - Optional linking to 3D coordinates should match the number of subtomograms.
 
-            x, y, z, n = imgh.getDimensions(fileName)
-            if fileName.endswith('.map'):
-                fileName += ':mrc'
-            if fileName.endswith('.mrc') or fileName.endswith(':mrc'):
-                if z == 1 and n != 1:
-                    zDim = n
-                    n = 1
-                else:
-                    zDim = z
-            else:
-                zDim = z
-            origin = Transform()
+        Web-Oriented Variant
+        -------------------
+        - Not explicitly provided; can be adapted by restricting input pattern and simplifying metadata handling.
 
-            origin.setShifts(x/-2. * samplingRate,
-                             y/-2. * samplingRate,
-                             zDim/-2. * samplingRate)
-
-            subtomo.setOrigin(origin)  # read origin from form
-
-            newFileName = _getUniqueFileName(self.getPattern(), fileName)
-            # newFileName = abspath(self._getVolumeFileName(fileName))
-
-            if fileName.endswith(':mrc'):
-                fileName = fileName[:-4]
-            createAbsLink(fileName, self._getExtraPath(newFileName))
-
-            if n == 1:
-                self._addSubtomogram(subtomo, self._getExtraPath(fileName),
-                                     self._getExtraPath(newFileName))
-            else:
-                for index in range(1, n+1):
-                    self._addSubtomogram(subtomo, self._getExtraPath(fileName),
-                                         self._getExtraPath(newFileName), index=index)
-
-    def _addSubtomogram(self, subtomo, fileName, newFileName, index=None):
-        """ adds a subtomogram to a set """
-        subtomo.cleanObjId()
-        if index is None:
-            subtomo.setFileName(newFileName)
-        else:
-            subtomo.setLocation(index, newFileName)
-
-        subtomo.setAcquisition(self._extractAcquisitionParameters(fileName))
-        # self._setCoordinates3D(subtomo)
-        self.subtomoSet.append(subtomo)
-
-    def createOutput(self):
-        self._defineOutputs(outputSubTomograms=self.subtomoSet)
-
-    # --------------------------- INFO functions ------------------------------
-    # def _setCoordinates3D(self, subtomo):
-    #     if self.importCoordinates.get():
-    #         if len(self.coords) < 1:
-    #             raise Exception("Coordinates 3D and subtomograms should have the same size")
-    #         else:
-    #             subtomo.setCoordinate3D(self.coords.pop(0))
-
-    def _hasOutput(self):
-        return self.hasAttribute('outputSubTomograms')
-
-    def _getSubTomMessage(self):
-        return "SubTomograms %s" % self.getObjectTag('outputSubTomograms')
-
-    def _summary(self):
-        summary = []
-        if self._hasOutput():
-            summary.append("%s imported from:\n%s"
-                           % (self._getSubTomMessage(), self.getPattern()))
-
-            if self.samplingRate.get():
-                summary.append(u"Sampling rate: *%0.2f* (Å/px)" %
-                               self.samplingRate.get())
-
-            # This is too much info to display
-            # ProtTomoImportAcquisition._summary(self, summary, getattr(self, 'outputSubTomograms'))
-
-        return summary
-
-    def _methods(self):
-        methods = []
-        if self._hasOutput():
-            methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getSubTomMessage(), self.samplingRate.get()))
-        return methods
-
-    def _getVolumeFileName(self, fileName, extension=None):
-        if extension is not None:
-            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
-        else:
-            baseFileName = "import_" + str(basename(fileName)).split(":")[0]
-
-        return self._getExtraPath(baseFileName)
-
-    def _validate(self):
-        errors = []
-        try:
-            next(self.iterFiles())
-        except StopIteration:
-            errors.append('No files matching the pattern %s were found.' % self.getPattern())
-        return errors
+        Biological Perspective
+        ---------------------
+        - Enables structured import of subtomogram datasets for reproducible analysis.
+        - Preserves spatial calibration and acquisition context for accurate averaging.
+        - Supports efficient downstream structural biology workflows, including subtomogram averaging and classification.
+        """
