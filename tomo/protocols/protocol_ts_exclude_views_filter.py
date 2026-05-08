@@ -225,6 +225,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         angleMax = -999.
         accumDose = 0.
         initialDose = 999.
+        doReStack = self.getAttribValue(DO_RESTACK)
         sxThreshold, syThreshold = self._getMaxShiftThresholds(ts)
 
         imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
@@ -249,14 +250,17 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             metricsDict = tqd.analyze_image(zeroTiltMedian, tiltAngle)
             self._filterByImgQuality(ti, metricsDict)
 
-            angleMin = min(tiltAngle, angleMin)
-            angleMax = max(tiltAngle, angleMax)
-            accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
-            initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
-
-            newTi = ti.clone()
-            tiList.append(newTi)
-            finalNoImgs += 1
+            if ti.isEnabled():
+                angleMin = min(tiltAngle, angleMin)
+                angleMax = max(tiltAngle, angleMax)
+                accumDose = max(ti.getAcquisition().getAccumDose(), accumDose)
+                initialDose = min(ti.getAcquisition().getDoseInitial(), initialDose)
+                newTi = ti.clone()
+                tiList.append(newTi)
+                finalNoImgs += 1
+            elif not doReStack:
+                newTi = ti.clone()
+                tiList.append(newTi)
 
         with self._lock:
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
@@ -269,7 +273,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 outTs.copyInfo(ts)
                 outTsSet.append(outTs)
 
-                if self.getAttribValue(DO_RESTACK):
+                if doReStack:
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:
                     self._populateFinalTs(outTs, tiList)
@@ -280,7 +284,6 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 outTsSet = self.getOutputSetOfTS(attrName=self._possibleOutputs.failedTiltSeries.name)
                 # Tilt-series
                 outTs = ts.clone()
-                # outTs.copyInfo(ts)
                 outTsSet.append(outTs)
                 outTs.copyItems(ts)
 
