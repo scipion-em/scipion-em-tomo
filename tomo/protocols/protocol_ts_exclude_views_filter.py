@@ -261,36 +261,38 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             finalNoImgs += 1
 
         with self._lock:
-            # Set of tilt-series
-            outTsSet = self.getOutputSetOfTS()
-            failedTsSet = self.getOutputSetOfTS(attrName=self._possibleOutputs.failedTiltSeries.name)
-            # Tilt-series
-            outTs = TiltSeries()
-            outTs.copyInfo(ts)
-
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
             if finalNoImgs >= minNoViewsAllowed:
+                # Set of tilt-series
+                outTsSet = self.getOutputSetOfTS()
+                # Tilt-series
+                outTs = TiltSeries()
+                outTs.copyInfo(ts)
+
                 outTsSet.append(outTs)
                 if self.getAttribValue(DO_RESTACK):
                     self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
                 else:
                     self._populateFinalTs(outTs, tiList)
 
-                outTs.write()
-                outTsSet.update(outTs)
-                outTsSet.write()
-                self._store(outTsSet)
             else:
-                failedTsSet.append(outTs)
+                # Set of tilt-series
+                outTsSet = self.getOutputSetOfTS(attrName=self._possibleOutputs.failedTiltSeries.name)
+                # Tilt-series
+                outTs = TiltSeries()
+                outTs.copyInfo(ts)
+                outTsSet.append(outTs)
+
                 tsId = ts.getTsId()
                 logger.info(yellowStr(f'tsId = {tsId} was removed because the number '
                                       f'of tilt-images after filtering [{finalNoImgs}] '
                                       f'is lower than the minimum specified [{minNoViewsAllowed}].'))
                 self._updateRemovedTsIds(tsId)
-                outTs.write()
-                failedTsSet.update(outTs)
-                failedTsSet.write()
-                self._store(failedTsSet)
+
+            outTs.write()
+            outTsSet.update(outTs)
+            outTsSet.write()
+            self._store(outTsSet)
 
             # Close explicitly the outputs (for streaming)
             self.closeOutputsForStreaming()
