@@ -28,7 +28,6 @@ import logging
 import traceback
 from dataclasses import dataclass, asdict
 from enum import Enum
-from random import shuffle
 from typing import Counter, Tuple, List, Optional, Dict
 import yaml
 import numpy as np
@@ -230,8 +229,13 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         sxThreshold, syThreshold = self._getMaxShiftThresholds(ts)
 
         imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
-        zeroTiltImgData = imgStack.getCentralImage()
-        zeroTiltMedian = float(np.median(zeroTiltImgData))
+
+        # Compute dark outliers once for the whole stack (robust, no 0-degree anchor).
+        darkSensitivity = self.getAttribValue(DARK_TH)
+        dark_info = {}
+        if darkSensitivity >= 0:
+            dark_info = self._compute_dark_flags(ts, imgStack, darkSensitivity)
+
         finalNoImgs = 0
         tiList = []
         # Tilt-images
@@ -248,7 +252,9 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             # Filter by quality
             tiData = imgStack.getImage(i)
             tqd = TiltImageQualityDetector(tiData)
-            metricsDict = tqd.analyze_image(zeroTiltMedian, tiltAngle)
+            metricsDict = tqd.analyze_image(tiltAngle)
+            if dark_info:
+                metricsDict.update(dark_info.get(int(ti.getAcquisitionOrder()), {}))
             self._filterByImgQuality(ti, metricsDict)
 
             if ti.isEnabled():
@@ -362,23 +368,6 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         return xdimThreshold, ydimThreshold
 
     @staticmethod
-    def _getDarkImgIndices(ts: TiltSeries) -> Optional[List[int]]:
-        imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
-        zeroTiltImgData = imgStack.getCentralImage()
-        zeroTiltMedian = float(np.median(zeroTiltImgData))
-        tiltAngleList = [ti.getTiltAngle() for ti in ts.iterItems()]
-        indices = []
-        counter = 1
-        for tiltAngle, tiData in zip(tiltAngleList, imgStack):
-            tqd = TiltImageQualityDetector(tiData)
-            metricsDict = tqd.analyze_image(zeroTiltMedian, tiltAngle)
-            isBad = tqd.is_trash(metricsDict)
-            if isBad:
-                indices.append(counter)
-            counter += 1
-        return indices
-
-    @staticmethod
     def _getTiId(ti: TiltImage) -> str:
         return f'{ti.getAcquisitionOrder()}@{ti.getTsId()}'
 
@@ -409,7 +398,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             self._updateTiDict(ti, TiLabel.BY_DOSE.value)
 
     def _filterByImgQuality(self, ti: TiltImage, tiMetricsDict: Dict) -> None:
-        if tiMetricsDict["comp_ratio"] < 0.25:
+        # Dark outlier (punctual blackout / shutter failure). Controlled by 'darkSensitivity'.
+        if tiMetricsDict.get('is_dark', 0) and float(tiMetricsDict.get('is_dark')) > 0:
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_DARK.value)
 
@@ -485,88 +475,216 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             summary.append(f'Some tilt-series were removed: *{self.removedTsIds.get()}*')
         return summary
 
+    # -------------------------- IMAGE QUALITY: DARK OUTLIERS --------------------------
+    @staticmethod
+    def _robust_brightness(image_data: np.ndarray,
+                           crop_fraction: float = 0.7,
+                           p_low: float = 5.0,
+                           p_high: float = 95.0,
+                           eps: float = 1e-8) -> Dict[str, float]:
+        """Compute a robust, scale-invariant brightness descriptor.
+
+        No assumption of stack normalization. Uses a central crop to reduce border / grid-bar influence.
+        """
+        image_data = np.squeeze(image_data)
+        h, w = image_data.shape
+        cf = float(np.clip(crop_fraction, 0.2, 1.0))
+        dh = int(h * cf)
+        dw = int(w * cf)
+        y0 = max((h - dh) // 2, 0)
+        x0 = max((w - dw) // 2, 0)
+        crop = image_data[y0:y0 + dh, x0:x0 + dw]
+
+        p05 = float(np.percentile(crop, p_low))
+        p50 = float(np.median(crop))
+        p95 = float(np.percentile(crop, p_high))
+        scale = (p95 - p05)
+        brightness = (p50 - p05) / (scale + eps)
+        return {'p05': p05, 'p50': p50, 'p95': p95, 'brightness': float(brightness)}
+
+    @staticmethod
+    def _robust_linear_fit(x: np.ndarray,
+                           y: np.ndarray,
+                           iters: int = 6,
+                           huber_c: float = 1.345,
+                           eps: float = 1e-8) -> Tuple[float, float]:
+        """Robust linear fit y ~ a + b*x using IRLS (Iteratively Reweighted Least Squares) with Huber
+        weights to prevent outliers influence."""
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        b, a = np.polyfit(x, y, 1)  # slope, intercept
+        for _ in range(max(1, iters)):
+            resid = y - (a + b * x)
+            med = np.median(resid)
+            mad = np.median(np.abs(resid - med))
+            sigma = 1.4826 * mad + eps
+            u = resid / (huber_c * sigma)
+            w = 1.0 / np.maximum(1.0, np.abs(u))
+            X = np.vstack([np.ones_like(x), x]).T
+            XtW = X.T * w
+            beta = np.linalg.lstsq(XtW @ X, XtW @ y, rcond=None)[0]
+            a, b = float(beta[0]), float(beta[1])
+        return a, b
+
+    def _compute_dark_flags(self,
+                            ts: TiltSeries,
+                            imgStack,
+                            darkSensitivity: float,
+                            window: int = 2,
+                            crop_fraction: float = 0.7,
+                            cos_floor: float = 0.2,
+                            local_ratio_th: float = 0.65,
+                            eps: float = 1e-8) -> Dict[int, Dict[str, float]]:
+        """Compute per-image dark outlier scores for a tilt-series.
+
+        Assumption: the stack is sorted by tilt angle from min to max.
+        Strategy: robust global model log(brightness) vs log(cos(|tilt|)) + local neighborhood check.
+
+        Main idea: An image is considered dark if it is much darker than expected for its angle
+        (a global outlier), and it is also much darker than its neighbors (a local outlier).
+
+        Returns a dict keyed by acquisitionOrder with fields: is_dark, dark_z, local_ratio, brightness, p05/p50/p95.
+        """
+        ti_by_angle = list(ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD))
+        n = len(ti_by_angle)
+        angles = np.asarray([float(ti.getTiltAngle()) for ti in ti_by_angle], dtype=float)
+
+        # Robust per‑image brightness (without normalization) ----------------------------------------------------
+
+        brightness = np.zeros(n, dtype=float)
+        p05 = np.zeros(n, dtype=float)
+        p50 = np.zeros(n, dtype=float)
+        p95 = np.zeros(n, dtype=float)
+
+        for k, ti in enumerate(ti_by_angle):
+            img = imgStack.getImage(k)
+            bm = self._robust_brightness(img, crop_fraction=crop_fraction, eps=eps)
+            brightness[k] = max(float(bm['brightness']), eps)
+            p05[k], p50[k], p95[k] = bm['p05'], bm['p50'], bm['p95']
+
+        # Global ‘expected’ model versus angle (physical/geometric trend) ---------------------------------------
+        cosv = np.cos(np.radians(np.abs(angles)))
+        cosv = np.maximum(cosv, cos_floor)
+        x = np.log(cosv + eps)
+        y = np.log(brightness + eps)
+        a, b = self._robust_linear_fit(x, y)
+        resid = y - (a + b * x)
+
+        # Global outlier score based on a robust z‑score --------------------------------------------------------
+        med_r = np.median(resid)
+        mad_r = np.median(np.abs(resid - med_r))
+        sigma_r = 1.4826 * mad_r + eps
+        z = (resid - med_r) / sigma_r
+
+        # Local check (neighboring-window analysis) -------------------------------------------------------------
+        local_ratio = np.ones(n, dtype=float)
+        for pos in range(n):
+            lo = max(0, pos - window)
+            hi = min(n, pos + window + 1)
+            neigh = [j for j in range(lo, hi) if j != pos]
+            if not neigh:
+                continue
+            ref = float(np.median(brightness[neigh]))
+            local_ratio[pos] = brightness[pos] / (ref + eps)
+
+        # Final decision based on global + local analysis -----------------------------------------------------
+        is_dark = (z < -float(darkSensitivity)) & (local_ratio < local_ratio_th)
+        out = {}
+        for k, ti in enumerate(ti_by_angle):
+            out[int(ti.getAcquisitionOrder())] = {
+                'is_dark': float(is_dark[k]),
+                'dark_z': float(z[k]),
+                'local_ratio': float(local_ratio[k]),
+                'brightness': float(brightness[k]),
+                'p05': float(p05[k]),
+                'p50': float(p50[k]),
+                'p95': float(p95[k]),
+                'exp_log_brightness': float(a + b * x[k])
+            }
+        return out
 
 class TiltImageQualityDetector:
-    """
-    A utility class to detect low-quality images in a cryo-ET tilt-series.
+    """Per-image quality descriptors for cryo-ET tilt images.
+
+    Darkness detection needs context from the whole tilt-series and is computed at the protocol level,
+    then appended to the per-image metrics.
     """
 
     def __init__(self, image_data: np.ndarray) -> None:
-        self.raw_image = image_data
+        self.raw_image = np.squeeze(image_data)
+        img_min = float(np.min(self.raw_image))
+        img_max = float(np.max(self.raw_image))
+        self.norm_image = (self.raw_image - img_min) / (img_max - img_min + 1e-8)
 
-        img_min = np.min(image_data)
-        img_max = np.max(image_data)
-        self.norm_image = (image_data - img_min) / (img_max - img_min + 1e-8)
+    def get_robust_brightness_metrics(self,
+                                     crop_fraction: float = 0.7,
+                                     p_low: float = 5.0,
+                                     p_high: float = 95.0,
+                                     eps: float = 1e-8) -> Dict[str, float]:
+        """Robust, scale-invariant brightness descriptor computed on a central crop."""
+        h, w = self.raw_image.shape
+        cf = float(np.clip(crop_fraction, 0.2, 1.0))
+        dh = int(h * cf)
+        dw = int(w * cf)
+        y0 = max((h - dh) // 2, 0)
+        x0 = max((w - dw) // 2, 0)
+        crop = self.raw_image[y0:y0 + dh, x0:x0 + dw]
 
-    def get_intensity_metrics(self, zero_tilt_median: float, tilt_angle_deg: float) -> Dict[str, float]:
-        """Calculates intensity metrics relative to the zero-degree tilt image."""
-        current_median = float(np.median(self.raw_image))
-        relative_ratio = current_median / (zero_tilt_median + 1e-8)
-
-        angle_rad = np.radians(abs(tilt_angle_deg))
-        cos_val = np.cos(angle_rad)
-
-        # Compensated Ratio: Normalized for ice thickness increase at high tilts
-        compensated_ratio = relative_ratio / (cos_val + 1e-8)
-
-        return {
-            "median": current_median,
-            "relative_ratio": relative_ratio,
-            "compensated_ratio": float(compensated_ratio)
-        }
+        p05 = float(np.percentile(crop, p_low))
+        p50 = float(np.median(crop))
+        p95 = float(np.percentile(crop, p_high))
+        scale = (p95 - p05)
+        brightness = (p50 - p05) / (scale + eps)
+        return {'p05': p05, 'p50': p50, 'p95': p95, 'brightness': float(brightness)}
 
     def get_extreme_contrast_metrics(self, grid_size: Tuple[int, int] = (6, 6)) -> Dict[str, float]:
-        """
-        Detects extreme partial obstructions (e.g., grid bars, mass contamination)
-        by analyzing the variation of local Inter-Percentile Ranges (IPR).
-        """
+        """Detect extreme partial obstructions via patch-contrast variability."""
         h, w = self.raw_image.shape
-        ph, pw = h // grid_size[0], w // grid_size[1]
+        ph, pw = max(h // grid_size[0], 1), max(w // grid_size[1], 1)
 
         patch_contrast_ranges = []
         for i in range(grid_size[0]):
             for j in range(grid_size[1]):
                 p = self.raw_image[i * ph:(i + 1) * ph, j * pw:(j + 1) * pw]
-                # Calculate Inter-Percentile Range (IPR) to avoid noise extremes
+                if p.size == 0:
+                    continue
                 p10, p90 = np.percentile(p, [10, 90])
                 patch_contrast_ranges.append(float(p90 - p10))
 
+        if not patch_contrast_ranges:
+            return {'mean_patch_contrast': 0.0, 'std_patch_contrast': 0.0, 'extreme_contrast_score': 0.0}
+
         mean_contrast = float(np.mean(patch_contrast_ranges))
         std_contrast = float(np.std(patch_contrast_ranges))
-
-        # Score: How much does local contrast vary across the image?
         extreme_contrast_score = std_contrast / (mean_contrast + 1e-8)
-
-        return {
-            "mean_patch_contrast": mean_contrast,
-            "std_patch_contrast": std_contrast,
-            "extreme_contrast_score": extreme_contrast_score
-        }
+        return {'mean_patch_contrast': mean_contrast,
+                'std_patch_contrast': std_contrast,
+                'extreme_contrast_score': extreme_contrast_score}
 
     def get_entropy(self) -> float:
-        """Calculates Shannon Entropy for texture analysis."""
+        """Shannon entropy for texture analysis."""
         img_8bit = (self.norm_image * 255).astype(np.uint8)
         hist, _ = np.histogram(img_8bit, bins=256, range=(0, 256))
-        prob = hist / hist.sum()
+        prob = hist / (hist.sum() + 1e-8)
         prob = prob[prob > 0]
         return float(-np.sum(prob * np.log2(prob)))
 
     def get_edge_energy(self) -> float:
-        """Calculates mean edge energy using a Sobel filter."""
+        """Mean edge energy using Sobel filter."""
         edges = sobel(self.norm_image)
         return float(np.mean(edges))
 
-    def analyze_image(self, zero_tilt_median: float, tilt_angle: float) -> Dict[str, float]:
-        """Returns all quality metrics in a single dictionary."""
-        intensity = self.get_intensity_metrics(zero_tilt_median, tilt_angle)
+    def analyze_image(self, tilt_angle: float) -> Dict[str, float]:
+        """Return per-image metrics (protocol may append dark outlier fields)."""
         extreme_contrast = self.get_extreme_contrast_metrics()
-
+        bright = self.get_robust_brightness_metrics()
         return {
-            "median": intensity["median"],
-            "rel_ratio": intensity["relative_ratio"],
-            "comp_ratio": intensity["compensated_ratio"],
-            "entropy": self.get_entropy(),
-            "edge_energy": self.get_edge_energy(),
-            "extreme_contrast_score": extreme_contrast["extreme_contrast_score"]
+            'median': bright['p50'],
+            'p05': bright['p05'],
+            'p95': bright['p95'],
+            'brightness': bright['brightness'],
+            'entropy': self.get_entropy(),
+            'edge_energy': self.get_edge_energy(),
+            'extreme_contrast_score': extreme_contrast['extreme_contrast_score'],
+            'tilt_angle': float(tilt_angle)
         }
-
