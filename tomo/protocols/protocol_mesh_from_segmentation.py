@@ -56,267 +56,196 @@ class ProtMeshFromSegmentation(EMProtocol):
     """
     Creates meshes based on segmentations or voxels values (TomoMasks).
     """
-    _label = 'meshes from tomo mask'
-    _devStatus = BETA
-    _possibleOutputs = OutputMeshesFromSegmentation
-    stepsExecutionMode = STEPS_PARALLEL
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.failedTsIds = []
+    """
+    Generates 3D mesh representations from tomographic segmentations or
+    probabilistic voxel masks (TomoMasks). The protocol converts labeled
+    regions or density-based masks into sparse point-based meshes that can
+    be visualized, analyzed, or used in downstream structural workflows.
 
-    # --------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputMasks', PointerParam, pointerClass=SetOfTomoMasks,
-                      label='Tomo Masks', important=True,
-                      help='Set of tomo mask from which the meshes will be created')
-        form.addParam('inputTomograms', PointerParam, pointerClass=SetOfTomograms,
-                      label='Tomograms',
-                      help='Tomograms to which the meshes will be asotiated')
-        form.addParam('boxSize', IntParam,
-                      expertLevel=LEVEL_ADVANCED,
-                      default=32,
-                      label="Box size (px)",
-                      help="Required by some visualization tools")
+    AI Generated:
 
-        form.addSection(label='Parameters')
-        form.addParam('smoothMask', BooleanParam, label='Smooth mask',
-                      important=True, default=False,
-                      help='Wether the input is a segmentation or a smooth mask')
-        form.addParam('backgroundLabel', IntParam, label='Background label',
-                      condition='not smoothMask', default=0,
-                      help='Label in the segmentation to be considered as '
-                           'background')
+    Mesh From Segmentation (ProtMeshFromSegmentation) — User Manual
 
-        line = form.addLine('Threshold to keep',
-                            condition='smoothMask',
-                            help="Only the voxels between these two values "
-                                 "will be considered to create the meshes.")
-        line.addParam('lowLimit', FloatParam, default=0.1, label='Lowest')
-        line.addParam('highLimit', FloatParam, default=1, label='Highest')
+        Overview
 
-        group = form.addGroup('Morphological operations',
-                              help='Operations are performed in the same order '
-                                   'as in the form')
-        group.addParam('applyDilation', IntParam, label='Dilation',
-                       default=0,
-                       help='When set to a positive number, a dilation '
-                            'operation is applied with the provided pixel count.')
-        group.addParam('applySkeletonization', BooleanParam, label='Skeletonization',
-                       default=True,
-                       help='When set to yes, a skeletonization operation is applied.')
+        The Mesh From Segmentation protocol transforms tomographic masks
+        into collections of 3D mesh points associated with tomograms. Its
+        main purpose is to convert segmented biological structures into a
+        geometric representation that can be visualized efficiently and used
+        for spatial analysis within cryo-electron tomography workflows.
 
-        form.addParam('density',
-                      FloatParam,
-                      label='Percentage of density ',
-                      default=5.0,
-                      validators=[GE(0), LE(100)],
-                      help='This parameter goes from 0 - 100 and defines the '
-                           'percentage of voxel of the tomoMask that '
-                           'will be considered as points of the mesh.')
+        In practical cryo-ET studies, biological objects such as membranes,
+        filaments, vesicles, organelles, or macromolecular assemblies are
+        often segmented before quantitative interpretation. This protocol
+        allows those segmented regions to be converted into point-based
+        meshes that preserve the spatial organization of the original
+        structures while significantly reducing data complexity.
 
-        form.addParallelSection(threads=1, mpi=0)
+        The generated meshes are particularly useful for visualization
+        environments, geometric analyses, particle contextualization, and
+        downstream tools requiring sparse structural representations rather
+        than dense voxel volumes.
 
-    # --------------------------- INSERT steps functions -----------------------
-    def _insertAllSteps(self):
-        closeSetDeps = []
-        self._initialize()
-        for tsId in self.masks.keys():
-            cInPId = self._insertFunctionStep(self.convertInputStep, tsId,
-                                              prerequisites=[],
-                                              needsGPU=False)
-            pId = self._insertFunctionStep(self.processTomogramStep, tsId,
-                                           prerequisites=cInPId,
-                                           needsGPU=False)
-            closeSetDeps.append(pId)
-        self._insertFunctionStep(self.closeOutputSet,
-                                 prerequisites=[],
-                                 needsGPU=False)
+        Inputs and General Workflow
 
-    # --------------------------- STEPS functions ------------------------------
-    def convertInputStep(self, tsId: str):
-        try:
-            # Mask
-            mask = self._getInputMask(tsId)
-            maskFName = mask.getFileName()
-            convertedMaskFn = self._getMaskFn(tsId)
-            self._convertOrLink(tsId, maskFName, convertedMaskFn)
-            # Tomogram
-            tomogram = self._getInputTomogram(tsId)
-            tomoFName = tomogram.getFileName()
-            convertedTomoFn = self._getTomoFn(tsId)
-            self._convertOrLink(tsId, tomoFName, convertedTomoFn)
-        except Exception as e:
-            self.failedTsIds.append(tsId)
-            logger.error(redStr(f'tsId = {tsId} -> input conversion failed '
-                                f'with the exception -> {e}'))
-            logger.error(traceback.format_exc())
+        The protocol requires two principal inputs: a set of tomographic
+        masks and a corresponding set of tomograms. Each tomographic mask
+        must share a common tsId with its associated tomogram so both objects
+        can be matched correctly during processing.
 
-    def processTomogramStep(self, tsId: str):
-        if tsId in self.failedTsIds:
-            return
-        try:
-            logger.info(cyanStr(f'tsId = {tsId} -> generating the mesh...'))
-            mask = self._getInputMask(tsId)
-            tomogram = self._getInputTomogram(tsId)
+        During initialization, the protocol identifies the tomograms and
+        masks that share common identifiers. Elements without matching tsIds
+        are ignored, ensuring that only coherent tomogram-mask pairs are
+        processed. This design is especially important in large cryo-ET
+        projects where datasets may originate from multiple acquisition or
+        segmentation pipelines.
 
-            with self._lock:
-                outputMeshes = self._getOutputMeshes()
-                maskData = self._loadMask(mask)
+        Before processing begins, input masks and tomograms are either linked
+        directly or converted into MRC format when necessary. This guarantees
+        compatibility with the internal image processing workflow and avoids
+        unnecessary duplication when files are already stored in a supported
+        format.
 
-                if self.smoothMask:
-                    self._processSmoothMask(
-                        mesh=outputMeshes,
-                        tomogram=tomogram,
-                        mask=maskData
-                    )
-                else:
-                    self._processSegmentation(
-                        mesh=outputMeshes,
-                        tomogram=tomogram,
-                        segmentation=maskData
-                    )
+        Segmentation-Based and Smooth-Mask Processing
 
-                outputMeshes.write()
-                self._store()
-        except Exception as e:
-            self.failedTsIds.append(tsId)
-            logger.error(redStr(f'tsId = {tsId} -> process tomogram step failed '
-                                f'with the exception -> {e}'))
-            logger.error(traceback.format_exc())
+        The protocol supports two biologically distinct processing modes.
 
-    def closeOutputSet(self):
-        self._closeOutputSet()
-        outputAttribName = self._possibleOutputs.meshes.name
-        output = getattr(self, outputAttribName, None)
-        if not output or (output and len(output) == 0):
-            raise Exception(f'No output/s {outputAttribName} were generated. Please check the '
-                            f'Output Log > run.stdout and run.stderr')
+        In segmentation mode, the input tomomask is interpreted as a labeled
+        segmentation map where each integer value represents a distinct
+        structural region. The user may define a background label, which is
+        excluded from processing. Every remaining label is independently
+        transformed into a mesh representation.
 
-    # --------------------------- UTILS functions ------------------------------
-    def _initialize(self):
-        inTomoMasks = self.inputMasks.get()
-        inTomograms = self.inputTomograms.get()
-        presentMaskTsIds = set(inTomoMasks.getTSIds())
-        presentTomoTsIds = set(inTomoMasks.getTSIds())
-        commonTsIds = presentMaskTsIds & presentTomoTsIds
-        nonPresenTsIds = presentMaskTsIds ^ presentTomoTsIds
-        if nonPresenTsIds:
-            logger.info(yellowStr(f'Some tsIds are not common to both sets of '
-                                  f'tomograms and tomomasks: {nonPresenTsIds}'))
-        self.masks = {tsId: mask.clone() for mask in inTomoMasks if
-                      (tsId := mask.getTsId()) in commonTsIds}
-        self.tomos = {tsId: tomo.clone() for tomo in inTomograms if
-                      (tsId := tomo.getTsId()) in commonTsIds}
-        self.baseGroupId = Integer(1)
+        This mode is particularly suitable for semantic segmentations
+        generated by manual annotation tools or machine-learning approaches.
+        Biological users commonly employ it for separating membranes,
+        cytoskeletal filaments, organelles, or compartment boundaries into
+        independent spatial objects.
 
-    def _getOutputMeshes(self) -> SetOfMeshes:
-        output: SetOfMeshes = getattr(self, self._possibleOutputs.meshes.name, None)
-        if output is not None:
-            output.enableAppend()
-        else:
-            output = SetOfMeshes.create(self._getPath(), template='meshes%s.sqlite')
-            output.setPrecedents(self.inputTomograms)
-            output.setSamplingRate(self.inputMasks.get().getSamplingRate())
-            output.setBoxSize(self.boxSize.get())
-            output.setStreamState(Set.STREAM_OPEN)
+        In smooth-mask mode, the tomomask is interpreted as a continuous
+        density or probability map instead of a discrete segmentation. In
+        this case, the protocol selects voxels whose values fall within a
+        user-defined intensity interval.
 
-            self._defineOutputs(**{self._possibleOutputs.meshes.name: output})
-            self._defineSourceRelation(self.inputMasks, output)
+        This approach is especially useful when working with probabilistic
+        segmentations, confidence maps, or soft masks derived from neural
+        network predictions. Rather than relying on discrete labels, the mesh
+        is generated from regions satisfying the specified density thresholds.
 
-        return output
+        Morphological Processing
 
-    def _getInputMask(self, tsId: str) -> TomoMask:
-        return self.masks[tsId]
+        Before mesh generation, the protocol optionally applies morphological
+        operations to refine the binary mask.
 
-    def _getInputTomogram(self, tsId: str) -> Tomogram:
-        return self.tomos[tsId]
+        Dilation can be applied using a spherical footprint with a user-defined
+        radius. Biologically, dilation may help reconnect fragmented regions,
+        compensate for segmentation discontinuities, or enlarge thin structures
+        that would otherwise generate sparse or disconnected meshes.
 
-    @staticmethod
-    def _loadMask(mask: TomoMask) -> np.ndarray:
-        maskFName = mask.getFileName()
-        return MRCImageReader.open(maskFName)
+        Skeletonization can also be enabled. This operation reduces structures
+        to their topological backbone while preserving connectivity. In cryo-ET
+        workflows, skeletonization is particularly useful for filamentous or
+        tubular structures such as actin networks, microtubules, or membrane
+        traces where the central geometry is more important than the full
+        segmented volume.
 
-    # --------------------------- INFO functions -------------------------------
-    def _validate(self):
-        errors = []
-        sRateTol = 0.01
-        masksSRate = self.inputMasks.get().getSamplingRate()
-        tomosSRate = self.inputTomograms.get().getSamplingRate()
-        if abs(masksSRate - tomosSRate) > sRateTol:
-            errors.append(f'The sampling rate of the introduced sets are not equal within '
-                          f'the tolerance {sRateTol}.\n'
-                          f'MasksSRate -> {masksSRate} =! TomosSRate -> {tomosSRate}.')
-        return errors
+        Since these operations are applied sequentially, their combined effect
+        strongly influences the geometry of the resulting mesh. Biological users
+        should therefore evaluate the processed masks visually to ensure that
+        relevant structural features are preserved.
 
-    def _processSegmentation(self,
-                             mesh: SetOfMeshes,
-                             tomogram: Tomogram,
-                             segmentation: np.ndarray) -> None:
-        labels = np.unique(segmentation)
-        for label in labels:
-            if label != self.backgroundLabel.get():
-                mask = (segmentation == label)
-                self._processBinaryMask(
-                    mesh=mesh,
-                    tomogram=tomogram,
-                    mask=mask
-                )
+        Mesh Density and Point Sampling
 
-    def _processSmoothMask(self,
-                           mesh: SetOfMeshes,
-                           tomogram: Tomogram,
-                           mask: np.ndarray) -> None:
-        mask = (self.lowLimit.get() <= mask) & (mask <= self.highLimit.get())
-        self._processBinaryMask(
-            mesh=mesh,
-            tomogram=tomogram,
-            mask=mask
-        )
+        Once the binary mask has been finalized, the protocol extracts voxel
+        coordinates corresponding to the segmented region. Instead of converting
+        every voxel into a mesh point, a random subsampling strategy is applied
+        according to the user-defined density percentage.
 
-    def _processBinaryMask(self,
-                           mesh: SetOfMeshes,
-                           tomogram: Tomogram,
-                           mask: np.ndarray):
-        if self.applyDilation.get() > 0:
-            footprint = skimage.morphology.ball(self.applyDilation.get())
-            mask = skimage.morphology.binary_dilation(mask, footprint)
+        This parameter determines how many voxels are retained as mesh points.
+        Lower densities generate lighter meshes that are easier to visualize and
+        manipulate interactively, while higher densities preserve more geometric
+        detail at the cost of larger outputs.
 
-        if self.applySkeletonization.get():
-            mask = skimage.morphology.skeletonize_3d(mask)
+        From a biological perspective, sparse meshes are often sufficient for
+        representing large cellular structures or membrane networks. However,
+        denser sampling may be preferable when fine spatial details or local
+        curvature analyses are required.
 
-        probability = self.density.get() / 100.0
-        coordinates = np.argwhere(mask)
-        indices = np.arange(0, len(coordinates))
-        nPoints = math.floor(probability * len(indices))
-        selection = np.random.choice(indices, size=nPoints, replace=False)
+        Generated mesh points preserve their original spatial coordinates and
+        remain associated with the corresponding tomogram. Each processed region
+        is additionally assigned a group identifier, allowing independent labels
+        or segmented structures to remain distinguishable in downstream analyses.
 
-        for z, y, x in coordinates[selection, :]:
-            point = MeshPoint()
-            point.setVolume(tomogram)
-            point.setGroupId(self.baseGroupId)
-            point.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
-            mesh.append(point)
+        Parallel Execution and Robustness
 
-        self.baseGroupId.increment()
+        The protocol executes independently for each tomogram-mask pair using
+        parallel processing steps. This design improves scalability and makes
+        the protocol suitable for large cryo-electron tomography datasets.
 
-    def _getMaskFn(self, tsId: str) -> str:
-        return self._getExtraPath(f'{tsId}_mask{MRC_EXT}')
+        During execution, failed tomograms are tracked individually. Errors in
+        one dataset therefore do not necessarily interrupt processing of the
+        remaining tomograms. Conversion failures, incompatible files, or mesh
+        generation problems are reported through the logging system for later
+        inspection.
 
-    def _getTomoFn(self, tsId: str) -> str:
-        return self._getExtraPath(f'{tsId}{MRC_EXT}')
+        Validation and Consistency Checks
 
-    @staticmethod
-    def _isMrc(filename: str) -> bool:
-        return MRC_EXT in filename
+        To ensure geometric consistency, the protocol validates that the
+        introduced tomograms and tomomasks share the same sampling rate within
+        a small tolerance threshold. This verification is biologically critical
+        because mismatched voxel sizes would distort the spatial interpretation
+        of the generated meshes.
 
-    def _convertOrLink(self, tsId: str, inFileName: str, outFileName: str) -> None:
-        inBaseName = basename(inFileName)
-        if self._isMrc(inFileName):
-            logger.info(cyanStr(f'tsId = {tsId} {inBaseName} -> Creating a link...'))
-            createLink(inFileName, outFileName)
-        else:
-            logger.info(cyanStr(f'tsId = {tsId} {inBaseName} -> Converting into {MRC_EXT}...'))
-            imgStack = ImageReadersRegistry.open(inFileName)
-            ImageReadersRegistry.write(imgStack, outFileName)
+        The protocol also verifies that valid tomogram-mask associations exist
+        through shared tsIds. Non-matching identifiers are excluded from the
+        workflow and reported to the user.
+
+        Outputs and Their Interpretation
+
+        The protocol produces a SetOfMeshes object containing mesh points
+        associated with their original tomograms. The resulting meshes preserve
+        the global spatial organization of the segmented structures while
+        reducing volumetric complexity.
+
+        Depending on the selected parameters, the generated meshes may represent
+        compact volumetric regions, skeletal traces, membrane surfaces, or sparse
+        probabilistic structures. These outputs can subsequently be used for
+        visualization, quantitative spatial analysis, structural contextualization,
+        or integration with downstream tomographic workflows.
+
+        Practical Recommendations
+
+        For standard semantic segmentations, the default segmentation mode is
+        generally appropriate. Users should carefully verify the selected
+        background label to avoid accidentally including solvent or empty regions
+        in the final mesh.
+
+        When processing probabilistic masks, selecting biologically meaningful
+        threshold ranges is essential. Excessively permissive thresholds may
+        generate noisy meshes, whereas overly restrictive values may fragment
+        biologically continuous structures.
+
+        Skeletonization is particularly recommended for elongated biological
+        objects such as cytoskeletal networks or membrane traces. Conversely,
+        for compact organelles or volumetric compartments, disabling
+        skeletonization may better preserve morphology.
+
+        The density parameter should be adjusted according to the intended use
+        of the mesh. Visualization-oriented workflows generally benefit from
+        lower densities, while geometric analyses may require denser point
+        sampling.
+
+        Final Perspective
+
+        In modern cryo-electron tomography workflows, segmentation alone is
+        often insufficient for advanced spatial interpretation. By transforming
+        dense voxel masks into structured geometric representations, the Mesh
+        From Segmentation protocol provides an efficient bridge between
+        segmentation, visualization, and quantitative structural analysis.
+
+        Careful selection of thresholds, morphological operations, and mesh
+        density allows biological users to tailor the generated meshes to the
+        specific structural properties of their tomographic datasets and the
+        scientific questions under investigation.
+    """

@@ -47,498 +47,212 @@ class ProtTomoMisalignTiltSeries(EMProtocol, ProtTomoBase):
     or an aligned one in case you want to apply the inverse of the misalignment
     transformation matrix.
     """
-    _label = 'misalign tilt-series '
-    _devStatus = BETA
-    _possibleOutputs = {MISALIGNED_TS_NAME: tomoObj.SetOfTiltSeries,
-                        INTERPOLATED_TS_NAME: tomoObj.SetOfTiltSeries}
-
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.MisalignedTiltSeries = None
-        self.InterpolatedTiltSeries = None
-
-    # -------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
-        form.addSection('Input')
-
-        form.addParam('inputSetOfTiltSeries',
-                      params.PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      label='Input set of tilt-series')
-
-        """ Options to introduce misalignment in the X axis shift"""
-        form.addParam('shiftXNoiseToggle',
-                      params.BooleanParam,
-                      default=False,
-                      label='Introduce misalignment in shift X?',
-                      important=True,
-                      help='Introduce noise in the shift alignment value in the X axis. Characterize the noise '
-                           'behaviour through the parameters in the following formula:\n'
-                           '\n'
-                           'dx = a0 + a1 * i + a2 * sin((i + a3) / S * pi) + a4 * sin((i + a5) / S * 2 * pi) '
-                           '+ N(0,a6)\n'
-                           '\n'
-                           'Being i the index position of the image inside the tilt-series, S the size of it and N a '
-                           'normal distribution.'
-                           'These parameters characterize the following behaviours:\n'
-                           '- Constant (a0): an offset error (a0) is introduced in every image of the tilt-series.\n'
-                           '- Incremental (a1): a constant incremental error (a1) is propagated through the '
-                           'tilt-series.\n'
-                           '- Sine lobe (a2, a3): the introduced error presents a half sine shape, characterized by '
-                           'the error amplitude (a2) and the phase to displace the error function a given number of '
-                           'images inside the tilt-series (a3).\n'
-                           '- Sine cycle (a4, a5): the introduced error presents a full sine cycle shape, '
-                           'characterized by the error amplitude (a4) and the phase to displace the error function a '
-                           'given number of images inside the tilt-series (a5).\n'
-                           '- Random (a6): a random error is introduced in every image of the tilt-series given a '
-                           'sigma value (a6).\n')
-
-        groupShiftX = form.addGroup('Misalignment parameters in shift X',
-                                    condition='shiftXNoiseToggle==True')
-
-        groupShiftX.addParam('a0param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Offset error (a0)',
-                             help='Offset shift error introduced in the X axis for every image of the tilt-series.')
-
-        groupShiftX.addParam('a1param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Incremental error (a1)',
-                             help='Incremental shift error introduced in the X axis for every image of the '
-                                  'tilt-series.')
-
-        groupShiftX.addParam('a2param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Sine lobe error amplitude (a2)',
-                             help='Maximum amplitude of the sine lobe error function introduced in the X axis.')
-
-        groupShiftX.addParam('a3param',
-                             params.IntParam,
-                             default=0,
-                             label='Sine lobe error phase (a3)',
-                             help='Phase (displacement) of the sine lobe error function. The introduced number '
-                                  'corresponds to the number of images from the tilt-series that the origin of the '
-                                  'error function will be displaced.')
-
-        groupShiftX.addParam('a4param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Sine error amplitude (a4)',
-                             help='Maximum amplitude of the sine error function introduced in the X axis.')
-
-        groupShiftX.addParam('a5param',
-                             params.IntParam,
-                             default=0,
-                             label='Sine error phase (a5)',
-                             help='Phase (displacement) of the sine error function. The introduced number corresponds '
-                                  'to the number of images from the tilt-series that the origin of the error function '
-                                  'will be displaced.')
-
-        groupShiftX.addParam('a6param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Random error sigma (a6)',
-                             help='Sigma value for the random error introduced in the shift X.')
-
-        """ Options to introduce misalignment in the Y axis shift"""
-        form.addParam('shiftYNoiseToggle',
-                      params.BooleanParam,
-                      default=False,
-                      label='Introduce misalignment in shift Y?',
-                      important=True,
-                      help='Introduce noise in the shift alignment value in the Y axis. Characterize the noise '
-                           'behaviour through the parameters in the following formula:\n'
-                           '\n'
-                           'dY = b0 + b1 * i + b2 * sin((i + b3) / S * pi) + b4 * sin((i + b5) / S * 2 * pi) '
-                           '+ N(0,b6)\n'
-                           '\n'
-                           'Being i the index position of the image inside the tilt-series, S the size of it and N a '
-                           'normal distribution.'
-                           'These parameters characterize the following behaviours:\n'
-                           '- Constant (b0): an offset error (b0) is introduced in every image of the tilt-series.\n'
-                           '- Incremental (b1): a constant incremental error (b1) is propagated through the '
-                           'tilt-series.\n'
-                           '- Sine lobe (b2, b3): the introduced error presents a half sine shape, characterized by '
-                           'the error amplitude (b2) and the phase to displace the error function a given number of '
-                           'images inside the tilt-series (b3).\n'
-                           '- Sine cycle (b4, b5): the introduced error presents a full sine cycle shape, '
-                           'characterized by the error amplitude (b4) and the phase to displace the error function a '
-                           'given number of images inside the tilt-series (b5).\n'
-                           '- Random (b6): a random error is introduced in every image of the tilt-series given a '
-                           'sigma value (b6).\n')
-
-        groupShiftY = form.addGroup('Misalignment parameters in shift Y',
-                                    condition='shiftYNoiseToggle==True')
-
-        groupShiftY.addParam('b0param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Offset error (b0)',
-                             help='Offset shift error introduced in the Y axis for every image of the tilt-series.')
-
-        groupShiftY.addParam('b1param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Incremental error (b1)',
-                             help='Incremental shift error introduced in the Y axis for every image of the '
-                                  'tilt-series.')
-
-        groupShiftY.addParam('b2param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Sine lobe error amplitude (b2)',
-                             help='Maximum amplitude of the sine lobe error function introduced in the Y axis.')
-
-        groupShiftY.addParam('b3param',
-                             params.IntParam,
-                             default=0,
-                             label='Sine lobe error phase (b3)',
-                             help='Phase (displacement) of the sine lobe error function. The introduced number '
-                                  'corresponds to the number of images from the tilt-series that the origin of the '
-                                  'error function will be displaced.')
-
-        groupShiftY.addParam('b4param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Sine error amplitude (b4)',
-                             help='Maximum amplitude of the sine error function introduced in the Y axis.')
-
-        groupShiftY.addParam('b5param',
-                             params.IntParam,
-                             default=0,
-                             label='Sine error phase (b5)',
-                             help='Phase (displacement) of the sine error function. The introduced number corresponds '
-                                  'to the number of images from the tilt-series that the origin of the error function '
-                                  'will be displaced.')
-
-        groupShiftY.addParam('b6param',
-                             params.FloatParam,
-                             default=0.0,
-                             label='Random error sigma (b6)',
-                             help='Sigma value for the random error introduced in the shift Y.')
-
-        """ Options to introduce misalignment in the angle"""
-        form.addParam('angleNoiseToggle',
-                      params.BooleanParam,
-                      default=False,
-                      label='Introduce misalignment in angle?',
-                      important=True,
-                      help='Introduce noise in the angle alignment value. Characterize the noise behaviour through the '
-                           'parameters in the following formula:\n'
-                           '\n'
-                           'dA = c0 + c1 * i + c2 * sin((i + c3) / S * pi) + c4 * sin((i + c5) / S * 2 * pi) '
-                           '+ N(0,c6)\n'
-                           '\n'
-                           'Being i the index position of the image inside the tilt-series, S the size of it and N a '
-                           'normal distribution.'
-                           'These parameters characterize the following behaviours:\n'
-                           '- Constant (c0): an offset error (c0) is introduced in every image of the tilt-series.\n'
-                           '- Incremental (c1): a constant incremental error (c1) is propagated through the '
-                           'tilt-series.\n'
-                           '- Sine lobe (c2, c3): the introduced error presents a half sine shape, characterized by '
-                           'the error amplitude (c2) and the phase to displace the error function a given number of '
-                           'images inside the tilt-series (c3).\n'
-                           '- Sine cycle (c4, c5): the introduced error presents a full sine cycle shape, '
-                           'characterized by the error amplitude (c4) and the phase to displace the error function a '
-                           'given number of images inside the tilt-series (c5).\n'
-                           '- Random (c6): a random error is introduced in every image of the tilt-series given a '
-                           'sigma value (c6).\n')
-
-        groupAngle = form.addGroup('Misalignment parameters in angle',
-                                   condition='angleNoiseToggle==True')
-
-        groupAngle.addParam('c0param',
-                            params.FloatParam,
-                            default=0.0,
-                            label='Offset error (c0)',
-                            help='Constant angle error to add for every image of the tilt-series. Angles are measured '
-                                 'in degrees.')
-
-        groupAngle.addParam('c1param',
-                            params.FloatParam,
-                            default=0.0,
-                            label='Incremental error (c1)',
-                            help='Initial angle error value for the first image (lowest angle) of the tilt-series. '
-                                 'Angles are measured in degrees.')
-
-        groupAngle.addParam('c2param',
-                            params.FloatParam,
-                            default=0.0,
-                            label='Sine lobe error amplitude (c2)',
-                            help='Maximum amplitude of the sine lobe error function introduced in the angle. Angles '
-                                 'are measured in degrees.')
-
-        groupAngle.addParam('c3param',
-                            params.IntParam,
-                            default=0,
-                            label='Sine lobe error phase (c3)',
-                            help='Phase (displacement) of the sine lobe error function. The introduced number '
-                                 'corresponds to the number of images from the tilt-series that the origin of the '
-                                 'error function will be displaced.')
-
-        groupAngle.addParam('c4param',
-                            params.FloatParam,
-                            default=0.0,
-                            label='Sine error amplitude (c4)',
-                            help='Maximum amplitude of the sine error function introduced in the angle. Angles are '
-                                 'measured in degrees.')
-
-        groupAngle.addParam('c5param',
-                            params.IntParam,
-                            default=0,
-                            label='Sine error phase (c5)',
-                            help='Phase (displacement) of the sine error function. The introduced number corresponds '
-                                 'to the number of images from the tilt-series that the origin of the error function '
-                                 'will be displaced.')
-
-        groupAngle.addParam('c6param',
-                            params.FloatParam,
-                            default=0.0,
-                            label='Random error sigma (c6)',
-                            help='Sigma value for random error introduced in the angle. Angles are measured in '
-                                 'degrees.')
-
-        """ Options for misalignment interpolation"""
-        form.addParam('applyMatrix', params.BooleanParam,
-                      default=False,
-                      label='Generate interpolated tilt-series',
-                      important=True,
-                      help='Generate tilt-series applying the'
-                           'obtained misalignment transformation matrix.')
-
-        """ Options for aligned tilt series"""
-        form.addParam('addInverseMatrix', params.BooleanParam,
-                      default=False,
-                      label='With inverted matrix',
-                      important=False,
-                      help='Save the inverse of the misalignment transformation matrix in the interpolated set.',
-                      condition='applyMatrix==True')
-
-    # -------------------------- INSERT steps functions ---------------------
-    def _insertAllSteps(self):
-        for ts in self.inputSetOfTiltSeries.get():
-            self._insertFunctionStep(self.introduceRandomMisalignment, ts.getObjId())
-
-            if self.applyMatrix.get():
-                self._insertFunctionStep(self.interpolateTiltSeries, ts.getObjId())
-
-    # --------------------------- STEPS functions ----------------------------
-    def introduceRandomMisalignment(self, tsObjId):
-        ts = self.inputSetOfTiltSeries.get()[tsObjId]
-        tsId = ts.getTsId()
-
-        outputMisalignedSetOfTiltSeries = self.getOutputMisalignedSetOfTiltSeries()
-        missAliTs = tomoObj.TiltSeries(tsId=tsId)
-        missAliTs.copyInfo(ts)
-        outputMisalignedSetOfTiltSeries.append(missAliTs)
-
-        for index, ti in enumerate(ts):
-            missAliTi = tomoObj.TiltImage()
-            missAliTi.copyInfo(ti, copyId=True)
-            missAliTi.setLocation(ti.getLocation())
-
-            if ti.hasTransform():
-                transformMat = ti.getTransform().getMatrix()
-            else:
-                transformMat = np.identity(3)
-            newTransformMat = self.modifyTransformMatrix(transformMat, index, ts.getSize(), tsId)
-
-            newTransform = data.Transform()
-            newTransform.setMatrix(newTransformMat)
-            missAliTi.setTransform(newTransform)
-
-            missAliTs.append(missAliTi)
-
-        outputMisalignedSetOfTiltSeries.update(missAliTs)
-        outputMisalignedSetOfTiltSeries.write()
-
-        self._store()
-
-    def interpolateTiltSeries(self, tsObjId):
-        missAliTs = self.MisalignedTiltSeries[tsObjId]
-        tsId = missAliTs.getTsId()
-
-        outputInterpolatedSetOfTiltSeries = self.getOutputInterpolatedSetOfTiltSeries()
-
-        extraPrefix = self._getExtraPath(tsId)
-        outputTsFileName = os.path.join(extraPrefix, "%s_missAli.st" % tsId)
-
-        """Apply the transformation form the input tilt-series"""
-        missAliTs.applyTransform(outputTsFileName)
-
-        missAliInterTs = tomoObj.TiltSeries(tsId=tsId)
-        missAliInterTs.copyInfo(missAliTs)
-        outputInterpolatedSetOfTiltSeries.append(missAliInterTs)
-
-        saveMatrix = self.addInverseMatrix.get()
-
-        for index, tiltImage in enumerate(missAliTs):
-            missAliInterTi = tomoObj.TiltImage()
-
-            if saveMatrix:
-                # Calculate the inverse of the transformation matrix
-                tiltImage.getTransform().invert()
-
-            missAliInterTi.copyInfo(tiltImage, copyId=True, copyTM=saveMatrix)
-
-            missAliInterTi.setLocation(index + 1, outputTsFileName)
-            missAliInterTs.append(missAliInterTi)
-
-        missAliInterTs.write()
-
-        outputInterpolatedSetOfTiltSeries.update(missAliInterTs)
-        outputInterpolatedSetOfTiltSeries.write()
-
-        self._store()
-
-    # --------------------------- UTILS functions ----------------------------
-    def modifyTransformMatrix(self, transformMatrix, index, size, tsId):
-        """Shift in X axis modifications"""
-        if self.shiftXNoiseToggle.get():
-            incrementShiftX = self.a0param.get() + \
-                              self.a1param.get() * index + \
-                              self.a2param.get() * abs(np.sin((index + self.a3param.get()) / size * np.pi)) + \
-                              self.a4param.get() * np.sin((index + self.a5param.get()) / size * 2 * np.pi)
-
-            if self.a6param.get() != 0:
-                incrementShiftX += np.random.normal(transformMatrix[0, 2], self.a6param.get())
-
-            transformMatrix[0, 2] += incrementShiftX
-
-        """Shift in Y axis modifications"""
-        if self.shiftYNoiseToggle.get():
-            incrementShiftY = self.b0param.get() + \
-                              self.b1param.get() * index + \
-                              self.b2param.get() * abs(np.sin((index + self.b3param.get()) / size * np.pi)) + \
-                              self.b4param.get() * np.sin((index + self.b5param.get()) / size * 2 * np.pi)
-
-            if self.b6param.get() != 0:
-                incrementShiftY += np.random.normal(transformMatrix[1, 2], self.b6param.get())
-
-            transformMatrix[1, 2] += incrementShiftY
-
-        """Angle modifications"""
-        if self.angleNoiseToggle.get():
-            oldAngle = np.arccos(transformMatrix[0, 0])
-
-            incrementAngle = self.c0param.get() + \
-                             self.c1param.get() * index + \
-                             self.c2param.get() * abs(np.sin((index + self.c3param.get()) / size * np.pi)) + \
-                             self.c4param.get() * np.sin((index + self.c5param.get()) / size * 2 * np.pi)
-
-            if self.c6param.get() != 0:
-                incrementAngle += np.random.normal(oldAngle, self.c6param.get())
-
-            newAngle = oldAngle + math.radians(incrementAngle)
-
-            transformMatrix[0, 0] = np.cos(newAngle)
-            transformMatrix[0, 1] = - np.sin(newAngle)
-            transformMatrix[1, 0] = np.sin(newAngle)
-            transformMatrix[1, 1] = np.cos(newAngle)
-
-        fileName = "TM_misalignment_" + tsId + ".xf"
-        extraPrefix = self._getExtraPath(tsId)
-        path.makePath(extraPrefix)
-        filePath = os.path.join(extraPrefix, fileName)
-
-        if 'incrementShiftX' not in locals():
-            incrementShiftX = 0
-        if 'incrementShiftY' not in locals():
-            incrementShiftY = 0
-        if 'incrementAngle' not in locals():
-            incrementAngle = 0
-
-        vector = [np.cos(math.radians(incrementAngle)),
-                  np.sin(math.radians(incrementAngle)),
-                  - np.sin(math.radians(incrementAngle)),
-                  np.cos(math.radians(incrementAngle)),
-                  incrementShiftX,
-                  incrementShiftY]
-
-        mode = "a" if os.path.exists(filePath) else "w"
-
-        with open(filePath, mode) as f:
-            writer = csv.writer(f, delimiter='\t')
-
-            writer.writerow(vector)
-
-        fileName = "TM_final_" + tsId + ".xf"
-        filePath = os.path.join(extraPrefix, fileName)
-
-        vector = [transformMatrix[0, 0],
-                  transformMatrix[1, 0],
-                  transformMatrix[0, 1],
-                  transformMatrix[1, 1],
-                  transformMatrix[0, 2],
-                  transformMatrix[1, 2]]
-
-        mode = "a" if os.path.exists(filePath) else "w"
-
-        with open(filePath, mode) as f:
-            writer = csv.writer(f, delimiter='\t')
-
-            writer.writerow(vector)
-
-        return transformMatrix
-
-    def getOutputMisalignedSetOfTiltSeries(self):
-        if not self.MisalignedTiltSeries:
-            self.debug("Creating %s output." % MISALIGNED_TS_NAME)
-            outputMisalignedSetOfTiltSeries = self._createSetOfTiltSeries(suffix='Misaligned')
-            outputMisalignedSetOfTiltSeries.copyInfo(self.inputSetOfTiltSeries.get())
-            outputMisalignedSetOfTiltSeries.setDim(self.inputSetOfTiltSeries.get().getDim())
-            self._defineOutputs(**{MISALIGNED_TS_NAME: outputMisalignedSetOfTiltSeries})
-            self._defineSourceRelation(self.inputSetOfTiltSeries, outputMisalignedSetOfTiltSeries)
-        return self.MisalignedTiltSeries
-
-    def getOutputInterpolatedSetOfTiltSeries(self):
-
-        if not self.InterpolatedTiltSeries:
-            self.debug("Creating %s output." % INTERPOLATED_TS_NAME)
-            outputInterpolatedSetOfTiltSeries = self._createSetOfTiltSeries(suffix='Interpolated')
-            outputInterpolatedSetOfTiltSeries.copyInfo(self.inputSetOfTiltSeries.get())
-            outputInterpolatedSetOfTiltSeries.setDim(self.inputSetOfTiltSeries.get().getDim())
-            self._defineOutputs(**{INTERPOLATED_TS_NAME: outputInterpolatedSetOfTiltSeries})
-            self._defineSourceRelation(self.inputSetOfTiltSeries, outputInterpolatedSetOfTiltSeries)
-
-        return self.InterpolatedTiltSeries
-
-    # --------------------------- INFO functions ----------------------------
-    def _summary(self):
-        summary = []
-        if self.MisalignedTiltSeries:
-            summary.append("Input Tilt-Series: %d.\nTransformation matrices calculated: %d."
-                           % (self.inputSetOfTiltSeries.get().getSize(),
-                              self.MisalignedTiltSeries.getSize()))
-
-        if self.InterpolatedTiltSeries:
-            summary.append("Interpolated Tilt-Series: %d.\n"
-                           % self.InterpolatedTiltSeries.getSize())
-
-        if self.AlignedTiltSeries:
-            summary.append("Aligned Tilt-Series: %d.\n"
-                           % self.AlignedTiltSeries.getSize())
-
-        if len(summary) == 0:
-            summary.append("Output not ready yet.")
-
-        return summary
-
-    def _methods(self):
-        methods = []
-        if self.MisalignedTiltSeries:
-            methods.append("New transformation matrices has been calculated for %d Tilt-series."
-                           % (self.MisalignedTiltSeries.getSize()))
-
-        if self.InterpolatedTiltSeries:
-            methods.append("Also, interpolation has been completed for %d Tilt-series."
-                           % self.InterpolatedTiltSeries.getSize())
-
-        if len(methods) == 0:
-            methods.append("Output not ready yet.")
-
-        return methods
+    """
+    Introduces controlled misalignment into tilt-series transformation matrices
+    by modifying shifts and angular parameters. The protocol can also generate
+    interpolated tilt-series by applying the simulated misalignment matrices
+    directly to the image data.
+
+    AI Generated:
+
+    Misalign Tilt-Series (ProtTomoMisalignTiltSeries) — User Manual
+
+        Overview
+
+        The Misalign Tilt-Series protocol is designed to simulate realistic
+        alignment errors in cryo-electron tomography tilt-series datasets.
+        Instead of reconstructing or correcting tilt-series alignment, the
+        protocol intentionally perturbs the transformation matrices associated
+        with each tilt image. This allows users to reproduce acquisition or
+        alignment inaccuracies commonly observed during tomographic processing.
+
+        In practical cryo-ET workflows, this type of simulation is especially
+        useful for benchmarking alignment algorithms, testing reconstruction
+        robustness, validating correction methods, or generating synthetic
+        datasets for methodological development. By introducing controlled and
+        reproducible geometric distortions, users can evaluate how sensitive
+        downstream reconstruction pipelines are to different classes of
+        alignment errors.
+
+        From a biological perspective, tilt-series misalignment can strongly
+        affect tomogram quality, structural interpretability, and subtomogram
+        averaging performance. Simulating these imperfections provides a useful
+        framework for understanding the limitations and stability of processing
+        pipelines under non-ideal experimental conditions.
+
+        Inputs and General Workflow
+
+        The protocol requires a set of input tilt-series containing either
+        existing alignment transformations or raw geometric metadata. For each
+        tilt image, the protocol modifies the associated transformation matrix
+        according to a user-defined mathematical model.
+
+        The workflow operates independently on every tilt-series. During
+        execution, the protocol iterates through all tilt images and applies
+        controlled perturbations to translational and rotational alignment
+        parameters. These modifications are accumulated directly into the
+        transformation matrix associated with each image.
+
+        The protocol produces a new set of misaligned tilt-series containing
+        the modified transformations. Optionally, it can also generate fully
+        interpolated image stacks where the geometric transformations are
+        physically applied to the image data itself.
+
+        Shift Misalignment in X and Y
+
+        One of the central features of the protocol is the ability to simulate
+        translational misalignment independently along the X and Y axes. These
+        perturbations mimic common alignment instabilities observed during
+        experimental acquisition, including stage drift, beam-induced motion,
+        cumulative alignment inaccuracies, or local registration failures.
+
+        The shift perturbation model combines several independent components.
+        A constant offset introduces a systematic displacement affecting all
+        images equally. An incremental component propagates a progressive drift
+        across the tilt-series, reproducing situations where alignment errors
+        accumulate gradually during acquisition.
+
+        In addition, the protocol includes sinusoidal perturbations that model
+        cyclic or oscillatory alignment instabilities. Two complementary modes
+        are implemented: a half-sine lobe and a full sine cycle. These are
+        particularly useful for reproducing mechanical instabilities or
+        periodic stage deformations that vary continuously across the angular
+        range of the tilt-series.
+
+        Finally, a stochastic Gaussian component can be added to simulate
+        random alignment noise. This random contribution reproduces the type
+        of local uncertainty commonly observed in low signal-to-noise
+        experimental datasets.
+
+        By combining these components, the protocol allows users to reproduce
+        highly realistic and biologically plausible alignment distortions.
+
+        Angular Misalignment
+
+        In addition to translational perturbations, the protocol can also
+        introduce angular errors directly into the rotational component of the
+        transformation matrix. These perturbations simulate inaccuracies in
+        tilt-angle estimation or rotational alignment refinement.
+
+        The angular perturbation follows the same mathematical philosophy used
+        for translational shifts. Constant rotational offsets simulate global
+        calibration errors, while incremental angular drifts reproduce
+        progressive orientation inaccuracies accumulated during acquisition.
+
+        Sinusoidal angular perturbations are especially valuable when studying
+        systematic rotational oscillations caused by stage instability or
+        imperfect microscope mechanics. Random angular noise further allows
+        simulation of local orientation uncertainty typical of experimental
+        cryo-ET data.
+
+        Biologically, angular inaccuracies are often more damaging than small
+        translational shifts because they directly affect projection geometry.
+        Even moderate rotational errors can significantly degrade tomogram
+        resolution and compromise subtomogram averaging quality.
+
+        Mathematical Model of Misalignment
+
+        The protocol defines misalignment using analytical functions that vary
+        across the tilt-series index. Each perturbation is computed as a
+        combination of deterministic and stochastic components.
+
+        The translational and angular increments are modeled through offsets,
+        linear drift terms, sinusoidal functions, and Gaussian noise
+        contributions. This design allows users to generate highly controlled
+        synthetic alignment defects ranging from simple systematic offsets to
+        complex non-linear perturbation patterns.
+
+        The resulting perturbations are accumulated directly into the affine
+        transformation matrix associated with each tilt image. Rotational
+        modifications are applied by recomputing the rotation matrix elements,
+        while translational perturbations modify the shift coordinates.
+
+        Interpolated Tilt-Series Generation
+
+        The protocol optionally allows the generation of interpolated
+        tilt-series by physically applying the modified transformation matrices
+        to the image data. This operation produces image stacks that visually
+        resemble experimentally misaligned datasets.
+
+        In practical terms, the interpolated output simulates the appearance
+        of a tilt-series after geometric distortion has been introduced. This
+        is especially useful for testing alignment correction algorithms,
+        evaluating reconstruction robustness, or training machine learning
+        approaches under realistic acquisition imperfections.
+
+        An optional inverse-matrix mode is also available. In this case, the
+        inverse of the generated misalignment matrix is stored in the output
+        metadata. This feature is particularly useful for workflows focused on
+        alignment recovery or correction benchmarking.
+
+        Transformation Matrix Export
+
+        During execution, the protocol stores the generated transformation
+        parameters into external XF matrix files. Two different outputs are
+        generated.
+
+        The first file contains only the introduced perturbation increments,
+        allowing users to inspect the synthetic misalignment independently of
+        the original transformations. The second file stores the final
+        transformation matrices after all modifications have been applied.
+
+        These exported matrices are especially useful for debugging,
+        benchmarking external reconstruction software, or quantitatively
+        comparing alignment correction strategies.
+
+        Outputs and Their Interpretation
+
+        The protocol generates a new set of misaligned tilt-series preserving
+        the original image metadata while replacing the transformation
+        matrices with the perturbed versions.
+
+        When interpolation is enabled, an additional set of interpolated
+        tilt-series is produced. In this output, the geometric transformations
+        have already been applied to the image data, generating physically
+        distorted image stacks.
+
+        From a methodological perspective, the misaligned output is useful for
+        evaluating metadata-driven alignment procedures, while the
+        interpolated output is better suited for testing complete image-based
+        correction pipelines.
+
+        Practical Recommendations
+
+        In most simulation workflows, it is advisable to begin with small
+        translational perturbations and limited angular noise in order to
+        evaluate baseline reconstruction sensitivity. Excessively large
+        perturbations may generate unrealistic datasets that no longer
+        resemble experimentally achievable conditions.
+
+        Incremental drift components are particularly useful for reproducing
+        acquisition instabilities observed during long tilt-series collection.
+        Sinusoidal perturbations are better suited for studying systematic
+        stage oscillations or cyclic alignment artifacts.
+
+        Random noise terms should be introduced carefully because high
+        stochastic perturbations can rapidly destabilize reconstruction
+        quality. In practice, biologically meaningful simulations usually
+        combine moderate systematic drift with limited random noise.
+
+        When generating interpolated datasets, users should visually inspect
+        the resulting tilt-series to ensure that the simulated distortions
+        remain physically plausible and compatible with the intended
+        benchmarking scenario.
+
+        Final Perspective
+
+        The Misalign Tilt-Series protocol provides a flexible framework for
+        simulating realistic alignment imperfections in cryo-electron
+        tomography datasets. Rather than serving as a correction tool, the
+        protocol focuses on controlled degradation of alignment quality in
+        order to support methodological validation, robustness testing, and
+        synthetic data generation.
+
+        For cryo-ET developers and advanced users, the ability to reproduce
+        systematic and stochastic alignment defects represents an important
+        resource for understanding how reconstruction pipelines behave under
+        imperfect experimental conditions. Careful tuning of translational and
+        angular perturbations enables the creation of realistic synthetic
+        datasets that closely resemble the variability encountered in real
+        tomographic acquisition workflows.
+    """

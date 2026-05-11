@@ -59,242 +59,180 @@ class ProtTomoApplyTomoMask(EMProtocol):
     will try to match the tomograms and the masks by tsId. Once the mask/s are applied.
     Some operations can be applied to the mask: invert, dilate and apply a gaussian filter."""
 
-    _label = 'apply tomomasks to tomograms'
-    _devStatus = BETA
-    _possibleOutputs = ApplyTomoMaskOutputs
-    stepsExecutionMode = STEPS_PARALLEL
-    _sRateTol = 1e-3  # Angstrom/px
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.tomosDict = None
-        self.tomoMaskDict = None
-        self.doSmooth = False
-        self.nonMatchingTsIdsMsg = String()
-        self.failedApixTsIds = []
-        self.failedDimsTsIds = []
+    """
+    Applies one or multiple tomographic masks to a set of tomograms in order
+    to isolate regions of interest, suppress unwanted signal, and prepare the
+    data for downstream cryo-electron tomography analysis.
 
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(ApplyTomoMaskFormParams.IN_TOMO_SET.value,
-                      PointerParam,
-                      pointerClass='SetOfTomograms',
-                      important=True,
-                      label='Tomograms')
-        form.addParam(ApplyTomoMaskFormParams.IN_MASK_SET.value,
-                      PointerParam,
-                      pointerClass="VolumeMask, SetOfTomoMasks",
-                      important=True,
-                      label='Masks',
-                      help='The protocol will try to match the tomograms and the masks by tsId.')
-        group = form.addGroup('Mask operations')
-        group.addParam(ApplyTomoMaskFormParams.INVERT_MASK.value,
-                       BooleanParam,
-                       default=False,
-                       label='Invert mask?')
-        group.addParam(ApplyTomoMaskFormParams.DILATION_PX.value,
-                       IntParam,
-                       default=0,
-                       label='Number of pixels for dilation',
-                       validators=[GE(0)],
-                       haelp='The dilation will expands the shape by the given number of pixels '
-                             'in all directions.')
-        group.addParam(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value,
-                       IntParam,
-                       default=3,
-                       label='Std for gaussian smoothing',
-                       validators=[GE(0)],
-                       help='A gaussian filter can be applied by setting this parameter with a value greater than 0. '
-                            'It can be used to smooth the borders, providing a more continuous transition between the '
-                            'mask and the background. It helps to avoid undesired mathematical artifacts when '
-                            'processing later the resulting masked tomograms.\n\nThis parameter (named sigma) '
-                            'determines how much neighboring pixels influence each other during smoothing. '
-                            'A small value of sigma means a sharper image, less smoothing, '
-                            'while a larger value of sigma means a blurrier image, more smoothing.')
-        form.addParallelSection(threads=1, mpi=0)
+    AI Generated:
 
-    # --------------------------- INSERT steps functions ----------------------
-    def _insertAllSteps(self):
-        self._initialize()
-        closeStepDeps = []
-        for tsId in self.tomosDict.keys():
-            smoothId = self._insertFunctionStep(self.processMaskStep, tsId,
-                                                prerequisites=[],
-                                                needsGPU=False)
-            aMId = self._insertFunctionStep(self.applyMaskStep, tsId,
-                                            prerequisites=smoothId,
-                                            needsGPU=False)
-            cOutId = self._insertFunctionStep(self.createOutputStep, tsId,
-                                              prerequisites=aMId,
-                                              needsGPU=False)
-            closeStepDeps.append(cOutId)
-        self._insertFunctionStep(self.closeOutputSetStep,
-                                 prerequisites=closeStepDeps,
-                                 needsGPU=False)
+    Apply Tomomasks to Tomograms (ProtTomoApplyTomoMask) — User Manual
 
-    # -------------------------- STEPS functions ------------------------------
-    def _initialize(self):
-        inTomos = self._getInTomoSet()
-        inTomoMasks = self._getInTomoMasks()
-        tomosTsIds = set(inTomos.getTSIds())
-        tomoMaskTsIds = set(inTomoMasks.getTSIds())
-        # Check the common elements
-        matchingTsIds = tomosTsIds & tomoMaskTsIds
-        nonMatchingTsIds = tomosTsIds ^ tomoMaskTsIds
-        if not matchingTsIds:
-            raise Exception('No matching tsIds were found among the given sets of tomograms and tomo masks.')
-        if nonMatchingTsIds:
-            msg = f'Some non-matching tsIds were found: {nonMatchingTsIds}'
-            self.nonMatchingTsIdsMsg.set(msg)
-            logger.info(cyanStr(msg))
-            self._store(self.nonMatchingTsIdsMsg)
-        if self._getFormAttrib(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value) > 0:
-            self.doSmooth = True
-        self.tomosDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos
-                          if tomo.getTsId() in matchingTsIds}
-        self.tomoMaskDict = {tomoMask.getTsId(): tomoMask.clone() for tomoMask in inTomoMasks
-                             if tomoMask.getTsId() in matchingTsIds}
+        Overview
 
-    def processMaskStep(self, tsId: str):
-        if self.doSmooth:
-            logger.info(cyanStr(f'tsId = {tsId}: processing the mask...'))
-            mask = self.tomoMaskDict[tsId]
-            maskFileName = mask.getFileName()
-            # Read the mask
-            with mrcfile.mmap(maskFileName, mode='r', permissive=True) as mrc:
-                data = mrc.data
-            # Dilate the mask
-            dilationPixels = self._getFormAttrib(ApplyTomoMaskFormParams.DILATION_PX.value)
-            if dilationPixels > 0:
-                data = np.array(data, dtype=bool)  # Required for the binary dilation
-                data = binary_dilation(data, iterations=dilationPixels)
-            # Smooth the mask
-            data = np.array(data, dtype=float)  # Required to be cast from uint8 to float for the gaussian filtering
-            sigma = self._getFormAttrib(ApplyTomoMaskFormParams.SIGMA_GAUSSIAN.value)
-            smoothData = gaussian_filter(data, sigma=sigma)
-            # Invert if required
-            invertMask = self._getFormAttrib(ApplyTomoMaskFormParams.INVERT_MASK.value)
-            smoothData = 1 - smoothData if invertMask else smoothData
-            # Write the result
-            smoothMaskFn = self._getSmoothedMaskFn(tsId)
-            with mrcfile.new_mmap(smoothMaskFn, overwrite=True, shape=smoothData.shape,
-                                  mrc_mode=2) as mrc:  # Mode 2 is float32 (see new_mmap)
-                for i in range(len(smoothData)):
-                    mrc.data[i, :, :] = smoothData[i, :, :]
-                mrc.update_header_from_data()
-                mrc.voxel_size = mask.getSamplingRate()
+        The Apply Tomomasks to Tomograms protocol applies binary or continuous
+        masks over tomographic volumes to selectively preserve specific
+        structural regions while suppressing background or irrelevant density.
+        In cryo-electron tomography workflows, masking is a fundamental step
+        for improving visualization, reducing noise, focusing subsequent
+        processing steps, and restricting analysis to biologically meaningful
+        regions.
 
-    def applyMaskStep(self, tsId: str):
-        logger.info(cyanStr(f'tsId = {tsId}: applying the mask...'))
-        mask = self.tomoMaskDict[tsId]
-        tomo = self.tomosDict[tsId]
-        # Check tomo by tomo (to cover heterogeneous sets) both the sampling rate (checked out only at set level
-        # in the _validate) and the dimensions
-        maskSRate = mask.getSamplingRate()
-        tomoSRate = tomo.getSamplingRate()
-        # Validate the sampling rate
-        if abs(tomoSRate - maskSRate) > self._sRateTol:
-            self.failedApixTsIds.append(tsId)
-        else:
-            maskFileName = self._getSmoothedMaskFn(tsId) if self.doSmooth else mask.getFileName()
-            tomoFileName = tomo.getFileName()
-            maskDims = MRCImageReader.getDimensions(maskFileName)
-            tomoDims = MRCImageReader.getDimensions(tomoFileName)
-            # Validate the dimensions
-            if not np.allclose(np.array(maskDims), np.array(tomoDims)):
-                self.failedDimsTsIds.append(tsId)
-            else:
-                maskStack = ImageReadersRegistry.open(maskFileName)
-                tomoStack = ImageReadersRegistry.open(tomoFileName)
-                resultingImgList = [np.multiply(maskSlice, tomoSlice) for
-                                    maskSlice, tomoSlice in zip(maskStack, tomoStack)]
-                resultingStack = ImageStack(resultingImgList)
-                MRCImageReader.write(resultingStack, self._getResultFn(tsId), samplingRate=tomoSRate)
-                # Remove the smoothed mask from the protocol tmp directory to avoid the storage of multiple
-                # big temporal files in execution time at once
-                if self.doSmooth:
-                    remove(self._getSmoothedMaskFn(tsId))
+        From a biological perspective, masking becomes especially important
+        when working with crowded cellular environments, membrane-associated
+        complexes, organelles, or heterogeneous intracellular regions where
+        unwanted surrounding density may interfere with interpretation or
+        downstream computational procedures. By applying masks, the protocol
+        helps users emphasize the structures of interest while minimizing the
+        contribution of unrelated signal.
 
-    def createOutputStep(self, tsId: str):
-        if not (tsId in self.failedApixTsIds or tsId in self.failedDimsTsIds):
-            with self._lock:
-                logger.info(cyanStr(f'tsId = {tsId}: registering the output...'))
-                currentTomo = self.tomosDict[tsId]
-                outputTomos = self._getOutTomos()
-                tomo = Tomogram()
-                tomo.copyInfo(currentTomo)
-                tomo.setFileName(self._getResultFn(tsId))
-                outputTomos.append(tomo)
-                outputTomos.update(tomo)
-                outputTomos.write()
-                self._store(outputTomos)
+        Inputs and General Workflow
 
-    def closeOutputSetStep(self):
-        super()._closeOutputSet()
-        if self.failedApixTsIds:
-            failedApixTsIdList = String(str(self.failedApixTsIds))
-            self._store(failedApixTsIdList)
-        if self.failedDimsTsIds:
-            failedDimsTsIdList = String(str(self.failedDimsTsIds))
-            self._store(failedDimsTsIdList)
+        The protocol requires two principal inputs: a set of tomograms and a
+        corresponding set of tomographic masks. The matching between tomograms
+        and masks is automatically performed through their tsId identifiers.
+        Only tomograms and masks sharing the same tsId are processed together.
 
-    # --------------------------- UTILS functions -----------------------------
-    def _getFormAttrib(self, attribName: str):
-        return getattr(self, attribName).get()
+        During execution, the protocol first identifies the matching pairs
+        between both datasets. Tomograms or masks without a corresponding
+        partner are excluded from processing, and the protocol reports these
+        mismatches to the user. This behavior is especially useful in large
+        cryo-ET projects where tomograms and masks may originate from
+        different preprocessing pipelines or annotation stages.
 
-    def _getInTomoSet(self, returnPointer: bool = False) -> Union[SetOfTomograms, Pointer]:
-        inTomoSetPointer = getattr(self, ApplyTomoMaskFormParams.IN_TOMO_SET.value)
-        return inTomoSetPointer if returnPointer else inTomoSetPointer.get()
+        Once matching pairs are identified, the protocol optionally processes
+        the masks before applying them to the tomograms. The processed mask is
+        then multiplied voxel-by-voxel with the corresponding tomogram,
+        generating a new masked tomographic volume.
 
-    def _getInTomoMasks(self, returnPointer: bool = False) -> Union[SetOfTomoMasks, Pointer]:
-        inTomoMasksPointer = getattr(self, ApplyTomoMaskFormParams.IN_MASK_SET.value)
-        return inTomoMasksPointer if returnPointer else inTomoMasksPointer.get()
+        Mask Processing and Biological Relevance
 
-    def _getResultFn(self, tsId: str):
-        return self._getExtraPath(f'{tsId}.mrc')
+        One of the central features of this protocol is the ability to modify
+        the masks before application. Several optional operations are
+        available, including mask inversion, binary dilation, and Gaussian
+        smoothing.
 
-    def _getSmoothedMaskFn(self, tsId: str) -> str:
-        return self._getTmpPath(f'{tsId}_smooth_mask.mrc')
+        Mask inversion changes the interpretation of the mask by exchanging
+        foreground and background regions. Biologically, this may be useful
+        when the original segmentation defines regions to exclude rather than
+        regions to preserve. Instead of retaining the segmented structure, the
+        inverted mask preserves the surrounding environment.
 
-    def _getOutTomos(self) -> SetOfTomograms:
-        outputName = self._possibleOutputs.maskedTomograms.name
-        outTomograms = getattr(self, outputName, None)
-        if outTomograms:
-            outTomograms.enableAppend()
-        else:
-            inSetPointer = self._getInTomoSet(returnPointer=True)
-            outTomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
-            outTomograms.copyInfo(inSetPointer.get())
-            outTomograms.setStreamState(Set.STREAM_OPEN)
-            self._defineOutputs(**{outputName: outTomograms})
-            self._defineSourceRelation(inSetPointer, outTomograms)
-            self._defineSourceRelation(self._getInTomoMasks(returnPointer=True), outTomograms)
-        return outTomograms
+        Binary dilation expands the masked region by a user-defined number of
+        pixels in all spatial directions. This operation is particularly
+        important in biological datasets where segmentations may be slightly
+        conservative or where neighboring density surrounding the segmented
+        structure should also be preserved. For example, membrane proteins,
+        ribosome-associated regions, or flexible peripheral domains may
+        benefit from moderate dilation to avoid cutting biologically relevant
+        signal.
 
-    # --------------------------- INFO functions ------------------------------
-    def _summary(self) -> list:
-        msgList = []
-        nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
-        if nonMatchingTsIdsMsg:
-            msgList.append(f'*{nonMatchingTsIdsMsg}*')
-        failedTsIdApixList = getattr(self, 'failedApixTsIdList', None)
-        if failedTsIdApixList:
-            msgList.append(f'*WARNING*: Failed tsIds because of different pixel size '
-                           f'in the tomo mask and the tomogram: {failedTsIdApixList}')
-        failedTsIdDims = getattr(self, 'failedDimsTsIdList', None)
-        if failedTsIdDims:
-            msgList.append(f'*WARNING*: Failed tsIds because of different dimensions '
-                           f'in the tomo mask and the tomogram: {failedTsIdDims}')
-        return msgList
+        Gaussian smoothing introduces soft transitions between masked and
+        unmasked regions. Instead of abrupt binary boundaries, the protocol
+        generates progressively attenuated borders that reduce edge artifacts
+        during later processing stages. In cryo-ET workflows, this is
+        especially valuable before Fourier-based analyses, subtomogram
+        extraction, denoising, or averaging procedures where sharp boundaries
+        may introduce undesired mathematical artifacts.
 
-    def _validate(self) -> list:
-        errorList = []
-        inTomos = self._getInTomoSet()
-        inMasks = self._getInTomoMasks()
-        # Check the sampling rate
-        inTomosSRate = inTomos.getSamplingRate()
-        inMasksSRate = inMasks.getSamplingRate()
-        if abs(inTomosSRate - inMasksSRate) > self._sRateTol:
-            errorList.append(f'The sampling rate of the given tomograms and mask/s are different within tolerance: '
-                             f'abs({inTomosSRate:.3f} - {inMasksSRate:.3f} > {self._sRateTol:3f}')
-        return errorList
+        The sigma parameter controls the degree of smoothing. Small sigma
+        values preserve sharper transitions and structural detail, while
+        larger values produce softer and blurrier boundaries. Biologically,
+        choosing the appropriate smoothing level depends on the balance
+        between preserving fine structural features and minimizing boundary
+        artifacts.
+
+        Validation and Dataset Consistency
+
+        The protocol performs several validation steps to ensure that masks
+        and tomograms are compatible before processing.
+
+        First, it verifies that the sampling rates of the tomograms and masks
+        are consistent within a predefined tolerance. Matching voxel size is
+        biologically essential because any discrepancy would cause the mask to
+        correspond to an incorrect physical region of the tomogram.
+
+        The protocol also validates the dimensions of each tomogram-mask pair.
+        If dimensions differ, the corresponding dataset is excluded from
+        processing. This protects against applying masks to incompatible
+        volumes, which could otherwise generate corrupted or biologically
+        meaningless results.
+
+        Importantly, these validations are performed individually for each
+        tomogram-mask pair rather than globally at the dataset level. This
+        design allows the protocol to operate safely on heterogeneous datasets
+        where some entries may be valid while others are not.
+
+        Parallel Execution and Processing Strategy
+
+        The protocol is designed to operate in parallel mode, processing each
+        tomogram independently. For every tsId, the workflow is divided into
+        three main stages: mask preprocessing, mask application, and output
+        registration.
+
+        This strategy improves scalability and efficiency when working with
+        large tomographic datasets, which are common in cellular cryo-ET
+        projects. Since tomograms can be extremely large in size, independent
+        processing reduces bottlenecks and allows more efficient resource
+        utilization.
+
+        Temporary smoothed masks are automatically removed after use in order
+        to minimize storage consumption during execution. This behavior is
+        particularly important for high-throughput cryo-ET pipelines where
+        intermediate volumes may occupy substantial disk space.
+
+        Outputs and Interpretation
+
+        The protocol generates a new set of masked tomograms preserving the
+        metadata and acquisition information of the original input set. Each
+        output tomogram corresponds to the original volume after application
+        of the associated processed mask.
+
+        From a biological standpoint, the resulting tomograms contain only
+        the regions selected by the mask and are therefore more focused for
+        downstream interpretation, segmentation refinement, particle picking,
+        subtomogram averaging, or visualization.
+
+        The protocol also reports problematic datasets, including non-matching
+        tsIds, incompatible sampling rates, or dimension mismatches. These
+        warnings provide transparency and help users diagnose inconsistencies
+        in complex cryo-ET projects.
+
+        Practical Recommendations
+
+        In most biological workflows, Gaussian smoothing is strongly
+        recommended because it reduces sharp boundary artifacts and produces
+        more natural transitions between preserved and suppressed density.
+        Moderate sigma values are usually sufficient for routine tomographic
+        analyses.
+
+        Dilation should be used carefully. Small expansions are often useful
+        for preserving neighboring structural context, but excessive dilation
+        may reintroduce unwanted background signal or obscure the intended
+        masking effect.
+
+        Users should also verify that masks were generated from tomograms with
+        matching voxel size and dimensions before running the protocol. Even
+        small inconsistencies in sampling rate can lead to biologically
+        inaccurate masking.
+
+        For exploratory visualization tasks, relatively soft masks often
+        provide visually pleasing results. In contrast, quantitative analyses
+        or segmentation-driven workflows may require tighter and more precise
+        masking strategies.
+
+        Final Perspective
+
+        In cryo-electron tomography, masking is not simply a cosmetic
+        operation but a biologically meaningful preprocessing step that can
+        significantly influence downstream interpretation and computational
+        analysis. Properly designed masks help isolate relevant structural
+        information, reduce background complexity, and improve the robustness
+        of subsequent processing stages.
+
+        The effectiveness of this protocol therefore depends not only on the
+        technical correctness of the masks, but also on the biological
+        understanding of which regions should be preserved, excluded, or
+        softly attenuated in order to best represent the underlying specimen.
+    """

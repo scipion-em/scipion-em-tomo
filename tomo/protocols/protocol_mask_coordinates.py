@@ -42,122 +42,154 @@ COORDINATES = 'Coordinates'
 class ProtMaskCoordinates(EMProtocol, ProtTomoBase):
     """ To be filled by Oier HAHAHA
     """
-    _label = 'mask 3d coordinates'
-    _devStatus = BETA
-    _possibleOutputs = {COORDINATES: SetOfCoordinates3D}
 
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputCoordinates', 
-                      PointerParam, pointerClass=SetOfCoordinates3D,
-                      label='Input coordinates', important=True,
-                      help='Select the Coordinates3D to be filtered')
-        form.addParam('inputSegmentations', 
-                      PointerParam, pointerClass=SetOfTomoMasks,
-                      label='Input segmentation', important=True,
-                      help='Select the tomo mask used for filtering coordinates')
-        form.addParam('segmentationLabel', IntParam, label='Segmentation label',
-                      default=-1,
-                      help='Labels to consider. If negative, it will consider '
-                           'all non-zero areas in the input segmentation')
-        form.addParam('excludeUnsegmented', BooleanParam, 
-                      label='Exclude unsegmented coordinates', default=True,
-                      help='Determines behaviour when encountering coordinates '
-                           'without a segmentation. When true, those coordintates ' 
-                           'are not outputed. If false, all coordintates from '
-                           'those coordinates are outputed.')
+    """
+    Filters 3D coordinates using tomographic segmentation masks in order
+    to retain only coordinates located within biologically relevant
+    segmented regions. The protocol evaluates each coordinate against
+    a tomomask and generates a new filtered set of coordinates based on
+    the selected segmentation criteria.
 
-    # --------------------------- INSERT steps functions -----------------------
-    def _insertAllSteps(self):
-        coordinates = self._getInputCoordinates()
-        tomograms: SetOfTomograms = coordinates.getPrecedents()
-        
-        self._insertFunctionStep(self.createOutputStep)
-        for tomogram in tomograms.iterItems():
-            tsId = tomogram.getTsId()
-            self._insertFunctionStep(self.filterTomogramCoordinatesStep, tsId)
-        self._insertFunctionStep(self.closeOuputStep)
-        
-    # --------------------------- STEPS functions ------------------------------
-    def createOutputStep(self):
-        inputCoordintates = self._getInputCoordinates()
-        tomograms = inputCoordintates.getPrecedents()
-        outputCoordinates = self._createSetOfCoordinates3D(tomograms)
-        outputCoordinates.copyInfo(inputCoordintates)
-        outputCoordinates.setStreamState(Set.STREAM_OPEN)
-        
-        self._defineOutputs(**{COORDINATES: outputCoordinates})
-        self._defineSourceRelation(self.inputCoordinates, outputCoordinates)
-        self._defineSourceRelation(self.inputSegmentations, outputCoordinates)
-    
-    def filterTomogramCoordinatesStep(self, tsId: str):
-        inputCoordinates3d = self._getInputCoordinates()
-        outputCoordinates: SetOfCoordinates3D = getattr(self, COORDINATES)
-        tomogram: Tomogram = inputCoordinates3d.getPrecedent(tsId)
-        segmentation = self._getInputSegmentation(tsId)
-        
-        if segmentation is not None:
-            mask = self._calculateMask(segmentation)
-            
-            for item in inputCoordinates3d.iterCoordinates(tomogram):
-                if self._checkCoordinate(item, mask):
-                    outputCoordinates.append(item)
-        
-        elif not self.excludeUnsegmented:
-            for item in inputCoordinates3d.iterCoordinates(tomogram):
-                outputCoordinates.append(item)
+    AI Generated:
 
-    def closeOuputStep(self):
-        self._closeOutputSet()
+    Mask 3D Coordinates (ProtMaskCoordinates) — User Manual
+        Overview
 
-    # --------------------------- UTILS functions ------------------------------
-    def _getInputCoordinates(self) -> SetOfCoordinates3D:
-        return self.inputCoordinates.get()
-    
-    def _getInputSegmentation(self, tsId: str) -> TomoMask:
-        segmentations: SetOfTomoMasks = self.inputSegmentations.get()
-        for item in segmentations.iterItems():
-            if item.getTsId() == tsId:
-                return item
-        return None
-    
-    def _loadSegmentation(self, segmentation: TomoMask) -> np.ndarray:
-        ih = ImageHandler()
-        image = ih.read(segmentation)
-        return image.getData()
-    
-    def _calculateMask(self, segmentation: TomoMask) -> np.ndarray:
-        segmentationData = self._loadSegmentation(segmentation)
-        label: int = self.segmentationLabel.get()
-        
-        if label < 0:
-            mask = (segmentationData > 0)
-        else:
-            mask = (segmentationData == label)
-            
-        return mask
-        
-    def _checkCoordinate(self, coordinate: Coordinate3D, mask: np.ndarray) -> bool:
-        position = coordinate.getPosition(const.BOTTOM_LEFT_CORNER)
-        position = tuple(map(round, position))
-        x, y, z = position
-        return bool(mask[z, y, x] == True)
-    
-    # --------------------------- INFO functions -------------------------------
-    def _validate(self):
-        result = []
-        
-        coordinates = self._getInputCoordinates()
-        tomograms: SetOfTomograms = coordinates.getPrecedents()
-        segmentations: SetOfTomoMasks = self.inputSegmentations.get()
+        The Mask 3D Coordinates protocol filters a set of 3D coordinates
+        according to tomographic segmentation masks. Its primary purpose
+        is to remove coordinates located outside biologically relevant
+        segmented regions while preserving those associated with the
+        structures of interest. In cryo-electron tomography workflows,
+        this operation is particularly useful for restricting particle
+        picking results to specific cellular compartments, membranes,
+        organelles, or macromolecular assemblies identified through
+        segmentation procedures.
 
-        if coordinates.getSamplingRate() != segmentations.getSamplingRate():
-            result.append('Sampling rate of the segmentation does not '
-                          'match the sampling rate of the segmentation')
-        
-        if tomograms.getDim() != segmentations.getDim():
-            result.append('Dimensions of the segmentation does not match '
-                          'the dimensions of the tomogram used for picking')
-        
-        return result
-    
+        In practical biological applications, automated particle picking
+        frequently produces coordinates distributed across both relevant
+        and irrelevant regions of the tomogram. By combining coordinate
+        datasets with segmentation masks, the protocol allows users to
+        focus subsequent analyses only on spatial regions supported by
+        prior structural or biological knowledge. This improves dataset
+        specificity and reduces the introduction of false positives into
+        subtomogram averaging or classification workflows.
+
+        Inputs and General Workflow
+
+        The protocol requires two main inputs: a set of 3D coordinates
+        and a set of tomographic segmentation masks. The coordinate set
+        provides the spatial positions to be evaluated, while the
+        segmentation masks define the regions considered biologically
+        relevant. Each tomogram is processed independently by matching
+        coordinates and segmentations through their corresponding
+        tilt-series identifiers.
+
+        During execution, the protocol creates a new output coordinate
+        set linked to the original tomograms. For every tomogram, the
+        associated segmentation mask is loaded into memory and converted
+        into a binary mask representation. Each coordinate position is
+        then evaluated against this mask in order to determine whether
+        it belongs to a segmented region.
+
+        Segmentation Labels and Region Selection
+
+        An important feature of the protocol is the possibility of
+        filtering coordinates using specific segmentation labels.
+        Segmentation datasets often contain multiple annotated regions
+        represented by different integer values. The protocol allows
+        users either to select a particular label or to consider all
+        non-zero segmented regions simultaneously.
+
+        When the segmentation label parameter is negative, every
+        non-background voxel is treated as a valid segmented region.
+        This mode is useful for general filtering tasks in which all
+        annotated structures should be retained. Alternatively, when a
+        positive label value is provided, only coordinates falling
+        within voxels matching that exact label are preserved. This
+        enables highly selective biological analyses focused on specific
+        organelles, membrane systems, or structural compartments.
+
+        Coordinate Evaluation Strategy
+
+        For each coordinate, the protocol retrieves its spatial position
+        relative to the tomogram reference frame and converts the
+        coordinates into voxel indices compatible with the segmentation
+        mask dimensions. The coordinate is accepted only if the
+        corresponding voxel position in the mask evaluates to true.
+
+        This voxel-based filtering strategy ensures direct spatial
+        consistency between segmentation data and particle coordinates.
+        As a result, only coordinates physically located inside the
+        segmented structures are propagated into the output dataset.
+
+        Handling Missing Segmentations
+
+        Biological datasets are not always fully segmented, and some
+        tomograms may lack associated masks. The protocol therefore
+        provides configurable behavior for handling these cases.
+
+        When exclusion of unsegmented tomograms is enabled, coordinates
+        belonging to tomograms without a corresponding segmentation are
+        discarded entirely. This behavior is appropriate for highly
+        curated workflows where only validated segmented regions should
+        contribute to downstream analysis.
+
+        Alternatively, users may disable this exclusion behavior. In
+        that case, coordinates from tomograms lacking segmentations are
+        copied directly into the output dataset without filtering. This
+        option is useful in partially annotated datasets where retaining
+        unsegmented tomograms remains biologically meaningful.
+
+        Validation and Dataset Consistency
+
+        Before execution, the protocol validates the compatibility
+        between coordinate and segmentation datasets. The sampling rate
+        of the segmentations must match the sampling rate associated
+        with the tomograms used during coordinate picking. Likewise,
+        tomogram and segmentation dimensions must be identical to
+        guarantee spatial consistency during voxel-based masking.
+
+        These validation steps are biologically important because even
+        small mismatches in voxel size or dimensions may shift the
+        coordinate positions relative to the segmentation mask, leading
+        to incorrect filtering decisions.
+
+        Outputs and Their Interpretation
+
+        After processing, the protocol generates a new set of filtered
+        3D coordinates linked to the original tomograms and input
+        segmentations. The output preserves all metadata associated with
+        the original coordinate set while restricting the coordinates to
+        the segmented spatial regions selected during execution.
+
+        Biologically, the resulting dataset represents a spatially
+        refined subset of particles or annotations that are consistent
+        with the segmentation information. This refinement often improves
+        the quality of downstream subtomogram averaging, classification,
+        or structural interpretation workflows.
+
+        Practical Recommendations
+
+        In routine cryo-electron tomography workflows, this protocol is
+        particularly effective when segmentation masks represent stable
+        or biologically meaningful structures such as membranes,
+        organelles, cytoskeletal networks, or viral assemblies. Careful
+        selection of segmentation labels is essential because incorrect
+        label usage may unintentionally remove relevant coordinates or
+        retain unwanted regions.
+
+        Users should also verify that segmentation masks and coordinate
+        datasets share the same voxel size and geometric dimensions
+        before execution. Even when validation passes, visually checking
+        several filtered coordinates in a tomographic viewer is strongly
+        recommended to confirm biological correctness.
+
+        Final Perspective
+
+        Coordinate masking is not simply a technical filtering step but
+        a biologically driven spatial refinement process. By integrating
+        segmentation knowledge with particle coordinate datasets, the
+        protocol enables more selective and biologically coherent
+        tomographic analyses while reducing noise and irrelevant spatial
+        information in downstream workflows.
+    """

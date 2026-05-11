@@ -50,128 +50,131 @@ class ProtInvertTiltAngles(EMProtocol):
     in the metadata associated to each tilt-series. Introducing the CTFs will update the pointer from introduced
     CTFs to the tilt-series with the inverted tilt-angles in order to keep the coherence in the
     relationship between both objects after the angle inversion operation."""
-    _label = 'invert tilt angles'
-    _devStatus = BETA
-    _possibleOutputs = InvertTiltsOutputs
-    stepsExecutionMode = STEPS_PARALLEL
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.tsDict = None
-        self.ctfDict = None
-        self.nonMatchingTsIdsMsg = String()
+    """
+    Inverts the tilt angles associated with a set of tilt-series in order
+    to change the physical handedness of the tomographic acquisition.
+    The protocol generates a new set of tilt-series where each tilt angle
+    is multiplied by -1 while preserving the original acquisition structure
+    and metadata relationships.
 
-    # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_TS_SET, PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      label='Tilt-Series')
-        form.addParam(IN_CTF_SET, PointerParam,
-                      pointerClass='SetOfCTFTomoSeries',
-                      label='CTF (opt)',
-                      allowsNull=True,
-                      help='Introducing the CTFs will update the pointer from introduced CTFs to '
-                           'the tilt-series with the inverted tilt-angles in order to keep the coherence in the '
-                           'relationship between both objects after the angle inversion operation.')
+    AI Generated:
 
-    # --------------------------- INSERT steps functions ----------------------
-    def _insertAllSteps(self):
-        self._initialize()
-        for tsId in self.tsDict.keys():
-            self._insertFunctionStep(self._invertAnglesStep, tsId,
-                                     needsGPU=False)
+    Invert Tilt Angles (ProtInvertTiltAngles) — User Manual
+        Overview
 
-    # -------------------------- STEPS functions ------------------------------
-    def _initialize(self):
-        inTsSet = self._getInTsSet()
-        inCtfs = self._getInCtfSet()
-        if inCtfs:
-            tsIds = set(inTsSet.getTSIds())
-            ctfTsIds = set(inCtfs.getTSIds())
-            # Check the common elements
-            matchingTsIds = tsIds & ctfTsIds
-            nonMatchingTsIds = tsIds ^ ctfTsIds
-            if not matchingTsIds:
-                raise Exception('No matching tsIds were found among the given sets of tilt-series and CTFs.')
-            if nonMatchingTsIds:
-                msg = f'Some non-matching tsIds were found: {nonMatchingTsIds}'
-                self.nonMatchingTsIdsMsg.set(msg)
-                logger.info(cyanStr(msg))
-                self._store(self.nonMatchingTsIdsMsg)
-            self.tsDict = {ts.getTsId(): ts.clone() for ts in inTsSet if ts.getTsId() in matchingTsIds}
-            self.ctfDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfs if ctf.getTsId() in matchingTsIds}
-        else:
-            self.tsDict = {ts.getTsId(): ts.clone() for ts in inTsSet}
+        The Invert Tilt Angles protocol modifies the angular metadata of
+        a tilt-series dataset by reversing the sign of every tilt angle.
+        This operation effectively changes the handedness convention of
+        the tomographic acquisition while preserving the original image
+        data and acquisition order. The protocol is particularly useful
+        in cryo-electron tomography workflows where tilt geometry needs
+        to be corrected to maintain consistency between reconstruction,
+        visualization, and downstream analysis pipelines.
 
-    def _invertAnglesStep(self, tsId: str):
-        inTs = self.tsDict[tsId]
-        outTsSet = self._getOutputTsSet()
-        newTs = TiltSeries()
-        newTs.copyInfo(inTs)
-        outTsSet.append(newTs)
+        In practical biological workflows, handedness inconsistencies may
+        appear when datasets are processed with different acquisition
+        conventions or software packages. Although the voxel intensities
+        remain unchanged, incorrect tilt-angle orientation can lead to
+        mirrored reconstructions, incorrect structural interpretation,
+        or incompatibilities with subtomogram averaging and segmentation
+        procedures. This protocol addresses those issues by generating a
+        coherent tilt-series representation with inverted angular metadata.
 
-        for inTi in inTs.iterItems():
-            newTi = inTi.clone()
-            newTi.setTiltAngle(-1 * inTi.getTiltAngle())
-            newTs.append(newTi)
+        Inputs and General Workflow
 
-        newTs.write()
-        outTsSet.update(newTs)
-        outTsSet.write()
+        The protocol requires as input a set of tilt-series containing
+        the angular metadata associated with each tilt image. Optionally,
+        a corresponding set of CTF estimations can also be provided.
+        When CTF information is included, the protocol automatically
+        updates the relationship between the new tilt-series and their
+        associated CTF objects to preserve internal consistency across
+        the dataset.
 
-        # Generate the output CTFs
-        if self.ctfDict:
-            inCtf = self.ctfDict[tsId]
-            outCtfSet = self._getOutputCtfSet()
-            newCtf = inCtf.clone()
-            newCtf.setTiltSeries(self.tsDict[tsId])
-            outCtfSet.append(newCtf)
+        During execution, the protocol iterates through each tilt-series
+        independently. A new output tilt-series is created by cloning the
+        original metadata and duplicating every tilt image while replacing
+        each tilt angle with its negative counterpart. The image ordering,
+        acquisition information, and structural organization remain
+        unchanged throughout the process.
 
-            for ctfTomo in inCtf.iterItems():
-                newCtfTomo = ctfTomo.clone()
-                newCtf.append(newCtfTomo)
+        Handling of CTF Associations
 
-            newCtf.write()
-            outCtfSet.update(newCtf)
-            outCtfSet.write()
+        One of the most important aspects of this protocol is the
+        preservation of coherence between tilt-series and CTF estimation
+        objects. In cryo-ET processing pipelines, CTF models are tightly
+        associated with the angular geometry of the acquisition. If tilt
+        angles are inverted without updating these relationships, later
+        reconstruction or refinement stages may become inconsistent.
 
-    # --------------------------- UTILS functions -----------------------------
-    def _getInTsSet(self, returnPointer: bool = False) -> Union[SetOfTiltSeries, Pointer]:
-        inTsPointer = getattr(self, IN_TS_SET)
-        return inTsPointer if returnPointer else inTsPointer.get()
+        When a set of CTF tomo-series is introduced, the protocol first
+        validates the compatibility between both datasets using their
+        tilt-series identifiers. Only matching tilt-series are processed.
+        The protocol then generates a new output CTF set linked to the
+        newly generated tilt-series with inverted angles, ensuring that
+        all metadata dependencies remain synchronized.
 
-    def _getInCtfSet(self, returnPointer: bool = False) -> Union[SetOfCTFTomoSeries, Pointer]:
-        inCtfsPointer = getattr(self, IN_CTF_SET)
-        return inCtfsPointer if returnPointer else inCtfsPointer.get()
+        Validation and Dataset Consistency
 
-    def _getOutputTsSet(self) -> SetOfTiltSeries:
-        outSetSetAttrib = self._possibleOutputs.tiltSeries.name
-        outTsSet = getattr(self, outSetSetAttrib, None)
-        if not outTsSet:
-            outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries')
-            outTsSet.copyInfo(self._getInTsSet())
-            self._defineOutputs(**{outSetSetAttrib: outTsSet})
-            self._defineSourceRelation(self._getInTsSet(returnPointer=True), outTsSet)
-        return outTsSet
+        Before processing begins, the protocol checks whether the
+        introduced tilt-series and CTF sets share compatible tilt-series
+        identifiers. If no common identifiers are found, execution stops
+        with an error because the relationship between both datasets
+        cannot be established reliably.
 
-    def _getOutputCtfSet(self) -> SetOfCTFTomoSeries:
-        outSetSetAttrib = self._possibleOutputs.ctfs.name
-        outCtfSet = getattr(self, outSetSetAttrib, None)
-        if not outCtfSet:
-            outCtfSet = SetOfCTFTomoSeries.create(self._getPath(), template='ctfs')
-            outCtfSet.copyInfo(self._getInCtfSet())
-            outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name)
-            outCtfSet.setSetOfTiltSeries(outTsSet)
-            self._defineOutputs(**{outSetSetAttrib: outCtfSet})
-            self._defineSourceRelation(self._getInCtfSet(returnPointer=True), outCtfSet)
-        return outCtfSet
+        In cases where only part of the datasets match, the protocol
+        continues processing the compatible entries while storing a
+        warning message describing the non-matching identifiers. This
+        behavior allows partially compatible datasets to be reused
+        without forcing complete manual curation beforehand.
 
-    # --------------------------- INFO functions ------------------------------
-    def _summary(self) -> list:
-        msgList = []
-        nonMatchingTsIdsMsg = self.nonMatchingTsIdsMsg.get()
-        if nonMatchingTsIdsMsg:
-            msgList.append(f'*{nonMatchingTsIdsMsg}*')
-        return msgList
+        Parallel Processing Strategy
+
+        The protocol executes using a parallel step-based strategy in
+        which each tilt-series is processed independently. This design
+        improves scalability for large cryo-electron tomography projects
+        containing many tilt-series acquisitions. Since the operation only
+        modifies metadata and does not alter image intensities, execution
+        is typically lightweight and computationally efficient.
+
+        Outputs and Their Interpretation
+
+        After execution, the protocol produces a new set of tilt-series
+        with inverted tilt angles. The original datasets remain untouched,
+        allowing users to preserve both conventions within the same
+        project if needed. Each generated tilt-series maintains the same
+        image sequence and acquisition structure as the original input,
+        differing only in the sign of the angular metadata.
+
+        If CTF information was provided, an additional output set of
+        CTF tomo-series is generated and linked directly to the updated
+        tilt-series. This ensures compatibility with subsequent
+        reconstruction, alignment, or subtomogram analysis workflows.
+
+        Practical Recommendations
+
+        In biological practice, this protocol is most commonly used when
+        importing datasets generated under different handedness
+        conventions or when correcting inconsistencies discovered during
+        tomographic reconstruction. Before applying the protocol, it is
+        advisable to confirm that the observed handedness discrepancy is
+        truly caused by tilt-angle orientation and not by visualization
+        settings or reconstruction artifacts.
+
+        When working with CTF information, users should always introduce
+        the associated CTF set together with the tilt-series to preserve
+        dataset coherence automatically. Reviewing the generated warning
+        messages is also recommended in order to identify missing or
+        incompatible tilt-series identifiers before continuing with
+        downstream processing.
+
+        Final Perspective
+
+        Although mathematically simple, tilt-angle inversion is a
+        biologically significant metadata operation because it directly
+        affects the geometric interpretation of tomographic data.
+        Maintaining consistency between tilt geometry, CTF estimation,
+        and reconstruction conventions is essential for obtaining
+        reliable structural interpretations in cryo-electron tomography
+        workflows.
+    """

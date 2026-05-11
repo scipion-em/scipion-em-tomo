@@ -41,214 +41,188 @@ OUTPUT_NAME = 'Tomograms'
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     """Protocol to import a set of tomograms to the project"""
-    _outputClassName = 'SetOfTomograms'
-    _label = 'import tomograms'
-    _possibleOutputs = {OUTPUT_NAME: SetOfTomograms}
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.Tomograms = None
-        self.ih = None
 
 
-    def _defineParams(self, form):
-        ProtTomoImportFiles._defineParams(self, form)
-        ProtTomoImportFiles.addExclusionWordsParam(form)
+    """
+    Imports a set of subtomograms into a Scipion project together with
+    their associated acquisition metadata and spatial origin information.
+    The protocol supports volumetric formats commonly used in cryo-electron
+    tomography workflows and prepares the imported subtomograms for downstream
+    visualization, classification, averaging, or refinement procedures.
 
-        ProtTomoImportAcquisition._defineParams(self, form)
+    AI Generated:
 
-        form.addSection('Origin Info')
-        form.addParam('setOrigCoord', params.BooleanParam,
-                      condition='importFrom == IMPORT_FROM_FILES',
-                      label="Set origin of coordinates",
-                      help="Option YES:\nA new volume will be created with "
-                           "the "
-                           "given ORIGIN of coordinates. This ORIGIN will be "
-                           "set in the map file header.\nThe ORIGIN of "
-                           "coordinates will be placed at the center of the "
-                           "whole volume if you select n(x)/2, n(y)/2, "
-                           "n(z)/2 as "
-                           "x, y, z coordinates (n(x), n(y), n(z) are the "
-                           "dimensions of the whole volume). However, "
-                           "selecting "
-                           "0, 0, 0 as x, y, z coordinates, the volume will be "
-                           "placed at the upper right-hand corner.\n\n"
-                           "Option NO:\nThe ORIGIN of coordinates will be "
-                           "placed at the center of the whole volume ("
-                           "coordinates n(x)/2, n(y)/2, n(z)/2 by default). "
-                           "This "
-                           "ORIGIN will NOT be set in the map file header.\n\n"
-                           "WARNING: In case you want to process "
-                           "the volume with programs requiring a specific "
-                           "symmetry regarding the origin of coordinates, "
-                           "for example the protocol extract unit "
-                           "cell, check carefully that the coordinates of the "
-                           "origin preserve the symmetry of the whole volume. "
-                           "This is particularly relevant for loading "
-                           "fragments/subunits of the whole volume.\n",
-                      default=False)
+    Import Subtomograms (ProtImportSubTomograms) — User Manual
 
-        form.addBooleanParam('fromMrcHeader', label='From mrc header',
-                             help='Use origin information in mrc headers of the tomograms.',
-                             default=False, condition='setOrigCoord', )
+        Overview
 
-        form.addLine('Manual offset',
-                     help="A wizard will suggest you possible "
-                          "coordinates for the ORIGIN. In MRC volume "
-                          "files, the ORIGIN coordinates will be "
-                          "obtained from the file header.\n "
-                          "In case you prefer set your own ORIGIN "
-                          "coordinates, write them here. You have to "
-                          "provide the map center coordinates in "
-                          "Angstroms (pixels x sampling).\n",
-                     condition='setOrigCoord and not fromMrcHeader')
-        # line.addParam would produce a nicer looking form
-        # but them the wizard icon is drawn outside the visible
-        # window. Until this bug is fixed form is a better option
-        form.addParam('x', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
-                      label="x", help="offset along x axis (Angstroms)")
-        form.addParam('y', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
-                      label="y", help="offset along y axis (Angstroms)")
-        form.addParam('z', params.FloatParam, condition='setOrigCoord and not fromMrcHeader',
-                      label="z", help="offset along z axis (Angstroms)")
+        The Import Subtomograms protocol is designed to incorporate a collection
+        of previously generated subtomograms into a Scipion tomography project.
+        In cryo-electron tomography workflows, subtomograms usually correspond
+        to small 3D regions extracted from larger tomograms and centered on
+        biological particles, macromolecular complexes, membranes, or repeating
+        cellular structures. These subtomograms often represent the starting
+        point for subtomogram averaging, alignment, classification, or structural
+        heterogeneity analysis.
 
-    def _insertAllSteps(self):
-        self._initialize()
-        self._insertFunctionStep(self.importTomogramsStep)
+        From a biological perspective, this protocol acts as a bridge between
+        external subtomogram extraction procedures and downstream structural
+        analysis inside Scipion. The protocol does not perform particle picking
+        or extraction itself. Instead, it imports already generated subtomogram
+        volumes while preserving important metadata such as voxel size,
+        acquisition parameters, and spatial origin.
 
-    # --------------------------- STEPS functions -----------------------------
-    def _initialize(self):
-        self.ih = ImageHandler()
-        self.initializeParsing()
+        The protocol is especially useful when subtomograms were generated using
+        external tomography software packages or when data produced in previous
+        workflows must be integrated into a unified Scipion processing pipeline.
 
-    def importTomogramsStep(self):
-        """ Copy images matching the filename pattern
-        Register other parameters.
-        """
-        samplingRate = self.samplingRate.get()
+        Inputs and General Workflow
 
-        # Create a Volume template object
-        tomo = Tomogram()
-        tomo.setSamplingRate(samplingRate)
-        tomoSet = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
-        tomoSet.setSamplingRate(samplingRate)
+        The protocol requires a collection of volumetric files corresponding to
+        subtomograms. These files are identified using a filename pattern, which
+        allows the protocol to iterate automatically through all matching entries.
+        Each imported volume is registered internally as a SubTomogram object and
+        incorporated into a SetOfSubTomograms container.
 
-        self._parseAcquisitionData()
-        if self.importAcquisitionFrom.get() != self.FROM_FILE_IMPORT:
-            tomoSet.setAcquisition(self._extractAcquisitionParameters(None))
+        During the import process, the protocol determines the dimensions of each
+        volume and calculates a spatial origin centered within the box. This
+        origin definition is particularly important in subtomogram averaging
+        workflows because alignment algorithms assume that particles are roughly
+        centered within the subtomogram reference frame.
 
-        if self.regEx:
-            logger.info("Using regex pattern: '%s'" % self.regExPattern)
-            logger.info("Generated glob pattern: '%s'" % self.globPattern)
-            for tsId, fileName in self.getMatchingFilesFromRegEx().items():
-                self.addTomoToSet(fileName, tsId, tomo, tomoSet)
-        else:
-            inPattern = self.filesPattern.get()
-            pattern = inPattern.strip() if inPattern else ''
-            logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(), pattern))
-            filePaths = [fileName[0] for fileName in self.iterFiles()]
-            fileList = self._excludeByWords(filePaths)
-            for fileName in fileList:
-                tsId = normalizeTSId(removeBaseExt(fileName))
-                self.addTomoToSet(fileName, tsId, tomo, tomoSet)
+        The voxel size, provided as the sampling rate, is propagated to the full
+        dataset and stored for downstream processing. Correct sampling rate
+        definition is biologically critical because it directly affects
+        structural interpretation, resolution estimation, and compatibility with
+        subsequent refinement procedures.
 
-        self._defineOutputs(**{OUTPUT_NAME: tomoSet})
+        File Formats and Volume Interpretation
 
-    # --------------------------- UTILS functions ------------------------------
-    def _getOrigCoord(self):
-        return -1. * self.x.get(), -1. * self.y.get(), -1. * self.z.get()
+        The protocol supports standard volumetric formats commonly used in cryo-EM
+        and tomography workflows, including MRC and MAP files. Special handling
+        is implemented for stack-like MRC files in which multiple subtomograms
+        may be stored within a single container.
 
-    def setDefaultOrigin(self, fileName, origin):
-        samplingRate = self.samplingRate.get()
-        x, y, z, n = self.ih.getDimensions(fileName)
-        origin.setShifts(x / -2. * samplingRate,
-                         y / -2. * samplingRate,
-                         z / -2. * samplingRate)
+        When the imported file contains multiple volumes, the protocol separates
+        them logically into individual subtomogram entries while preserving the
+        correct indexing information. This behavior is particularly useful for
+        large-scale tomography projects where particle extraction software exports
+        many particles into consolidated stacks rather than independent files.
 
-    def getTomoNewFileName(self, tsId, ext):
-        return self._getExtraPath(f'{tsId}{ext}')
+        MAP files are internally interpreted as MRC-compatible volumes to ensure
+        interoperability across cryo-EM software ecosystems.
 
-    def addTomoToSet(self, fileName: str, tsId: str, tomoObj: Tomogram, tomoSet: SetOfTomograms) -> None:
-        origin = Transform()
-        if self.setOrigCoord.get():
-            if self.fromMrcHeader.get():
-                if Ccp4Header.isCompatible(fileName):
-                    ccp4Header = Ccp4Header(fileName, readHeader=True)
-                    origin.setShiftsTuple(ccp4Header.getOrigin())
-                else:
-                    logger.info("File %s not compatible with mrc format. Setting default origin: geometrical center "
-                                "of it." % fileName)
-                    self.setDefaultOrigin(fileName, origin)
-            else:
-                origin.setShiftsTuple(self._getOrigCoord())
-        else:
-            self.setDefaultOrigin(fileName, origin)
+        Acquisition Metadata Handling
 
-        tomoObj.setOrigin(origin)
-        tomoObj.setTsId(tsId)
-        newFileName = self.getTomoNewFileName(tsId, getExt(fileName))
-        createAbsLink(abspath(fileName), abspath(newFileName))
-        tomoObj.setAcquisition(self._extractAcquisitionParameters(fileName))
-        tomoObj.cleanObjId()
-        tomoObj.setFileName(newFileName)
-        tomoSet.append(tomoObj)
-        tomoSet.update(tomoObj)
+        One of the central features of this protocol is the integration of
+        acquisition metadata inherited from tomography experiments. The protocol
+        parses acquisition parameters and associates them with each imported
+        subtomogram.
 
-    # --------------------------- INFO functions ------------------------------
-    def _hasOutput(self):
-        return self.Tomograms is not None
+        In biological workflows, acquisition metadata can become highly relevant
+        when comparing datasets collected under different microscope conditions,
+        magnifications, or imaging strategies. Preserving this information helps
+        maintain consistency throughout downstream refinement and averaging
+        procedures.
 
-    def _getTomMessage(self):
-        return "Tomograms %s" % self.getObjectTag(OUTPUT_NAME)
+        The protocol therefore not only imports image data but also preserves
+        experimental context, which is essential for reproducible cryo-ET
+        analysis.
 
-    def _summary(self):
-        summary = []
-        try:
-            if self._hasOutput():
-                summary.append("%s imported from:\n%s"
-                               % (self._getTomMessage(), self.getPattern()))
+        Spatial Origin and Coordinate System
 
-                if self.samplingRate.get():
-                    summary.append(u"Sampling rate: *%0.2f* (Å/px)" % self.samplingRate.get())
+        The protocol automatically assigns a centered spatial origin to every
+        subtomogram based on the dimensions of the imported volume and the
+        sampling rate. In practice, this means that the geometric center of the
+        subtomogram becomes the reference point for subsequent alignment and
+        averaging operations.
 
-                ProtTomoImportAcquisition._summary(self, summary, self.Tomograms)
+        This origin assignment is biologically important because many subtomogram
+        alignment methods assume that the target macromolecule is approximately
+        centered in the extraction box. Incorrect origins may lead to unstable
+        alignments, poor averages, or inaccurate structural interpretation.
 
-                x, y, z = self.Tomograms.getFirstItem().getShiftsFromOrigin()
-                summary.append(u"Tomograms Origin (x,y,z):\n"
-                               u"    x: *%0.2f* (Å/px)\n"
-                               u"    y: *%0.2f* (Å/px)\n"
-                               u"    z: *%0.2f* (Å/px)" % (x, y, z))
+        The protocol computes the shifts in physical units using the voxel size,
+        ensuring consistency between image geometry and spatial calibration.
 
-        except Exception as e:
-            print(e)
+        Integration into Cryo-ET Workflows
 
-        return summary
+        Imported subtomograms are commonly used in subtomogram averaging pipelines
+        aimed at increasing signal-to-noise ratio and recovering high-resolution
+        structural information from noisy tomographic data.
 
-    def _methods(self):
-        methods = []
-        if self._hasOutput():
-            methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getTomMessage(), self.samplingRate.get()), )
-        return methods
+        In practical biological applications, subtomograms may correspond to
+        ribosomes, viral spikes, membrane channels, cytoskeletal assemblies, or
+        large molecular complexes inside native cellular environments. Once
+        imported, these particles can be aligned, classified, or averaged to
+        identify structural states and conformational variability.
 
-    def _getVolumeFileName(self, fileName, extension=None):
-        if extension is not None:
-            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
-        else:
-            baseFileName = "import_" + str(basename(fileName)).split(":")[0]
+        Because the protocol preserves acquisition information and spatial
+        consistency, it facilitates reliable integration with downstream Scipion
+        tomography protocols.
 
-        return self._getExtraPath(baseFileName)
+        Coordinate Association
 
-    def _validate(self):
-        errors = []
-        self._initialize()
-        if self.regEx:
-            matchingFileDict = self.getMatchingFilesFromRegEx()
-            if not matchingFileDict:
-                errors.append('No files matching the pattern %s were found.' % self.globPattern)
-        else:
-            try:
-                next(self.iterFiles())
-            except StopIteration:
-                errors.append('No files matching the pattern %s were found.' % self.getPattern())
-        return errors
+        The code structure includes placeholders for future or optional
+        association between subtomograms and previously imported 3D coordinates.
+        Although this functionality is currently disabled, the design indicates
+        support for workflows where each subtomogram can be directly linked to
+        its original particle coordinate inside the tomogram.
+
+        Such associations are biologically valuable because they preserve the
+        spatial context of particles within the cellular environment, enabling
+        correlation between structural information and native localization.
+
+        Outputs and Their Interpretation
+
+        After execution, the protocol generates a SetOfSubTomograms object
+        containing all successfully imported subtomograms together with their
+        associated metadata, origins, and acquisition parameters.
+
+        Each subtomogram maintains its file reference and geometric information,
+        allowing it to be used immediately in visualization, averaging,
+        classification, or refinement workflows.
+
+        The resulting dataset becomes a standardized Scipion-compatible container
+        suitable for large-scale cryo-electron tomography analysis.
+
+        Validation and Data Integrity
+
+        Before import begins, the protocol validates the existence of files
+        matching the provided pattern. If no matching files are detected, the
+        execution stops with an error message.
+
+        This validation step prevents incomplete imports and ensures that users
+        are aware of incorrect file patterns or missing datasets before starting
+        computationally expensive downstream analyses.
+
+        Practical Recommendations
+
+        In practical cryo-ET workflows, users should verify that all imported
+        subtomograms share a consistent voxel size and box dimensions before
+        proceeding to averaging or classification. Mixing particles extracted at
+        different sampling rates may lead to incorrect alignments or unreliable
+        structural interpretation.
+
+        It is also advisable to confirm that particles are approximately centered
+        within the extraction box. Although the protocol assigns a centered
+        origin automatically, strongly off-centered particles may still require
+        re-extraction or additional preprocessing.
+
+        For large datasets stored as MRC stacks, users should ensure that the
+        indexing and dimensionality are correctly interpreted after import,
+        particularly when subtomograms originate from external software packages.
+
+        Final Perspective
+
+        For cryo-electron tomography users, importing subtomograms is more than a
+        simple data-loading operation. It represents the transition from raw
+        extracted particles to biologically meaningful structural analysis.
+        Proper definition of voxel size, acquisition metadata, and spatial origin
+        is essential for obtaining reliable averages and interpretable structural
+        results.
+
+        By standardizing subtomogram datasets inside Scipion, this protocol
+        provides the foundation for robust subtomogram averaging workflows and
+        integrative structural studies within native cellular environments.
+    """

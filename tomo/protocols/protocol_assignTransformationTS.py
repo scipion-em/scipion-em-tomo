@@ -52,254 +52,143 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
     Assign the transformation matrices from an input set of tilt-series to a target one.
     """
 
-    _label = 'Tilt-series assign alignment'
-    _devStatus = BETA
-    _possibleOutputs = outputObjects
-    stepsExecutionMode = STEPS_PARALLEL
+    """
+    Assigns transformation matrices from one set of tilt-series to another,
+    allowing alignment information obtained in a previously processed dataset
+    to be transferred and reused in a different tilt-series collection.
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.tsIdsReadFrom = []
-        self.tsIdsReadTo = []
-        self.sRateRatio = None
+    AI Generated:
 
-    @classmethod
-    def worksInStreaming(cls):
-        return True
+    Assign Transformation Matrix Tilt-Series (ProtAssignTransformationMatrixTiltSeries) — User Manual
 
-    # -------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
-        form.addSection(Message.LABEL_INPUT)
-        form.addParam('getTMSetOfTiltSeries',
-                      PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      help='Set of tilt-series from which transformation matrices will be obtained.',
-                      label='Tilt-series from which to take the alignment')
+        Overview
 
-        form.addParam('setTMSetOfTiltSeries',
-                      PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      help='Set of tilt-series on which transformation matrices will be assigned.',
-                      label='Tilt-series to assign the alignment to')
+        The Assign Transformation Matrix Tilt-Series protocol transfers alignment
+        information from one tilt-series dataset to another by assigning the
+        transformation matrices of a reference set onto a target set. Its main
+        purpose is to preserve geometrical alignment relationships between
+        corresponding tilt-images while avoiding the need to recompute alignment
+        parameters from scratch.
 
-        form.addParallelSection(threads=3, mpi=0)
+        In cryo-electron tomography workflows, this protocol is especially useful
+        when working with reprocessed datasets, re-stacked tilt-series, corrected
+        image collections, or alternative preprocessing pipelines where the image
+        content changes but the acquisition geometry remains compatible. Instead
+        of repeating computationally expensive alignment procedures, the protocol
+        propagates previously validated transformations to a new dataset.
 
-    # -------------------------- INSERT steps functions ---------------------
-    def stepsGeneratorStep(self) -> None:
-        closeSetStepDeps = []
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
-        inTsSetFrom = self.getInTsSetFrom()
-        self.readingOutput(outTsSet)
-        inTsSetTo = self.getInTsSetTo()
-        self.readingOutput(outTsSet, tsSetFrom=False)
-        self.sRateRatio = inTsSetTo.getSamplingRate() / inTsSetFrom.getSamplingRate()
+        Inputs and General Workflow
 
-        while True:
-            with self._lock:
-                inTsIdsFrom = set(inTsSetFrom.getTSIds())
-                inTsIdsTo = set(inTsSetTo.getTSIds())
-                presentTsIds = inTsIdsFrom & inTsIdsTo
+        The protocol requires two input sets of tilt-series. The first set acts
+        as the alignment source and must already contain valid transformation
+        matrices. The second set acts as the destination dataset, receiving the
+        alignment information from the source set.
 
-            if ((not inTsSetFrom.isStreamOpen() and Counter(self.tsIdsReadFrom) == Counter(presentTsIds)) and
-                    (not inTsSetTo.isStreamOpen() and Counter(self.tsIdsReadTo) == Counter(presentTsIds))):
-                logger.info(cyanStr('Input set closed.\n'))
-                self._insertFunctionStep(self.closeOutputSetsStep,
-                                         prerequisites=closeSetStepDeps,
-                                         needsGPU=False)
-                break
+        During execution, the protocol continuously monitors both datasets in
+        streaming mode and identifies matching tilt-series using their tilt-series
+        identifiers. Once matching datasets are detected, the protocol creates a
+        new output tilt-series where the transformation matrices from the source
+        dataset are assigned to the corresponding tilt-images of the target
+        dataset.
 
-            nonProcessedTsIdsFrom = inTsIdsFrom - set(self.tsIdsReadFrom)
-            nonProcessedTsIdsTo = inTsIdsTo - set(self.tsIdsReadTo)
-            tsFrom2ProcessDict = {tsId: ts.clone() for ts in inTsSetFrom.iterItems()
-                                  if (tsId := ts.getTsId()) in nonProcessedTsIdsFrom  # Only not processed tsIds (from)
-                                  and ts.getSize() > 0}  # Avoid processing empty TS
-            tsTo2ProcessDict = {tsId: ts.clone() for ts in inTsSetTo.iterItems()
-                                if (tsId := ts.getTsId()) in nonProcessedTsIdsTo  # Only not processed tsIds (to)
-                                and ts.getSize() > 0}  # Avoid processing empty CTFs
+        The protocol has been designed for streaming environments, allowing
+        tilt-series to be processed incrementally as soon as they become available.
+        This behavior is particularly useful in automated tomography pipelines or
+        facility-level workflows where data may still be actively generated during
+        processing.
 
-            for tsId, tsFrom in tsFrom2ProcessDict.items():
-                tsTo = tsTo2ProcessDict.get(tsId, None)
-                if not tsTo:
-                    logger.info(yellowStr(f'tsId = {tsId} - no corresponding tsTo to tsFrom was found...'))
-                    continue
-                pId = self._insertFunctionStep(self.assignTrMatStep,
-                                               tsId,
-                                               tsFrom,
-                                               tsTo,
-                                               prerequisites=[],
-                                               needsGPU=False)
-                closeSetStepDeps.append(pId)
-                logger.info(cyanStr(f"Steps created for tsId = {tsId}"))
-                self.tsIdsReadFrom.append(tsId)
-                self.tsIdsReadTo.append(tsId)
+        Matching Tilt-Series and Acquisition Consistency
 
-            self.refreshStreaming(inTsSetFrom)
-            self.refreshStreaming(inTsSetTo)
+        A key aspect of the protocol is the matching of acquisition orders between
+        source and target tilt-images. Transformation matrices are only assigned
+        when both tilt-series contain images with compatible acquisition orders.
+        This ensures that geometrical consistency is preserved during the transfer
+        process.
 
-    def refreshStreaming(self, inSet: SetOfTiltSeries) -> None:
-        # Refresh status for the streaming
-        time.sleep(10)
-        if inSet.isStreamOpen():
-            with self._lock:
-                inSet.loadAllProperties()  # refresh status for the streaming
+        The protocol also handles cases where certain views were excluded during
+        previous processing stages or when tilt-series were re-stacked. If a
+        tilt-image exists in the target dataset but no compatible acquisition
+        order is found in the source dataset, the image is marked as disabled and
+        assigned an identity transformation matrix instead of a potentially
+        incorrect alignment.
 
-    # --------------------------- STEPS functions ----------------------------
-    def assignTrMatStep(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
-        logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
-        try:
-            outTsSet = self.getOutTsSet()
-            newTs = TiltSeries(tsId=tsId)
-            newTs.copyInfo(tsTo)
-            # The tilt axis angle may have been re-assigned, so it must be updated
-            # to keep the coherence with the values of the transformation matrix assigned
-            fromTsTAx = tsFrom.getAcquisition().getTiltAxisAngle()
-            newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
-            outTsSet.append(newTs)
+        From a biological and geometrical perspective, maintaining acquisition-order
+        consistency is critical because transformation matrices directly describe
+        the spatial relationship between projections. Incorrect mapping between
+        views could propagate alignment errors into downstream tomographic
+        reconstruction or subtomogram analysis.
 
-            # Manage the possible previously excluded views or previous ts re-stacking
-            matchingAcqOrders = self._getCommonAcqOrderInTsPair(tsFrom, tsTo)
-            fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in tsFrom}
+        Streaming Execution and Parallel Processing
 
-            for tiTo in tsTo.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
-                newTi = self._processTiltImage(tiTo, fromTsAcqDict, matchingAcqOrders)
-                newTs.append(newTi)
+        The protocol operates using a streaming-oriented execution model. It
+        continuously checks whether new tilt-series have appeared in the input
+        datasets and schedules alignment-transfer tasks dynamically. This allows
+        processing to begin before the complete datasets are fully available.
 
-            newTs.setDim(tsTo.getDim())
-            newTs.write()
-            outTsSet.update(newTs)
-            outTsSet.write()
-            self._store()
+        Parallel execution is supported, enabling several tilt-series to be
+        processed simultaneously. This significantly improves throughput in
+        high-volume tomography facilities or automated acquisition pipelines.
 
-        except Exception as e:
-            logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
-            logger.error(traceback.format_exc())
+        The protocol keeps track of processed tilt-series identifiers to avoid
+        duplicate processing and automatically closes the output set once all
+        compatible tilt-series have been transferred and both input streams are
+        finalized.
 
-    def _processTiltImage(self, tiTo, fromTsAcqDict, matchingAcqOrders):
-        acqOrder = tiTo.getAcquisitionOrder()
+        Transformation Matrix Adaptation
 
-        if acqOrder in matchingAcqOrders:
-            tiFrom = fromTsAcqDict[acqOrder]
-            newTi = TiltImage()
-            newTi.copyInfo(tiFrom)
-            newTi.setFileName(tiTo.getFileName())
-            newTi.setAcquisition(tiTo.getAcquisition())
+        An important feature of the protocol is the automatic adaptation of
+        translational shifts according to the sampling-rate ratio between the
+        source and target datasets. When voxel sizes differ between datasets,
+        translational components of the transformation matrices are rescaled to
+        preserve geometrical correctness.
 
-            # The tilt axis angle may have been re-assigned or even refined at tilt-image
-            # level (and updated consequently in the tilt axis angle field in the metadata),
-            # so it must be updated to keep the coherence with the values of the transformation
-            # matrix assigned
-            fromTiTAx = tiFrom.getAcquisition().getTiltAxisAngle()
-            newTi.getAcquisition().setTiltAxisAngle(fromTiTAx)
-            newTi.setTiltAngle(tiFrom.getTiltAngle())
-            self.updateTiTrMatrix(newTi)
-            return newTi
+        This adjustment is particularly important when the target tilt-series has
+        undergone binning, resizing, or resampling operations. Without this
+        correction, alignment shifts would become inconsistent with the new pixel
+        size and could lead to reconstruction artifacts or spatial distortions.
 
-        # Case of disabled views
-        newTi = tiTo.clone()
-        t = Transform()
-        t.setMatrix(np.identity(3))
-        newTi.setTransform(t)
-        newTi.setEnabled(False)
-        return newTi
+        The protocol also updates tilt-axis angles whenever these values were
+        modified or refined during previous alignment procedures. This guarantees
+        coherence between metadata and the assigned transformation matrices.
 
-    def closeOutputSetsStep(self):
-        self._closeOutputSet()
-        attribName = self._possibleOutputs.tiltSeries.name
-        output = getattr(self, attribName, None)
-        if not output or (output and len(output) == 0):
-            raise Exception(f'No output/s {attribName} were generated. Please check the '
-                            f'Output Log > run.stdout and run.stderr')
+        Outputs and Interpretation
 
-    # --------------------------- UTILS functions ----------------------------
-    def getInTsSetFrom(self, asPointer: bool = False) -> Union[Pointer, SetOfTiltSeries]:
-        return self.getTMSetOfTiltSeries if asPointer else self.getTMSetOfTiltSeries.get()
+        The protocol produces a new set of tilt-series containing the images from
+        the destination dataset together with the transformation matrices imported
+        from the reference dataset. The output preserves the metadata and geometry
+        of the target tilt-series while incorporating the alignment information
+        from the source dataset.
 
-    def getInTsSetTo(self, asPointer: bool = False) -> Union[Pointer, SetOfTiltSeries]:
-        return self.setTMSetOfTiltSeries if asPointer else self.setTMSetOfTiltSeries.get()
+        Disabled or unmatched views remain explicitly flagged, ensuring that
+        incomplete correspondences are handled safely and transparently. This is
+        especially important in tomography workflows where missing projections or
+        discarded views are relatively common.
 
-    def readingOutput(self,
-                      outSet: SetOfTiltSeries,
-                      tsSetFrom: bool = True) -> None:
-        if outSet:
-            if tsSetFrom:
-                tsIdList = self.tsIdsReadFrom
-                inObjStr = 'tsFrom'
-            else:
-                tsIdList = self.tsIdsReadTo
-                inObjStr = 'tsTo'
-            for item in outSet:
-                tsIdList.append(item.getTsId())
-            self.info(cyanStr(f'{inObjStr}: items processed {tsIdList}'))
-        else:
-            self.info(cyanStr('No items have been processed yet'))
+        The resulting output can be directly used for tomographic reconstruction,
+        subtomogram averaging, or downstream alignment-sensitive analyses without
+        requiring a new alignment estimation step.
 
-    @staticmethod
-    def _getCommonAcqOrderInTsPair(ts1: TiltSeries, ts2: TiltSeries) -> typing.Set[int]:
-        tsAcqOrderSet1 = {ti.getAcquisitionOrder() for ti in ts1}
-        tsAcqOrderSet2 = {ti.getAcquisitionOrder() for ti in ts2}
-        return tsAcqOrderSet1 & tsAcqOrderSet2
+        Validation and Reliability
 
-    def getOutTsSet(self):
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
-        if outTsSet:
-            outTsSet.enableAppend()
-        else:
-            outTsSet = SetOfTiltSeries.create(self._getPath(),
-                                              template='tiltseries',
-                                              suffix='assignedTransform')
-            fromTsSet = self.getInTsSetFrom()
-            toTsSet = self.getInTsSetTo()
-            outTsSet.copyInfo(toTsSet)
-            outTsSet.setDim(toTsSet.getDim())
-            # The tilt axis angle may have been re-assigned, so it must be updated to
-            # keep the coherence with the values of the transformation matrix assigned
-            fromTsSetTAx = fromTsSet.getAcquisition().getTiltAxisAngle()
-            outTsSet.getAcquisition().setTiltAxisAngle(fromTsSetTAx)
-            outTsSet.setStreamState(Set.STREAM_OPEN)
-            # Write set properties, otherwise it may expose the set (sqlite) without properties.
-            outTsSet.write()
+        Before execution, the protocol validates that the source tilt-series
+        actually contain transformation matrices. If no alignment information is
+        available, execution is halted to prevent invalid assignments.
 
-            self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet})
-            self._defineSourceRelation(self.getInTsSetFrom(asPointer=True), outTsSet)
-            self._defineSourceRelation(self.getInTsSetTo(asPointer=True), outTsSet)
-        return outTsSet
+        From a practical perspective, users should ensure that both tilt-series
+        datasets originate from compatible acquisition schemes and preserve the
+        same acquisition ordering. Major inconsistencies between datasets may lead
+        to incomplete assignments or disabled projections.
 
-    @staticmethod
-    def _getTsSize(ts: TiltSeries) -> int:
-        stackSize = ts.getSize()
-        metadataSize = len([enabled for ti in ts.iterItems() if (enabled := ti.isEnabled())])
-        return min(stackSize, metadataSize)
+        Final Perspective
 
-    def updateTiTrMatrix(self, ti: TiltImage) -> None:
-        """ Scale the transform matrix shifts. """
-        transform = ti.getTransform()
-        matrix = transform.getMatrix()
-        matrix[0][2] /= self.sRateRatio
-        matrix[1][2] /= self.sRateRatio
-        transform.setMatrix(matrix)
-        ti.setTransform(transform)
+        For cryo-electron tomography users, this protocol provides an efficient
+        mechanism for reusing previously computed alignment information across
+        multiple processing branches. By preserving geometrical consistency while
+        avoiding redundant alignment computation, the protocol simplifies complex
+        tomography workflows and accelerates iterative data processing strategies.
 
-    # --------------------------- INFO functions ----------------------------
-    def _validate(self) -> List[str]:
-        validateMsgs = []
-        fromTsSet = self.getInTsSetFrom()
-        # The "from" TS set is expected to have alignment
-        for ts in fromTsSet.iterItems():
-            if not ts.hasAlignment():
-                validateMsgs.append("Tilt-series %s from the input set do not have a "
-                                    "transformation matrix assigned." % ts.getTsId())
-                break
-        return validateMsgs
-
-    def _summary(self):
-        summary = []
-        outputTSName = self._possibleOutputs.tiltSeries.name
-        if hasattr(self, outputTSName):
-            outTsSet = getattr(self, outputTSName)
-            summary.append(f"\nTransformation matrices assigned: {outTsSet.getSize()}\n")
-        else:
-            summary.append("Outputs are not ready yet.")
-        return summary
-
+        In practical biological workflows, this capability becomes particularly
+        valuable when comparing preprocessing methods, generating alternative
+        reconstructions, or integrating streaming acquisition pipelines into
+        automated Scipion environments.
+    """

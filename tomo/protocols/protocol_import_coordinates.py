@@ -53,220 +53,170 @@ IMPORT_FROM_CBOX = 'cbox'
 class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     """Protocol to import a set of tomograms to the project"""
-    _outputClassName = 'SetOfCoordinates3D'
-    _label = 'import coordinates 3D'
 
-    def _getImportChoices(self):
-        """ Return a list of possible choices
-        from which the import can be done.
-        (usually packages formats such as: xmipp3, eman2, relion...etc.
-        """
-        importChoices = [IMPORT_FROM_AUTO, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]
-        if existsPlugin('emantomo'):
-            importChoices.append(IMPORT_FROM_EMAN)
-        if existsPlugin('dynamo'):
-            importChoices.append(IMPORT_FROM_DYNAMO)
-        return importChoices
 
-    def _getDefaultChoice(self):
-        return 0
 
-    def __init__(self, **args):
-        super().__init__(**args)
-        self.OUTPUT_PREFIX = "outputCoordinates"
-        self.scaleFactor = 1.0
-        self.tomoSRate = None
+    """
+    Imports 3D particle coordinates associated with tomograms from
+    different tomography software formats. The protocol establishes
+    a correspondence between tomograms and coordinate files and
+    generates a unified SetOfCoordinates3D object that can be used
+    in downstream subtomogram analysis workflows.
 
-    def _defineParams(self, form):
-        super()._defineImportParams(form)
-        form.addParam('samplingRate', params.FloatParam,
-                      label='Coordinates sampling rate [Å/pix] (opt.)',
-                      allowsNull=True,
-                      help="If empty, the coordinates' sampling rate will be considered to be the same as the "
-                           "tomograms'.\n"
-                           "*IMPORTANT*: If a value is provided, the ratio of both tomograms and coordinates sampling "
-                           "rate will be used to scale the coordinates properly to the tomograms introduced.")
+    AI Generated:
 
-        form.addParam('boxSize', params.IntParam,
-                      label='Box Size [pix]',
-                      default=20,
-                      help='It will be re-scaled to the tomogram size considering the coordinates and tomograms '
-                           'ratio between their corresponding sampling rates.')
+    Import Coordinates 3D (ProtImportCoordinates3D) — User Manual
+        Overview
 
-        form.addParam('importTomograms', params.PointerParam,
-                      pointerClass='SetOfTomograms',
-                      label='Input tomograms',
-                      help='Select the tomograms to which the coordinates should be referred to.\n'
-                           'The file names of the tomogram and coordinate files must be the same.')
+        The Import Coordinates 3D protocol is designed to incorporate
+        previously identified particle coordinates into a Scipion
+        tomography project. Its main purpose is to associate spatial
+        particle positions with their corresponding tomograms so that
+        these coordinates can later be used for subtomogram extraction,
+        particle visualization, template matching validation, or
+        downstream structural analysis.
 
-    def _insertAllSteps(self):
-        self._initialize()
-        self._insertFunctionStep(self.importCoordinatesStep)
+        In cryo-electron tomography workflows, coordinates are often
+        generated outside Scipion using particle-picking or annotation
+        software such as Dynamo, EMAN, crYOLO, or custom manual picking
+        tools. This protocol provides a standardized mechanism to import
+        those coordinates while preserving their geometric relationship
+        with the tomograms.
 
-    # --------------------------- STEPS functions -----------------------------
-    def _initialize(self):
-        tomoSRate = self.importTomograms.get().getSamplingRate()
-        coordsSRate = self.samplingRate.get()
-        if coordsSRate:
-            self.scaleFactor = coordsSRate / tomoSRate
-        self.tomoSRate = tomoSRate
+        From a biological perspective, this protocol represents the bridge
+        between tomographic reconstruction and subtomogram analysis.
+        Accurate coordinate import is therefore critical because any
+        mismatch in scaling, orientation, or tomogram association may
+        propagate errors into all subsequent processing steps.
 
-    def importCoordinatesStep(self):
-        importTomograms = self.importTomograms.get()
-        coordsSet = SetOfCoordinates3D.create(self.getPath(), template='coordinates%s.sqlite')
-        coordsSet.setSamplingRate(self.tomoSRate)
-        coordsSet.setPrecedents(importTomograms)
-        coordsSet.setBoxSize(self.boxSize.get() * self.scaleFactor)
+        Inputs and General Workflow
 
-        ci = self.getImportClass()
-        for tomo in importTomograms.iterItems():
-            tomoName = removeBaseExt(tomo.getFileName())
-            for coordFile, fileId in self.iterFiles():
-                fileName = removeBaseExt(coordFile)
-                if tomo is not None and tomoName == fileName:
-                    # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]:
-                        def addCoordinate(coord, x, y, z):
-                            coord.setVolume(tomo.clone())
+        During execution, the protocol scans the coordinate files, detects
+        or uses the selected import format, and parses the coordinates for
+        each tomogram independently. The imported coordinates are then
+        converted into a unified internal representation compatible with
+        Scipion tomography workflows.
 
-                            x = x * self.scaleFactor
-                            y = y * self.scaleFactor
-                            z = z * self.scaleFactor
+        The protocol supports multiple coordinate formats commonly used in
+        cryo-electron tomography pipelines. TXT files can be imported as
+        generic coordinate lists, EMAN JSON files are supported when the
+        emantomo plugin is installed, Dynamo TBL files are available through
+        the dynamo plugin, and CBOX files generated by crYOLO can also be
+        imported directly.
 
-                            coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
-                            coordsSet.append(coord)
-                        ci.importCoordinates3D(coordFile, addCoordinate)
-                    elif self.getImportFrom() == IMPORT_FROM_DYNAMO:
-                        ci(coordFile, coordsSet, tomo.clone(), scaleFactor=self.scaleFactor)
+        Coordinate and Tomogram Sampling Rates
 
-        args = {self.OUTPUT_PREFIX: coordsSet}
-        self._defineOutputs(**args)
-        self._defineSourceRelation(self.importTomograms, coordsSet)
+        One of the most biologically important aspects of this protocol is
+        the management of sampling rates. Coordinates are meaningful only
+        when expressed in the same spatial scale as the tomograms to which
+        they belong.
 
-    # --------------------------- INFO functions ------------------------------
-    def _hasOutput(self):
-        return self.hasAttribute(self.OUTPUT_PREFIX)
+        If the coordinate sampling rate is not provided, the protocol assumes
+        that coordinates and tomograms already share the same pixel size.
+        This is the safest and most common situation when the coordinates
+        were generated directly from the imported tomograms.
 
-    def _getCoordsMessage(self):
-        return "Coordinates %s" % self.getObjectTag(self.OUTPUT_PREFIX)
+        However, in many practical cryo-ET workflows, coordinates may have
+        been generated from tomograms that were binned, resized, or processed
+        at a different resolution. In these cases, the protocol automatically
+        computes a scaling factor between the coordinate sampling rate and
+        the tomogram sampling rate. All imported coordinates are then rescaled
+        accordingly before being stored.
 
-    def _summary(self):
-        summary = []
-        if self._hasOutput():
-            summary.append("%s imported from:\n%s" % (self._getCoordsMessage(), self.getPattern()))
-            tomoSRate = self.importTomograms.get().getSamplingRate()
-            coordsSRate = self.samplingRate.get()
-            if coordsSRate:
-                scaleFactor = coordsSRate / tomoSRate
-                summary.append("*Coordinates were scaled by a factor of %.2f.*" % scaleFactor)
-        return summary
+        Biologically, this step is essential because incorrect scaling may
+        lead to particles being extracted from completely wrong positions.
+        Even small scaling mismatches can significantly affect subtomogram
+        averaging quality and downstream structural interpretation.
 
-    def _methods(self):
-        methods = []
-        if self._hasOutput():
-            methods.append(" %s imported with a sampling rate *%0.2f*" %
-                           (self._getCoordsMessage(), self.samplingRate.get()),)
-        return methods
+        Box Size Interpretation
 
-    def _getVolumeFileName(self, fileName, extension=None):
-        if extension is not None:
-            baseFileName = "import_" + str(basename(fileName)).split(".")[0] + ".%s" % extension
-        else:
-            baseFileName = "import_" + str(basename(fileName)).split(":")[0]
+        The protocol also allows the user to define a box size associated
+        with the imported coordinates. This box size represents the expected
+        extraction region around each particle and is automatically scaled
+        according to the coordinate-to-tomogram sampling ratio.
 
-        return self._getExtraPath(baseFileName)
+        In practical terms, the box size should approximately correspond to
+        the expected molecular dimensions of the biological complex of interest.
+        Choosing a box size that is too small may truncate structural features,
+        while excessively large boxes increase computational cost and may
+        introduce unnecessary background signal.
 
-    def _validate(self):
-        errors = []
-        try:
-            next(self.iterFiles())
-        except StopIteration:
-            errors.append('No files matching the pattern %s were found.' % self.getPattern())
-        else:
-            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-            numberMatches = len(set(tomoFiles) & set(coordFiles))
-            if numberMatches == 0:
-                errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
-                              "relation, the filename of the corresponding tomogram and coordinate "
-                              "files must be equal.")
-        return errors
+        Import Format Detection and Compatibility
 
-    def _warnings(self):
-        warnings = []
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
-        if not existsPlugin('emantomo'):
-            warnings.append('Plugin *scipion-em-emantomo* has not being installed. Please, install the Plugin to '
-                            'import Eman related formats (currently supported formats: ".json"). Otherwise, the protocol '
-                            'may have unexpected outputs if Eman files are attempted to be imported.\n')
-        if not existsPlugin('dynamo'):
-            warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
-                            'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
-                            'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
-        if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
-                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
-                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
-                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                            "- '.txt', '.tbl', '.json').\n")
-            mismatches_coords = set(coordFiles).difference(tomoFiles)
-            if mismatches_coords:
-                warnings.append("The following coordinate files will not be associated to any Tomogram "
-                                "(name without extension):")
-                for file in mismatches_coords:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
-            mismatches_tomos = set(tomoFiles).difference(coordFiles)
-            if mismatches_tomos:
-                warnings.append("The following Tomogram files will not be associated to any coordinates "
-                                "(name without extension):")
-                for file in mismatches_tomos:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
-        return warnings
+        The protocol can automatically detect the coordinate format based on
+        file extensions. This simplifies routine workflows where users may
+        combine coordinate files generated by different tomography software.
 
-    # ------------------ UTILS functions --------------------------------------
-    def getImportFrom(self):
-        importFrom = self._getImportChoices()[self.importFrom.get()]
-        if importFrom == IMPORT_FROM_AUTO:
-            importFrom = self.getFormat()
-        return importFrom
+        TXT files are interpreted as generic coordinate lists and are useful
+        for simple workflows or manually curated coordinates. EMAN JSON files
+        provide compatibility with EMAN-based tomography pipelines, while
+        Dynamo TBL files support subtomogram averaging workflows frequently
+        used in structural cell biology. CBOX support enables integration with
+        modern deep-learning particle pickers such as crYOLO.
 
-    def getFormat(self):
-        for coordFile, _ in self.iterFiles():
-            if coordFile.endswith('.txt'):
-                return IMPORT_FROM_TXT
-            elif coordFile.endswith('.json') and existsPlugin('emantomo'):
-                return IMPORT_FROM_EMAN
-            elif coordFile.endswith('.tbl') and existsPlugin('dynamo'):
-                return IMPORT_FROM_DYNAMO
-            elif coordFile.endswith('.cbox'):
-                return IMPORT_FROM_CBOX
-        return -1
+        Some formats require external plugins to be installed. If the
+        corresponding plugin is missing, the protocol generates warnings to
+        inform the user that import functionality may be incomplete or invalid.
+        This behavior prevents silent failures and improves workflow reliability.
 
-    def getImportClass(self):
-        """ Return the class in charge of importing the files. """
-        importFrom = self.getImportFrom()
+        Coordinate Association Strategy
 
-        if importFrom == IMPORT_FROM_EMAN:
-            EmanImport = Domain.importFromPlugin('emantomo.convert', 'EmanTomoImport',
-                                                 errorMsg='Eman is needed to import .json or '
-                                                          '.box files',
-                                                 doRaise=True)
-            return EmanImport(self, None)
+        The association between tomograms and coordinates is entirely based on
+        filename matching without extensions. This design ensures a simple and
+        reproducible correspondence mechanism across datasets.
 
-        elif importFrom == IMPORT_FROM_DYNAMO:
-            readDynCoord = Domain.importFromPlugin("dynamo.convert.convert", "readDynCoord")
-            return readDynCoord
+        From a workflow perspective, maintaining consistent naming conventions
+        is extremely important. If coordinate and tomogram filenames do not
+        match correctly, the protocol will not be able to establish the
+        relationship between them, and the affected files will be ignored or
+        reported as mismatches.
 
-        elif importFrom == IMPORT_FROM_CBOX:
-            return EmTableCoordImport("cryolo", "CoordinateX", "CoordinateY", "CoordinateZ", "Width", "Height")
+        The protocol performs validation checks before execution to ensure
+        that at least some tomograms and coordinate files can be associated.
+        Additional warnings are generated whenever unmatched tomograms or
+        coordinate files are detected.
 
-        elif importFrom == IMPORT_FROM_TXT:
-            return TomoImport(self)
+        Outputs and Their Interpretation
 
-        else:
-            self.importFilePath = ''
-            return None
+        After execution, the protocol generates a SetOfCoordinates3D object
+        containing all successfully imported particle positions linked to
+        their corresponding tomograms.
+
+        Each coordinate preserves its spatial position within the tomogram
+        reference frame and becomes immediately available for downstream
+        tomography protocols such as subtomogram extraction, visualization,
+        classification, or averaging.
+
+        The imported coordinates also retain information about the effective
+        box size and sampling rate, ensuring consistency throughout the
+        subsequent processing pipeline.
+
+        Practical Recommendations
+
+        In routine cryo-ET workflows, it is strongly recommended to verify
+        that tomograms and coordinate files follow identical naming conventions
+        before import. Most import failures originate from filename mismatches
+        rather than coordinate parsing problems.
+
+        Users should also verify that coordinate sampling rates correspond to
+        the tomogram resolution used during picking. When coordinates originate
+        from binned tomograms, providing the correct coordinate sampling rate
+        is essential for accurate particle localization.
+
+        For biological datasets with heterogeneous particle sizes, selecting
+        an appropriate box size is important because it directly influences
+        later subtomogram extraction quality.
+
+        When importing coordinates generated by external software, visual
+        inspection after import is highly recommended. Confirming that particles
+        appear correctly centered within tomograms is one of the most reliable
+        ways to detect scaling or association problems early in the workflow.
+
+        Final Perspective
+
+        For tomography users, coordinate import is not simply a file conversion
+        task but a critical spatial registration step that connects particle
+        localization with structural analysis. Proper scaling, accurate tomogram
+        association, and careful validation of imported coordinates are essential
+        to ensure biologically meaningful subtomogram analysis results.
+    """

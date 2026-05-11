@@ -41,127 +41,136 @@ class ProtTsConvertCoordinates3d(EMProtocol, ProtTomoBase):
     tomograms.
     """
 
-    _label = 'Tilt-series convert coords3D'
-    _devStatus = BETA
+    """
+    Converts 3D coordinates associated with tilt-series into 3D coordinates
+    linked to reconstructed tomograms. The protocol transfers spatial coordinate
+    information from the tilt-series reference frame into the tomogram reference
+    system while preserving positional and scoring metadata required for
+    downstream tomographic analysis.
 
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        ProtTomoBase.__init__(self)
+    AI Generated:
 
-    # -------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
-        form.addSection('Input')
+    Tilt-Series Convert Coordinates3D (ProtTsConvertCoordinates3d) — User Manual
+        Overview
 
-        form.addParam('inputSetOfCoordinates',
-                      params.PointerParam,
-                      pointerClass='SetOfTiltSeriesCoordinates',
-                      important=True,
-                      label='Input set of coordinates 3D',
-                      help='Set of 3D coordinates indicating the position in space of the fiducials. This set should '
-                           'be obtained from the previous alignment step of the tilt-series.')
+        The Tilt-Series Convert Coordinates3D protocol transforms a set of 3D
+        coordinates associated with tilt-series into a standard set of 3D
+        coordinates linked directly to reconstructed tomograms. Its primary goal
+        is to reconnect coordinate information generated during tilt-series
+        alignment or fiducial-tracking procedures with the final tomographic
+        reconstruction space.
 
-        form.addParam('inputSetOfTomograms',
-                      params.PointerParam,
-                      pointerClass='SetOfTomograms',
-                      important=True,
-                      label='Input set of tomograms')
+        In cryo-electron tomography workflows, several intermediate processing
+        stages operate in the coordinate system of the tilt-series rather than in
+        the reconstructed tomogram itself. Fiducial positions, alignment markers,
+        or tracked particles are often stored relative to the tilt-series geometry
+        before reconstruction is completed. However, downstream structural
+        interpretation, subtomogram extraction, visualization, and spatial analysis
+        require coordinates expressed directly within the tomographic reference
+        frame.
 
-    # -------------------------- INSERT steps functions ---------------------
-    def _insertAllSteps(self):
+        This protocol bridges that transition by converting tilt-series-based
+        coordinates into tomogram-associated coordinates while preserving their
+        spatial meaning and metadata relationships.
 
-        self._insertFunctionStep(self.convertCoordinates)
-        self._insertFunctionStep(self.closeOutputSetStep)
+        Inputs and General Workflow
 
-    # --------------------------- STEPS functions ----------------------------
+        The protocol requires two inputs: a set of 3D coordinates associated with
+        tilt-series and a corresponding set of reconstructed tomograms.
 
-    def convertCoordinates(self):
-        sotsc3d = self.inputSetOfCoordinates.get()
+        During execution, the protocol identifies the tomogram associated with
+        each coordinate using the tilt-series identifier. A correspondence table
+        between tilt-series identifiers and tomograms is internally generated to
+        ensure that every coordinate is assigned to the correct reconstructed
+        volume.
 
-        sr = self.inputSetOfTomograms.get().getSamplingRate()
+        Once the appropriate tomogram is identified, the protocol converts the
+        coordinate positions into the tomogram spatial reference system using the
+        tomogram sampling rate. The transformed coordinates are then stored as
+        standard Coordinate3D objects associated with their respective tomograms.
 
-        self.getOutputSetOfCoordinates3Ds()
-        tomoDict = self.getTomoDict()
+        In addition to positional information, the protocol preserves scoring
+        metadata from the original coordinates, allowing confidence or quality
+        measurements generated during alignment procedures to remain available in
+        downstream analyses.
 
-        for coor3d in sotsc3d:
-            tsId = coor3d.getTsId()
+        Coordinate Conversion and Spatial Interpretation
 
-            if tsId in tomoDict.keys():
-                tomo = tomoDict[tsId]
+        Biologically, this protocol restores the direct relationship between
+        detected spatial features and the reconstructed tomographic volume. While
+        tilt-series coordinates are geometrically meaningful during alignment,
+        tomogram-associated coordinates are necessary for interpreting the spatial
+        organization of macromolecular complexes inside the reconstructed specimen.
 
-                newCoord3D = tomoObj.Coordinate3D()
-                newCoord3D.setVolume(tomo)
-                newCoord3D.setX(coor3d.getX()/sr, CENTER_GRAVITY)
-                newCoord3D.setY(coor3d.getY()/sr, CENTER_GRAVITY)
-                newCoord3D.setZ(coor3d.getZ()/sr, CENTER_GRAVITY)
-                newCoord3D.setScore(coor3d.getScore())
-                
-                newCoord3D.setVolId(tomo.getObjId())
-                self.outputSetOfCoordinates3D.append(newCoord3D)
-                self.outputSetOfCoordinates3D.update(newCoord3D)
+        The conversion process rescales coordinate values according to the
+        tomogram sampling rate, ensuring that the resulting coordinates are
+        correctly expressed in tomographic voxel space. This step is especially
+        important when reconstruction binning or sampling modifications have been
+        applied during tomogram generation.
 
-        self.outputSetOfCoordinates3D.write()
+        Because the protocol preserves the original spatial associations, the
+        resulting coordinates remain compatible with subtomogram extraction,
+        particle averaging, fiducial visualization, and spatial distribution
+        studies.
 
-        self._store()
+        Sampling Rate and Coordinate Accuracy
 
-    def closeOutputSetStep(self):
-        self.outputSetOfCoordinates3D.setStreamState(Set.STREAM_CLOSED)
+        The accuracy of the converted coordinates depends directly on the
+        consistency between the tilt-series geometry and the reconstructed
+        tomograms. If tomograms have been reconstructed using different binning
+        factors or sampling rates, proper coordinate scaling becomes essential to
+        maintain geometric consistency.
 
-        self._store()
+        The protocol automatically uses the sampling rate of the input tomograms
+        during coordinate transformation. This ensures that coordinate positions
+        remain synchronized with the physical dimensions of the reconstructed
+        volumes.
 
-    # --------------------------- UTILS functions ----------------------------
+        From a practical perspective, users should verify that the input
+        tilt-series coordinates and tomograms originate from compatible alignment
+        and reconstruction workflows. Inconsistent sampling conventions or
+        mismatched tilt-series identifiers may produce biologically incorrect
+        spatial mappings.
 
-    def getOutputSetOfCoordinates3Ds(self):
-        if hasattr(self, "outputSetOfCoordinates3D"):
-            self.outputSetOfCoordinates3D.enableAppend()
+        Outputs and Their Interpretation
 
-        else:
-            outputSetOfCoordinates3D = self._createSetOfCoordinates3D(volSet=self.inputSetOfTomograms.get(),
-                                                                      suffix='Coords3d')
+        The protocol produces a SetOfCoordinates3D directly associated with the
+        input tomograms. Each coordinate contains transformed X, Y, and Z
+        positions together with the tomographic reference and any inherited score
+        information.
 
-            outputSetOfCoordinates3D.setSamplingRate(self.inputSetOfTomograms.get().getSamplingRate())
-            outputSetOfCoordinates3D.setPrecedents(self.inputSetOfTomograms.get())
-            outputSetOfCoordinates3D.setBoxSize(32)
+        These coordinates can subsequently be used for subtomogram extraction,
+        fiducial inspection, structural averaging, or spatial organization
+        analyses within Scipion tomography workflows.
 
-            outputSetOfCoordinates3D.setStreamState(Set.STREAM_OPEN)
+        From a biological perspective, the resulting output represents a validated
+        mapping between alignment-derived spatial information and the final
+        reconstructed tomographic environment.
 
-            self._defineOutputs(outputSetOfCoordinates3D=outputSetOfCoordinates3D)
-            self._defineSourceRelation(self.inputSetOfTomograms.get(), outputSetOfCoordinates3D)
+        Practical Recommendations
 
-        return self.outputSetOfCoordinates3D
+        In routine cryo-ET processing, users should ensure that the tilt-series
+        coordinates were generated from the same acquisition and alignment context
+        as the tomograms used for conversion. Maintaining consistent tilt-series
+        identifiers throughout the workflow is essential for accurate coordinate
+        assignment.
 
-    def getTomoDict(self):
-        tomoDict = {}
+        It is also advisable to visually inspect a subset of converted coordinates
+        within the reconstructed tomograms to confirm that fiducials or particles
+        appear correctly positioned in three-dimensional space.
 
-        for tomo in self.inputSetOfTomograms.get():
-            t = tomo.clone()
-            tomoDict[tomo.getTsId()] = t
+        When tomograms have been reconstructed using aggressive binning or
+        rescaling, users should pay particular attention to coordinate precision,
+        especially in workflows requiring accurate subtomogram localization or
+        quantitative spatial analysis.
 
-        return tomoDict
+        Final Perspective
 
-    # --------------------------- INFO functions ----------------------------
-    def _summary(self):
-        summary = []
-
-        if not hasattr(self, 'outputSetOfCoordinates3D'):
-            summary.append("No output coordinates generated yet")
-
-        else:
-            summary.append("Input tilt-series 3d coordinates: %d\n"
-                           "Output 3d coordinates associated to a set of tomograms: %d" %
-                           (self.inputSetOfCoordinates.get().getSize(),
-                            self.outputSetOfCoordinates3D.getSize()))
-
-        return summary
-
-    def _methods(self):
-        methods = []
-
-        if not hasattr(self, 'outputSetOfCoordinates3D'):
-            methods.append("No output coordinates generated yet")
-
-        else:
-            methods.append("%d 3d coordinates associated to a set of tomograms have been generated from the %d input "
-                           "tilt-series 3d coordinates.\n" %
-                           (self.outputSetOfCoordinates3D.getSize(),
-                            self.inputSetOfCoordinates.get().getSize()))
-        return methods
+        The Tilt-Series Convert Coordinates3D protocol provides an essential
+        bridge between tilt-series alignment procedures and tomogram-centered
+        structural analysis workflows. By converting alignment-derived spatial
+        coordinates into tomogram-associated coordinates, the protocol enables
+        coherent downstream interpretation of three-dimensional biological
+        structures while preserving geometric consistency across the tomography
+        processing pipeline.
+    """

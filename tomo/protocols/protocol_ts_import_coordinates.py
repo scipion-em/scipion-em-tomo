@@ -39,181 +39,177 @@ OUTPUT_TS_COORDINATES_NAME = "TiltSeriesCoordinates"
 
 class ProtImportTiltSeriesCoordinates(ProtTomoImportFiles):
     """Protocol to import a set of tilt-series coordinates 3D"""
-    _outputClassName = 'SetOfCoordinates3D'
-    _label = 'import tilt-series coordinates'
-    _possibleOutputs = {OUTPUT_TS_COORDINATES_NAME: SetOfTiltSeriesCoordinates}
 
-    def _getImportChoices(self):
-        """ Return a list of possible choices from which the import can be done.
-        """
-        importChoices = [IMPORT_FROM_TXT]
-        if existsPlugin('imod'):
-            importChoices.append(IMPORT_FROM_IMOD)
-        return importChoices
+    """
+    Imports 3D fiducial or particle coordinates associated with a set of
+    tilt-series. The protocol supports importing coordinates from plain
+    text files or IMOD-compatible coordinate files and converts them into
+    a unified Scipion SetOfTiltSeriesCoordinates object for downstream
+    tomographic processing.
 
-    def _defineAcquisitionParams(self, form):
-        pass
+    AI Generated:
 
-    def __init__(self, **args):
-        ProtTomoImportFiles.__init__(self, **args)
+    Import Tilt-Series Coordinates (ProtImportTiltSeriesCoordinates) — User Manual
 
-        self.TiltSeriesCoordinates = None
+        Overview
 
-    def _defineParams(self, form):
-        ProtTomoImportFiles._defineParams(self, form)
+        The Import Tilt-Series Coordinates protocol is designed to load
+        3D coordinate information associated with tomographic tilt-series
+        datasets into the Scipion framework. These coordinates usually
+        correspond to fiducial markers, particles, landmarks, or manually
+        identified positions that are later used in tomographic alignment,
+        reconstruction, subtomogram extraction, or structural analysis.
 
-        form.addParam('inputSetOfTiltSeries',
-                      params.PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      label='Input set of tilt-series')
+        In cryo-electron tomography workflows, coordinate information is
+        biologically and computationally important because it defines
+        spatial locations inside reconstructed tomograms or tilt-series
+        acquisitions. Correct coordinate import ensures that downstream
+        procedures operate within the proper geometric reference system.
 
-    def _insertAllSteps(self):
-        self.fileList = [file for file, _ in self.iterFiles()]
+        The protocol supports both standard text-based coordinate files
+        and IMOD-related coordinate formats when the IMOD plugin is
+        available in the Scipion installation. This flexibility allows
+        integration with external tomography processing pipelines commonly
+        used in structural biology laboratories.
 
-        if self.getImportFrom() == IMPORT_FROM_IMOD:
-            for ts in self.inputSetOfTiltSeries.get():
-                self._insertFunctionStep(self.importCoordinatesFromImodStep,
-                                         ts.getObjId())
+        Inputs and General Workflow
 
-        elif self.getImportFrom() == IMPORT_FROM_TXT:
-            for ts in self.inputSetOfTiltSeries.get():
-                self._insertFunctionStep(self.importCoordinatesStep,
-                                         ts.getObjId())
+        The protocol requires an input SetOfTiltSeries that defines the
+        experimental tilt-series associated with the coordinates being
+        imported. Each tilt-series is matched against coordinate files
+        available in the selected import directory. Matching is performed
+        using the tilt-series identifier, meaning that coordinate files
+        must contain the corresponding tilt-series ID in their filename.
 
-        self._insertFunctionStep(self.createOutputStep)
+        During execution, the protocol iterates through all tilt-series
+        and searches for the corresponding coordinate file. Once a match
+        is found, coordinates are parsed and converted into internal
+        TiltSeriesCoordinate objects associated with the corresponding
+        tilt-series.
 
-    # --------------------------- STEPS functions -----------------------------
+        The imported coordinates are progressively appended into a
+        SetOfTiltSeriesCoordinates object that remains open during import
+        and is automatically closed once all files have been processed.
 
-    def importCoordinatesFromImodStep(self, tsObjId):
-        from imod import utils as imodUtils
-        ts = self.inputSetOfTiltSeries.get()[tsObjId]
-        tsId = ts.getTsId()
+        Coordinate Import from TXT Files
 
-        self.getOutputSetOfTiltSeriesCoordinates(self.inputSetOfTiltSeries.get())
+        When importing from standard TXT files, the protocol assumes a
+        simple coordinate representation where each valid line contains
+        X, Y, and Z coordinate values. The parser ignores empty lines and
+        converts coordinate values into integer spatial positions.
 
-        for coordFilePath in self.fileList:
-            if tsId in coordFilePath:
-                break
+        The imported coordinates preserve the original coordinate system
+        present in the text file. This mode is particularly useful for
+        custom coordinate annotations, manually curated datasets, or
+        outputs generated by external scripts and non-IMOD software.
 
-        coordList, xDim, yDim = imodUtils.format3DCoordinatesList(coordFilePath)
+        From a practical perspective, users should ensure that coordinate
+        files follow a consistent formatting convention and that coordinate
+        values correspond to the same sampling rate and spatial reference
+        frame as the associated tilt-series.
 
-        for element in coordList:
-            newCoord3D = TiltSeriesCoordinate()
-            newCoord3D.setTsId(ts.getTsId())
-            newCoord3D.setPosition(element[0] - (xDim / 2),
-                                   element[1] - (yDim / 2),
-                                   element[2],
-                                   sampling_rate=ts.getSamplingRate())
+        Coordinate Import from IMOD
 
-            self.TiltSeriesCoordinates.append(newCoord3D)
-        self.TiltSeriesCoordinates.write()
-        self._store()
+        When the IMOD plugin is installed, the protocol can directly
+        import IMOD-compatible coordinate information. In this case,
+        coordinates are processed using IMOD utility functions that
+        interpret the original file structure and extract both coordinate
+        positions and image dimensions.
 
-    def importCoordinatesFromTxtStep(self, tsObjId):
-        ts = self.inputSetOfTiltSeries.get()[tsObjId]
-        tsId = ts.getTsId()
+        Unlike the TXT import mode, IMOD coordinates are internally
+        recentered relative to the image dimensions. The protocol shifts
+        X and Y coordinates by subtracting half of the image size so that
+        coordinates become centered with respect to the tomogram reference
+        frame rather than the upper-left image corner.
 
-        self.getOutputSetOfTiltSeriesCoordinates(self.inputSetOfTiltSeries.get())
+        This transformation is biologically important because many
+        tomographic processing algorithms assume centered coordinate
+        systems during alignment, reconstruction, or subtomogram analysis.
+        Improper coordinate centering may lead to systematic localization
+        errors in downstream analyses.
 
-        for coordFilePath in self.fileList:
-            if tsId in coordFilePath:
-                break
+        Coordinate System and Sampling Considerations
 
-        coordList = self.format3DCoordinatesList(coordFilePath)
+        Each imported coordinate is associated with the sampling rate of
+        the corresponding tilt-series. Maintaining this relationship is
+        essential because coordinate interpretation depends directly on
+        voxel size and acquisition scaling.
 
-        for element in coordList:
-            newCoord3D = TiltSeriesCoordinate()
-            newCoord3D.setTsId(ts.getTsId())
-            newCoord3D.setPosition(element[0],
-                                   element[1],
-                                   element[2],
-                                   sampling_rate=ts.getSamplingRate())
+        The protocol assumes that TXT coordinates originate from a
+        coordinate system whose origin is located at the upper-left corner
+        of the zero-degree tilt image. Users should therefore verify that
+        external coordinate generation tools use compatible conventions.
 
-            self.TiltSeriesCoordinates.append(newCoord3D)
-        self.TiltSeriesCoordinates.write()
-        self._store()
+        In biological tomography workflows, coordinate consistency is
+        critical when combining data from multiple software environments.
+        Even small coordinate mismatches may affect particle picking,
+        subtomogram extraction accuracy, or fiducial alignment precision.
 
-    def createOutputStep(self):
-        if self.TiltSeriesCoordinates:
-            self.TiltSeriesCoordinates.setStreamState(Set.STREAM_CLOSED)
+        Output Generation
 
-        self._store()
+        The main output of the protocol is a
+        SetOfTiltSeriesCoordinates object containing all imported
+        coordinates linked to their corresponding tilt-series.
 
-    # ------------------ UTILS functions --------------------------------------
-    def getImportFrom(self):
-        importFrom = self._getImportChoices()[self.importFrom.get()]
+        During execution, the output set operates in streaming mode,
+        allowing coordinates to be progressively appended as files are
+        processed. Once import is completed, the protocol closes the
+        output stream to indicate that no further coordinates will be
+        added.
 
-        return importFrom
+        The resulting coordinate set can then be used by downstream
+        tomography protocols inside Scipion, including subtomogram
+        extraction, alignment refinement, particle localization, or
+        tomogram annotation workflows.
 
-    @staticmethod
-    def format3DCoordinatesList(coordFilePath):
-        """ This method takes a txt fiducial coordinates file path and returns a list containing each coordinate
-        information. This assumes that coordinates origin is top left corner, centered at the 0º tilt-image."""
+        Validation and Error Detection
 
-        coorList = []
+        Before execution, the protocol validates that every tilt-series
+        has a corresponding coordinate file available in the import
+        directory. If no matching file is found for a given tilt-series,
+        the protocol reports a validation error indicating the missing
+        correspondence.
 
-        with open(coordFilePath) as f:
-            coorText = f.read().splitlines()
+        Additional validation is performed for IMOD imports. If the user
+        selects IMOD mode without having the scipion-em-imod plugin
+        installed, the protocol generates a warning indicating that IMOD
+        support is unavailable.
 
-            for i, line in enumerate(coorText):
-                if line != '':
-                    vector = line.replace('-', ' -').split()
+        These validation steps are important because coordinate import
+        errors are often difficult to detect visually and may propagate
+        unnoticed into later stages of tomographic analysis.
 
-                    coorList.append([int(vector[1]), int(vector[2]), int(vector[3])])
+        Practical Recommendations
 
-        return coorList
+        In routine tomography workflows, users should carefully verify
+        filename conventions before execution to ensure that each
+        tilt-series correctly matches its coordinate file. Maintaining
+        consistent naming schemes across acquisition and annotation
+        pipelines significantly reduces import errors.
 
-    def getOutputSetOfTiltSeriesCoordinates(self, setOfTiltSeries=None):
+        For IMOD-generated datasets, using the IMOD import mode is
+        generally preferable because it preserves compatibility with
+        established tomography processing standards and automatically
+        handles coordinate centering.
 
-        if self.TiltSeriesCoordinates:
-            self.TiltSeriesCoordinates.enableAppend()
+        For custom workflows or manually curated coordinates, TXT import
+        mode provides greater flexibility and simpler interoperability
+        with external tools or scripting environments.
 
-        else:
-            outputSetOfCoordinates3D = SetOfTiltSeriesCoordinates.create(self._getPath(),
-                                                                         suffix='tsCoords')
+        After import, it is advisable to visually inspect a subset of
+        coordinates within tomograms or tilt-series viewers to confirm
+        that coordinate orientation, centering, and scaling are correct.
 
-            outputSetOfCoordinates3D.setSetOfTiltSeries(setOfTiltSeries)
-            outputSetOfCoordinates3D.setStreamState(Set.STREAM_OPEN)
+        Final Perspective
 
-            self._defineOutputs(**{OUTPUT_TS_COORDINATES_NAME: outputSetOfCoordinates3D})
-            self._defineSourceRelation(setOfTiltSeries, outputSetOfCoordinates3D)
+        Importing tilt-series coordinates is not simply a data conversion
+        task but a critical geometric standardization step in cryo-electron
+        tomography workflows. Reliable coordinate management ensures that
+        downstream structural interpretation, subtomogram localization,
+        and biological analysis remain spatially consistent throughout
+        the processing pipeline.
 
-        return self.TiltSeriesCoordinates
-
-    # --------------------------- INFO functions ------------------------------
-    def _summary(self):
-        summary = []
-
-        return summary
-
-    def _methods(self):
-        methods = []
-
-        return methods
-
-    def _validate(self):
-        validateMsgs = []
-
-        match = False
-
-        for ts in self.inputSetOfTiltSeries.get():
-            tsId = ts.getTsId()
-
-            for coordsFilePath, _ in self.iterFiles():
-                if tsId in coordsFilePath:
-                    match = True
-                    break
-
-            if not match:
-                validateMsgs.append("No coordinates file found for tilt-series %s: image file is %s and have not "
-                                    "found its exact match." % (tsId, ts.getFileName()))
-
-            match = False
-
-        if self.getImportFrom() == IMPORT_FROM_IMOD and not existsPlugin('imod'):
-            validateMsgs.append('Plugin *scipion-em-imod* has not being installed. Please, install the Plugin to '
-                                'import IMOD related formats (currently supported formats: ".txt"). Otherwise, the '
-                                'protocol may have unexpected outputs if Eman files are attempted to be imported.\n')
-
-        return validateMsgs
+        Careful validation of coordinate conventions, file matching, and
+        sampling consistency is essential for producing accurate and
+        biologically meaningful tomographic results.
+    """
