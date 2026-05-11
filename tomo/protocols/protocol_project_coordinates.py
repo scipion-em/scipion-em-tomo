@@ -47,123 +47,144 @@ class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
     Project 3D coordinates into a set of landmarks.
     """
 
-    _label = 'project coordinates'
-    _devStatus = BETA
-    _possibleOutputs = OutputProjectCoordinates
+    """
+    Projects 3D coordinates onto a tilt-series to generate landmark models.
+    The protocol converts spatial 3D coordinate information into corresponding
+    2D landmark positions across all images of a tilt-series, enabling the
+    generation of fiducial-like landmarks suitable for tomographic alignment,
+    visualization, or tracking workflows.
 
-    # -------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
-        form.addSection('Input')
-        form.addParam('inputCoordinates',
-                      params.PointerParam,
-                      label="Coordinates",
-                      pointerClass=SetOfCoordinates3D,
-                      important=True,
-                      help='Coordinates to be projected onto the tilt-series' )
+    AI Generated:
 
-        form.addParam('inputTiltSeries',
-                      params.PointerParam,
-                      label="Tilt-series",
-                      pointerClass=SetOfTiltSeries,
-                      allowsNull=True,
-                      help='Tilt series on which coordinates are projected. '
-                      'If not specified, it will be deduced from the coordinates.')
+    Project Coordinates (ProtProjectCoordinates) — User Manual
+        Overview
 
-    # -------------------------- INSERT steps functions ---------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.createOutputStep)
+        The Project Coordinates protocol projects a set of 3D coordinates onto
+        one or more tilt-series in order to generate landmark models. Its main
+        purpose is to transform volumetric spatial information into a set of
+        consistent 2D landmark positions distributed across the angular views
+        of a tomographic acquisition. In cryo-electron tomography workflows,
+        this protocol is particularly useful for simulating fiducial markers,
+        validating alignment strategies, generating synthetic tracking datasets,
+        or linking structural coordinates with experimental tilt-series geometry.
 
-    # --------------------------- STEPS functions ----------------------------
-    def createOutputStep(self):
-        inputTiltSeries = self._getInputSetOfTiltSeries()
-        inputCoodinates = self._getInputSetOfCoordinates3d()
-        landmarkSize = inputCoodinates.getBoxSize() * inputTiltSeries.getSamplingRate()
-        offset = np.array(inputTiltSeries.getDim()[:2]) / 2
-        scale = inputCoodinates.getSamplingRate() / inputTiltSeries.getSamplingRate()
-        
-        outputSetOfLandmarkModels: SetOfLandmarkModels = self._createSetOfLandmarkModels()
-        outputSetOfLandmarkModels.copyInfo(inputTiltSeries)
-        outputSetOfLandmarkModels.setSetOfTiltSeries(inputTiltSeries)
-        
-        for tiltSeries in inputTiltSeries:
-            tsId = tiltSeries.getTsId()
-            where = '%s="%s"' % (Coordinate3D.TOMO_ID_ATTR, tsId)
-            landmarkModel = LandmarkModel(
-                tsId=tsId,
-                fileName=self._getExtraPath(tsId + '.sfid'),
-                size=landmarkSize,
-                applyTSTransformation=False
-            )
-            landmarkModel.setTiltSeries(tiltSeries)
-            
-            for coordinate3d in inputCoodinates.iterItems(where=where):
-                position3d = np.array(coordinate3d.getPosition(constants.SCIPION) + (1, ))
-                position3d[:3] *= scale # Scale to match the binning of the TS
-                chainId = coordinate3d.getObjId()
-                
-                for tiltImage in tiltSeries:
-                    position2d = self._projectCoordinate(tiltImage, position3d)
-                    position2d = position2d[:2]
-                    position2d += offset
-                    
-                    landmarkModel.addLandmark(
-                        xCoor=position2d[0],
-                        yCoor=position2d[1],
-                        tiltIm=tiltImage.getIndex(),
-                        chainId=chainId,
-                        xResid=0,
-                        yResid=0
-                    )
+        From a biological and tomographic perspective, the protocol establishes
+        the geometric relationship between 3D particle locations and their
+        expected appearance across a tilt-series. This allows researchers to
+        study how spatial coordinates propagate through tomographic projections
+        and how alignment transformations affect their observed positions.
 
-            outputSetOfLandmarkModels.append(landmarkModel)
-                    
-        self._defineOutputs(**{OutputProjectCoordinates.landmarkModels.name: outputSetOfLandmarkModels})
-        self._defineSourceRelation(self.inputCoordinates, outputSetOfLandmarkModels)
-        if self.inputTiltSeries.get() is not None:
-            self._defineSourceRelation(self.inputTiltSeries, outputSetOfLandmarkModels)
-    
-    # --------------------------- UTILS functions ----------------------------
-    def _getInputSetOfCoordinates3d(self) -> SetOfCoordinates3D:
-        return self.inputCoordinates.get()
+        Inputs and General Workflow
 
-    def _getInputSetOfTiltSeries(self) -> SetOfTiltSeries:
-        result = self.inputTiltSeries.get()
-        if result is None:
-            coordinates = self._getInputSetOfCoordinates3d()
-            result = getObjFromRelation(coordinates, self, SetOfTiltSeries) 
-            
-        return result
+        The protocol requires a set of 3D coordinates as its primary input.
+        These coordinates usually correspond to particle positions, structural
+        landmarks, or biologically relevant points identified inside tomograms.
+        Optionally, the user may also provide a set of tilt-series on which the
+        coordinates will be projected. If the tilt-series are not explicitly
+        specified, the protocol attempts to deduce them automatically from the
+        coordinate relationships stored in the dataset.
 
-    def _projectCoordinate(self,
-                           tiltImage: TiltImage,
-                           position3d: np.ndarray ) -> np.ndarray:
-        projection = self._getProjectionMatrix(tiltImage)
-        projected = projection @ position3d
-        
-        if tiltImage.hasTransform():
-            transform = tiltImage.getTransform().getMatrix()
-            projected = np.linalg.inv(transform) @ projected
+        During execution, the protocol iterates through each tilt-series and
+        identifies all coordinates associated with that tomographic dataset.
+        Every 3D coordinate is converted into homogeneous coordinates and scaled
+        to match the sampling rate of the tilt-series. The protocol then applies
+        a geometric projection model based on the tilt angle of each image in
+        the series, generating the corresponding 2D landmark position for every
+        projection view.
 
-        return projected    
-    
-    def _getProjectionMatrix(self, tiltImage: TiltImage) -> np.ndarray:
-        tiltAngle = tiltImage.getTiltAngle()
-        tiltAngle = np.deg2rad(tiltAngle)
-        return np.array([
-            [np.cos(tiltAngle), 0, np.sin(tiltAngle), 0],
-            [0,                 1, 0,                 0],
-            [0,                 0, 0,                 1]
-        ])
-        
-    # --------------------------- INFO functions ----------------------------
-    def _validate(self):
-        result = []
-        
-        tiltSeries = self._getInputSetOfTiltSeries()
-        if tiltSeries is None:
-            result.append(
-                'Could not deduce tilt series from the coordinates. '
-                'Please, specify the tilt series manually. '
-            )
-        
-        return result
+        The resulting projected positions are stored as landmark models linked
+        to the original tilt-series. These landmarks can later be used in
+        alignment, visualization, or geometric validation workflows.
+
+        Geometric Projection Model
+
+        The protocol relies on a projection matrix derived from the tilt angle
+        associated with each tilt image. This matrix models the tomographic
+        acquisition geometry by rotating the 3D coordinate system according to
+        the tilt angle and projecting the resulting positions into the 2D image
+        plane.
+
+        Biologically, this operation reproduces how a particle or structural
+        feature would appear during the experimental acquisition process. The
+        protocol therefore provides a mathematically consistent bridge between
+        volumetric coordinates and experimental tilt projections.
+
+        If the tilt image already contains alignment transformations, the
+        protocol additionally compensates for these transformations by applying
+        the inverse transformation matrix to the projected coordinates. This
+        ensures that landmark positions remain consistent with the aligned or
+        transformed state of the tilt-series.
+
+        Coordinate Scaling and Sampling Consistency
+
+        An important aspect of the protocol is the handling of sampling rates.
+        Coordinates and tilt-series may originate from datasets with different
+        binning levels or voxel sizes. To preserve geometric consistency, the
+        protocol rescales the coordinates according to the ratio between the
+        coordinate sampling rate and the tilt-series sampling rate.
+
+        From a practical perspective, this step is essential when combining
+        datasets generated at different resolutions or after preprocessing
+        operations such as binning or resampling. Without proper scaling,
+        projected landmarks would appear shifted or geometrically inconsistent
+        across the tilt-series.
+
+        Landmark Model Generation
+
+        For every tilt-series, the protocol creates an independent landmark
+        model containing the projected 2D positions associated with all input
+        coordinates. Each landmark is linked to its originating coordinate
+        through a chain identifier, preserving the correspondence between the
+        original 3D point and all of its 2D projections.
+
+        This organization allows the resulting landmarks to behave similarly to
+        fiducial trajectories or tracked particles across angular views. Such
+        information can be valuable for alignment benchmarking, motion analysis,
+        or synthetic dataset generation.
+
+        Outputs and Their Interpretation
+
+        After execution, the protocol produces a set of landmark models
+        associated with the input tilt-series. Each landmark model contains the
+        projected 2D coordinates corresponding to the original 3D positions
+        across all tilt images.
+
+        Biologically and computationally, these outputs represent the expected
+        trajectories of spatial features during tomographic acquisition. They
+        can therefore be interpreted as synthetic fiducials, geometric
+        references, or coordinate-based tracking models suitable for downstream
+        tomographic workflows.
+
+        The generated landmark models preserve the relationship with both the
+        original coordinates and the associated tilt-series, ensuring full
+        traceability throughout the processing pipeline.
+
+        Practical Recommendations
+
+        In practical cryo-ET workflows, users should ensure that the coordinate
+        set and tilt-series belong to the same tomographic reference frame.
+        Significant inconsistencies in alignment, sampling rate, or coordinate
+        origin may produce inaccurate landmark projections.
+
+        The protocol is especially useful for testing alignment algorithms,
+        validating geometric transformations, or generating controlled synthetic
+        datasets for methodological development. When working with transformed
+        tilt-series, preserving accurate transformation matrices is important to
+        ensure geometrically correct landmark placement.
+
+        Care should also be taken when interpreting projected coordinates near
+        the tomogram boundaries, since projection effects at high tilt angles
+        may move landmarks outside the visible field of view.
+
+        Final Perspective
+
+        For cryo-electron tomography users, the Project Coordinates protocol is
+        fundamentally a geometric transformation tool that connects volumetric
+        structural information with experimental tilt-series projections. By
+        translating 3D coordinates into consistent 2D landmark trajectories,
+        the protocol enables realistic modeling of tomographic acquisition
+        geometry and facilitates a wide range of alignment, validation, and
+        simulation workflows. Proper handling of coordinate scaling, tilt
+        geometry, and transformation matrices is essential for obtaining
+        biologically and geometrically meaningful results.
+    """

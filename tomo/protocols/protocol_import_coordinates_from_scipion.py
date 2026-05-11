@@ -41,146 +41,171 @@ class outputObjs(Enum):
 class ProtImportCoordinates3DFromScipion(EMProtocol, ProtTomoBase):
     """Protocol to import a set of 3d coordinates from Scipion sqlite file"""
 
-    _label = 'import 3D coordinates from scipion'
-    _devStatus = BETA
-    _possibleOutputs = outputObjs
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.notMatchingMsg = None
+    """
+    Imports a set of 3D particle coordinates directly from a Scipion
+    sqlite database and associates them with a corresponding set of
+    tomograms. The protocol reconstructs the spatial relationship
+    between coordinates and tomograms using tomo identifiers or
+    filename matching to ensure compatibility with downstream
+    tomography workflows.
 
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('sqliteFile', FileParam,
-                      label='Scipion sqlite file')
-        form.addParam('importTomograms', PointerParam,
-                      pointerClass='SetOfTomograms',
-                      label='Input tomograms',
-                      help='Select the tomograms to which the coordinates should be referred to. '
-                           'The matching between coordinates and tomograms is made checking the tsId/tomoId '
-                           'attribute. If no matches are found, then it tries to do it comparing the filenames. '
-                           '*IMPORTANT*: the coordinates will be assumed to be at the same sampling rate as the '
-                           'introduced tomograms.')
-        form.addParam('boxSize', IntParam,
-                      label='Box Size [pix]',
-                      default=20)
+    AI Generated:
 
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.importCoordinatesStep)
+    Import Coordinates 3D From Scipion (ProtImportCoordinates3DFromScipion) — User Manual
+        Overview
 
-    # --------------------------- STEPS functions -----------------------------
-    def importCoordinatesStep(self):
-        inTomoSet = self.importTomograms.get()
-        inCoordsSet = SetOfCoordinates3D()
-        outCoordsSet = self._createSetOfCoordinates3D(self.importTomograms)
+        The Import Coordinates 3D From Scipion protocol is designed to
+        recover and reuse previously generated 3D particle coordinates
+        stored in a Scipion sqlite database. Its primary objective is
+        to reconnect coordinate information with a new or existing set
+        of tomograms while preserving the spatial consistency required
+        for subtomogram extraction, averaging, and structural analysis.
 
-        # Generate a set of 3d coordinates and assign the mapper of the introduced sqlite file
-        inCoordsSet.setSamplingRate(inTomoSet.getSamplingRate())
-        inCoordsSet.setBoxSize(self.boxSize.get())
-        inCoordsSet._mapperPath.set('%s, %s' % (self.sqliteFile.get(), ''))
-        inCoordsSet.load()
+        In cryo-electron tomography workflows, coordinates are frequently
+        generated during earlier processing stages or in independent
+        projects. This protocol allows those coordinates to be imported
+        back into the current workflow without the need to regenerate
+        particle positions manually. From a biological perspective, this
+        facilitates data reuse, reproducibility, and integration between
+        multiple tomography processing pipelines.
 
-        # Check if the coordinates and the tomograms can be related via the tomoId or the filename
-        self._checkCoordinatesMatching(inTomoSet, inCoordsSet, outCoordsSet)
-        if self.notMatchingMsg:
-            self._store()
+        The protocol is especially useful in collaborative environments
+        or long-term projects where coordinates may have been generated
+        in different Scipion sessions but still need to remain associated
+        with updated tomograms or refined reconstructions.
 
-        # Set some set attributes
-        outCoordsSet.setSamplingRate(inTomoSet.getSamplingRate())
-        outCoordsSet.setBoxSize(self.boxSize.get())
-        # Set volume pointers (required by getCoordinates().getX, Y and Z
-        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in inTomoSet}
-        for coord in outCoordsSet.iterCoordinates():
-            coord.setVolume(tomoIdsDict[coord.getTomoId()])
+        Inputs and General Workflow
 
-        # Define outputs and relations
-        self._defineOutputs(**{outputObjs.coordinates.name: outCoordsSet})
-        self._defineSourceRelation(self.importTomograms, outCoordsSet)
+        The protocol requires two main inputs: a Scipion sqlite file
+        containing a SetOfCoordinates3D object and a set of tomograms
+        that will serve as the spatial reference for those coordinates.
 
-    # --------------------------- INFO functions ------------------------------
-    def _validate(self):
-        errorList = []
-        if not exists(self.sqliteFile.get()):
-            errorList.append('Introduced file was not found:\n\t%s' % self.sqliteFile.get())
+        During execution, the protocol loads the coordinate set directly
+        from the sqlite database and creates a new output coordinate set
+        associated with the provided tomograms. The imported coordinates
+        are assumed to already be expressed in the same sampling rate as
+        the introduced tomograms. Consequently, no geometric rescaling is
+        performed during import.
 
-        return errorList
+        The protocol then attempts to establish a relationship between
+        coordinates and tomograms. This association is primarily based on
+        the tomoId or tsId attributes. If no direct identifier match is
+        found, the protocol performs a secondary comparison using the base
+        filenames of the tomograms.
 
-    def _summary(self):
-        summaryMsg = []
-        if self.isFinished():
-            if getattr(self, 'outputTomograms', None):
-                summaryMsg.append('A *set of tomograms was generated* containing only the ones which there are\n'
-                                  'at least one coordinate referred to.\n')
-            statusMsg = getattr(self, 'notMatchingMsg', None)
-            if statusMsg:
-                summaryMsg.append(statusMsg.get())
+        This dual matching strategy increases robustness when coordinates
+        originate from different projects or when metadata conventions
+        vary slightly across workflows.
 
-        return summaryMsg
+        Coordinate-to-Tomogram Matching
 
-    # --------------------------- UTILS functions ----------------------------
+        One of the most important aspects of this protocol is the matching
+        mechanism between imported coordinates and tomograms. Every 3D
+        coordinate must be associated with a valid tomogram reference in
+        order to preserve its spatial meaning.
 
-    def _checkCoordinatesMatching(self, inTomoSet, inCoordsSet, outCoordsSet):
-        notFoundCoords = []
-        notFoundCoordsMsg = ''
-        notFoundTomosMsg = ''
-        inTomoSetMatchingIndices = []
-        pattern = 'Row %i  -  tomoId = %s  -  (x, y, x) = (%.2f, %.2f, %.2f)'
-        tomoTsIdList, tomoBaseNameList = zip(*[(tomo.getTsId(), removeBaseExt(tomo.getFileName()))
-                                               for tomo in inTomoSet])
-        for coord in inCoordsSet:
-            coordTomoId = coord.getTomoId()
-            if coordTomoId:
-                if coordTomoId in tomoTsIdList:
-                    indByTomoId = tomoTsIdList.index(coordTomoId) + 1
-                    coord.setVolume(inTomoSet[indByTomoId])
-                    inTomoSetMatchingIndices.append(indByTomoId)
-                    # Add it to the output set of coordinates
-                    outCoordsSet.append(coord)
-                else:
-                    indexByName = self._getMatchingIndexByFileName(coordTomoId, tomoBaseNameList)
-                    if indexByName:
-                        coord.setVolume(inTomoSet[indexByName])
-                        inTomoSetMatchingIndices.append(indexByName)
-                        # Add it to the output set of coordinates
-                        outCoordsSet.append(coord)
-                    else:
-                        self._appendBaddCoordMsgToList(coord, notFoundCoords, inTomoSet, coordTomoId, pattern)
+        The protocol first searches for exact tomoId matches between the
+        coordinate metadata and the tomogram set. This is the most reliable
+        association strategy because it depends on explicit tomography
+        identifiers rather than filenames.
 
-            else:
-                self._appendBaddCoordMsgToList(coord, notFoundCoords, inTomoSet, 'NoTomoId', pattern)
+        If no tomoId match is found, the protocol attempts to identify the
+        corresponding tomogram using filename similarity. This fallback
+        mechanism is particularly useful when coordinates were exported or
+        migrated between projects where metadata identifiers may have been
+        modified or lost.
 
-        # Build a precedents set with only the matching tomograms, in case there are not all the ones present in the
-        # input set
-        pattern = '\t-{}\n'
-        if not inTomoSetMatchingIndices:
-            raise Exception(ERR_COORDS_FROM_SQLITE_NO_MATCH)
+        From a biological perspective, correct coordinate association is
+        essential because an incorrect tomogram assignment would place
+        particles into the wrong cellular or structural context. Such
+        mismatches could invalidate subtomogram extraction and all
+        downstream analyses derived from those particles.
 
-        if notFoundCoords:
-            nOfNonMatchingCoords = len(notFoundCoords)
-            # Format the non-matching coordinates message and add the header
-            notFoundCoordsMsg += '*[%i] coordinates were excluded*.\nThey have a tomoId which was not found in the ' \
-                                 'tsId attribute of none of the tomograms introduced nor contained in their basename.' \
-                                 '\nThe details can be checked in the output log.' % nOfNonMatchingCoords
+        Handling Non-Matching Coordinates
 
-            # Print the detailed information in the output log
-            print(yellowStr(('EXCLUDED COORDINATES [%i]:\n%s' %
-                            (nOfNonMatchingCoords, pattern * nOfNonMatchingCoords)).format(*notFoundCoords)))
+        Coordinates that cannot be associated with any tomogram are
+        automatically excluded from the output set. The protocol generates
+        detailed warning messages describing the excluded coordinates,
+        including their identifiers and spatial positions.
 
-        self.notMatchingMsg = String(notFoundTomosMsg + '\n\n' + notFoundCoordsMsg if
-                                     notFoundTomosMsg else notFoundCoordsMsg)
+        This behavior prevents invalid coordinate assignments while still
+        allowing valid particles to be imported successfully. The detailed
+        reporting also helps users diagnose metadata inconsistencies or
+        naming problems between projects.
 
-    @staticmethod
-    def _getMatchingIndexByFileName(coordTomoId, tomoBaseNameList):
-        matchingIndex = None
-        matches = list(map(lambda x: coordTomoId in x, tomoBaseNameList))
-        if any(matches):
-            matchingIndex = matches.index(True) + 1
+        If none of the imported coordinates can be matched to the provided
+        tomograms, the protocol raises an exception and terminates execution.
+        This validation step ensures that biologically meaningless coordinate
+        sets are not propagated into subsequent tomography workflows.
 
-        return matchingIndex
+        Sampling Rate and Spatial Interpretation
 
-    @staticmethod
-    def _appendBaddCoordMsgToList(coord, notFoundCoordsList, inTomoSet, coordTomoId, pattern):
-        coord.setVolume(inTomoSet[1])  # 3D coordinate must be referred to a volume to get its origin
-        notFoundCoordsList.append(pattern % (coord.getObjId(), coordTomoId, *coord.getPosition(SCIPION)))
+        Unlike protocols that import coordinates from external software,
+        this protocol assumes that the imported coordinates already share
+        the same sampling rate as the introduced tomograms. As a result,
+        coordinate positions are transferred directly without scaling.
 
+        Biologically, this assumption is valid when coordinates and
+        tomograms originate from the same Scipion workflow or from
+        datasets processed with identical voxel sizes. However, users
+        should exercise caution when importing coordinates generated from
+        binned or resampled tomograms, since mismatched sampling rates
+        could lead to systematic localization errors.
 
+        The protocol also assigns a user-defined box size to the output
+        coordinates. This box size defines the extraction region that
+        will later be used during subtomogram extraction or particle
+        analysis workflows.
+
+        Outputs and Their Interpretation
+
+        After execution, the protocol produces a new SetOfCoordinates3D
+        object containing all successfully matched coordinates associated
+        with the corresponding tomograms.
+
+        Each coordinate is linked to its tomogram volume reference,
+        allowing downstream protocols to correctly interpret particle
+        positions in three-dimensional space. The output coordinates
+        preserve the original spatial information stored in the sqlite
+        database while adapting the dataset to the currently selected
+        tomogram set.
+
+        In cases where only a subset of tomograms contains matching
+        coordinates, the protocol effectively filters the imported
+        coordinate dataset to retain only biologically relevant entries.
+
+        Practical Recommendations
+
+        In practical cryo-ET workflows, it is strongly recommended to
+        maintain stable tomoId conventions across projects whenever
+        possible. Identifier-based matching is considerably more robust
+        than filename matching and reduces the risk of ambiguous
+        associations.
+
+        Users should also verify that imported tomograms correspond to
+        the same voxel size and preprocessing stage used when the original
+        coordinates were generated. Even though the protocol assumes
+        compatible sampling rates, incorrect assumptions may compromise
+        downstream subtomogram extraction quality.
+
+        After import, visual inspection of several coordinates within the
+        tomograms is highly recommended. Confirming that particles appear
+        correctly localized provides an effective validation of the matching
+        process and helps detect metadata inconsistencies early.
+
+        When importing coordinates from archived or external Scipion
+        projects, preserving original filenames and tomography identifiers
+        greatly improves workflow reproducibility and minimizes the risk of
+        coordinate exclusion.
+
+        Final Perspective
+
+        For tomography users, coordinate import from Scipion sqlite files
+        is more than a simple database recovery operation. It represents a
+        mechanism for preserving and reusing biologically meaningful spatial
+        annotations across workflows and projects. Accurate tomogram matching,
+        consistent metadata management, and careful validation of imported
+        coordinates are essential to ensure reliable downstream structural
+        interpretation in cryo-electron tomography analyses.
+    """

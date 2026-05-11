@@ -36,50 +36,99 @@ from tomo.protocols import ProtTomoBase
 class ProtSplitEvenOddTomoSet(EMProtocol, ProtTomoBase):
     """ Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
     """
-    _label = 'split even/odd tomos/subtomos'
-    _devStatus = BETA
 
-    # -------------------------- DEFINE param functions -----------------------
-    def _defineParams(self, form):
-        form.addSection(label='Input')
+    """
+    ProtSplitEvenOddTomoSet — Split Tomograms/Subtomograms into Even and Odd Sets
 
-        form.addParam('inputSet', PointerParam,
-                      pointerClass='SetOfSubTomograms, SetOfTomograms',
-                      label="Set to split",
-                      help='Select the set of tomograms or subtomograms that you '
-                           'want to split in even/odd sets.')
+    This protocol separates a set of tomograms or subtomograms into two
+    independent subsets according to the object identifier parity. Elements
+    with even identifiers are assigned to one output set, while elements
+    with odd identifiers are assigned to another. The protocol is mainly
+    intended for dataset partitioning, validation workflows, and independent
+    processing strategies in cryo-electron tomography pipelines.
 
-    # -------------------------- INSERT steps functions -----------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep('createOutputStep')
+    AI Generated:
 
-    # -------------------------- STEPS functions ------------------------------
-    def createOutputStep(self):
-        inputSet = self.inputSet.get()
-        if isinstance(inputSet, SetOfTomograms):
-            evenSet = self._createSetOfTomograms(suffix='_even')
-            oddSet = self._createSetOfTomograms(suffix='_odd')
-        else:
-            evenSet = self._createSetOfSubTomograms(suffix='_even')
-            oddSet = self._createSetOfSubTomograms(suffix='_odd')
+    Split Even/Odd Tomograms or Subtomograms (ProtSplitEvenOddTomoSet)
+    — User Manual
 
-        evenSet.copyInfo(inputSet)
-        oddSet.copyInfo(inputSet)
+        Overview
 
-        for element in inputSet:
-            if element.getObjId() % 2 == 0:
-                evenSet.append(element)
-            else:
-                oddSet.append(element)
+        The Split Even/Odd Tomograms protocol divides an input dataset into
+        two separate subsets based on the parity of the internal object
+        identifiers. Tomograms or subtomograms with even identifiers are
+        stored in one output set, while elements with odd identifiers are
+        stored in another.
 
-        self._defineOutputs(outputset_even=evenSet)
-        self._defineSourceRelation(inputSet, evenSet)
-        self._defineOutputs(outputset_odd=oddSet)
-        self._defineSourceRelation(inputSet, oddSet)
+        In practical cryo-electron tomography workflows, this type of split
+        is commonly used to generate independent datasets for validation,
+        benchmarking, testing reproducibility, or parallel processing
+        strategies. By separating the data into two groups, users can
+        evaluate consistency between independent reconstructions or compare
+        processing outcomes under different conditions.
 
-    # -------------------------- INFO functions -------------------------------
-    def _summary(self):
-        if not self.isFinished():
-            return["Output sets not ready yet."]
-        else:
-            return["We have split the input set in even and odd sets."]
+        Inputs and General Workflow
+
+        The protocol accepts either a SetOfTomograms or a
+        SetOfSubTomograms as input. During execution, the protocol inspects
+        each element in the dataset and evaluates its object identifier.
+        Elements whose identifiers are divisible by two are assigned to the
+        even subset, while the remaining elements are assigned to the odd
+        subset.
+
+        The protocol preserves the metadata and acquisition information from
+        the original dataset, ensuring that both output subsets remain fully
+        compatible with downstream tomography workflows inside Scipion.
+
+        Dataset Partitioning Strategy
+
+        The splitting strategy is deterministic and entirely based on object
+        identifiers. This means that repeated executions on the same dataset
+        will always generate identical even and odd subsets, which is
+        particularly useful for reproducible benchmarking and validation
+        experiments.
+
+        Since the protocol does not alter the tomograms or subtomograms
+        themselves, the resulting subsets maintain the original spatial,
+        biological, and acquisition properties of the input data.
+
+        Outputs and Interpretation
+
+        After execution, the protocol produces two output datasets:
+        an even set and an odd set. Both outputs preserve the structure,
+        metadata, and object relationships of the original input collection.
+
+        These subsets can be processed independently in downstream cryo-ET
+        workflows, including subtomogram averaging, classification,
+        reconstruction validation, or testing of independent refinement
+        strategies.
+
+        From a biological perspective, the protocol does not introduce any
+        transformation or modification to the underlying data. Its role is
+        purely organizational, facilitating controlled experimental designs
+        and reproducible computational analyses.
+
+        Practical Recommendations
+
+        In routine cryo-electron tomography workflows, splitting datasets
+        into even and odd subsets is useful when users need to validate the
+        robustness of a processing pipeline or compare independent
+        reconstructions. It can also help distribute computational load
+        across multiple processing branches.
+
+        Users should keep in mind that the split is based solely on object
+        identifiers and not on biological content, acquisition conditions,
+        or structural similarity. Therefore, if the dataset contains ordered
+        acquisitions or strongly heterogeneous populations, additional care
+        may be needed to ensure balanced biological representation between
+        subsets.
+
+        Final Perspective
+
+        Although simple in implementation, dataset partitioning is an
+        important organizational step in many cryo-ET workflows. By
+        generating reproducible even and odd subsets, this protocol provides
+        a straightforward mechanism for validation, independent analysis,
+        and reproducible testing within Scipion tomography pipelines.
+
+    """

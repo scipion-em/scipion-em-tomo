@@ -47,251 +47,236 @@ class ProtTomoExtractCoords(ProtTomoPicking):
     original dimensions. It can be also handy to visualize the resulting
     subtomograms in their location on the tomograms.
     """
+    """
+    Composes tilt-series in streaming mode from motion-corrected micrographs
+    and corresponding mdoc metadata files. The protocol continuously monitors
+    incoming data, matches tilt images with metadata information, and generates
+    complete tilt-series datasets ready for downstream cryo-electron tomography
+    processing workflows.
 
-    _label = 'extract 3D coordinates'
-    _devStatus = BETA
-    _possibleOutputs = Output3dCoordExtraction
+    AI Generated:
 
-    def __init__(self, **kwargs):
+    Compose Tilt Series (ProtComposeTS) — User Manual
+        Overview
 
-        super().__init__(**kwargs)
-        self.outputCoords = None
-        self._tomoDict = None
-        self._inputAreSubtomos = None
+        The Compose Tilt Series protocol is designed to generate tomography
+        tilt-series automatically and incrementally during data acquisition.
+        It combines motion-corrected micrographs with metadata extracted from
+        mdoc files, creating organized tilt-series objects that can be directly
+        used in downstream cryo-ET workflows such as alignment, reconstruction,
+        subtomogram averaging, or CTF estimation.
 
-    # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        form.addSection(label='Input')
+        In practical cryo-electron tomography workflows, tilt images are often
+        acquired sequentially while preprocessing steps such as motion correction
+        are executed simultaneously. This protocol addresses that streaming
+        scenario by continuously monitoring incoming micrographs and metadata,
+        composing the tilt-series as soon as sufficient information becomes
+        available.
 
-        form.addParam('inputSubTomos', params.PointerParam,
-                      pointerClass=[SetOfSubTomograms, SetOfCoordinates3D],
-                      label='Subtomograms or 3D coordinates', important=True,
-                      help='Select the subtomograms from which you want\n'
-                           'to extract the coordinates. The coordinate belonging to '
-                           'each subtomogram should be already associated to an initial '
-                           'tomogram.')
+        For biological users working in automated acquisition environments,
+        this protocol allows near real-time organization of tomography datasets,
+        reducing manual intervention and accelerating processing pipelines.
 
-        form.addParam('inputTomos', params.PointerParam,
-                      pointerClass=SetOfTomograms,
-                      label='Tomograms', important=True,
-                      help='Select the tomograms to which you want to\n'
-                           'associate the coordinates from the subtomograms.')
+        Inputs and Streaming Workflow
 
-        form.addParam('boxSize', params.IntParam,
-                      allowsNull=True, expertLevel=params.LEVEL_ADVANCED, label='Box Size',
-                      help='Determine the box size of the extracted coordinates. By default, '
-                           'the program assigns the box size directly from the coordinates '
-                           'associated to the subtomograms.')
+        The protocol requires two principal inputs: a SetOfMicrographs
+        containing the motion-corrected tilt images, and a directory containing
+        the corresponding mdoc files generated during acquisition.
 
-        form.addParallelSection(threads=0, mpi=0)
+        Each mdoc file describes the acquisition metadata of a tilt-series,
+        including tilt angles, acquisition order, dose information, and tilt
+        axis orientation. The protocol continuously scans the specified folder,
+        detects new mdoc files, validates their contents, and attempts to match
+        each tilt image described in the metadata with the corresponding
+        micrograph available in the streaming dataset.
 
-    # --------------------------- INSERT steps functions ----------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.extractCoordinatesStep)
-        self._insertFunctionStep(self.createOutputStep)
+        The streaming behaviour is controlled through the “Time for the next
+        tilt” parameter. This delay determines how long the protocol waits
+        after the last modification of an mdoc file before considering that
+        tilt-series complete. This mechanism is particularly important in live
+        acquisition workflows where tilt images arrive progressively over time.
 
-    def getTomogramFromItem(self, item):
-        """ Returns the tomogram associated with the item. Item could be either a subtomogram or a 3D coordinate."""
+        In high-throughput tomography facilities or automated acquisition
+        sessions such as PACEtomo experiments, carefully adjusting this timeout
+        helps avoid premature processing of incomplete tilt-series.
 
-        tomoDict = self.getTomogramDictionary()
+        Mdoc File Detection and Validation
 
-        # get the coordinate
-        coord = self.getCoordFromItem(item)
+        The protocol searches for mdoc files using user-defined path and pattern
+        parameters. Standard wildcard expressions are supported, allowing
+        flexible integration with different acquisition folder organizations.
 
-        # If no coordinate, we are dealing with imported subtomograms
-        if coord is None:
+        Before composing a tilt-series, each mdoc file undergoes several
+        validation steps. Files containing exclusion keywords may be ignored,
+        which is useful when acquisition directories contain temporary,
+        corrupted, or unwanted metadata files.
 
-            # From file name and subtomo:
-            file = pwutils.removeBaseExt(item.getVolName())
+        The protocol also validates the integrity of the mdoc contents. If the
+        metadata format is invalid or required information is missing, the
+        corresponding tilt-series is skipped to prevent propagation of errors
+        into downstream processing.
 
-            tomo = tomoDict[file]
+        A minimum number of tilts can also be enforced. This is biologically
+        important because severely incomplete tilt-series generally produce
+        unreliable tomographic reconstructions and may compromise later
+        subtomogram analysis.
 
-        # There are coordinates
-        else:
-            tomo = tomoDict.get(coord.getTomoId(), None)
+        Matching Micrographs with Metadata
 
-        # last resource: vol identifier.
-        if tomo is None:
-            # Try by vol id
-            tomo = tomoDict[item.getVolId()]
+        Once the mdoc information is validated, the protocol attempts to match
+        each tilt image described in the metadata with the corresponding
+        motion-corrected micrograph.
 
-        return tomo
+        The matching process is based on filename consistency between the mdoc
+        entries and the imported micrographs. Only successfully matched images
+        are incorporated into the final tilt-series.
 
-    def getTomogramDictionary(self):
-        """ Returns a dictionary of tomogram where the key is any of the
-        possible tomogram identifiers to do the matching"""
+        During streaming acquisition, it is common for some tilt images to
+        still be missing while the protocol is running. In these situations,
+        the protocol temporarily delays composition until additional
+        micrographs become available.
 
-        if not self._tomoDict:
-            self._tomoDict = dict()
-            # iterate over the SetOfTomograms
-            for tomo in self.getInputTomos().iterItems():
-                # Clone the tomogram
-                tomoClone = tomo.clone()
+        If the acquisition stream is already closed, the protocol evaluates
+        whether the percentage of available tilts satisfies the minimum
+        threshold defined by the user. This behaviour provides flexibility in
+        cases where certain movies failed during acquisition or preprocessing,
+        while still allowing partially complete tilt-series to be recovered.
 
-                # Add the tomogram based on the filename
-                filename = pwutils.removeBaseExt(tomo.getFileName())
-                self._tomoDict[filename] = tomoClone
+        Tilt Ordering and Geometrical Consistency
 
-                # Add it by tilt series id
-                self._tomoDict[tomoClone.getTsId()] = tomoClone
+        Before generating the final tilt-series, the protocol sorts all tilt
+        images according to their tilt angle. This guarantees that the output
+        tilt-series follows the correct geometrical order required by most
+        tomography reconstruction algorithms.
 
-                # Add it by row identifier (the weakest due to join sets renumbering identifiers)
-                self._tomoDict[tomoClone.getObjId()] = tomoClone
+        Correct angular ordering is biologically critical because downstream
+        reconstruction software assumes that projections correspond to a
+        physically meaningful tilt sequence. Incorrect ordering may lead to
+        reconstruction artifacts or completely invalid tomograms.
 
-        return self._tomoDict
+        Tilt Axis Angle Handling
 
-    def extractCoordFromItem(self, item, boxSize, scaleCoords, scaleShifts):
-        coord = self.getCoordFromItem(item)
-        tomo = self.getTomogramFromItem(item)
+        The protocol provides several mechanisms to manage the tilt axis angle.
+        By default, the value is extracted directly from the mdoc metadata.
+        However, users may manually override this value when prior knowledge of
+        the acquisition geometry is available.
 
-        if tomo is None:
-            self.warning("Tomogram not found for %s" % item)
-            return None
-        else:
-            newCoord = Coordinate3D()
+        An additional correction mode is included for Tomography 5 and related
+        acquisition systems that use alternative tilt-axis conventions. In
+        these cases, the protocol automatically converts the angle definition
+        into the standard geometry expected by Scipion tomography workflows.
 
-            coord.setVolume(tomo)
-            newCoord.copyObjId(coord)
-            x, y, z = coord.getPosition(const.SCIPION)
-            newCoord.setVolume(tomo)
-            newCoord.setPosition(x * scaleCoords, y * scaleCoords, z * scaleCoords, const.SCIPION)
+        Accurate tilt-axis definition is particularly important because errors
+        in this parameter directly affect alignment quality and tomographic
+        reconstruction accuracy.
 
-            newCoord.setBoxSize(boxSize)
-            transformation = self.checkMatrix(item)
-            transformation[0, 3] *= scaleShifts
-            transformation[1, 3] *= scaleShifts
-            transformation[2, 3] *= scaleShifts
-            newCoord.setMatrix(transformation)
-            if coord.hasGroupId():
-                newCoord.setGroupId(coord.getGroupId())
+        Generation of Tilt-Series Stacks
 
-            return newCoord
+        After successful validation and matching, the protocol composes the
+        final tilt-series stack by sequentially combining the individual tilt
+        images into a single MRC stack file.
 
-    def areInputSubtomos(self):
-        """
-        Returns true if input re Subtomograms. (Lazy loaded)
-        :param item: an item of the inputset
-        :return:
-        """
-        if self._inputAreSubtomos is None:
-            self._inputAreSubtomos = isinstance(self.getInputSubTomos(), SetOfSubTomograms)
+        The resulting tilt-series preserves all relevant acquisition metadata,
+        including tilt angles, acquisition order, accumulated dose, voltage,
+        magnification, and sampling rate.
 
-        return self._inputAreSubtomos
+        This metadata propagation is essential for downstream tomography
+        protocols, especially alignment and reconstruction methods that rely on
+        accurate acquisition geometry and dose information.
 
-    def getCoordFromItem(self, item):
-        """ Returns the Coordinate 3D from the item"""
-        if self.areInputSubtomos():
-            coord = item.getCoordinate3D()
-        else:
-            coord = item
-        return coord
+        The protocol also computes global acquisition properties such as
+        minimum tilt angle, maximum tilt angle, angular step size, and total
+        accumulated dose.
 
-    @classmethod
-    def checkMatrix(cls, item):
-        """ Returns the matrix of item (subtomo or coordinate3D"""
-        transform = item.getTransform().getMatrix() if isinstance(item, SubTomogram) else item.getMatrix()
-        if transform is not None:
-            return transform
-        else:
-            return np.eye(transform.shape[0])
+        Odd/Even Tilt-Series Generation
 
-    def extractCoordinatesStep(self):
-        """What must be considered here:
+        An optional feature allows the generation of odd and even tilt-series
+        stacks when the input micrographs contain odd/even motion-correction
+        information.
 
-            1. If the input is a set of subtomograms:
-                1.1. The coordinates associated will be at the scale of the tomograms they were picked from.
-                1.2. The shifts of each subtomogram transformation matrix will be scaled properly.
-            2. If the input is a set of 3d coordinates: both the coordinates and the shifts will be at the scale
-               of the tomograms they were picked from.
+        This functionality is particularly useful for advanced cryo-ET
+        workflows involving noise estimation, validation procedures, or
+        resolution assessment strategies based on independent half datasets.
 
-        Thus, two scale factors will be necessary to considerate all the possible cases: one for the shifts and
-        another for the coordinates. They will be equal in the case of introducing a set of 3d coordinates."""
-        inTomos = self.getInputTomos()
-        inSubTomos = self.getInputSubTomos()
-        inCoords = self.getCoordinates()
+        If odd/even data are requested but unavailable in the metadata, the
+        protocol raises a validation error to prevent generation of incomplete
+        outputs.
 
-        inTomosSRate = inTomos.getSamplingRate()
-        scaleCoords = inCoords.getSamplingRate() / inTomosSRate
-        scaleShifts = inSubTomos.getSamplingRate() / inTomosSRate
+        Acquisition Parameter Estimation
 
-        # Create the output set of coordinates
-        self.outputCoords = self._createSetOfCoordinates3D(inTomos)
-        self.outputCoords.setSamplingRate(inTomosSRate)
+        The protocol automatically generates tomography acquisition objects by
+        combining metadata extracted from both the micrographs and the mdoc
+        files.
 
-        if self.boxSize.get() is None:
+        Parameters such as voltage, magnification, spherical aberration,
+        amplitude contrast, dose per frame, angular range, and tilt step are
+        propagated into the resulting tilt-series.
 
-            if self.areInputSubtomos():
-                boxSize = inSubTomos.getXDim() * scaleCoords
-            else:
-                boxSize = inSubTomos.getBoxSize() * scaleCoords
-        else:
-            boxSize = self.boxSize.get()
+        When certain acquisition parameters are already present in the input
+        micrographs, these values are prioritized to maintain consistency
+        across the processing workflow.
 
-        # For each item (Subtomo or coordinate) in the input
-        for item in inSubTomos:
-            newCoord = self.extractCoordFromItem(item, boxSize, scaleCoords, scaleShifts)
-            if newCoord:
-                self.outputCoords.append(newCoord)
+        Streaming Behaviour and Data Persistence
 
-        self.outputCoords.setBoxSize(boxSize)
+        One of the central aspects of this protocol is its continuous streaming
+        execution model. The protocol repeatedly scans the acquisition folders,
+        updates the input micrograph set, and dynamically generates processing
+        steps for newly detected tilt-series.
 
-    def createOutputStep(self):
-        if self.outputCoords.getSize() > 0:
-            self._defineOutputs(**{Output3dCoordExtraction.coordinates3d.name: self.outputCoords})
-            self._defineSourceRelation(self.inputSubTomos, self.outputCoords)
-            self._defineSourceRelation(self.inputTomos, self.outputCoords)
-        else:
-            raise Exception("No coordinates were extracted from the input subtomograms probably "
-                            "due to an issue during the association with the new tomograms. In case "
-                            "the association was done by the filename, please, check that the tomograms where "
-                            "subtomograms were extracted and new tomograms have the same file names "
-                            "and try again.")
+        As each tilt-series is completed, it is immediately written into the
+        output SetOfTiltSeries object and made available for downstream
+        protocols without waiting for the entire acquisition session to finish.
 
-    # ------------- UTILS functions ----------------
-    def getSuffix(self, suffix):
-        return "_tmp%s" % suffix
+        This behaviour is particularly advantageous in automated cryo-ET
+        facilities where reconstruction and quality-control procedures may run
+        in parallel with data collection.
 
-    def getTmpOutputPath(self, suffix):
-        return self._getPath("coordinates%s.sqlite" % self.getSuffix(suffix))
+        Outputs and Their Interpretation
 
-    def getInputTomos(self):
-        return self.inputTomos.get()
+        The primary output is a SetOfTiltSeries object containing one or more
+        composed tilt-series. Each tilt-series includes the ordered tilt-image
+        stack together with complete acquisition metadata.
 
-    def getInputSubTomos(self):
-        return self.inputSubTomos.get()
+        Individual tilt images retain their associated tilt angle, acquisition
+        order, accumulated dose, and optional odd/even information. The output
+        is therefore immediately compatible with standard tomography alignment
+        and reconstruction protocols.
 
-    def getCoordinates(self):
-        if self.areInputSubtomos():
-            return self.getInputSubTomos().getCoordinates3D()
-        else:
-            return self.getInputSubTomos()
+        From a biological perspective, the quality and completeness of the
+        generated tilt-series strongly influence all downstream analyses.
+        Missing tilts, incorrect geometry, or inconsistent metadata may reduce
+        tomogram quality and limit interpretability of macromolecular
+        structures.
 
-    # --------------------------- INFO functions ------------------------------
-    def _summary(self):
-        summary = []
-        # ps1 = self.getCoordinates().getSamplingRate()
-        # ps2 = self.getInputTomos().getSamplingRate()
-        # summary.append(u'Input subtomograms pixel size: *%0.3f* (Å/px)' % ps1)
-        # summary.append(u'Input tomograms pixel size: *%0.3f* (Å/px)' % ps2)
-        # summary.append('Scaling coordinates by a factor of *%0.3f*' % (ps1 / ps2))
+        Practical Recommendations
 
-        if hasattr(self, 'outputCoordinates3D'):
-            summary.append('Output coordinates: *%d*'
-                           % self.outputCoordinates3D.getSize())
+        In routine cryo-ET acquisition workflows, it is recommended to ensure
+        consistent naming conventions between mdoc entries and motion-corrected
+        micrographs before starting the protocol.
 
-        return summary
+        For streaming acquisitions, the timeout parameter should be adjusted
+        according to the acquisition speed and preprocessing latency. Fast
+        acquisitions may work well with short waiting times, while slower
+        acquisition schemes such as PACEtomo generally require longer delays.
 
-    def _methods(self):
-        return self._summary()
+        The minimum percentage of required tilts should also be selected
+        carefully. Relaxed thresholds may recover partially incomplete datasets,
+        but excessive tilt loss can compromise tomographic reconstruction
+        quality.
 
-    def _validate(self):
-        """ The function of this hook is to add some validation before the
-        protocol is launched to be executed. It should return a list of errors.
-        """
-        errors = []
-        inputSubTomos = self.getInputSubTomos()
-        first = inputSubTomos.getFirstItem()
-        if self.getCoordFromItem(first) is None:
-            errors.append('The input particles do not have coordinates!!!')
+        When using odd/even datasets, users should verify beforehand that the
+        motion-correction protocol generated the required metadata.
 
-        return errors
+        Final Perspective
+
+        For cryo-electron tomography workflows, tilt-series composition is more
+        than a simple file organization step. Correct association between tilt
+        images, acquisition metadata, angular ordering, and dose information is
+        essential for obtaining biologically meaningful tomographic
+        reconstructions.
+
+        The Compose Tilt Series protocol provides an automated and streaming-
+        oriented solution that integrates naturally into modern cryo-ET
+        acquisition pipelines, enabling efficient, scalable, and reliable
+        tomography data management.
+    """

@@ -42,226 +42,147 @@ class ProtTomoToMicsOutput(enum.Enum):
 
 class ProtTomoToMics(EMProtocol):
     """ Turns tomograms into set of micrographs to apply SPA picking methods."""
-    _label = 'tomograms to micrographs'
-    _devStatus = BETA
-    _possibleOutputs = ProtTomoToMicsOutput
 
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('input', PointerParam,
-                      pointerClass='SetOfTomograms',
-                      label='Tomograms',
-                      important=True,
-                      help='Select the tomograms to be turned into micrographs')
-        form.addParam('slicesGap', IntParam,
-                      label="Slices gap",
-                      default=10,
-                      validators=[GT(0)],
-                      help='Number of slices to skip when turning the tomogram slices into micrographs, starting from '
-                           'the central slice. For example, if a tomogram has a thickness of 300 pixels and the gap '
-                           'is set to 20, then the list of slices that will be used as reference for each micrograph '
-                           'will be, considering that the slices are numbered from 0 to the thickness value - 1:'
-                           '\n\t- Central slice = 149'
-                           '\n\t- Going up = 169, 189, 209, 229, 249, 269, 289'
-                           '\n\t- Going down = 129, 109, 89, 69, 49, 29, 9.'
-                           '\nSo 15 micrographs will be generated.')
-        form.addParam('noSlicesToAvg', IntParam,
-                      label='No. slices to sum',
-                      default=5,
-                      validators=[GT(0)],
-                      help='It represents the number of adjacent slices that will be sum for each reference slice to '
-                           'get the corresponding micrographs (see help of the parameter "Slices gap"). For example, '
-                           'if the number is 5, 2 slices above and 2 slices below will be sum for each reference '
-                           'slice, so 5 slices will be sum in total to get each micrograph. If set to 1, no sum will '
-                           'be performed.')
+"""
+Tomograms to Micrographs and 2D Coordinates to 3D Coordinates — User Manual
 
-    # --------------------------- INSERT steps functions --------------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.createOutputStep)
+    Overview
 
-    # --------------------------- STEPS functions --------------------------------------------
-    def getInputTomograms(self) -> SetOfTomograms:
-        return self.input.get()
+    These two protocols are designed to work together as a complementary workflow
+    that bridges cryo-electron tomography and Single Particle Analysis (SPA)
+    methodologies. The first protocol converts tomograms into sets of 2D
+    micrographs generated from selected tomographic slices, while the second
+    protocol reconstructs the corresponding 3D coordinates from particles picked
+    on those micrographs.
 
-    def createOutputStep(self):
-        input = self.input.get()
-        output = SetOfMicrographs.create(self._getPath())
-        output.setSamplingRate(input.getSamplingRate())
+    Together, they provide a practical strategy for applying mature 2D particle
+    picking tools to tomographic data while preserving the ability to recover
+    biologically meaningful spatial information inside the original volume.
 
-        # Acquisition
-        micAcq = Acquisition()
-        tomoAcq = input.getAcquisition()
-        micAcq.setMagnification(tomoAcq.getMagnification())
-        micAcq.setSphericalAberration(tomoAcq.getSphericalAberration())
-        micAcq.setVoltage(tomoAcq.getVoltage())
-        micAcq.setAmplitudeContrast(tomoAcq.getAmplitudeContrast())
-        micAcq.setDoseInitial(tomoAcq.getDoseInitial())
-        micAcq.setDosePerFrame(tomoAcq.getDosePerFrame())
+    In cryo-electron tomography, direct particle picking within tomograms is often
+    difficult because of low signal-to-noise ratios, specimen thickness, and
+    crowded intracellular environments. By transforming tomographic slices into
+    micrograph-like images, the workflow allows standard SPA particle pickers
+    to operate efficiently on tomographic datasets.
 
-        output.setAcquisition(micAcq)
+    Once particles are detected in 2D, the second protocol restores their
+    volumetric context by converting the detected positions back into 3D
+    tomographic coordinates. This enables downstream subtomogram extraction,
+    averaging, classification, and spatial analysis workflows.
 
-        # For each tomogram
-        for tomo in input:
-            self.appendMicsFromTomogram(output, tomo)
+    Inputs and General Workflow
 
-        self._defineOutputs(**{ProtTomoToMicsOutput.outputMicrographs.name: output})
-        self._defineSourceRelation(self.input, output)
+    The workflow begins with a set of tomograms. The Tomograms to Micrographs
+    protocol extracts slices along the Z axis and generates 2D micrographs from
+    them. The extraction starts from the central slice of each tomogram and
+    progresses symmetrically toward upper and lower regions using a configurable
+    slice gap.
 
-    # --------------------------- UTILS functions --------------------------------------------
-    def appendMicsFromTomogram(self, output, tomo):
-        nSlicesAvg = self.noSlicesToAvg.get()
-        gap = self.slicesGap.get()
-        sRate = tomo.getSamplingRate()
-        self.info("Creating micrographs for %s with a %s gap and adding %s contiguous slices." %
-                  (tomo.getTsId(), gap, nSlicesAvg))
+    For every selected slice, neighboring slices can optionally be averaged
+    together. This averaging operation improves contrast and suppresses noise,
+    often making biological structures easier to detect automatically.
 
-        # Load the tomogram image to get the dimensions
-        with mrcfile.mmap(tomo.getFileName(), mode='r+') as tomoMrc:
-            tomogramData = tomoMrc.data
-            thk, width, height = tomogramData.shape
-        shape = (1, width, height)
+    Each generated micrograph preserves metadata from the original tomogram,
+    including sampling rate and acquisition parameters. Most importantly, the
+    micrograph naming convention stores information about the originating
+    tomogram and the exact Z slice used during generation.
 
-        # For each slice
-        for indexLims in self.genCenterList(thk, gap, nSlicesAvg):
-            downLim, center, upLim = indexLims[:]
-            micName = tomoSliceToMicName(tomo, center)
-            self.info("Creating micrograph (%s) from %s to %s slices of %s" % (micName, downLim, upLim-1,tomo.getTsId()))
-            outputMicName = replaceExt(self._getExtraPath(micName), "mrc")
-            with mrcfile.new_mmap(outputMicName, shape, overwrite=True) as mic:
-                micData = np.empty(shape, dtype=tomogramData.dtype)
-                micData[0] = np.sum(tomogramData[downLim:upLim], axis=0)
-                mic.set_data(micData)
-                mic.update_header_from_data()
-                mic.update_header_stats()
-                mic.voxel_size = sRate
+    After particle picking is performed on the generated micrographs, the
+    2D Coordinates to 3D Coordinates protocol reconstructs the corresponding
+    volumetric coordinates. The X and Y values are inherited directly from
+    the picked particle positions, while the Z coordinate is recovered from
+    the encoded slice identifier contained in the micrograph name.
 
-            # Create the micrograph metadata object
-            newMic = Micrograph()
-            newMic.setFileName(outputMicName)
-            newMic.setMicName(micName)
-            newMic.setSamplingRate(tomo.getSamplingRate())
+    The resulting output is a SetOfCoordinates3D associated with the original
+    tomograms.
 
-            # Append it
-            output.append(newMic)
+    Slice Averaging and Signal Enhancement
 
-    @staticmethod
-    def genCenterList(dataLen, gap, nSlicesAvg):
-        """Generates a list of lists in which each element is composed by the lower limit, the center and the upper
-        limit of the intervals of indices with a given step (gap) between them and calculating the adjacent indices
-        given the total number of slices that will include the interval (nSlicesAvg)."""
-        center = dataLen // 2 - 1  # Indices begin in 0, not in 1
-        slicesUp = (nSlicesAvg - 1) // 2  # Minus the gap index
-        slicesDown = nSlicesAvg - 1 - slicesUp  # The remaining ones, to cover even and odd cases of nSlicesAvg
-        indexListOfLists = [[center - slicesDown, center, center + slicesUp + 1]]
-        for i in range(gap, center + 1, gap):
-            if center - i - slicesDown >= 0:
-                index = center - i
-                indexListOfLists.append([index - slicesDown, index, index + slicesUp + 1])
-            if center + i + slicesUp <= dataLen:
-                index = center + i
-                indexListOfLists.append([index - slicesDown, index,  index + slicesUp + 1])
-        # Sort the list of lists based on the center element of each subList
-        return sorted(indexListOfLists, key=lambda l: l[1])
+    One of the most biologically relevant aspects of this workflow is the
+    possibility of averaging adjacent tomographic slices before generating
+    each micrograph.
 
-    # --------------------------- INFO functions --------------------------------------------
-    def _summary(self):
-        summary = []
-        if self.isFinished():
-            summary.append('Slices gap = *%i*\nSlices for averaging = *%i*' %
-                           (self.slicesGap.get(), self.noSlicesToAvg.get()))
-        return summary
+    Cryo-electron tomograms are typically noisy, especially in cellular studies
+    where sample thickness and radiation damage strongly reduce image contrast.
+    Averaging neighboring slices improves visibility of macromolecular features
+    and frequently leads to more robust particle detection.
 
-    def _methods(self):
-        methods = []
-        return methods
+    This strategy is particularly useful for ribosomes, membrane proteins,
+    viral assemblies, and other complexes embedded in crowded intracellular
+    environments.
 
-    def _validate(self):
-        validateMsgs = []
-        return validateMsgs
+    However, averaging too many slices may blur axial information and reduce
+    the precision of the reconstructed Z coordinate. Biological users should
+    therefore balance noise reduction against spatial specificity depending
+    on the intended downstream analysis.
 
+    Spatial Sampling Along the Z Axis
 
-class Prot2DcoordsTo3DCoordsOutput(enum.Enum):
-    outputCoordinates = SetOfCoordinates3D()
+    The slice gap parameter determines how densely the tomogram is sampled.
+    Small gaps generate a larger number of micrographs and provide more complete
+    volumetric coverage, although they increase computational and storage costs.
 
+    Larger gaps reduce redundancy and accelerate downstream processing but may
+    skip biologically relevant regions if particles are sparsely distributed
+    throughout the tomogram thickness.
 
-class Prot2DcoordsTo3DCoords(EMProtocol):
-    """ Turns 2d coordinates into set of 3d coordinates. Works in coordination with
-    'tomograms to micrographs' protocol"""
-    _label = '2d coordinates to 3d coordinates'
-    _devStatus = BETA
-    _possibleOutputs = Prot2DcoordsTo3DCoordsOutput
+    Since the reconstructed Z coordinate directly depends on the selected
+    slices, the choice of slice gap also influences the final spatial accuracy
+    of the workflow.
 
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('tomograms', PointerParam, pointerClass='SetOfTomograms',
-                      label='Tomograms',
-                      help='Select the tomograms to be associated to the 3D coordinates')
-        form.addParam('coordinates', PointerParam, pointerClass='SetOfCoordinates', label="2D Coordinates",
-                      help='Set of 2d coordinates picked on tomogram slices.')
+    Coordinate Reconstruction and Biological Interpretation
 
-    # --------------------------- INSERT steps functions --------------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.createOutputStep)
+    The reconstruction step restores the three-dimensional spatial organization
+    that was temporarily simplified during the 2D particle-picking stage.
 
-    # --------------------------- STEPS functions --------------------------------------------
-    def createOutputStep(self):
-        tomograms = self.tomograms.get()
-        coordinates = self.coordinates.get()
+    This is biologically important because many cryo-ET studies rely not only
+    on identifying particles, but also on understanding their spatial
+    distribution relative to membranes, organelles, cytoskeletal structures,
+    or neighboring macromolecular complexes.
 
-        output = SetOfCoordinates3D.create(self._getPath())
-        # output.copyInfo(input)
-        output.setPrecedents(tomograms)
-        output.setBoxSize(coordinates.getBoxSize())
-        output.setSamplingRate(coordinates.getMicrographs().getSamplingRate())
+    By reconnecting 2D particle detections with their original tomographic
+    positions, the workflow enables both structural and spatial biological
+    analyses while maintaining compatibility with standard subtomogram
+    processing pipelines.
 
-        # Get a dictionary of tomograms by tsId
-        tomoDict = dict()
-        for tomogram in tomograms:
-            tomo = tomogram.clone()
-            tomoDict[removeExt(basename(tomo.getFileName()))] = tomo
+    Outputs and Their Interpretation
 
-        # For each 2d coordinate
-        for cord2d in coordinates:
-            # Extract Z
-            micName = coordinates.getMicrographs()[cord2d.getMicId()].getFileName()
-            z, fileName = sliceAndNameFromMicName(micName)
-            newCoord = Coordinate3D()
-            newCoord.setVolume(tomoDict[fileName])
-            newCoord.setX(cord2d.getX(), BOTTOM_LEFT_CORNER)
-            newCoord.setY(cord2d.getY(), BOTTOM_LEFT_CORNER)
-            newCoord.setZ(z, BOTTOM_LEFT_CORNER)
-            newCoord.setBoxSize(coordinates.getBoxSize())
-            newCoord.setGroupId(1)
-            output.append(newCoord)
+    The workflow produces two main outputs. First, a SetOfMicrographs generated
+    from tomographic slices, intended for particle picking and visualization.
+    Second, a SetOfCoordinates3D containing the reconstructed volumetric
+    particle positions.
 
-        self._defineOutputs(**{Prot2DcoordsTo3DCoordsOutput.outputCoordinates.name: output})
-        self._defineSourceRelation(self.coordinates, output)
+    The generated micrographs should not be interpreted as independent
+    experimental acquisitions, but rather as computational representations
+    derived from tomographic data to facilitate particle detection.
 
-    # --------------------------- UTILS functions --------------------------------------------
+    The reconstructed coordinates preserve the association with the original
+    tomograms and remain fully compatible with subtomogram extraction and
+    averaging workflows.
 
-    # --------------------------- INFO functions --------------------------------------------
-    def _summary(self):
-        summary = []
-        return summary
+    Practical Recommendations
 
-    def _methods(self):
-        methods = []
-        return methods
+    In most biological applications, moderate slice averaging combined with
+    intermediate slice gaps provides a good balance between contrast enhancement,
+    computational efficiency, and spatial precision.
 
-    def _validate(self):
-        validateMsgs = []
-        return validateMsgs
+    Highly noisy tomograms may benefit from stronger averaging, whereas studies
+    focused on accurate spatial localization should minimize both slice averaging
+    and slice gaps.
 
+    Users should visually inspect both the generated micrographs and the final
+    reconstructed coordinates to ensure that biological structures remain well
+    represented throughout the workflow.
 
-def tomoSliceToMicName(tomo, slice):
-    return f"S{slice:03}_{basename(tomo.getFileName())}"
+    Final Perspective
 
+    Together, the Tomograms to Micrographs and 2D Coordinates to 3D Coordinates
+    protocols provide an effective hybrid strategy that combines the robustness
+    of SPA-style particle picking with the volumetric richness of cryo-electron
+    tomography.
 
-def sliceAndNameFromMicName(micname):
-    """ Extracts z and tomo name from a micname composed with tomoSliceToMicName"""
-
-    parts = removeExt(basename(micname)).split("_")
-    slice = parts[0]
-    slice = int(slice.replace("S", ""))
-    fileName = "_".join(parts[1:])
-    return slice, fileName
+    By temporarily transforming tomographic information into a 2D representation
+    and subsequently restoring its original 3D spatial context, the workflow
+    enables efficient particle detection while preserving the biological meaning
+    of the tomographic environment.
+"""

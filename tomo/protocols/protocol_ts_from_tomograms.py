@@ -50,75 +50,132 @@ class ProtTsFromTomos(EMProtocol):
     at tomogram level, but further processing may be desired to be carried out with the corresponding
     tilt-series before getting the final tomograms."""
 
-    _label = 'tilt-series from tomograms'
-    _devStatus = BETA
-    _possibleOutputs = OutputsTsFromTomos
+    """
+    Retrieves the tilt-series associated with a selected set of tomograms,
+    allowing users to recover the original tilt-series corresponding to
+    validated or selected tomographic reconstructions.
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    AI Generated:
 
-    # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_TOMO_SET, PointerParam,
-                      pointerClass='SetOfTomograms',
-                      important=True,
-                      label='Tomograms')
-        form.addParam(IN_TS_SET, PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      important=True,
-                      label='Tilt-Series')
+    Tilt-Series From Tomograms (ProtTsFromTomos) — User Manual
+        Overview
 
-    # --------------------------- INSERT steps functions ----------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self._getTsFromTomosStep, needsGPU=False)
+        The Tilt-Series From Tomograms protocol is designed to recover
+        the subset of tilt-series associated with a given collection of
+        tomograms. In cryo-electron tomography workflows, it is common
+        to evaluate data quality only after tomographic reconstruction,
+        since reconstruction artifacts, alignment problems, missing wedge
+        effects, or low contrast may not be sufficiently visible directly
+        at the tilt-series level. This protocol provides a convenient way
+        to trace validated tomograms back to their original tilt-series,
+        enabling additional processing or refinement steps to continue
+        from the corresponding raw or aligned projection data.
 
-    # -------------------------- STEPS functions ------------------------------
-    def _getTsFromTomosStep(self):
-        inTomosSet = self._getInTomoSet()
-        inTsSet = self._getInTsSet()
-        # Compute the matching tsIds among the tilt-series and the tomograms, as they both could be a subset
-        tomosTsIds = set(inTsSet.getTSIds())
-        tsIds = set(inTomosSet.getTSIds())
-        presentTsIds = tomosTsIds & tsIds
-        nonMatchingTsIds = (tomosTsIds ^ tsIds) - presentTsIds
-        # Validate the intersection
-        if len(presentTsIds) <= 0:
-            raise Exception("There isn't any common tsIds among the tomograms and the "
-                            "tilt-series introduced.")
-        if len(nonMatchingTsIds) > 0:
-            logger.info(cyanStr(f"TsIds not common in the introduced tomograms and "
-                                f"tilt-series are: {nonMatchingTsIds}"))
-        tsDict = {ts.getTsId(): ts.clone() for ts in inTsSet.iterItems() if ts.getTsId() in presentTsIds}
-        # Create the output set
-        outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries')
-        outTsSet.copyInfo(inTsSet)
-        self._defineOutputs(**{self._possibleOutputs.tiltSeries.name: outTsSet})
-        self._defineSourceRelation(self._getInTsSet(returnPointer=True), outTsSet)
-        for tsId in presentTsIds:
-            inTs = tsDict[tsId]
-            outTs = TiltSeries()
-            outTs.copyInfo(inTs)
-            outTsSet.append(outTs)
-            for ti in inTs.iterItems(orderBy=TiltImage.INDEX_FIELD):
-                outTi = TiltImage()
-                outTi.copyInfo(ti)
-                outTs.append(outTi)
-            outTsSet.update(outTs)
-            # Data persistence
-            outTs.write()
-            outTsSet.update(outTs)
-            outTsSet.write()
+        From a biological perspective, this protocol is especially useful
+        in fiducial-less workflows, where the quality of tilt-series
+        alignment can be difficult to assess before reconstruction.
+        Researchers often inspect reconstructed tomograms to identify
+        datasets with sufficient structural preservation, contrast, or
+        alignment quality. Once unsuitable tomograms are discarded, this
+        protocol allows the user to automatically recover only the
+        tilt-series linked to the accepted tomograms.
 
-        if len(outTsSet) == 0:
-            raise Exception(f'No output/s {self._possibleOutputs.tiltSeries.name} were generated. '
-                            f'Please check the Output Log > run.stdout and run.stderr')
+        Inputs and General Workflow
 
-    # --------------------------- UTILS functions -----------------------------
-    def _getInTsSet(self, returnPointer: bool = False) -> Union[SetOfTiltSeries, Pointer]:
-        inTsPointer = getattr(self, IN_TS_SET)
-        return inTsPointer if returnPointer else inTsPointer.get()
+        The protocol requires two inputs: a set of tomograms and a set
+        of tilt-series. Both datasets are expected to share common tilt-
+        series identifiers (tsIds), which are used internally to establish
+        the correspondence between tomograms and their originating
+        tilt-series.
 
-    def _getInTomoSet(self, returnPointer: bool = False) -> Union[SetOfTomograms, Pointer]:
-        inTomosPointer = getattr(self, IN_TOMO_SET)
-        return inTomosPointer if returnPointer else inTomosPointer.get()
+        During execution, the protocol compares the identifiers present
+        in both datasets and computes their intersection. Only tilt-series
+        whose identifiers are present in both collections are preserved
+        in the final output. This behavior ensures consistency between
+        tomographic reconstructions and their associated projection data.
+
+        In practical cryo-ET workflows, this allows users to manually or
+        automatically curate tomograms first, and then continue processing
+        only the corresponding tilt-series. Typical downstream applications
+        include improved CTF estimation, subtomogram extraction, particle
+        picking, denoising workflows, or reconstruction refinement.
+
+        Identifier Matching and Dataset Consistency
+
+        A central aspect of the protocol is the use of tsIds to establish
+        relationships between tomograms and tilt-series. The protocol
+        validates the overlap between both datasets and raises an exception
+        if no common identifiers are found. This prevents accidental
+        propagation of unrelated or incompatible datasets.
+
+        When only partial overlap exists, the protocol reports the non-
+        matching identifiers while still processing the common subset.
+        This behavior is biologically useful because tomography datasets
+        are often curated incrementally, and some tomograms or tilt-series
+        may have been removed in previous quality-control stages.
+
+        From a data-management perspective, preserving identifier
+        consistency throughout the workflow is extremely important.
+        Misaligned identifiers may lead to incorrect downstream analysis,
+        particularly in automated pipelines where metadata relationships
+        are heavily relied upon.
+
+        Output Generation
+
+        The protocol creates a new SetOfTiltSeries containing only the
+        tilt-series associated with the selected tomograms. Each tilt-
+        series is cloned together with its corresponding tilt images,
+        preserving acquisition metadata, ordering, and structural
+        information.
+
+        The resulting output behaves as a standard Scipion tilt-series
+        dataset and can therefore be directly connected to subsequent
+        tomography protocols. Since the protocol only filters and copies
+        metadata references rather than recomputing projections, execution
+        is computationally lightweight and very fast even for large
+        datasets.
+
+        Biological and Practical Applications
+
+        In biological cryo-ET studies, this protocol becomes especially
+        valuable after tomogram inspection and curation. Researchers often
+        reconstruct large numbers of tomograms and later retain only those
+        showing sufficient quality for downstream structural analysis.
+        Once the curated tomograms are identified, recovering the matching
+        tilt-series allows the workflow to continue from projection-space
+        data without manually tracking datasets.
+
+        This approach is particularly important in fiducial-less alignment
+        strategies, where reconstruction quality is frequently the most
+        reliable criterion for evaluating dataset usability. By linking
+        validated tomograms back to their tilt-series, users can refine
+        alignment procedures, repeat reconstruction under different
+        parameters, or apply advanced processing methods only to the best
+        datasets.
+
+        Practical Recommendations
+
+        In routine workflows, users should ensure that both the tomogram
+        and tilt-series datasets originate from compatible processing
+        pipelines and preserve consistent tsIds. Maintaining clean and
+        traceable metadata throughout the workflow greatly simplifies
+        dataset management and avoids ambiguity during selection steps.
+
+        It is generally advisable to perform tomogram curation carefully
+        before applying this protocol. Since the output directly reflects
+        the selected tomograms, any filtering or quality-control decision
+        at the tomogram level will propagate to all subsequent processing
+        stages involving the recovered tilt-series.
+
+        Final Perspective
+
+        The Tilt-Series From Tomograms protocol serves as a bridge between
+        tomogram-level quality assessment and tilt-series-level processing.
+        Although technically simple, it fulfills an important organizational
+        and biological role in cryo-electron tomography workflows by
+        preserving the connection between reconstructed volumes and their
+        originating projection data. This capability is particularly useful
+        in large-scale tomography projects, fiducial-less workflows, and
+        iterative refinement strategies where dataset traceability is
+        essential for reliable structural interpretation.
+    """

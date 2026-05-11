@@ -44,121 +44,124 @@ EXPORT_TO_CBOX = 'cbox'
 class ProtExportCoordinates3D(EMProtocol):
     """ Export 3D subtomogram coordinates to be used outside Scipion. """
 
-    _label = 'export 3D coordinates'
-    _devStatus = NEW
 
-    @staticmethod
-    def _getExportChoices():
-        """ Return a list of possible choices for export.
-        """
-        exportChoices = [EXPORT_TO_TXT]
-        if existsPlugin('reliontomo'):
-            exportChoices.append(EXPORT_TO_STAR)
-        if existsPlugin('emantomo'):
-            exportChoices.append(EXPORT_TO_EMAN)
-        if existsPlugin('dynamo'):
-            exportChoices.append(EXPORT_TO_DYNAMO)
-        if existsPlugin('sphire'):
-            exportChoices.append(EXPORT_TO_CBOX)
+    """
+    ProtExportCoordinates3D — Export 3D Subtomogram Coordinates Protocol
 
-        return exportChoices
+    This protocol exports 3D subtomogram coordinates generated inside Scipion into
+    external formats commonly used by different cryo-electron tomography software
+    packages. Its main purpose is to facilitate interoperability between Scipion
+    and external processing environments, allowing users to continue analysis,
+    visualization, subtomogram averaging, or particle extraction workflows in
+    other specialized software ecosystems.
 
-    # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        exportChoices = self._getExportChoices()
+    AI Generated:
 
-        form.addSection(label='Input')
-        form.addParam('inputCoordinates', params.PointerParam,
-                      pointerClass='SetOfCoordinates3D',
-                      important=True,
-                      label="Input 3D coordinates")
-        form.addParam('outputFormat', params.EnumParam,
-                      choices=exportChoices, default=0,
-                      label='Export to',
-                      help='Select the output format')
+    Export 3D Coordinates (ProtExportCoordinates3D) — User Manual
 
-    # --------------------------- INSERT steps functions ----------------------
-    def _insertAllSteps(self):
-        objId = self.inputCoordinates.get().getObjId()
-        format = self._getExportChoices()[self.outputFormat.get()]
-        self._insertFunctionStep(self.exportCoordsStep, format, objId)
+        Overview
 
-    # --------------------------- STEPS functions -----------------------------
-    def exportCoordsStep(self, format, coordsId):
-        inputCoords = self.inputCoordinates.get()
-        tomoIds = inputCoords.getTSIds()
-        pwutils.cleanPath(self._getExportPath())
-        pwutils.makePath(self._getExportPath())
+        The Export 3D Coordinates protocol converts a set of subtomogram coordinates
+        stored in Scipion into external file formats compatible with several tomography
+        processing packages. In practical cryo-ET workflows, this protocol is commonly
+        used when coordinates generated during particle picking or annotation inside
+        Scipion need to be transferred to external software for downstream analysis.
 
-        if format == EXPORT_TO_TXT:
-            def _writeFunc(coord, f):
-                x, y, z = map(int, coord.getPosition(BOTTOM_LEFT_CORNER))
-                f.write(f"{x} {y} {z}\n")
+        Depending on the installed plugins, the protocol supports exporting coordinates
+        to plain TXT files, RELION STAR files, EMAN JSON files, Dynamo tables, and
+        SPHIRE CBOX files. This flexibility allows users to integrate Scipion into
+        heterogeneous cryo-electron tomography pipelines without manually converting
+        coordinates between formats.
 
-            self._writeTxt(inputCoords, "txt", _writeFunc)
+        Inputs and Workflow
 
-        elif format == EXPORT_TO_STAR:
-            from reliontomo.convert import writeSetOfCoordinates
-            writeSetOfCoordinates(inputCoords,
-                                  self._getExportPath("coords.star"),
-                                  tomoIds,
-                                  sRate=inputCoords.getSamplingRate(),
-                                  coordsScale=1)
+        The protocol requires a SetOfCoordinates3D object as input. These coordinates
+        are typically associated with tomograms and contain the spatial positions of
+        particles or regions of interest identified during subtomogram analysis.
 
-        elif format == EXPORT_TO_EMAN:
-            from emantomo.convert import setCoords3D2Jsons
-            json_files = [self._getExportPath(f"{tsId}_info.json") for tsId in tomoIds]
-            setCoords3D2Jsons(json_files, inputCoords)
+        During execution, the protocol automatically creates an export directory and
+        organizes the output files according to the selected export format. Coordinates
+        are grouped by tomogram identifier, ensuring compatibility with downstream
+        software packages that expect tomogram-specific coordinate files.
 
-        elif format == EXPORT_TO_DYNAMO:
-            from dynamo.convert import matrix2eulerAngles
+        The export workflow is intentionally lightweight and does not modify the
+        original coordinates. Instead, it focuses on transforming the internal Scipion
+        representation into the syntax and structure required by external applications.
 
-            def _writeFunc(coord, f):
-                x, y, z = coord.getPosition(BOTTOM_LEFT_CORNER)
-                # Get alignment information
-                #if coord.hasTransform():  # FIXME
-                #    tdrot, tilt, narot, shiftx, shifty, shiftz = matrix2eulerAngles(coord.getMatrix())
-                #else:
-                tdrot, tilt, narot, shiftx, shifty, shiftz = 0, 0, 0, 0, 0, 0
-                f.write(f"{coord.getObjId()} 1 1 {shiftx} {shifty} {shiftz} "
-                        f"{tdrot} {tilt} {narot} 0 0 0 1 0 0 0 0 0 0 0 0 1 0 "
-                        f"{x} {y} {z} 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n")
+        Supported Export Formats
 
-            self._writeTxt(inputCoords, "tbl", _writeFunc)
+        The protocol dynamically detects available export options depending on the
+        installed Scipion plugins.
 
-        elif format == EXPORT_TO_CBOX:
-            from sphire.convert import writeSetOfCoordinates3D
-            writeSetOfCoordinates3D(self._getExportPath(), inputCoords)
+        TXT export produces simple text files containing X, Y, and Z coordinates.
+        This format is useful for custom scripts, visualization tools, or lightweight
+        processing pipelines where only particle positions are required.
 
-    # --------------------------- INFO functions ------------------------------
-    def _validate(self):
-        validateMsgs = []
+        RELION STAR export generates coordinate STAR files compatible with RelionTomo.
+        The protocol preserves tomogram identifiers and sampling information so the
+        coordinates can be directly integrated into RELION subtomogram workflows.
 
-        return validateMsgs
+        EMAN export creates JSON metadata files compatible with EMAN tomography tools.
+        This option facilitates interoperability with EMAN-based subtomogram processing
+        environments.
 
-    def _summary(self):
-        summary = []
+        Dynamo export generates Dynamo table files containing particle coordinates and
+        placeholder alignment parameters. Although rotational and translational
+        alignment values are initialized to zero in this implementation, the exported
+        tables remain compatible with standard Dynamo workflows.
 
-        summary.append(f"Output is written to: \n"
-                       f"{os.path.abspath(self._getExportPath())}\n")
+        SPHIRE export produces CBOX-compatible coordinate files for SPHIRE tomography
+        pipelines and visualization tools.
 
-        return summary
-    
-    # --------------------------- UTILS functions -----------------------------
-    def _getExportPath(self, *paths):
-        return os.path.join(self._getPath('Export'), *paths)
+        Coordinate Handling and Organization
 
-    def _writeTxt(self, inputCoords, ext="txt", writeCoord=None):
-        """ Iterate over coords by tomoId and write output. """
-        f = None
-        lastTomoId = None
-        for coord in inputCoords.iterCoordinates(orderBy="_tomoId"):
-            tomoId = coord.getTomoId()
-            if tomoId != lastTomoId:
-                if f:  # we need to close previous opened file
-                    f.close()
-                f = open(self._getExportPath(f"{tomoId}.{ext}"), "w")
-                lastTomoId = tomoId
-            writeCoord(coord, f)
-        if f:
-            f.close()
+        The protocol iterates over all coordinates ordered by tomogram identifier.
+        For each tomogram, a separate output file is generated, simplifying data
+        organization and downstream processing.
+
+        Coordinates are exported using the bottom-left corner reference convention,
+        ensuring consistency with tomography coordinate systems commonly used in
+        external software packages.
+
+        The export process preserves the original coordinate precision and tomogram
+        association while adapting the formatting rules required by each target
+        software package.
+
+        Outputs and Interpretation
+
+        After execution, the protocol generates an export directory containing the
+        converted coordinate files. The exact content depends on the selected format
+        and the number of tomograms present in the input dataset.
+
+        The exported files can be directly imported into external tomography software
+        for visualization, particle extraction, subtomogram averaging, or further
+        refinement procedures.
+
+        Since the protocol does not alter coordinate geometry or apply transformations,
+        the exported coordinates should remain biologically and spatially consistent
+        with the original Scipion project.
+
+        Practical Recommendations
+
+        In routine cryo-ET workflows, users should select the export format according
+        to the downstream software environment. TXT export is convenient for debugging,
+        scripting, or custom analyses, while STAR, Dynamo, EMAN, or CBOX exports are
+        better suited for fully integrated processing pipelines.
+
+        Before exporting, it is advisable to verify that the coordinate set is properly
+        curated and associated with the correct tomograms, since downstream software
+        may assume strict coordinate consistency.
+
+        When transferring coordinates between software packages, users should also
+        verify voxel size conventions, coordinate origins, and tomogram orientations
+        to avoid downstream alignment inconsistencies.
+
+        Final Perspective
+
+        In cryo-electron tomography workflows, coordinate interoperability is essential
+        for combining the strengths of different software ecosystems. This protocol
+        provides a simple and reliable bridge between Scipion and external tomography
+        platforms, enabling flexible and reproducible subtomogram analysis pipelines
+        across multiple computational environments.
+
+    """

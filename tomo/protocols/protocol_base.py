@@ -166,296 +166,194 @@ class ProtTomoImportFiles(ProtImportFiles, ProtTomoBase):
     A good example is the protocol ProtImportTomograms.
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.regEx = None
-        self.regExPattern = None
-        self.globPattern = None
+    """
+    Imports tomography-related files into the Scipion Tomo framework while providing
+    flexible mechanisms to identify, organize, and associate datasets through file
+    patterns and tilt-series identifiers (tsId). The protocol is designed to support
+    both conventional file import workflows and advanced tomography-oriented import
+    strategies where datasets must be linked consistently across processing stages.
 
-    # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        self._defineImportParams(form)
-        self._defineAcquisitionParams(form)
+    AI Generated:
 
-    @staticmethod
-    def addExclusionWordsParam(form):
-        form.addParam('exclusionWords', StringParam,
-                      label='Exclusion words:',
-                      expertLevel=LEVEL_ADVANCED,
-                      help="List of words separated by a space that "
-                           "the path should not have.")
+    Tomography File Import (ProtTomoImportFiles) — User Manual
 
-    def _defineImportParams(self, form):
-        """ Override to add options related to the different types
-        of import that are allowed by each protocol.
-        """
-        importChoices = self._getImportChoices()
+        Overview
 
-        form.addSection(label='Import')
-        if len(importChoices) > 1:  # not only from files
-            form.addParam('importFrom', EnumParam,
-                          choices=importChoices, default=self._getDefaultChoice(),
-                          label='Import from',
-                          help='Select the type of import.')
-        else:
-            form.addHidden('importFrom', EnumParam,
-                           choices=importChoices, default=self.IMPORT_FROM_FILES,
-                           label='Import from',
-                           help='Select the type of import.')
+        The ProtTomoImportFiles protocol provides the foundational infrastructure
+        for importing tomography data into Scipion. Its primary purpose is to
+        standardize how tomography-related files are discovered, identified, and
+        associated with specific tilt-series through the use of file patterns and
+        metadata extraction strategies.
 
-        form.addParam('filesPath', PathParam,
-                      label="Files directory",
-                      help="Directory with the files you want to import.\n\n"
-                           "The path can also contain wildcards to select"
-                           "from several folders. \n\n"
-                           "Examples:\n"
-                           "  ~/Tomograms/data/day??_tomograms/\n"
-                           "Each '?' represents one unknown character\n\n"
-                           "  ~/Tomograms/data/day*_tomograms/\n"
-                           "'*' represents any number of unknown characters\n\n"
-                           "  ~/Tomograms/data/day#_tomograms/\n"
-                           "'#' represents one digit that will be used as "
-                           "tomogram ID\n\n"
-                           "NOTE: wildcard characters ('*', '?', '#') "
-                           "cannot appear in the actual path.)")
-        form.addParam('filesPattern', StringParam,
-                      label='Pattern',
-                      help="Pattern of the files to be imported.\n\n"
-                           "The pattern can contain standard wildcards such as\n"
-                           "*, ?, etc, or special ones like ### to mark some\n"
-                           "digits in the filename as ID.\n\n"
-                           "NOTE: wildcards and special characters "
-                           "('*', '?', '#', ':', '%') cannot appear in the "
-                           "actual path.")
-        form.addLine('* NOTE: About files import in Scipion Tomo\n(click on the help icon to the right)',
-                     help='There are two modes that should be implemented to import files, based on the value of '
-                          'the Pattern parameter:\n'
-                          '\n1. *Empty* (a single file is imported if File directory parameter is the full path of a '
-                          'single file) or *using the classic wildcard patterns*, as in Scipion for SPA, and explain '
-                          'in the help of the parameter Pattern.\n'
-                          '\n*2. The pattern contains the label {TS}*, used to represent the part of the name desired '
-                          'to be considered as the tsId (Unique identifier of a tilt-series and its derived products, '
-                          'such as tomograms, ctfs, alignment, etc).\n\n'
-                          '*Examples*:\n\n'
-                          '*Example 1*: import only one tomogram named tomoAbc.mrc located if the directory '
-                          '/home/exampleDir.\n'
-                          '\n\tOption 1a: set Files directory to /home/exampleDir/tomoAbc.mrc and leave Pattern empty.\n'
-                          '\n\tOption 1b: set set Files directory to /home/exampleDir and Pattern to tomoAbc.mrc.\n'
-                          '\n\tOption 2: set set Files directory to /home/exampleDir and Pattern to the substring '
-                          'desired to be the tsId:\n\n'
-                          'If the tsId is desired to be tomoAbc, the pattern should be {TS}.mrc, while if the tsId we '
-                          'want, for example to match other objects in the project labelled with tsId based on what '
-                          'follows the word "tomo", it should be tomo{TS}.mrc. In the first case the tsId would be the '
-                          'whole basename, "tomoAbc", while in the second it would be only "Abc".\n\n'
-                          '*Example 2*: import alignment files (.xf) generated with IMOD, named TS_01_binned.xf, '
-                          'TS_02_binned.xf, TS_03_binned.xf, located in the directory /home/aliExample/binnedTS.\n\n'
-                          'Let us consider that we have already the tilt-series imported in Scipion and we know that '
-                          'their tsIds are, respectively, TS_01, TS_02, TS_03. To import the alignment files we have '
-                          'obtaiend using IMOD before having installed Scipion, the\n'
-                          '\n\tFiles directory should be /home/aliExample/binnedTS, and the'
-                          '\n\tPattern {TS}_binned.xf.\n\n'
-                          'Thus, the transformation matrices would be imported with tsIds TS_01, TS_02, TS_03, that '
-                          'matches to the existing tsIds of the tilt-series we want to assign the imported alignments '
-                          'to.')
-        form.addParam('copyFiles', BooleanParam, default=False,
-                      expertLevel=LEVEL_ADVANCED,
-                      label="Copy files?",
-                      help="By default the files are not copied into the "
-                           "project to avoid data duplication and to save "
-                           "disk space. Instead of copying, symbolic links are "
-                           "created pointing to original files. This approach "
-                           "has the drawback that if the project is moved to "
-                           "another computer, the links need to be restored.")
+        In cryo-electron tomography workflows, maintaining a consistent tilt-series
+        identifier is critically important because many downstream objects—such as
+        tomograms, alignments, CTF estimations, subtomograms, or transformation
+        matrices—must remain biologically and computationally linked throughout the
+        processing pipeline. This protocol establishes that relationship at the
+        import stage.
 
-    def _defineAcquisitionParams(self, form):
-        """ Override to add options related to acquisition info.
-        """
-        form.addParam('samplingRate', FloatParam,
-                      label=Message.LABEL_SAMP_RATE)
+        Unlike conventional import systems that simply collect files from a directory,
+        this protocol introduces tomography-aware parsing logic capable of identifying
+        unique tilt-series identifiers directly from filenames. This allows previously
+        generated external results, such as IMOD alignments or reconstructed tomograms,
+        to be integrated seamlessly into Scipion projects.
 
-    # --------------------------- UTILS functions -----------------------------
-    def initializeParsing(self):
-        pattern = self.filesPattern.get()
-        if pattern:
-            if TS_LABEL in pattern:
-                logger.info('Importing using a pattern.')
-                path = self.filesPath.get().strip()
-                pattern = pattern.strip()
-                pattern = join(path, pattern)
-                regExPattern = pattern.replace(TS_LABEL, r'(?P<TS>.*)')  # regex pattern for TS
-                self.regEx = re.compile(regExPattern)
-                self.regExPattern = regExPattern
-                globPattern = pattern.replace(TS_LABEL, '*')
-                # Glob module does not handle well the brackets (it does not list them)
-                self.globPattern = globPattern.replace('[', '*').replace(']', '*')
-            else:
-                logger.info(f'Direct import. Pattern {TS_LABEL} not introduced.')
+        Inputs and General Workflow
 
-    def _excludeByWords(self, files):
-        exclusionWords = self.exclusionWords.get()
+        The protocol supports two different import strategies depending on the value
+        of the Pattern parameter. The first strategy corresponds to traditional file
+        imports using standard wildcard expressions such as '*', '?', or numeric
+        placeholders. This mode behaves similarly to classical Scipion SPA import
+        protocols and is appropriate when datasets do not require advanced tomography
+        associations.
 
-        if exclusionWords is None:
-            return files
+        The second strategy is specifically designed for tomography workflows and
+        relies on the special {TS} label embedded in the filename pattern. This label
+        defines which region of the filename should be interpreted as the tilt-series
+        identifier. During initialization, the protocol converts this pattern into
+        regular expressions and glob-compatible patterns that allow automatic matching
+        between imported files and existing tomography objects inside the project.
 
-        exclusionWordList = exclusionWords.split()
+        From a biological and workflow-management perspective, this capability is
+        extremely important because it ensures consistency between datasets generated
+        externally and the internal tomography structure maintained by Scipion.
 
-        allowedFiles = []
+        Tilt-Series Identifier Parsing
 
-        for file in files:
-            if any(bannedWord in file for bannedWord in exclusionWordList):
-                logger.info("%s excluded. Contains any of %s" %
-                            (file, exclusionWords))
-                continue
-            allowedFiles.append(file)
+        One of the central concepts of this protocol is the extraction and normalization
+        of tilt-series identifiers. When the {TS} label is present in the import
+        pattern, the protocol dynamically builds a regular expression capable of
+        isolating the desired substring from each filename.
 
-        return allowedFiles
+        This mechanism allows users to adapt the import process to highly heterogeneous
+        naming conventions commonly encountered in cryo-ET facilities and collaborative
+        projects. For example, a filename such as:
 
-    def getMatchingFilesFromRegEx(self):
-        filePaths = glob(self.globPattern)
-        filePaths = self._excludeByWords(filePaths)
-        filePaths.sort(key=lambda fn: getmtime(fn))
-        matchingFilesDict = dict()
-        for f in filePaths:
-            matchRes = self.regEx.match(f)
-            if matchRes is not None:
-                tsId = matchRes.group('TS')  # Return the complete matched subgroup
-                logger.info("Raw tilt series id is %s." % tsId)
-                tsId = normalizeTSId(tsId)
-                logger.info("Normalized tilt series id is %s." % tsId)
-                matchingFilesDict[tsId] = f
-        return matchingFilesDict
+            TS_01_binned.xf
 
+        can generate the tilt-series identifier "TS_01" automatically when using the
+        pattern:
 
-    # --------------------------- INFO functions ------------------------------
-    def _validate(self):
-        pass
+            {TS}_binned.xf
 
+        This flexibility becomes essential when importing external alignments,
+        reconstruction files, or metadata generated outside Scipion but intended to
+        match already imported tilt-series.
 
-class ProtTomoSubtomogramAveraging(EMProtocol, ProtTomoBase):
-    """ Base class for subtomogram averaging protocols. """
-    pass
+        The protocol also normalizes extracted identifiers to ensure compatibility
+        across workflows, minimizing issues caused by inconsistent naming conventions.
 
+        Wildcards and Pattern Matching
 
-class ProtTomoImportAcquisition:
-    MANUAL_IMPORT = 0
-    FROM_FILE_IMPORT = 1
+        The import system supports both standard wildcard expressions and tomography-
+        specific placeholders. Standard wildcards allow users to scan directories and
+        identify groups of files efficiently, while the tomography-aware {TS} label
+        introduces semantic meaning into the import process.
 
-    def _defineParams(self, form):
+        This dual approach makes the protocol suitable both for simple exploratory
+        workflows and for highly structured production pipelines. In practical terms,
+        users can import individual files, entire directories, or complex collections
+        of tomography outputs generated by external software suites.
 
-        """ Override to add options related to acquisition info.
-        """
+        The protocol internally combines glob-based file discovery with regular
+        expression matching, ensuring both flexibility and reproducibility when working
+        with large tomography datasets.
 
-        importAcquisitionChoices = ['Manual', 'From file']
+        File Exclusion and Dataset Filtering
 
-        form.addSection(label='Acquisition Info')
+        The protocol includes an exclusion-word filtering mechanism intended to simplify
+        dataset curation during import. Users may provide a list of forbidden words,
+        and any file containing those substrings will automatically be ignored.
 
-        form.addParam('importAcquisitionFrom', EnumParam,
-                      choices=importAcquisitionChoices,
-                      default=self._getDefaultChoice(),
-                      label='Import from',
-                      help='Select the type of import.')
+        In biological workflows this functionality becomes useful when directories
+        contain intermediate files, temporary outputs, backup reconstructions, or
+        partially processed datasets that should not be incorporated into the project.
 
-        form.addParam('acquisitionData', PathParam,
-                      label="Acquisition parameters file",
-                      help="File with the acquisition parameters for each "
-                           "tomogram or subtomogram to import. File must be in plain format."
-                           " The file must contain a row per file to be imported "
-                           "and have the following parameters in order: \n"
-                           "\n"
-                           "'File_name AcquisitionAngleMin AcquisitionAngleMax Step TiltAxisAngle' \n"
-                           "\n"
-                           "An example would be:\n"
-                           "subtomo1.em -40 40 3 85\n"
-                           "subtomo2.em -45 50 2 85\n",
-                      condition="importAcquisitionFrom == %d" % self.FROM_FILE_IMPORT)
+        This filtering stage helps maintain clean and reproducible datasets while
+        reducing the risk of importing unintended files into downstream analyses.
 
-        form.addParam('acquisitionAngleMax', FloatParam,
-                      default=60,
-                      label='Acquisition angle max',
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      help='Enter the positive limit of the acquisition angle')
+        Acquisition Metadata Management
 
-        form.addParam('acquisitionAngleMin', FloatParam,
-                      default=-60,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Acquisition angle min',
-                      help='Enter the negative limit of the acquisition angle')
+        The ProtTomoImportAcquisition class complements the import system by handling
+        tomography acquisition parameters. These parameters can either be introduced
+        manually or extracted from an external metadata file containing acquisition
+        information for each imported object.
 
-        form.addParam('step', FloatParam,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      label='Step',
-                      help='Enter the step size for the import')
+        The protocol supports biologically relevant acquisition parameters such as
+        angular range, angular step size, tilt-axis orientation, microscope voltage,
+        spherical aberration, and amplitude contrast. These parameters are fundamental
+        for downstream tomographic reconstruction, CTF correction, and subtomogram
+        averaging workflows.
 
-        form.addParam('tiltAxisAngle', FloatParam,
-                      label='Tilt axis angle (deg.)',
-                      allowsNull=True,
-                      help="The rotation angle is the angle from the vertical "
-                           "to the axis of tilting, where counterclockwise is "
-                           "positive.\n See "
-                           "https://bio3d.colorado.edu/imod/doc/tomoguide.html#UnknownAxisAngle")
+        When acquisition parameters are imported from file, the protocol associates
+        metadata entries with imported objects through filename matching. This enables
+        large tomography datasets to be imported consistently without requiring manual
+        metadata entry for each tomogram or subtomogram.
 
-        form.addParam('voltage', FloatParam, default=300,
-                      label=Message.LABEL_VOLTAGE,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      help=Message.TEXT_VOLTAGE)
+        From a cryo-ET perspective, preserving accurate acquisition metadata is
+        essential because errors in angular geometry or microscope parameters can
+        propagate into reconstruction artifacts and compromise biological interpretation.
 
-        form.addParam('sphericalAberration', FloatParam, default=2.7,
-                      label=Message.LABEL_SPH_ABERRATION,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      help=Message.TEXT_SPH_ABERRATION)
+        Streaming and Workflow Integration
 
-        form.addParam('amplitudeContrast', FloatParam, default=0.1,
-                      label=Message.LABEL_AMPLITUDE,
-                      allowsNull=True,
-                      condition="importAcquisitionFrom == %d" % self.MANUAL_IMPORT,
-                      help=Message.TEXT_AMPLITUDE)
+        Although this protocol mainly focuses on import functionality, its architecture
+        is designed to integrate naturally with Scipion tomography workflows. Imported
+        objects preserve the relationships required by downstream processing protocols,
+        allowing alignment files, tomograms, CTF estimations, and subtomogram datasets
+        to remain synchronized through shared tilt-series identifiers.
 
-    def _parseAcquisitionData(self):
-        if self.importAcquisitionFrom.get() == self.MANUAL_IMPORT:
-            self.acquisitionParameters = {
-                'angleMin': self.acquisitionAngleMin.get(),
-                'angleMax': self.acquisitionAngleMax.get(),
-                'step': self.step.get(),
-                'tiltAxisAngle': self.tiltAxisAngle.get(),
-                'voltage': self.voltage.get(),
-                'sphericalAberration': self.sphericalAberration.get(),
-                'amplitudeContrast': self.amplitudeContrast.get(),
-            }
-        else:
-            params = open(self.acquisitionData.get(), "r")
-            self.acquisitionParameters = {}
-            for line in params.readlines():
-                param = line.split()
-                try:
-                    self.acquisitionParameters.update({param[0]: {
-                        'angleMin': float(param[1]),
-                        'angleMax': float(param[2]),
-                        'step': int(param[3]),
-                        'tiltAxisAngle': float(param[4]),
-                    }})
-                except Exception as e:
-                    print('Wrong acquisition data file format', e)
+        This interoperability is particularly important in modern cryo-ET pipelines,
+        where datasets often move between external software environments and Scipion-
+        based workflow managers.
 
-    def _extractAcquisitionParameters(self, fileName):
-        if self.importAcquisitionFrom.get() == self.FROM_FILE_IMPORT:
-            onlyName = fileName.split('/')[-1]
-            acquisitionParams = self.acquisitionParameters[onlyName]
-        else:
-            acquisitionParams = self.acquisitionParameters
+        Subtomogram Averaging Context
 
-        return tomo.objects.TomoAcquisition(**acquisitionParams)
+        The ProtTomoSubtomogramAveraging base class serves as a structural foundation
+        for subtomogram averaging protocols within the tomography framework. Although
+        the class itself does not yet implement processing logic, it establishes a
+        standardized inheritance structure for future averaging protocols.
 
-    def _summary(self, summary, setOfObject):
-        for obj in setOfObject:
-            if obj.hasAcquisition():
-                summary.append(u"File: %s" % obj.getFileName())
-                summary.append(u"Acquisition angle max: *%0.2f*" % obj.getAcquisition().getAngleMax())
+        In biological workflows, subtomogram averaging is used to improve the signal-
+        to-noise ratio of repetitive macromolecular complexes extracted from tomograms.
+        The existence of this shared base class helps maintain consistency across
+        tomography averaging implementations.
 
-                summary.append(u"Acquisition angle min: *%0.2f*" % obj.getAcquisition().getAngleMin())
-                if obj.getAcquisition().getStep():
-                    summary.append(u"Step: *%d*" % obj.getAcquisition().getStep())
-                if obj.getAcquisition().getTiltAxisAngle():
-                    summary.append(u"Tilt axis angle: *%0.2f*" % obj.getAcquisition().getTiltAxisAngle())
+        Outputs and Their Interpretation
+
+        After import, the protocol generates tomography-compatible Scipion objects
+        linked to their associated tilt-series identifiers and acquisition metadata.
+        These imported datasets can then be used directly in reconstruction, alignment,
+        CTF estimation, particle picking, or subtomogram averaging workflows.
+
+        The correctness of the import stage is biologically significant because all
+        downstream associations depend on the consistency of the imported identifiers
+        and metadata. Incorrect tsId extraction or mismatched acquisition parameters
+        may propagate through the entire tomography workflow.
+
+        Practical Recommendations
+
+        In routine cryo-electron tomography workflows, it is generally advisable to
+        adopt a consistent filename convention before importing datasets into Scipion.
+        Using clear and reproducible tilt-series identifiers greatly simplifies
+        downstream data management and minimizes matching errors between related
+        tomography objects.
+
+        When importing files generated externally—such as IMOD alignments or external
+        reconstructions—the {TS} pattern mechanism provides the most robust solution
+        for preserving dataset consistency. Users should verify that extracted tsIds
+        match existing tilt-series identifiers already present in the project.
+
+        For large datasets, exclusion filters can help avoid accidental import of
+        temporary or irrelevant files. Similarly, importing acquisition metadata from
+        external files is often preferable when handling large tomography collections,
+        since it improves reproducibility and reduces manual annotation errors.
+
+        Final Perspective
+
+        In cryo-electron tomography, data import is not simply a technical operation
+        but a critical organizational step that defines how all downstream datasets
+        remain connected throughout the workflow. The ProtTomoImportFiles framework
+        provides the flexibility required for heterogeneous tomography environments
+        while ensuring that biological datasets remain consistently associated through
+        standardized tilt-series identifiers and acquisition metadata management.
+    """

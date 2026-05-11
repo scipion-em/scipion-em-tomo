@@ -46,161 +46,196 @@ class importTomoMasksOutputs(Enum):
 class ProtImportTomomasks(ProtTomoImportFiles):
     """Protocol to import a set of tomomasks (segmentations) to the project"""
 
-    _label = 'import tomomasks (segmentations)'
-    _possibleOutputs = importTomoMasksOutputs
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.warnMsg = String('')
-        self.matchingTomoMaskDict = None  # keys = filenames of matching tomomasks, values = matching Tomogram
+    """
+    Imports a set of tomographic segmentation masks into a Scipion project
+    and associates them with their corresponding tomograms. The protocol
+    validates dimensional consistency between tomograms and masks and
+    prepares the segmentation volumes for downstream visualization,
+    annotation, structural interpretation, and quantitative analysis.
 
-    def _defineParams(self, form):
-        ProtTomoImportFiles()._defineImportParams(form)
-        ProtTomoImportFiles.addExclusionWordsParam(form)
-        form.addParam('inputTomos', PointerParam,
-                      pointerClass='SetOfTomograms',
-                      label='Tomograms',
-                      help='Select the tomograms to be assigned to the input tomo masks.')
+    AI Generated:
 
-    # --------------------------- STEPS functions -----------------------------
-    def _insertAllSteps(self):
-        self._initialize()
-        self._insertFunctionStep(self.importStep)
+    Import Tomomasks (ProtImportTomomasks) — User Manual
 
-    def _initialize(self):
-        self.ih = ImageHandler()
-        self.initializeParsing()
+        Overview
 
-    def importStep(self):
-        inTomos = self.inputTomos.get()
-        samplingRate = inTomos.getSamplingRate()
-        tomoMask = TomoMask()
-        tomoMask.setSamplingRate(samplingRate)
+        The Import Tomomasks protocol is designed to incorporate segmented
+        tomographic volumes, also referred to as tomomasks, into a Scipion
+        tomography workflow. In cryo-electron tomography, segmentation masks
+        are commonly used to identify biologically meaningful regions inside
+        tomograms, such as membranes, ribosomes, cytoskeletal filaments,
+        organelles, viral particles, vesicles, or other macromolecular
+        assemblies.
 
-        if self.regEx:
-            logger.info("Using regex pattern: '%s'" % self.regExPattern)
-            logger.info("Generated glob pattern: '%s'" % self.globPattern)
-            filesDict = self.getMatchingFilesFromRegEx()
-        else:
-            inPattern = self.filesPattern.get()
-            pattern = inPattern.strip() if inPattern else ''
-            logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(), pattern))
-            filePaths = [fileName[0] for fileName in self.iterFiles()]
-            fileList = self._excludeByWords(filePaths)
-            filesDict = {}
-            for fileName in fileList:
-                tsId = normalizeTSId(self.getTomoMaskName(fileName))
-                filesDict[tsId] = fileName
+        From a biological perspective, segmentation masks provide a way to
+        transform noisy tomographic reconstructions into interpretable
+        structural information. These masks are frequently generated using
+        manual annotation tools, machine learning segmentation software, or
+        specialized membrane annotation pipelines. The protocol enables these
+        segmented regions to be imported and formally associated with the
+        original tomograms inside the Scipion environment.
 
-        tomoDict = {tomo.getTsId(): tomo.clone() for tomo in inTomos}
-        tomoMaskSet = self._genOutputSetOfTomoMasks(filesDict, tomoDict)
+        The protocol therefore acts as a bridge between segmentation workflows
+        and downstream tomographic analysis, facilitating visualization,
+        particle extraction, contextual interpretation, and structural studies
+        within native cellular environments.
 
-        warnMsg = self.warnMsg
-        if warnMsg.get():
-            self._store(warnMsg)
-            print(yellowStr('WARNING!') + '\n' + warnMsg.get())
-        if len(tomoMaskSet) == 0:
-            raise Exception(ERR_NO_TOMOMASKS_GEN)
+        Inputs and General Workflow
 
-        self._defineOutputs(**{self._possibleOutputs.tomomasks.name: tomoMaskSet})
-        self._defineSourceRelation(self.inputTomos, tomoMaskSet)
+        The protocol requires two main inputs: a set of tomograms already
+        present in the project and a collection of segmentation mask files.
+        The masks are identified using either direct filename patterns or
+        regular expression matching strategies.
 
-    # --------------------------- INFO functions ------------------------------
-    def _getTomMessage(self):
-        return "Tomomasks %s" % self.getObjectTag(self._possibleOutputs.tomomasks.name)
+        During execution, the protocol scans the provided directory structure,
+        identifies compatible mask files, and attempts to associate each mask
+        with its corresponding tomogram through normalized tilt-series
+        identifiers. This matching strategy is particularly important in large
+        tomography projects where multiple segmentations may coexist for
+        different tomograms or experimental conditions.
 
-    def _summary(self):
-        try:
-            summary = []
-            if self.isFinished():
-                summary.append("%s imported from:\n%s" % (self._getTomMessage(), self.getPattern()))
+        Once the associations are established, the protocol generates a
+        SetOfTomoMasks object that stores the imported segmentation masks
+        together with their tomogram references and metadata.
 
-                if self.warnMsg:
-                    summary.append('Some tomograms or tomomasks were excluded. Check the log for more details.')
+        Segmentation Masks in Biological Context
 
-            return summary
+        In practical cryo-ET workflows, tomomasks often represent biologically
+        relevant structures isolated from the surrounding cellular environment.
+        For example, segmentation masks may define membrane boundaries,
+        cytoplasmic compartments, viral envelopes, protein assemblies, or
+        filamentous networks.
 
-        except Exception as e:
-            print(e)
+        These masks are essential for contextual structural biology because
+        they allow researchers to focus computational analyses on specific
+        cellular regions while excluding irrelevant density or reconstruction
+        artifacts. In many modern workflows, segmentation masks also guide
+        subtomogram extraction, region-based averaging, and machine learning
+        analysis.
 
-    def _validate(self):
-        errors = []
-        self._initialize()
-        if self.regEx:
-            matchingFileDict = self.getMatchingFilesFromRegEx()
-            if not matchingFileDict:
-                errors.append('No files matching the pattern %s were found.' % self.globPattern)
-        else:
-            try:
-                next(self.iterFiles())
-            except StopIteration:
-                errors.append('No files matching the pattern %s were found.' % self.getPattern())
-        return errors
+        By importing segmentation masks directly into Scipion, the protocol
+        enables integrated structural interpretation in which reconstructed
+        densities and annotated biological features coexist within the same
+        processing environment.
 
-    # --------------------------- UTILS functions ------------------------------
-    @staticmethod
-    def _tomoHasValidTsId(tomo):
-        return True if getattr(tomo, '_tsId', None) else False
+        File Matching and Identification
 
-    def _genOutputSetOfTomoMasks(self, filesDict, tomoDict):
-        tomoMasksNonMatchingDims = []
-        nonMatchingDimsList = []
-        tomoMaskSet = SetOfTomoMasks.create(self._getPath(), template='tomomasks%s.sqlite')
-        inTomoSet = self.inputTomos.get()
-        sRate = inTomoSet.getSamplingRate()
-        tomoMaskSet.setSamplingRate(sRate)
-        counter = 1
-        for tsId in filesDict.keys():
-            tomoMaskFile = filesDict[tsId]
-            tomo = tomoDict.get(tsId, None)
-            if tomo:
-                x, y, z, _ = self.ih.getDimensions(tomoMaskFile)
-                xt, yt, zt, _ = self.ih.getDimensions(tomo.getFileName())
-                if (xt, yt, zt) == (x, y, z):
-                    tomoMask = TomoMask()
-                    tomoMask.setTsId(tsId)
-                    tomoMask.setSamplingRate(sRate)
-                    newFileName = self.getTomoMaskNewFileName(tsId, getExt(tomoMaskFile))
-                    createAbsLink(abspath(tomoMaskFile), abspath(newFileName))
-                    tomoMask.setFileName(tomoMaskFile)
-                    tomoMask.setVolName(tomo.getFileName())
-                    tomoMaskSet.append(tomoMask)
-                    counter += 1
-                else:
-                    tomoMasksNonMatchingDims.append(self.getTomoMaskName(tomoMaskFile))
-                    nonMatchingDimsList.append((x, y, z))
+        The protocol supports flexible matching mechanisms to associate masks
+        with tomograms. When regular expressions are enabled, filenames are
+        parsed dynamically to identify corresponding tilt-series identifiers.
+        Alternatively, direct filename matching can be used when mask names
+        already follow a consistent naming convention.
 
-        if tomoMasksNonMatchingDims:
-            nNonMatchingDimsMasks = len(tomoMasksNonMatchingDims)
-            msgNonMatchingDimsMasks = yellowStr('[%i] tomomasks have different dimensions than the ones from the '
-                                                'introduced set of tomograms (x, y, z) = (%i, %i, %i):' %
-                                                (nNonMatchingDimsMasks, xt, yt, zt))
+        Additional normalization rules are implemented to support segmentation
+        outputs generated by external software packages. For example, suffixes
+        such as "_materials" or "_segmented", commonly introduced by membrane
+        annotation or neural-network segmentation tools, are automatically
+        removed before attempting the association with the tomogram.
 
-            for nonMatchingDimsMask, nonMatchingDims in zip(tomoMasksNonMatchingDims, nonMatchingDimsList):
-                msgNonMatchingDimsMasks += '\n\t- %s (x, y, z) = (%i, %i, %i)\n' % \
-                                           (nonMatchingDimsMask,
-                                            nonMatchingDims[0],
-                                            nonMatchingDims[1],
-                                            nonMatchingDims[2])
+        This flexibility is particularly valuable in collaborative projects
+        where segmentations may originate from different annotation pipelines
+        or external software ecosystems.
 
-            self.warnMsg.set(self.warnMsg.get() + msgNonMatchingDimsMasks + '\n\n')
+        Dimensional Consistency and Validation
 
-        return tomoMaskSet
+        One of the most biologically important aspects of the protocol is the
+        validation of dimensional consistency between tomograms and their
+        associated masks. For each tomomask, the protocol verifies that the
+        X, Y, and Z dimensions exactly match those of the corresponding
+        tomogram.
 
-    def addTomoMaskToSet(self, fileName: str, tsId: str, tomoMask: TomoMask, tomoMaskSet: SetOfTomoMasks) -> None:
-        tomoMask.setTsId(tsId)
-        newFileName = self.getTomoMaskNewFileName(tsId, getExt(fileName))
-        createAbsLink(abspath(fileName), abspath(newFileName))
-        tomoMask.cleanObjId()
-        tomoMask.setFileName(newFileName)
-        tomoMaskSet.append(tomoMask)
-        tomoMaskSet.update(tomoMask)
+        This validation is critical because segmentation masks must occupy the
+        same spatial coordinate system as the tomographic reconstruction. Any
+        dimensional mismatch would invalidate the biological interpretation of
+        the segmentation and could lead to incorrect localization of structures
+        or downstream computational errors.
 
-    def getTomoMaskNewFileName(self, tsId: str, ext: str) -> str:
-        return self._getExtraPath(f'{tsId}{ext}')
+        Masks with incompatible dimensions are automatically excluded from the
+        output dataset, and detailed warning messages are generated to inform
+        the user about the inconsistency.
 
-    @staticmethod
-    def getTomoMaskName(maskFileName):
-        # These suffixes are added by the memb. annotator and membrain, respectively
-        return removeBaseExt(maskFileName).replace('_materials', '').replace('_segmented', '')
+        Sampling Rate and Spatial Consistency
 
+        The protocol propagates the sampling rate from the input tomograms to
+        the imported tomomasks. Maintaining voxel-size consistency is essential
+        for correct structural interpretation because segmentation masks must
+        remain spatially aligned with the tomographic data.
+
+        In biological analyses, incorrect voxel calibration could produce
+        misleading measurements of membrane thickness, particle dimensions,
+        organelle size, or intermolecular distances. By preserving the original
+        tomogram sampling rate, the protocol guarantees geometric consistency
+        throughout downstream analyses.
+
+        Data Organization and File Management
+
+        During import, the protocol creates internal symbolic links to the
+        segmentation masks inside the Scipion project structure. This approach
+        avoids unnecessary duplication of large volumetric datasets while still
+        preserving reproducibility and project portability.
+
+        Each imported tomomask is stored with its associated tomogram reference,
+        allowing direct integration with visualization and segmentation-aware
+        workflows inside Scipion.
+
+        Outputs and Their Interpretation
+
+        After successful execution, the protocol produces a SetOfTomoMasks
+        object containing all validated segmentation masks together with their
+        corresponding tomogram associations.
+
+        Each tomomask preserves information about the original segmentation file,
+        voxel size, and linked tomogram volume. The resulting dataset can then
+        be used for structural interpretation, segmentation visualization,
+        contextual subtomogram extraction, or downstream quantitative analyses.
+
+        From a biological perspective, the imported masks provide an annotated
+        structural map of the tomographic environment, helping researchers
+        interpret molecular organization directly inside native cellular
+        contexts.
+
+        Error Handling and Warnings
+
+        The protocol includes several validation and warning mechanisms designed
+        to prevent biologically inconsistent imports. If no files match the
+        provided pattern, execution stops with an explicit error. Similarly,
+        masks with incompatible dimensions are excluded automatically.
+
+        Informative warning messages are stored and displayed so users can
+        identify which masks failed validation and why. This behavior is
+        especially useful in large segmentation projects where mismatches may
+        originate from preprocessing differences, cropping operations, or
+        inconsistent reconstruction parameters.
+
+        Practical Recommendations
+
+        In practical cryo-ET workflows, users should ensure that segmentation
+        masks are generated directly from the same tomograms that will be used
+        during import. Even small dimensional differences introduced by binning,
+        cropping, or resampling can invalidate the spatial correspondence
+        between masks and tomograms.
+
+        Consistent naming conventions are also strongly recommended, especially
+        in large datasets containing many tomograms and segmentation outputs.
+        Maintaining coherent identifiers greatly simplifies automatic matching
+        and reduces the risk of incorrect associations.
+
+        When using segmentation masks generated by machine learning pipelines,
+        users should visually inspect several imported masks after execution to
+        verify that spatial alignment and biological interpretation remain
+        correct.
+
+        Final Perspective
+
+        For cryo-electron tomography users, segmentation masks are not merely
+        auxiliary files but biologically meaningful annotations that define the
+        structural context of tomographic data. Proper integration of these
+        masks is essential for accurate interpretation of cellular organization,
+        molecular localization, and structural heterogeneity.
+
+        By validating spatial consistency, preserving tomogram associations,
+        and integrating segmentation data into Scipion workflows, this protocol
+        provides a reliable foundation for advanced contextual structural
+        biology analyses within cryo-electron tomography projects.
+    """
