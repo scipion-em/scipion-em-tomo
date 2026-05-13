@@ -1,6 +1,11 @@
-V3.12.6:
-  - Fix: Fixing an error crating subsets
-  - Fix: Prevent duplicated object insertion
+V3.11.6:
+ Users:
+  - Fix: Fixing an error crating subsets.
+  - Fix: Prevent duplicated object insertion.
+  - Protocol assign transformation to TS: improve the streaming.
+ Developers:
+  - Expand the TCL.
+  - Add tests to protocol assign transformation to TS.
 v3.11.5:
  Users:
   - Protocol meshes from segmentation: protocol parallelized.
