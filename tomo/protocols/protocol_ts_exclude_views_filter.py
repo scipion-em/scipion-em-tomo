@@ -28,15 +28,15 @@ import logging
 import traceback
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import Counter, Tuple, List, Optional, Dict
+from typing import Counter, Tuple, List, Dict
 import yaml
 import numpy as np
 import time
 from skimage.filters.edges import sobel
 from pwem.emlib.image.image_readers import ImageReadersRegistry
 from pyworkflow import BETA
-from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam, ProtStreamingBase
-from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam, GE, LE
+from pyworkflow.protocol import STEPS_PARALLEL, BooleanParam, ProtStreamingBase, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, FloatParam, IntParam, GE, LE, EnumParam
 from pyworkflow.object import Set, Pointer, String
 from pyworkflow.utils import cyanStr, Message, redStr, yellowStr
 from pwem.protocols import EMProtocol
@@ -53,9 +53,18 @@ MAX_SX = 'maxShiftX'
 MAX_SY = 'maxShiftY'
 MIN_DOSE = 'minDose'
 MAX_DOSE = 'maxDose'
-DARK_TH = 'darkSensitivity'
+QUALITY_FILTER = 'qualityFilterFactor'
+DARK_SENSITIVITY = 'darkSensitivity'
+DARK_LOCAL_RATION_TH = 'darkLocalRatioTh'
+DARK_WINDOW = 'darkWindow'
+DARK_COS_FLOOR = 'darkCosFloor'
+DARK_CROP_FRACTION = 'darkCropFraction'
+EXTREME_CONTRAST_TH = 'extremeContrastTh'
+MIN_ENTROPY = 'minEntropy'
+MIN_EDGE_ENERGY = 'minEdgeEnergy'
 MIN_VIEWS = 'minViews'
 DO_RESTACK = 'doReStack'
+
 
 # Tilt-series annotation keys
 @dataclass
@@ -77,6 +86,14 @@ class TiLabel(Enum):
     BY_EXTREME_CONTRAST_SPLIT = 'by_extreme_contrast_split'
     BY_LOW_INFO = 'by_low_info_or_flat_image'
     BY_EDGE_ENERGY = 'by_edge_energy'  # Very unfocused or lack of sample
+
+
+class QualityFilterModes(Enum):
+    disabled = 0
+    conservative = 1
+    balanced = 2
+    aggressive = 3
+    custom = 4
 
 
 class outputObjects(Enum):
@@ -104,6 +121,14 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         self.sRate = -1
         self.removedTsIds = String('')
         self.tiLabelDict = dict()
+        self.darkSensitivityVal = None
+        self.darkLocalRatioThVal = None
+        self.darkWindowVal = None
+        self.darkCosFloorVal = None
+        self.darkCropFractionVal = None
+        self.extremeContrastThVal = None
+        self.minEntropyVal = None
+        self.minEdgeEnergyVal = None
 
     @classmethod
     def worksInStreaming(cls):
@@ -126,8 +151,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                                   help='This is the minimum/maximum shift allowed along the X or Y direction. '
                                        'A value of 0.1 means that a 10% of the dimensions of the tilt image '
                                        'is allowed.')
-        lineShift.addParam(MAX_SX, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="X    ")
-        lineShift.addParam(MAX_SY, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="Y    ")
+        lineShift.addParam(MAX_SX, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="X")
+        lineShift.addParam(MAX_SY, FloatParam, default=0.0, validators=[GE(0), LE(1)], label="Y   ")
 
         lineTilt = group.addLine('Filter by tilt angle (deg)',
                                  help='This is the minimum/maximum tilt angle allowed.'
@@ -142,20 +167,110 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         lineDose.addParam(MIN_DOSE, FloatParam, default=0.0, label="Min")
         lineDose.addParam(MAX_DOSE, FloatParam, default=70.0, label="Max")
 
-        lineDark = group.addLine('Filter by dark sensitivity',
-                                 help='Values lower than 0 means that no dark filter will be applied. Behavior:\n\n'
-                                      '- *High Sensitivity: Low Factor --> 1.0 - 1.5.* It might flag images '
-                                      'that are just slightly darker than the average, such as high-tilt images '
-                                      'where the ice is naturally thicker.\n\n'
-                                      '- *Balanced: around 2.0.* It ignores the natural darkening of high '
-                                      'tilts but will catch "heavy" shadows or partial grid bars.\n\n'
-                                      '- *Low Sensitivity: High Factor --> greater than 3.0.* It will only flag '
-                                      '"catastrophic" failures, like a solid copper grid bar completely blocking the '
-                                      'electron beam (total blackouts).')
+        lineDark = group.addLine('Filter by image quality',
+                                 help='Disable low-quality tilt images (dark/blank frames, partial obstructions, '
+                                      'flat/low-texture or structureless views) using a strictness preset '
+                                      '(Conservative / Balanced / Aggressive / Custom).\n\n'
+                                      '*Conservative:*\n '
+                                      'Removes only clear, catastrophic failures (e.g., strong blackouts '
+                                      'or obvious obstructions). Recommended when you want to keep as many views as '
+                                      'possible, especially at high tilts, and rely on downstream steps to handle '
+                                      'minor quality variations.\n\n'
+                                      '*Balanced:*\n'
+                                      'A practical default for most datasets. Targets typical punctual failures (dark '
+                                      'frames, heavy partial obstructions) while ignoring normal high-tilt darkening '
+                                      'and modest contrast changes.\n\n'
+                                      '*Aggressive:*\n'
+                                      'Stricter filtering intended to remove borderline low-quality views (milder '
+                                      'dark dips, stronger local contrast anomalies, lower texture). Recommended when you '
+                                      'see frequent intermittent acquisition problems or when you prefer a cleaner '
+                                      'but smaller set of views\n\n'
+                                      '*Custom:*\n'
+                                      'Uses the preset as a starting point, then applies user-defined thresholds. '
+                                      'Choose this when you want precise control over the sensitivity of the dark '
+                                      'detector and the thresholds for extreme contrast, low information (entropy), '
+                                      'and edge-energy.')
 
-        lineDark.addParam(DARK_TH, FloatParam,
-                          default=2.0,
-                          label='Dark sensitivity factor', )
+        lineDark.addParam(QUALITY_FILTER, EnumParam,
+                          display=EnumParam.DISPLAY_COMBO,
+                          choices=[item.name for item in QualityFilterModes],
+                          default=QualityFilterModes.balanced.value,
+                          label='Quality preset')
+
+        customQualityCond = f'{QUALITY_FILTER} == {QualityFilterModes.custom.value}'
+        group.addParam(DARK_SENSITIVITY, FloatParam,
+                       label='Dark sensitivity',
+                       default=2.0,
+                       validators=[GE(0.5), LE(6)],
+                       condition=customQualityCond,
+                       help='Controls how extreme a brightness drop must be to classify an image as a dark outlier.'
+                            '\n\t- Lower values = more aggressive (more images flagged).'
+                            '\n\t- Higher values = more conservative (only strong blackouts).'
+                            '\n\t- Typical range: 1.5 – 3.0 (valid range: 0.5 – 6.0).')
+        group.addParam(DARK_LOCAL_RATION_TH, FloatParam,
+                       label='Dark local ratio threshold',
+                       default=0.65,
+                       validators=[GE(0.30), LE(0.90)],
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Requires the image to be sufficiently darker than its neighboring tilts.'
+                            '\n\t- Higher values = more aggressive (flags smaller local drops).'
+                            '\n\t- Lower values = more conservative (only strong, punctual drops).'
+                            '\n\t- Typical range: 0.6 – 0.7 (valid range: 0.3 – 0.9).')
+        group.addParam(DARK_WINDOW, IntParam,
+                       label='Dark neighborhood tilts',
+                       default=2,
+                       validators=[GE(1), LE(5)],
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Number of neighboring tilts used to compare local brightness.'
+                            '\n\t- Small values detect very local drops.'
+                            '\n\t- Larger values smooth the comparison but may miss punctual failures.'
+                            '\n\t- Typical range: 2 – 3 (valid range: 1 – 5).')
+        group.addParam(DARK_COS_FLOOR, FloatParam,
+                       label='Cosine floor (high tilt stabilization)',
+                       default=0.20,
+                       validators=[GE(0.05), LE(0.50)],
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Prevents instability of the brightness model at extreme tilt angles.'
+                            '\n\t- Lower values increase sensitivity at high tilts but may be less stable.'
+                            '\n\t- Higher values stabilize the model but reduce tilt dependence.'
+                            '\n\t- Typical range: 0.1 – 0.3 (valid range: 0.05 – 0.5).')
+        group.addParam(DARK_CROP_FRACTION, FloatParam,
+                       label='Central crop fraction',
+                       default=0.70,
+                       validators=[GE(0.40), LE(1.00)],
+                       expertLevel=LEVEL_ADVANCED,
+                       help='Fraction of the image used to compute brightness (center crop).'
+                            '\n\t- Lower values reduce edge artifacts (e.g., grid bars) but may be noisier.'
+                            '\n\t- Higher values use more of the image but may include unwanted edges.'
+                            '\n\t- Typical range: 0.6 – 0.8 (valid range: 0.4 – 1.0).')
+        group.addParam(EXTREME_CONTRAST_TH, FloatParam,
+                       label='Extreme contrast threshold',
+                       default=1.0,
+                       validators=[GE(0.5), LE(3.0)],
+                       condition=customQualityCond,
+                       help='Flags images with unusually uneven local contrast (e.g., grid bars, shadows).'
+                            '\n\t- Lower values = more aggressive (detects mild obstructions).'
+                            '\n\t- Higher values = more conservative (only strong artifacts).'
+                            '\n\t- Typical range: 0.8 – 1.3 (valid range: 0.5 – 3.0).')
+        group.addParam(MIN_ENTROPY, FloatParam,
+                       label='Low information / flat image threshold',
+                       default=3.0,
+                       validators=[GE(1.0), LE(6.0)],
+                       condition=customQualityCond,
+                       help='Minimum entropy. Flags images with low structural content (flat or low-texture images).'
+                            '\n\t- Higher values = more aggressive (requires more texture). '
+                            '\n\t- Lower values = more conservative (only very flat images).'
+                            '\n\t- Typical range: 2.5 – 3.5 (valid range: 1.0 – 6.0).')
+        group.addParam(MIN_EDGE_ENERGY, FloatParam,
+                       label='Edge energy threshold',
+                       default=0.0,
+                       validators=[GE(0.0), LE(0.05)],
+                       condition=customQualityCond,
+                       help='Minimum edge energy. Flags images with very low edge content (blurred or no sample '
+                            'signal).'
+                            '\n\t- Higher values = more aggressive (detects mild blur).'
+                            '\n\t- Lower values = more conservative (only near-zero edge content).'
+                            '\n\t- Typical range: 0.005 – 0.02 (valid range: 0.0 – 0.05).')
 
         form.addParam(MIN_VIEWS,
                       IntParam,
@@ -174,6 +289,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     # -------------------------- INSERT steps functions ---------------------
     def stepsGeneratorStep(self) -> None:
         closeSetStepDeps = []
+        self._initialize()
         inTsSet = self._getInTsSet()
         self.sRate = inTsSet.getSamplingRate()
         self.readingOutput()
@@ -211,6 +327,45 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                     inTsSet.loadAllProperties()  # refresh status for the streaming
 
     # --------------------------- STEPS functions ----------------------------
+    def _initialize(self):
+        qualityFilterMode = self.getAttribValue(QUALITY_FILTER)
+        if qualityFilterMode == QualityFilterModes.balanced.value:
+            self.darkSensitivityVal = 2.0
+            self.darkLocalRatioThVal = 0.65
+            self.darkWindowVal = 2
+            self.darkCosFloorVal = 0.20
+            self.darkCropFractionVal = 0.70
+            self.extremeContrastThVal = 1.0
+            self.minEntropyVal = 3.0
+            self.minEdgeEnergyVal = 0.0
+        elif qualityFilterMode == QualityFilterModes.conservative.value:
+            self.darkSensitivityVal = 3.0
+            self.darkLocalRatioThVal = 0.55
+            self.darkWindowVal = 2
+            self.darkCosFloorVal = 0.20
+            self.darkCropFractionVal = 0.70
+            self.extremeContrastThVal = 1.3
+            self.minEntropyVal = 2.5
+            self.minEdgeEnergyVal = 0.0
+        elif qualityFilterMode == QualityFilterModes.aggressive.value:
+            self.darkSensitivityVal = 1.5
+            self.darkLocalRatioThVal = 0.75
+            self.darkWindowVal = 2
+            self.darkCosFloorVal = 0.20
+            self.darkCropFractionVal = 0.70
+            self.extremeContrastThVal = 0.8
+            self.minEntropyVal = 3.5
+            self.minEdgeEnergyVal = 0.01
+        elif qualityFilterMode == QualityFilterModes.custom.value:
+            self.darkSensitivityVal = self.getAttribValue(DARK_SENSITIVITY)
+            self.darkLocalRatioThVal = self.getAttribValue(DARK_LOCAL_RATION_TH)
+            self.darkWindowVal = self.getAttribValue(DARK_WINDOW)
+            self.darkCosFloorVal = self.getAttribValue(DARK_COS_FLOOR)
+            self.darkCropFractionVal = self.getAttribValue(DARK_CROP_FRACTION)
+            self.extremeContrastThVal = self.getAttribValue(EXTREME_CONTRAST_TH)
+            self.minEntropyVal = self.getAttribValue(MIN_ENTROPY)
+            self.minEdgeEnergyVal = self.getAttribValue(MIN_EDGE_ENERGY)
+
     def excludeViewFilteringStep(self, ts: TiltSeries):
         try:
             self._registerOutput(ts)
@@ -230,11 +385,10 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
         imgStack = ImageReadersRegistry.open(ts.getFirstItem().getFileName())
 
-        # Compute dark outliers once for the whole stack (robust, no 0-degree anchor).
-        darkSensitivity = self.getAttribValue(DARK_TH)
-        dark_info = {}
-        if darkSensitivity >= 0:
-            dark_info = self._compute_dark_flags(ts, imgStack, darkSensitivity)
+        # Compute image quality analysis once for the whole stack
+        darkDict = {}
+        if self.getAttributeValue(QUALITY_FILTER) != QualityFilterModes.disabled.value:
+            darkDict = self._compute_dark_flags(ts, imgStack, self.darkSensitivityVal)
 
         finalNoImgs = 0
         tiList = []
@@ -253,8 +407,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             tiData = imgStack.getImage(i)
             tqd = TiltImageQualityDetector(tiData)
             metricsDict = tqd.analyze_image(tiltAngle)
-            if dark_info:
-                metricsDict.update(dark_info.get(int(ti.getAcquisitionOrder()), {}))
+            if darkDict:
+                metricsDict.update(darkDict.get(int(ti.getAcquisitionOrder()), {}))
             self._filterByImgQuality(ti, metricsDict)
 
             if ti.isEnabled():
@@ -371,10 +525,10 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _getTiId(ti: TiltImage) -> str:
         return f'{ti.getAcquisitionOrder()}@{ti.getTsId()}'
 
-    def _genTiDict(self, ti:TiltImage) -> None:
+    def _genTiDict(self, ti: TiltImage) -> None:
         self.tiLabelDict[self._getTiId(ti)] = TiMetadata()
 
-    def _updateTiDict(self, ti:TiltImage, label: str) -> None:
+    def _updateTiDict(self, ti: TiltImage, label: str) -> None:
         setattr(self.tiLabelDict[self._getTiId(ti)], label, True)
 
     def _filterByTiltAngle(self, ti: TiltImage) -> None:
@@ -403,15 +557,15 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_DARK.value)
 
-        if tiMetricsDict["extreme_contrast_score"] > 1: #1.25:
+        if tiMetricsDict["extreme_contrast_score"] > self.extremeContrastThVal:
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_EXTREME_CONTRAST_SPLIT.value)
 
-        if tiMetricsDict["entropy"] < 3.0:
+        if tiMetricsDict["entropy"] < self.minEntropyVal:
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_LOW_INFO.value)
 
-        if tiMetricsDict["edge_energy"] == 0:
+        if tiMetricsDict["edge_energy"] <= self.minEdgeEnergyVal:
             ti.setEnabled(False)
             self._updateTiDict(ti, TiLabel.BY_EDGE_ENERGY.value)
 
@@ -468,7 +622,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             if isinstance(output, Set):
                 output.close()
 
-    # --------------------------- INFO functions ----------------------------
+    # --------------------------- INFO functions ---------------------------------------
     def _summary(self):
         summary = []
         if self.isFinished() and self.removedTsIds.get():
@@ -476,9 +630,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         return summary
 
     # -------------------------- IMAGE QUALITY: DARK OUTLIERS --------------------------
-    @staticmethod
-    def _robust_brightness(image_data: np.ndarray,
-                           crop_fraction: float = 0.7,
+    def _robust_brightness(self,
+                           image_data: np.ndarray,
                            p_low: float = 5.0,
                            p_high: float = 95.0,
                            eps: float = 1e-8) -> Dict[str, float]:
@@ -488,7 +641,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         """
         image_data = np.squeeze(image_data)
         h, w = image_data.shape
-        cf = float(np.clip(crop_fraction, 0.2, 1.0))
+        cf = float(np.clip(self.darkCropFractionVal, 0.2, 1.0))
         dh = int(h * cf)
         dw = int(w * cf)
         y0 = max((h - dh) // 2, 0)
@@ -529,11 +682,6 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _compute_dark_flags(self,
                             ts: TiltSeries,
                             imgStack,
-                            darkSensitivity: float,
-                            window: int = 2,
-                            crop_fraction: float = 0.7,
-                            cos_floor: float = 0.2,
-                            local_ratio_th: float = 0.65,
                             eps: float = 1e-8) -> Dict[int, Dict[str, float]]:
         """Compute per-image dark outlier scores for a tilt-series.
 
@@ -545,6 +693,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
         Returns a dict keyed by acquisitionOrder with fields: is_dark, dark_z, local_ratio, brightness, p05/p50/p95.
         """
+        window = self.darkWindowVal
         ti_by_angle = list(ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD))
         n = len(ti_by_angle)
         angles = np.asarray([float(ti.getTiltAngle()) for ti in ti_by_angle], dtype=float)
@@ -558,13 +707,13 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
 
         for k, ti in enumerate(ti_by_angle):
             img = imgStack.getImage(k)
-            bm = self._robust_brightness(img, crop_fraction=crop_fraction, eps=eps)
+            bm = self._robust_brightness(img, eps=eps)
             brightness[k] = max(float(bm['brightness']), eps)
             p05[k], p50[k], p95[k] = bm['p05'], bm['p50'], bm['p95']
 
         # Global ‘expected’ model versus angle (physical/geometric trend) ---------------------------------------
         cosv = np.cos(np.radians(np.abs(angles)))
-        cosv = np.maximum(cosv, cos_floor)
+        cosv = np.maximum(cosv, self.darkCosFloorVal)
         x = np.log(cosv + eps)
         y = np.log(brightness + eps)
         a, b = self._robust_linear_fit(x, y)
@@ -588,7 +737,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             local_ratio[pos] = brightness[pos] / (ref + eps)
 
         # Final decision based on global + local analysis -----------------------------------------------------
-        is_dark = (z < -float(darkSensitivity)) & (local_ratio < local_ratio_th)
+        is_dark = (z < -float(self.darkSensitivityVal)) & (local_ratio < self.darkLocalRatioThVal)
         out = {}
         for k, ti in enumerate(ti_by_angle):
             out[int(ti.getAcquisitionOrder())] = {
@@ -603,6 +752,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             }
         return out
 
+
 class TiltImageQualityDetector:
     """Per-image quality descriptors for cryo-ET tilt images.
 
@@ -615,27 +765,6 @@ class TiltImageQualityDetector:
         img_min = float(np.min(self.raw_image))
         img_max = float(np.max(self.raw_image))
         self.norm_image = (self.raw_image - img_min) / (img_max - img_min + 1e-8)
-
-    def get_robust_brightness_metrics(self,
-                                     crop_fraction: float = 0.7,
-                                     p_low: float = 5.0,
-                                     p_high: float = 95.0,
-                                     eps: float = 1e-8) -> Dict[str, float]:
-        """Robust, scale-invariant brightness descriptor computed on a central crop."""
-        h, w = self.raw_image.shape
-        cf = float(np.clip(crop_fraction, 0.2, 1.0))
-        dh = int(h * cf)
-        dw = int(w * cf)
-        y0 = max((h - dh) // 2, 0)
-        x0 = max((w - dw) // 2, 0)
-        crop = self.raw_image[y0:y0 + dh, x0:x0 + dw]
-
-        p05 = float(np.percentile(crop, p_low))
-        p50 = float(np.median(crop))
-        p95 = float(np.percentile(crop, p_high))
-        scale = (p95 - p05)
-        brightness = (p50 - p05) / (scale + eps)
-        return {'p05': p05, 'p50': p50, 'p95': p95, 'brightness': float(brightness)}
 
     def get_extreme_contrast_metrics(self, grid_size: Tuple[int, int] = (6, 6)) -> Dict[str, float]:
         """Detect extreme partial obstructions via patch-contrast variability."""
@@ -677,12 +806,8 @@ class TiltImageQualityDetector:
     def analyze_image(self, tilt_angle: float) -> Dict[str, float]:
         """Return per-image metrics (protocol may append dark outlier fields)."""
         extreme_contrast = self.get_extreme_contrast_metrics()
-        bright = self.get_robust_brightness_metrics()
+        # bright = self.get_robust_brightness_metrics()
         return {
-            'median': bright['p50'],
-            'p05': bright['p05'],
-            'p95': bright['p95'],
-            'brightness': bright['brightness'],
             'entropy': self.get_entropy(),
             'edge_energy': self.get_edge_energy(),
             'extreme_contrast_score': extreme_contrast['extreme_contrast_score'],
