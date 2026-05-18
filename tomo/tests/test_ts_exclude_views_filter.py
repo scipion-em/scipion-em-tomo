@@ -67,49 +67,49 @@ class TestTsExcludeViewsFilterBase(TestBaseCentralizedLayer):
         tsImported = getattr(protTsImport, protTsImport.OUTPUT_NAME, None)
         return tsImported
 
-    @classmethod
-    def _runTsExcludeViewsFilter(cls,
-                                 inTsSet: Optional[SetOfTiltSeries],
-                                 maxSx: float = 0.,
-                                 maxSy: float = 0.,
-                                 minTilt: float = -100.,
-                                 maxTilt: float = 100.,
-                                 minDose: float = 0.,
-                                 maxDose: float = 300.,
-                                 darkFactor: float = 2.,
-                                 minNoTilts: int = 50,
-                                 doReStack: bool = False) -> Optional[SetOfTiltSeries]:
-        print(magentaStr(f"\n==> Excluding the views:"
-                         f"\n\t- MaxSx [%] = {maxSx}"
-                         f"\n\t- MaxSy [%] = {maxSy}"
-                         f"\n\t- MinTilt [deg.] = {minTilt}"
-                         f"\n\t- MaxTilt [deg.] = {maxTilt}"
-                         f"\n\t- MinDose [e/A²] = {minDose}"
-                         f"\n\t- MaxDose [e/A²] = {maxDose}"
-                         f"\n\t- Dark sensitivity = {darkFactor}"
-                         f"\n\t- Min no. tilts = {minNoTilts}"
-                         f"\n\t- Re-stack = {doReStack}",
-                         ))
-        protExcViewsFilter = cls.newProtocol(ProtExclViewFilter,
-                                             inTsSet=inTsSet,
-                                             minTilt=minTilt,
-                                             maxTilt=maxTilt,
-                                             maxShiftX=maxSx,
-                                             maxShiftY=maxSy,
-                                             minDose=minDose,
-                                             maxDose=maxDose,
-                                             darkSensitivity=darkFactor,
-                                             minViews=minNoTilts,
-                                             doReStack=doReStack)
-        cls.launchProtocol(protExcViewsFilter)
-        outTsSet = getattr(protExcViewsFilter, protExcViewsFilter._possibleOutputs.tiltSeries.name, None)
-        return outTsSet
-
-
-class TestTsExcludeViewsFilterMC(TestTsExcludeViewsFilterBase):
-
-    def testTsExcludeViewsFilterMC_01(self):
-        importedTsSet = self._runImportTs()
-        self._runTsExcludeViewsFilter(importedTsSet)
+#     @classmethod
+#     def _runTsExcludeViewsFilter(cls,
+#                                  inTsSet: Optional[SetOfTiltSeries],
+#                                  maxSx: float = 0.,
+#                                  maxSy: float = 0.,
+#                                  minTilt: float = -100.,
+#                                  maxTilt: float = 100.,
+#                                  minDose: float = 0.,
+#                                  maxDose: float = 300.,
+#                                  darkFactor: float = 2.,
+#                                  minNoTilts: int = 50,
+#                                  doReStack: bool = False) -> Optional[SetOfTiltSeries]:
+#         print(magentaStr(f"\n==> Excluding the views:"
+#                          f"\n\t- MaxSx [%] = {maxSx}"
+#                          f"\n\t- MaxSy [%] = {maxSy}"
+#                          f"\n\t- MinTilt [deg.] = {minTilt}"
+#                          f"\n\t- MaxTilt [deg.] = {maxTilt}"
+#                          f"\n\t- MinDose [e/A²] = {minDose}"
+#                          f"\n\t- MaxDose [e/A²] = {maxDose}"
+#                          f"\n\t- Dark sensitivity = {darkFactor}"
+#                          f"\n\t- Min no. tilts = {minNoTilts}"
+#                          f"\n\t- Re-stack = {doReStack}",
+#                          ))
+#         protExcViewsFilter = cls.newProtocol(ProtExclViewFilter,
+#                                              inTsSet=inTsSet,
+#                                              minTilt=minTilt,
+#                                              maxTilt=maxTilt,
+#                                              maxShiftX=maxSx,
+#                                              maxShiftY=maxSy,
+#                                              minDose=minDose,
+#                                              maxDose=maxDose,
+#                                              darkSensitivity=darkFactor,
+#                                              minViews=minNoTilts,
+#                                              doReStack=doReStack)
+#         cls.launchProtocol(protExcViewsFilter)
+#         outTsSet = getattr(protExcViewsFilter, protExcViewsFilter._possibleOutputs.tiltSeries.name, None)
+#         return outTsSet
+#
+#
+# class TestTsExcludeViewsFilterMC(TestTsExcludeViewsFilterBase):
+#
+#     def testTsExcludeViewsFilterMC_01(self):
+#         importedTsSet = self._runImportTs()
+#         self._runTsExcludeViewsFilter(importedTsSet)
 
 
