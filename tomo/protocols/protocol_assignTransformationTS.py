@@ -30,7 +30,7 @@ import traceback
 import typing
 from collections import Counter
 from enum import Enum
-from typing import List, Union
+from typing import List, Union, Dict
 import numpy as np
 from pwem.objects import Transform
 from pyworkflow import BETA
@@ -38,6 +38,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.object import Pointer, Set
 from pyworkflow.protocol import STEPS_PARALLEL, ProtStreamingBase, PointerParam
 from pyworkflow.utils import Message, cyanStr, redStr, yellowStr
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,7 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
                                   and ts.getSize() > 0}  # Avoid processing empty TS
             tsTo2ProcessDict = {tsId: ts.clone() for ts in inTsSetTo.iterItems()
                                 if (tsId := ts.getTsId()) in nonProcessedTsIdsTo  # Only not processed tsIds (to)
-                                and ts.getSize() > 0}  # Avoid processing empty CTFs
+                                and ts.getSize() > 0}  # Avoid processing empty TS
 
             for tsId, tsFrom in tsFrom2ProcessDict.items():
                 tsTo = tsTo2ProcessDict.get(tsId, None)
@@ -149,6 +150,14 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
     def assignTrMatStep(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
         logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
         try:
+            self._registerOutput(tsId, tsFrom, tsTo)
+        except Exception as e:
+            logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
+            logger.error(traceback.format_exc())
+
+    @retry_on_sqlite_lock(log=logger)
+    def _registerOutput(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
+        with self._lock:
             outTsSet = self.getOutTsSet()
             newTs = TiltSeries(tsId=tsId)
             newTs.copyInfo(tsTo)
@@ -167,16 +176,16 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
                 newTs.append(newTi)
 
             newTs.setDim(tsTo.getDim())
+            newTs.setAlignment2D()
             newTs.write()
             outTsSet.update(newTs)
             outTsSet.write()
             self._store()
 
-        except Exception as e:
-            logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
-            logger.error(traceback.format_exc())
-
-    def _processTiltImage(self, tiTo, fromTsAcqDict, matchingAcqOrders):
+    def _processTiltImage(self,
+                          tiTo: TiltImage,
+                          fromTsAcqDict: Dict[int, TiltImage],
+                          matchingAcqOrders: typing.Set[int]):
         acqOrder = tiTo.getAcquisitionOrder()
 
         if acqOrder in matchingAcqOrders:

@@ -337,6 +337,56 @@ class TestBaseCentralizedLayer(BaseTest):
                         msg=f'Tilt-series {ts.getTsId()}: origin values [originX, originY, originZ] are different than '
                             f'the expected within tolerance {originTolAngst} Å.\n{testOrigin} != \n{origin}')
 
+    def checkTrMatrixShiftsScale(self,
+                                 inTsSet: SetOfTiltSeries,
+                                 outTsSet: SetOfTiltSeries,
+                                 tolShiftsScaling: float = 0.1) -> None:
+        """Verify that transformation matrix shifts were scaled by the sampling rate ratio.
+
+        :param inTsSet: input SetOfTiltSeries containing the original transformation matrices.
+        :param outTsSet: output SetOfTiltSeries whose transformation matrices are expected to contain the scaled shifts.
+        :param tolShiftsScaling: tolerance allowed when checking that the shifts in the transformation matrices
+        have been properly scaled between the input and output tilt-series sets.
+        """
+        self.assertTrue(inTsSet.hasAlignment() and outTsSet.hasAlignment(),
+                        msg='Both sets of tilt series must have alignment information to check the shifts scaling')
+        inSRate = inTsSet.getSamplingRate()
+        outSRate = outTsSet.getSamplingRate()
+        sRateRatio = outSRate / inSRate
+
+        inTsIds = set(inTsSet.getTSIds())
+        outTsIds = set(outTsSet.getTSIds())
+        commonTsIds = inTsIds & outTsIds
+        self.assertTrue(len(commonTsIds) > 0, msg='The introduced sets do not have common tsIds.')
+        inTsSetDict = {tsId: ts.clone() for ts in inTsSet.iterItems() if (tsId := ts.getTsId()) in commonTsIds}
+        outTsSetDict = {tsId: ts.clone() for ts in outTsSet.iterItems() if (tsId := ts.getTsId()) in commonTsIds}
+
+        for tsId in commonTsIds:
+            inTs = inTsSetDict[tsId]
+            outTs = outTsSetDict[tsId]
+            inTiDict = {ti.getAcquisitionOrder(): ti.clone() for ti in inTs}
+            outTiDict = {ti.getAcquisitionOrder(): ti.clone() for ti in outTs}
+            commonAcqOrders = set(inTiDict.keys()) & set(outTiDict.keys())
+
+            for acqOrder in commonAcqOrders:
+                outTi = outTiDict[acqOrder]
+                if outTi.isEnabled():
+                    inTi = inTiDict[outTi.getAcquisitionOrder()]
+                    inTiMatrix = inTi.getTransform().getMatrix()
+                    outTiMatrix = outTi.getTransform().getMatrix()
+                    self.assertAlmostEqual(
+                        outTiMatrix[0][2],
+                        inTiMatrix[0][2] / sRateRatio,
+                        delta=tolShiftsScaling,
+                        msg=f"X shift scaling incorrect for tsId={tsId}, "
+                            f"acqOrder={outTi.getAcquisitionOrder()}")
+                    self.assertAlmostEqual(
+                        outTiMatrix[1][2],
+                        inTiMatrix[1][2] / sRateRatio,
+                        delta=tolShiftsScaling,
+                        msg=f"Y shift scaling incorrect for tsId={tsId}, "
+                            f"acqOrder={outTi.getAcquisitionOrder()}")
+
     # TOMO ACQUISITION #################################################################################################
     def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict],
                              currentAcq: TomoAcquisition,
