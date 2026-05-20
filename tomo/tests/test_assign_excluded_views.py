@@ -56,7 +56,7 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
     unbinnedSRate = DataSetRe4STATuto.unbinnedPixSize.value
 
     # Test 1: all 5 TS as target; exclude on TS_03 (4 views) and TS_43 (5 views)
-    excludedViewsAll5 = {
+    excludedViewsTs03Ts43 = {
         TS_01: [],
         TS_03: [0, 1, 38, 39],
         TS_43: [0, 1, 2, 39, 40],
@@ -65,8 +65,11 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
     }
 
     # Tests 2 & 3: subset TS_03 + TS_54; exclude on both (3 and 5 views)
-    excludedViewsSubset = {
+    excludedViewsTs03Ts54 = {
+        TS_01: [],
         TS_03: [0, 38, 39],
+        TS_43: [],
+        TS_45: [],
         TS_54: [0, 1, 38, 39, 40],
     }
 
@@ -96,8 +99,8 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
         cls.tsSetAll = cls._runImportTs(objLabel='target: all 5 TS')
 
         # Source for test 1: all 5 TS with exclusions on TS_03 and TS_43
-        cls.sourceAll = cls._runImportTs(objLabel='source: all 5 TS (excl)')
-        cls._excludeSetViews(cls.sourceAll, cls.excludedViewsAll5)
+        cls.tsSetAllWithEV = cls._runImportTs(objLabel='source: all 5 TS (excl)')
+        cls._excludeSetViews(cls.tsSetAllWithEV, cls.excludedViewsTs03Ts43)
 
         # Target for tests 2 & 3: subset TS_03 + TS_54 (clean)
         cls.tsSubset = cls._runImportTs(
@@ -105,10 +108,10 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
             objLabel='target: TS_03+TS_54')
 
         # Source for tests 2 & 3: TS_03 + TS_54 with exclusions
-        cls.sourceSubset = cls._runImportTs(
+        cls.tsSubsetWithEV = cls._runImportTs(
             exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value,
             objLabel='source: TS_03+TS_54 (excl)')
-        cls._excludeSetViews(cls.sourceSubset, cls.excludedViewsSubset)
+        cls._excludeSetViews(cls.tsSubsetWithEV, cls.excludedViewsTs03Ts54)
 
     @classmethod
     def _runImportTs(cls, exclusionWords: str = 'output', objLabel: str = 'Import TS') \
@@ -172,13 +175,15 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
         return outTsSet
 
     # ------------------------------------------------------------------
-    # Test 1: all 5 target TS, exclusions on TS_03 (4 views) and TS_43
-    #         (5 views). TS_01, TS_45, TS_54 should remain unmodified.
+    # Test 1:
+    # Source: set of 5 ts, exclusions on TS_03 (4 views) and TS_43 (5 views)
+    # Target: the same set of 5 ts, unmodified.
     # ------------------------------------------------------------------
-    def test_excludeViews_all5_exclude_TS03_TS43(self):
+    def test_excludeViews_01(self):
         outTsSet = self._runAssignExcludedViews(
-            self.sourceAll, self.tsSetAll,
-            objLabel='All 5, excl TS_03+TS_43')
+            self.tsSetAllWithEV,
+            self.tsSetAll,
+            objLabel='test_01')
         self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
 
         self.checkTiltSeries(
@@ -190,17 +195,41 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
             testAcqObj=self.testAcqObjDict5,
             anglesCount=self.anglesCountDict5,
             isHeterogeneousSet=True,
-            excludedViewsDict=self.excludedViewsAll5,
+            excludedViewsDict=self.excludedViewsTs03Ts43,
             presentTsIds=[TS_01, TS_03, TS_43, TS_45, TS_54])
 
     # ------------------------------------------------------------------
-    # Test 2: subset target (TS_03 + TS_54), exclusions on both
-    #         (TS_03: 3 views, TS_54: 5 views).
+    # Test 2:
+    # Source: subset target (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views).
+    # Target: set of 5 ts, unmodified.
     # ------------------------------------------------------------------
-    def test_excludeViews_subset_TS03_TS54(self):
+    def test_excludeViews_02(self):
         outTsSet = self._runAssignExcludedViews(
-            self.sourceSubset, self.tsSubset,
-            objLabel='Subset TS_03+TS_54, excl both')
+            self.tsSubsetWithEV, self.tsSetAll,
+            objLabel='test_02')
+        self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
+
+        self.checkTiltSeries(
+            outTsSet,
+            expectedSetSize=self.expectedSetSize5,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=self.expectedDimsDict5,
+            testAcqObj=self.testAcqObjDict5,
+            anglesCount=self.anglesCountDict5,
+            isHeterogeneousSet=True,
+            excludedViewsDict=self.excludedViewsTs03Ts54,
+            presentTsIds=[TS_01, TS_03, TS_43, TS_45, TS_54])
+
+    # ------------------------------------------------------------------
+    # Test 3:
+    # Source: set of 5 ts, exclusions on TS_03 (4 views) and TS_43 (5 views)
+    # Target: subset target (TS_03 + TS_54)
+    # ------------------------------------------------------------------
+    def test_excludeViews_03(self):
+        outTsSet = self._runAssignExcludedViews(
+            self.tsSetAllWithEV, self.tsSubset,
+            objLabel='test_03')
         self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
 
         self.checkTiltSeries(
@@ -212,41 +241,43 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
             testAcqObj=self.testAcqObjDict2,
             anglesCount=self.anglesCountDict2,
             isHeterogeneousSet=True,
-            excludedViewsDict=self.excludedViewsSubset,
+            excludedViewsDict=self.excludedViewsTs03Ts43,
             presentTsIds=[TS_03, TS_54])
 
     # ------------------------------------------------------------------
-    # Test 3: same exclusions as Test 2, then physically restack with
-    #         IMOD's ProtImodExcludeViews to remove disabled images.
+    # Test 4:
+    # Source: subset target (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views),
+    # then physically restack with IMOD's ProtImodExcludeViews to remove disabled images.
+    # Target: set of 5 ts, unmodified.
     # ------------------------------------------------------------------
-    def test_excludeViews_subset_and_restack_TS03_TS54(self):
-        # Step 1: assign excluded views
-        assignedTsSet = self._runAssignExcludedViews(
-            self.sourceSubset, self.tsSubset,
-            objLabel='Assign excl before restack')
-        self.assertIsNotNone(assignedTsSet,
-                             "No output from assign-excluded-views step")
-
-        # Step 2: restack using IMOD excludeviews
+    def test_excludeViews_04(self):
+        # Step 1: restack using IMOD excludeviews
         print(magentaStr("\n==> Restacking with IMOD ProtImodExcludeViews:"))
         protRestack = self.newProtocol(
             ProtImodExcludeViews,
-            inputSetOfTiltSeries=assignedTsSet)
+            inputSetOfTiltSeries=self.tsSubsetWithEV)
         protRestack.setObjLabel('Restack TS_03+TS_54')
         self.launchProtocol(protRestack)
-        restackedTsSet = getattr(protRestack, OUTPUT_TILTSERIES_NAME, None)
-        self.assertIsNotNone(restackedTsSet, "No restacked output produced")
+        restackedTsSubset = getattr(protRestack, OUTPUT_TILTSERIES_NAME, None)
+        self.assertIsNotNone(restackedTsSubset, "No restacked output produced")
+
+        # Step 2: assign excluded views
+        assignedTsSet = self._runAssignExcludedViews(
+            restackedTsSubset, self.tsSetAll,
+            objLabel='test_04')
+        self.assertIsNotNone(assignedTsSet,
+                             "No output from assign-excluded-views step")
 
         # Expected image counts after restack (original - excluded)
         restackedAnglesCount = {
-            TS_03: self.anglesCountDict2[TS_03] - len(self.excludedViewsSubset[TS_03]),
-            TS_54: self.anglesCountDict2[TS_54] - len(self.excludedViewsSubset[TS_54]),
+            TS_03: self.anglesCountDict2[TS_03] - len(self.excludedViewsTs03Ts54[TS_03]),
+            TS_54: self.anglesCountDict2[TS_54] - len(self.excludedViewsTs03Ts54[TS_54]),
         }
 
         # Verify set size
-        self.assertSetSize(restackedTsSet, self.expectedSetSize2)
+        self.assertSetSize(restackedTsSubset, self.expectedSetSize2)
 
-        for ts in restackedTsSet:
+        for ts in restackedTsSubset:
             tsId = ts.getTsId()
             expectedCount = restackedAnglesCount[tsId]
 
