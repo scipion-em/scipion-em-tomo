@@ -24,323 +24,97 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+"""
+Tests for ProtAssignExcludedViews — transfer excluded-view annotations
+(_enabled state) from a source set of tilt-series to a target set.
 
-from pyworkflow.tests import BaseTest, setupTestProject, DataSet
-from pyworkflow.utils import magentaStr
+Dataset: RE4_STA_TUTO (5 tilt-series: TS_01, TS_03, TS_43, TS_45, TS_54)
 
-from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
+Three scenarios:
+  1) All 5 TS as target, exclusions on TS_03 (4 views) and TS_43 (5 views).
+  2) Subset TS_03 + TS_54 as target, exclusions on both (3 and 5 views).
+  3) Same as (2), followed by a physical restack using IMOD's excludeviews.
+"""
+from typing import Optional, Dict, List
+
+from pyworkflow.tests import setupTestProject, DataSet
+from pyworkflow.utils import magentaStr, weakImport
+from tomo.objects import SetOfTiltSeries, TiltSeries
+from tomo.protocols import ProtImportTs, ProtImportTsBase
 from tomo.protocols.protocol_assign_excluded_views import ProtAssignExcludedViews
-from tomo.protocols import ProtImportTs
-from tomo.tests import (RE4_STA_TUTO, DataSetRe4STATuto,
-                         TS_01, TS_03, TS_54)
+from tomo.tests import (
+    RE4_STA_TUTO, DataSetRe4STATuto,
+    TS_01, TS_03, TS_43, TS_45, TS_54
+)
+from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
+with weakImport("imod"):
+    from imod.protocols import ProtImodExcludeViews
+    from imod.constants import OUTPUT_TILTSERIES_NAME
 
 
-class TestAssignExcludedViewsModel(BaseTest):
-    """Unit tests for excluded-view transfer logic using programmatic sets.
-    No dataset download required - all sets are created in memory."""
+class TestAssignExcludedViews(TestBaseCentralizedLayer):
+    unbinnedSRate = DataSetRe4STATuto.unbinnedPixSize.value
 
-    @classmethod
-    def setUpClass(cls):
-        cls.setupTestOutput()
+    # Test 1: all 5 TS as target; exclude on TS_03 (4 views) and TS_43 (5 views)
+    excludedViewsAll5 = {
+        TS_01: [],
+        TS_03: [0, 1, 38, 39],
+        TS_43: [0, 1, 2, 39, 40],
+        TS_45: [],
+        TS_54: [],
+    }
 
-    def _createTsInSet(self, tsSet, tsId, numImages,
-                       disabledAcqOrders=None, acqOrders=None):
-        """Add a TiltSeries with specified properties to a set.
-
-        :param tsSet: SetOfTiltSeries to add the TS to.
-        :param tsId: TiltSeries identifier.
-        :param numImages: Number of TiltImages to create.
-        :param disabledAcqOrders: Set of acquisition orders to disable.
-        :param acqOrders: List of acquisition orders (default: 1..numImages).
-        """
-        ts = TiltSeries(tsId=tsId)
-        ts.setSamplingRate(1.0)
-        tsSet.append(ts)
-
-        for i in range(numImages):
-            ti = TiltImage()
-            acqOrder = acqOrders[i] if acqOrders else i + 1
-            ti.setTiltAngle(-60 + i * 3)
-            ti.setAcquisitionOrder(acqOrder)
-            if disabledAcqOrders and acqOrder in disabledAcqOrders:
-                ti.setEnabled(False)
-            ts.append(ti)
-
-        ts.write()
-        tsSet.update(ts)
-
-    def _createTsSet(self, configs, suffix=''):
-        """Create a SetOfTiltSeries from a list of configuration dicts.
-
-        Each config dict has keys: tsId, numImages, and optionally
-        disabledAcqOrders and acqOrders.
-        """
-        tsSet = SetOfTiltSeries.create(self.outputPath,
-                                       template='tiltseries',
-                                       suffix=suffix)
-        tsSet.setSamplingRate(1.0)
-        for cfg in configs:
-            self._createTsInSet(tsSet, **cfg)
-        tsSet.write()
-        return tsSet
-
-    @staticmethod
-    def _applyTransferLogic(source, target, outputPath, suffix):
-        """Simulate the protocol's transfer logic on programmatic sets.
-
-        Returns (output SetOfTiltSeries, matchedTsIds, unmatchedTsIds).
-        """
-        sourceTsIds = set(source.getTSIds())
-        targetTsIds = set(target.getTSIds())
-        matchedTsIds = sorted(sourceTsIds & targetTsIds)
-        unmatchedTsIds = sorted(targetTsIds - sourceTsIds)
-
-        sourceTsDict = {ts.getTsId(): ts.clone() for ts in source
-                        if ts.getTsId() in matchedTsIds}
-
-        output = SetOfTiltSeries.create(outputPath,
-                                        template='tiltseries',
-                                        suffix=suffix)
-        output.copyInfo(target)
-
-        for targetTs in target:
-            tsId = targetTs.getTsId()
-            sourceTs = sourceTsDict.get(tsId, None)
-
-            newTs = TiltSeries(tsId=tsId)
-            newTs.copyInfo(targetTs)
-            output.append(newTs)
-
-            if sourceTs:
-                sourceAcqMap = {ti.getAcquisitionOrder(): ti.isEnabled()
-                                for ti in sourceTs}
-                for ti in targetTs:
-                    newTi = ti.clone()
-                    acqOrder = ti.getAcquisitionOrder()
-                    if acqOrder in sourceAcqMap:
-                        newTi.setEnabled(sourceAcqMap[acqOrder])
-                    newTs.append(newTi)
-            else:
-                for ti in targetTs:
-                    newTi = ti.clone()
-                    newTs.append(newTi)
-
-            newTs.write()
-            output.update(newTs)
-
-        output.write()
-        return output, matchedTsIds, unmatchedTsIds
-
-    # ------------------------------------------------------------------
-    # Test 1: Happy path - basic transfer of exclusions
-    # ------------------------------------------------------------------
-    def test_happy_path_transfer(self):
-        """Source has disabled views; output should replicate them."""
-        source = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 5,
-             'disabledAcqOrders': {2, 4}},
-            {'tsId': 'TS_02', 'numImages': 3,
-             'disabledAcqOrders': {1}},
-        ], suffix='src_happy')
-
-        target = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 5},
-            {'tsId': 'TS_02', 'numImages': 3},
-        ], suffix='tgt_happy')
-
-        output, matched, unmatched = self._applyTransferLogic(
-            source, target, self.outputPath, 'out_happy')
-
-        self.assertEqual(output.getSize(), 2)
-        self.assertEqual(matched, ['TS_01', 'TS_02'])
-        self.assertEqual(unmatched, [])
-
-        for ts in output:
-            tsId = ts.getTsId()
-            for ti in ts:
-                ao = ti.getAcquisitionOrder()
-                if tsId == 'TS_01' and ao in {2, 4}:
-                    self.assertFalse(
-                        ti.isEnabled(),
-                        "TS_01 acqOrder %d should be disabled" % ao)
-                elif tsId == 'TS_02' and ao == 1:
-                    self.assertFalse(
-                        ti.isEnabled(),
-                        "TS_02 acqOrder 1 should be disabled")
-                else:
-                    self.assertTrue(
-                        ti.isEnabled(),
-                        "%s acqOrder %d should be enabled" % (tsId, ao))
-
-    # ------------------------------------------------------------------
-    # Test 2: Re-stacked / acquisition-order robustness
-    # ------------------------------------------------------------------
-    def test_acquisition_order_robustness(self):
-        """Images matched by acqOrder, not by stack index."""
-        source = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 5,
-             'acqOrders': [1, 2, 3, 4, 5],
-             'disabledAcqOrders': {2, 4}},
-        ], suffix='src_robust')
-
-        # Target has REVERSED stack order
-        target = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 5,
-             'acqOrders': [5, 4, 3, 2, 1]},
-        ], suffix='tgt_robust')
-
-        output, _, _ = self._applyTransferLogic(
-            source, target, self.outputPath, 'out_robust')
-
-        for ts in output:
-            for ti in ts:
-                ao = ti.getAcquisitionOrder()
-                if ao in {2, 4}:
-                    self.assertFalse(
-                        ti.isEnabled(),
-                        "acqOrder %d should be disabled regardless of "
-                        "stack position" % ao)
-                else:
-                    self.assertTrue(
-                        ti.isEnabled(),
-                        "acqOrder %d should be enabled" % ao)
-
-    # ------------------------------------------------------------------
-    # Test 3: Unmatched target TiltSeries preserved
-    # ------------------------------------------------------------------
-    def test_unmatched_target_preserved(self):
-        """Target TS without a source match appear unchanged in output."""
-        source = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 3,
-             'disabledAcqOrders': {1, 2, 3}},
-        ], suffix='src_unmatched')
-
-        target = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 3},
-            {'tsId': 'TS_99', 'numImages': 4},
-        ], suffix='tgt_unmatched')
-
-        output, matched, unmatched = self._applyTransferLogic(
-            source, target, self.outputPath, 'out_unmatched')
-
-        self.assertEqual(output.getSize(), 2)
-        self.assertEqual(matched, ['TS_01'])
-        self.assertEqual(unmatched, ['TS_99'])
-
-        for ts in output:
-            tsId = ts.getTsId()
-            if tsId == 'TS_01':
-                for ti in ts:
-                    self.assertFalse(
-                        ti.isEnabled(),
-                        "TS_01 all views should be disabled")
-            elif tsId == 'TS_99':
-                for ti in ts:
-                    self.assertTrue(
-                        ti.isEnabled(),
-                        "TS_99 (unmatched) views should stay enabled")
-
-    # ------------------------------------------------------------------
-    # Test 4: Summary content
-    # ------------------------------------------------------------------
-    def test_summary_content(self):
-        """Matched and unmatched tsIds are reported correctly."""
-        source = self._createTsSet([
-            {'tsId': 'TS_A', 'numImages': 2},
-            {'tsId': 'TS_B', 'numImages': 2},
-        ], suffix='src_summary')
-
-        target = self._createTsSet([
-            {'tsId': 'TS_B', 'numImages': 2},
-            {'tsId': 'TS_C', 'numImages': 2},
-            {'tsId': 'TS_D', 'numImages': 2},
-        ], suffix='tgt_summary')
-
-        _, matched, unmatched = self._applyTransferLogic(
-            source, target, self.outputPath, 'out_summary')
-
-        self.assertEqual(matched, ['TS_B'])
-        self.assertEqual(unmatched, ['TS_C', 'TS_D'])
-
-        # Simulate summary message construction
-        matchedMsg = ", ".join(matched) if matched else None
-        unmatchedMsg = ", ".join(unmatched) if unmatched else None
-
-        self.assertIn('TS_B', matchedMsg)
-        self.assertIn('TS_C', unmatchedMsg)
-        self.assertIn('TS_D', unmatchedMsg)
-
-    # ------------------------------------------------------------------
-    # Test 5: Partial acquisition order overlap
-    # ------------------------------------------------------------------
-    def test_partial_acq_order_overlap(self):
-        """Source has fewer images - unmatched target acqOrders stay unchanged."""
-        source = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 3,
-             'acqOrders': [1, 2, 3],
-             'disabledAcqOrders': {2}},
-        ], suffix='src_partial')
-
-        # Target has acqOrders 1..5 (source only covers 1..3)
-        target = self._createTsSet([
-            {'tsId': 'TS_01', 'numImages': 5,
-             'acqOrders': [1, 2, 3, 4, 5]},
-        ], suffix='tgt_partial')
-
-        output, _, _ = self._applyTransferLogic(
-            source, target, self.outputPath, 'out_partial')
-
-        for ts in output:
-            for ti in ts:
-                ao = ti.getAcquisitionOrder()
-                if ao == 2:
-                    self.assertFalse(
-                        ti.isEnabled(),
-                        "acqOrder 2 should be disabled from source")
-                else:
-                    self.assertTrue(
-                        ti.isEnabled(),
-                        "acqOrder %d should stay enabled" % ao)
-
-    # ------------------------------------------------------------------
-    # Test 6: Validation - tsId matching
-    # ------------------------------------------------------------------
-    def test_tsid_matching_sets(self):
-        """Verify correct tsId set operations."""
-        source = self._createTsSet([
-            {'tsId': 'TS_A', 'numImages': 2},
-            {'tsId': 'TS_B', 'numImages': 2},
-            {'tsId': 'TS_C', 'numImages': 2},
-        ], suffix='src_match')
-
-        target = self._createTsSet([
-            {'tsId': 'TS_B', 'numImages': 2},
-            {'tsId': 'TS_C', 'numImages': 2},
-            {'tsId': 'TS_D', 'numImages': 2},
-        ], suffix='tgt_match')
-
-        sourceTsIds = set(source.getTSIds())
-        targetTsIds = set(target.getTSIds())
-        matched = sourceTsIds & targetTsIds
-        unmatched = targetTsIds - sourceTsIds
-
-        self.assertEqual(matched, {'TS_B', 'TS_C'})
-        self.assertEqual(unmatched, {'TS_D'})
-
-
-class TestAssignExcludedViewsProtocol(BaseTest):
-    """Integration tests for ProtAssignExcludedViews using the full
-    protocol framework with the RE4_STA_TUTO dataset."""
+    # Tests 2 & 3: subset TS_03 + TS_54; exclude on both (3 and 5 views)
+    excludedViewsSubset = {
+        TS_03: [0, 38, 39],
+        TS_54: [0, 1, 38, 39, 40],
+    }
 
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
 
+        allTsIds = (TS_01, TS_03, TS_43, TS_45, TS_54)
+        subsetTsIds = (TS_03, TS_54)
+
+        cls.testAcqObjDict5, cls.expectedDimsDict5, cls.anglesCountDict5 = \
+            DataSetRe4STATuto.genTestTsDicts(allTsIds)
+        cls.testAcqObjDict2, cls.expectedDimsDict2, cls.anglesCountDict2 = \
+            DataSetRe4STATuto.genTestTsDicts(subsetTsIds)
+
+        cls.expectedSetSize5 = len(allTsIds)
+        cls.expectedSetSize2 = len(subsetTsIds)
+
+        cls._runPreviousProtocols()
+
     @classmethod
-    def _runImportTs(cls, exclusionWords=None):
-        print(magentaStr("\n==> Importing tilt series:"))
-        protTsImport = cls.newProtocol(
+    def _runPreviousProtocols(cls):
+        print(magentaStr('\n--- Importing tilt-series for assign-excluded-views tests ---'))
+
+        # Target for test 1: all 5 TS (clean)
+        cls.tsSetAll = cls._runImportTs(objLabel='target: all 5 TS')
+
+        # Source for test 1: all 5 TS with exclusions on TS_03 and TS_43
+        cls.sourceAll = cls._runImportTs(objLabel='source: all 5 TS (excl)')
+        cls._excludeSetViews(cls.sourceAll, cls.excludedViewsAll5)
+
+        # Target for tests 2 & 3: subset TS_03 + TS_54 (clean)
+        cls.tsSubset = cls._runImportTs(
+            exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value,
+            objLabel='target: TS_03+TS_54')
+
+        # Source for tests 2 & 3: TS_03 + TS_54 with exclusions
+        cls.sourceSubset = cls._runImportTs(
+            exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value,
+            objLabel='source: TS_03+TS_54 (excl)')
+        cls._excludeSetViews(cls.sourceSubset, cls.excludedViewsSubset)
+
+    @classmethod
+    def _runImportTs(cls, exclusionWords: str = 'output', objLabel: str = 'Import TS') \
+            -> Optional[SetOfTiltSeries]:
+        print(magentaStr(f"\n==> Importing tilt-series: {objLabel}"))
+        protImportTs = cls.newProtocol(
             ProtImportTs,
             filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
             filesPattern=DataSetRe4STATuto.tsPattern.value,
@@ -350,83 +124,143 @@ class TestAssignExcludedViewsProtocol(BaseTest):
             magnification=DataSetRe4STATuto.magnification.value,
             sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
             amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
-            samplingRate=DataSetRe4STATuto.unbinnedPixSize.value,
+            samplingRate=cls.unbinnedSRate,
             doseInitial=DataSetRe4STATuto.initialDose.value,
             dosePerFrame=DataSetRe4STATuto.dosePerTiltImgWithTltFile.value,
             tiltAxisAngle=DataSetRe4STATuto.tiltAxisAngle.value)
+        protImportTs.setObjLabel(objLabel)
+        cls.launchProtocol(protImportTs)
+        tsImported = getattr(protImportTs, ProtImportTsBase.OUTPUT_NAME, None)
+        return tsImported
 
-        cls.launchProtocol(protTsImport)
-        return getattr(protTsImport, protTsImport.OUTPUT_NAME, None)
+    @classmethod
+    def _excludeSetViews(cls, inSet: SetOfTiltSeries, excludedViewsDict: Dict[str, List[int]]) -> None:
+        """Mark specific tilt images as disabled (_objEnabled=False) in the
+        given SetOfTiltSeries, modifying it in-place. Only TS whose tsId
+        appears in excludedViewsDict (with a non-empty list) are modified."""
+        objList = [obj.clone(ignoreAttrs=[]) for obj in inSet]
+        for obj in objList:
+            tsId = obj.getTsId()
+            if tsId in excludedViewsDict and excludedViewsDict[tsId]:
+                cls._excIntermediateSetViews(inSet, obj, excludedViewsDict[tsId])
 
-    def test_protocol_with_matched_and_unmatched(self):
-        """Full protocol run: 2 matched tsIds + 1 unmatched in target."""
-        print(magentaStr("\n==> Testing assign excluded views protocol:"))
+    @staticmethod
+    def _excIntermediateSetViews(inSet: SetOfTiltSeries,
+                                 obj: TiltSeries,
+                                 excludedViewsList: Dict[str, List[int]]) -> None:
+        tiList = [ti.clone() for ti in obj]
+        for i, ti in enumerate(tiList):
+            if i in excludedViewsList:
+                ti._objEnabled = False
+                obj.update(ti)
+        obj.write()
+        inSet.update(obj)
+        inSet.write()
 
-        # Source: TS_03, TS_54 (2 TS)
-        sourceTs = self._runImportTs(
-            exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value)
-        self.assertIsNotNone(sourceTs, "Source import failed")
-        self.assertEqual(sourceTs.getSize(), 2)
-
-        # Target: TS_01, TS_03, TS_54 (3 TS - TS_01 has no source match)
-        targetTs = self._runImportTs(exclusionWords='output 43 45')
-        self.assertIsNotNone(targetTs, "Target import failed")
-        self.assertEqual(targetTs.getSize(), 3)
-
-        # Run the protocol
-        prot = self.newProtocol(ProtAssignExcludedViews,
-                                inputSourceTiltSeries=sourceTs,
-                                inputTargetTiltSeries=targetTs)
+    def _runAssignExcludedViews(self,
+                                sourceTsSet: SetOfTiltSeries,
+                                targetTsSet: SetOfTiltSeries,
+                                objLabel: str ='Assign excluded views') -> Optional[SetOfTiltSeries]:
+        print(magentaStr(f"\n==> Running assign excluded views: {objLabel}"))
+        prot = self.newProtocol(
+            ProtAssignExcludedViews,
+            inputSourceTiltSeries=sourceTsSet,
+            inputTargetTiltSeries=targetTsSet)
+        prot.setObjLabel(objLabel)
         self.launchProtocol(prot)
+        outTsSet = getattr(prot, prot._possibleOutputs.tiltSeries.name, None)
+        return outTsSet
 
-        # -- Check output set --
-        outTs = getattr(prot, prot._possibleOutputs.tiltSeries.name, None)
-        self.assertIsNotNone(outTs, "Output tilt-series should not be None")
-        self.assertSetSize(outTs, 3, msg="Output should contain 3 TS")
+    # ------------------------------------------------------------------
+    # Test 1: all 5 target TS, exclusions on TS_03 (4 views) and TS_43
+    #         (5 views). TS_01, TS_45, TS_54 should remain unmodified.
+    # ------------------------------------------------------------------
+    def test_excludeViews_all5_exclude_TS03_TS43(self):
+        outTsSet = self._runAssignExcludedViews(
+            self.sourceAll, self.tsSetAll,
+            objLabel='All 5, excl TS_03+TS_43')
+        self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
 
-        outTsIds = sorted(outTs.getTSIds())
-        self.assertEqual(outTsIds, sorted([TS_01, TS_03, TS_54]),
-                         "Output should contain all target tsIds")
+        self.checkTiltSeries(
+            outTsSet,
+            expectedSetSize=self.expectedSetSize5,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=self.expectedDimsDict5,
+            testAcqObj=self.testAcqObjDict5,
+            anglesCount=self.anglesCountDict5,
+            isHeterogeneousSet=True,
+            excludedViewsDict=self.excludedViewsAll5,
+            presentTsIds=[TS_01, TS_03, TS_43, TS_45, TS_54])
 
-        # Since source has no excluded views, all output images stay enabled
-        for ts in outTs:
+    # ------------------------------------------------------------------
+    # Test 2: subset target (TS_03 + TS_54), exclusions on both
+    #         (TS_03: 3 views, TS_54: 5 views).
+    # ------------------------------------------------------------------
+    def test_excludeViews_subset_TS03_TS54(self):
+        outTsSet = self._runAssignExcludedViews(
+            self.sourceSubset, self.tsSubset,
+            objLabel='Subset TS_03+TS_54, excl both')
+        self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
+
+        self.checkTiltSeries(
+            outTsSet,
+            expectedSetSize=self.expectedSetSize2,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=self.expectedDimsDict2,
+            testAcqObj=self.testAcqObjDict2,
+            anglesCount=self.anglesCountDict2,
+            isHeterogeneousSet=True,
+            excludedViewsDict=self.excludedViewsSubset,
+            presentTsIds=[TS_03, TS_54])
+
+    # ------------------------------------------------------------------
+    # Test 3: same exclusions as Test 2, then physically restack with
+    #         IMOD's ProtImodExcludeViews to remove disabled images.
+    # ------------------------------------------------------------------
+    def test_excludeViews_subset_and_restack_TS03_TS54(self):
+        # Step 1: assign excluded views
+        assignedTsSet = self._runAssignExcludedViews(
+            self.sourceSubset, self.tsSubset,
+            objLabel='Assign excl before restack')
+        self.assertIsNotNone(assignedTsSet,
+                             "No output from assign-excluded-views step")
+
+        # Step 2: restack using IMOD excludeviews
+        print(magentaStr("\n==> Restacking with IMOD ProtImodExcludeViews:"))
+        protRestack = self.newProtocol(
+            ProtImodExcludeViews,
+            inputSetOfTiltSeries=assignedTsSet)
+        protRestack.setObjLabel('Restack TS_03+TS_54')
+        self.launchProtocol(protRestack)
+        restackedTsSet = getattr(protRestack, OUTPUT_TILTSERIES_NAME, None)
+        self.assertIsNotNone(restackedTsSet, "No restacked output produced")
+
+        # Expected image counts after restack (original - excluded)
+        restackedAnglesCount = {
+            TS_03: self.anglesCountDict2[TS_03] - len(self.excludedViewsSubset[TS_03]),
+            TS_54: self.anglesCountDict2[TS_54] - len(self.excludedViewsSubset[TS_54]),
+        }
+
+        # Verify set size
+        self.assertSetSize(restackedTsSet, self.expectedSetSize2)
+
+        for ts in restackedTsSet:
+            tsId = ts.getTsId()
+            expectedCount = restackedAnglesCount[tsId]
+
+            # Restacked TS should have fewer images
+            self.assertEqual(
+                ts.getSize(), expectedCount,
+                f"{tsId}: expected {expectedCount} images after restack, "
+                f"got {ts.getSize()}")
+
+            # All remaining images must be enabled (disabled ones were removed)
             for ti in ts:
                 self.assertTrue(
                     ti.isEnabled(),
-                    "All images should be enabled (source has no exclusions)")
+                    f"{tsId}: restacked TS should only contain enabled images")
 
-        # -- Check summary --
-        summary = prot._summary()
-        summaryStr = " ".join(summary)
-        self.assertIn(TS_03, summaryStr,
-                      "Summary should mention matched TS_03")
-        self.assertIn(TS_54, summaryStr,
-                      "Summary should mention matched TS_54")
-        self.assertIn(TS_01, summaryStr,
-                      "Summary should mention unmatched TS_01")
-
-    def test_protocol_all_matched(self):
-        """Full protocol run where all target tsIds have a source match."""
-        print(magentaStr("\n==> Testing assign excluded views "
-                         "(all matched):"))
-
-        # Both source and target: TS_03, TS_54
-        exclusionWords = DataSetRe4STATuto.exclusionWordsTs03ts54.value
-        sourceTs = self._runImportTs(exclusionWords=exclusionWords)
-        targetTs = self._runImportTs(exclusionWords=exclusionWords)
-
-        prot = self.newProtocol(ProtAssignExcludedViews,
-                                inputSourceTiltSeries=sourceTs,
-                                inputTargetTiltSeries=targetTs)
-        self.launchProtocol(prot)
-
-        outTs = getattr(prot, prot._possibleOutputs.tiltSeries.name, None)
-        self.assertIsNotNone(outTs)
-        self.assertSetSize(outTs, 2)
-
-        # Summary should report all matched
-        summary = prot._summary()
-        summaryStr = " ".join(summary)
-        self.assertIn("All target tilt-series were matched", summaryStr)
-        self.assertIn(TS_03, summaryStr)
-        self.assertIn(TS_54, summaryStr)
+            # TODO: if ProtImodExcludeViews generates new binary files,
+            # verify that file dimensions reflect the reduced stack size.
