@@ -262,7 +262,7 @@ class TestBaseCentralizedLayer(BaseTest):
                     isExcludedView = True if ind in excludedViewsDict[tsId] else False
                 else:
                     isExcludedView = False
-                self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
+                self.checkObjectEnabled(ti, isExcludedView, tsId, ind + 1)
                 # Odd/Even
                 if hasOddEven:
                     self.assertTrue(exists(ti.getEven()))
@@ -1173,9 +1173,9 @@ class TestBaseCentralizedLayer(BaseTest):
         enb = obj.isEnabled()
         objType = 'CTF' if type(obj) is CTFTomoSeries else 'Tilt image'
         if isExcludedView:
-            self.assertFalse(enb, msg='TsId = %s: %s %i was expected not to be Enabled' % (tsId, objType, ind))
+            self.assertFalse(enb, msg='TsId = %s: %s of index %i was expected not to be Enabled' % (tsId, objType, ind))
         else:
-            self.assertTrue(enb, msg='TsId = %s: %s %i was expected to be Enabled' % (tsId, objType, ind))
+            self.assertTrue(enb, msg='TsId = %s: %s of index %i was expected to be Enabled' % (tsId, objType, ind))
 
     def checkCtfTomo(self, ctf, isExcluded, expectPsdFile):
         defocusU = ctf.getDefocusU()

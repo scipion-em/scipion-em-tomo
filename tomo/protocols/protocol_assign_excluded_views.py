@@ -173,35 +173,39 @@ class ProtAssignExcludedViews(EMProtocol):
         sourceTsSet = self._getSourceTsSet()
         targetTsSet = self._getTargetTsSet()
 
-        sourceTsIds = set(sourceTsSet.getTSIds())
-        targetTsIds = set(targetTsSet.getTSIds())
-        matchedTsIds = sourceTsIds & targetTsIds
+        # Check that the source and target objects are not the same
+        if sourceTsSet is targetTsSet:
+            errors.append("Both source and target sets are the same.")
+        else:
+            sourceTsIds = set(sourceTsSet.getTSIds())
+            targetTsIds = set(targetTsSet.getTSIds())
+            matchedTsIds = sourceTsIds & targetTsIds
 
-        if not matchedTsIds:
-            errors.append("No matching tsId values found between source "
-                          "(%s) and target (%s) sets." %
-                          (", ".join(sorted(sourceTsIds)),
-                           ", ".join(sorted(targetTsIds))))
-            return errors
+            if not matchedTsIds:
+                errors.append("No matching tsId values found between source "
+                              "(%s) and target (%s) sets." %
+                              (", ".join(sorted(sourceTsIds)),
+                               ", ".join(sorted(targetTsIds))))
+                return errors
 
-        # Validate acquisition orders in matched TiltSeries
-        for tsId in sorted(matchedTsIds):
-            sourceTs = sourceTsSet.getTiltSeriesFromTsId(tsId)
-            targetTs = targetTsSet.getTiltSeriesFromTsId(tsId)
+            # Validate acquisition orders in matched TiltSeries
+            for tsId in sorted(matchedTsIds):
+                sourceTs = sourceTsSet.getTiltSeriesFromTsId(tsId)
+                targetTs = targetTsSet.getTiltSeriesFromTsId(tsId)
 
-            for label, ts in [("source", sourceTs), ("target", targetTs)]:
-                acqOrders = [ti.getAcquisitionOrder() for ti in ts]
-                if None in acqOrders:
-                    errors.append("Missing acquisition order in %s "
-                                  "tilt-series %s." % (label, tsId))
-                validOrders = [ao for ao in acqOrders if ao is not None]
-                counts = Counter(validOrders)
-                duplicates = sorted([ao for ao, cnt in counts.items()
-                                     if cnt > 1])
-                if duplicates:
-                    errors.append("Duplicate acquisition orders in %s "
-                                  "tilt-series %s: %s" %
-                                  (label, tsId, duplicates))
+                for label, ts in [("source", sourceTs), ("target", targetTs)]:
+                    acqOrders = [ti.getAcquisitionOrder() for ti in ts]
+                    if None in acqOrders:
+                        errors.append("Missing acquisition order in %s "
+                                      "tilt-series %s." % (label, tsId))
+                    validOrders = [ao for ao in acqOrders if ao is not None]
+                    counts = Counter(validOrders)
+                    duplicates = sorted([ao for ao, cnt in counts.items()
+                                         if cnt > 1])
+                    if duplicates:
+                        errors.append("Duplicate acquisition orders in %s "
+                                      "tilt-series %s: %s" %
+                                      (label, tsId, duplicates))
 
         return errors
 

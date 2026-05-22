@@ -35,11 +35,12 @@ Three scenarios:
   2) Subset TS_03 + TS_54 as target, exclusions on both (3 and 5 views).
   3) Same as (2), followed by a physical restack using IMOD's excludeviews.
 """
+import copy
 from typing import Optional, Dict, List
 
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr, weakImport
-from tomo.objects import SetOfTiltSeries, TiltSeries
+from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
 from tomo.protocols import ProtImportTs, ProtImportTsBase
 from tomo.protocols.protocol_assign_excluded_views import ProtAssignExcludedViews
 from tomo.tests import (
@@ -150,8 +151,8 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
     @staticmethod
     def _excIntermediateSetViews(inSet: SetOfTiltSeries,
                                  obj: TiltSeries,
-                                 excludedViewsList: Dict[str, List[int]]) -> None:
-        tiList = [ti.clone() for ti in obj]
+                                 excludedViewsList: List[int]) -> None:
+        tiList = [ti.clone() for ti in obj.iterItems(orderBy=TiltImage.INDEX_FIELD)]
         for i, ti in enumerate(tiList):
             if i in excludedViewsList:
                 ti._objEnabled = False
@@ -200,7 +201,7 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
 
     # ------------------------------------------------------------------
     # Test 2:
-    # Source: subset target (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views).
+    # Source: subset (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views).
     # Target: set of 5 ts, unmodified.
     # ------------------------------------------------------------------
     def test_excludeViews_02(self):
@@ -224,7 +225,7 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
     # ------------------------------------------------------------------
     # Test 3:
     # Source: set of 5 ts, exclusions on TS_03 (4 views) and TS_43 (5 views)
-    # Target: subset target (TS_03 + TS_54)
+    # Target: subset (TS_03 + TS_54)
     # ------------------------------------------------------------------
     def test_excludeViews_03(self):
         outTsSet = self._runAssignExcludedViews(
@@ -246,13 +247,68 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
 
     # ------------------------------------------------------------------
     # Test 4:
+    # Source: set of 5 ts, exclusions on TS_03 (4 views) and TS_43 (5 views)
+    # Target: subset (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views).
+    # ------------------------------------------------------------------
+    def test_excludeViews_04(self):
+        outTsSet = self._runAssignExcludedViews(
+            self.tsSetAllWithEV, self.tsSubsetWithEV,
+            objLabel='test_04')
+        self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
+
+        self.checkTiltSeries(
+            outTsSet,
+            expectedSetSize=self.expectedSetSize2,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=self.expectedDimsDict2,
+            testAcqObj=self.testAcqObjDict2,
+            anglesCount=self.anglesCountDict2,
+            isHeterogeneousSet=True,
+            excludedViewsDict=self.excludedViewsTs03Ts43,
+            presentTsIds=[TS_03, TS_54])
+
+    # ------------------------------------------------------------------
+    # Test 5:
+    # Source:  subset (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views).
+    # Target: set of 5 ts, exclusions on TS_03 (4 views) and TS_43 (5 views).
+    # ------------------------------------------------------------------
+    def test_excludeViews_05(self):
+        outTsSet = self._runAssignExcludedViews(
+            self.tsSubsetWithEV, self.tsSetAllWithEV,
+            objLabel='test_05')
+        self.assertIsNotNone(outTsSet, "No output tilt-series set produced")
+
+        # Check the results
+        testExcludedViews = copy.deepcopy(self.excludedViewsTs03Ts54)
+        testExcludedViews[TS_43] = self.excludedViewsTs03Ts43[TS_43]
+        self.checkTiltSeries(
+            outTsSet,
+            expectedSetSize=self.expectedSetSize5,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=self.expectedDimsDict5,
+            testAcqObj=self.testAcqObjDict5,
+            anglesCount=self.anglesCountDict5,
+            isHeterogeneousSet=True,
+            excludedViewsDict=testExcludedViews,
+            presentTsIds=[TS_01, TS_03, TS_43, TS_45, TS_54])
+
+    # ------------------------------------------------------------------
+    # Test 6:
+    # 6.1:
     # Source: subset target (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views),
     # then physically restack with IMOD's ProtImodExcludeViews to remove disabled images.
     # Target: set of 5 ts, unmodified.
+    #
+    # 6.2:
+    # Source: set of 5 ts, exclusions on TS_03 (4 views) and TS_43 (5 views)
+    # Target: subset target (TS_03 + TS_54), exclusions on both (TS_03: 3 views, TS_54: 5 views),
+    # then physically restack with IMOD's ProtImodExcludeViews to remove disabled images.
     # ------------------------------------------------------------------
-    def test_excludeViews_04(self):
-        # Step 1: restack using IMOD excludeviews
-        print(magentaStr("\n==> Restacking with IMOD ProtImodExcludeViews:"))
+    def test_excludeViews_06(self):
+         # Restack using IMOD excludeviews
+        print(magentaStr("\n==> Restacking with IMOD:"))
         protRestack = self.newProtocol(
             ProtImodExcludeViews,
             inputSetOfTiltSeries=self.tsSubsetWithEV)
@@ -260,38 +316,67 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
         self.launchProtocol(protRestack)
         restackedTsSubset = getattr(protRestack, OUTPUT_TILTSERIES_NAME, None)
         self.assertIsNotNone(restackedTsSubset, "No restacked output produced")
-
-        # Step 2: assign excluded views
-        assignedTsSet = self._runAssignExcludedViews(
-            restackedTsSubset, self.tsSetAll,
-            objLabel='test_04')
-        self.assertIsNotNone(assignedTsSet,
-                             "No output from assign-excluded-views step")
-
-        # Expected image counts after restack (original - excluded)
+        # Expected image counts after restack (original - excluded) and tilt-series dimensions
         restackedAnglesCount = {
             TS_03: self.anglesCountDict2[TS_03] - len(self.excludedViewsTs03Ts54[TS_03]),
             TS_54: self.anglesCountDict2[TS_54] - len(self.excludedViewsTs03Ts54[TS_54]),
         }
+        expectedDimsRestack2 = copy.deepcopy(self.expectedDimsDict2)
+        expectedDimsRestack2[TS_03][-1] = restackedAnglesCount[TS_03]
+        expectedDimsRestack2[TS_54][-1] = restackedAnglesCount[TS_54]
 
-        # Verify set size
-        self.assertSetSize(restackedTsSubset, self.expectedSetSize2)
+        # Test 6.1: assign excluded views
+        assignedTsSet = self._runAssignExcludedViews(
+            restackedTsSubset, self.tsSetAll,
+            objLabel='test_06.1')
+        self.assertIsNotNone(assignedTsSet, "No output from assign-excluded-views step")
 
-        for ts in restackedTsSubset:
-            tsId = ts.getTsId()
-            expectedCount = restackedAnglesCount[tsId]
+        # Check the results
+        testExcludedViews = copy.deepcopy(self.excludedViewsTs03Ts54)
+        for tsId in testExcludedViews.keys():
+            testExcludedViews[tsId] = []
+        self.checkTiltSeries(
+            assignedTsSet,
+            expectedSetSize=self.expectedSetSize5,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=self.expectedDimsDict5,
+            testAcqObj=self.testAcqObjDict5,
+            anglesCount=self.anglesCountDict5,
+            isHeterogeneousSet=True,
+            excludedViewsDict=testExcludedViews,
+            presentTsIds=[TS_01, TS_03, TS_43, TS_45, TS_54])
 
-            # Restacked TS should have fewer images
-            self.assertEqual(
-                ts.getSize(), expectedCount,
-                f"{tsId}: expected {expectedCount} images after restack, "
-                f"got {ts.getSize()}")
+        # Test 6.2: assign excluded views
+        assignedTsSet = self._runAssignExcludedViews(
+            self.tsSetAllWithEV, restackedTsSubset,
+            objLabel='test_06.2')
+        self.assertIsNotNone(assignedTsSet, "No output from assign-excluded-views step")
 
-            # All remaining images must be enabled (disabled ones were removed)
-            for ti in ts:
-                self.assertTrue(
-                    ti.isEnabled(),
-                    f"{tsId}: restacked TS should only contain enabled images")
+        # Check the results
+        testExcludedViews[TS_03] = [0]  # Because of re-stack there is a re-indexation and this is the only present
+        # Also the acquisition needs to be built adapted to the test because of the re-stack
+        testAcqObjDictReStacked = {}
+        acq_TS_03 = DataSetRe4STATuto.testAcq03.value.clone()
+        acq_TS_03.setAccumDose(111.)
+        acq_TS_03.setAngleMin(-54)
+        acq_TS_03.setAngleMax(54)
+        testAcqObjDictReStacked[TS_03] = acq_TS_03
 
-            # TODO: if ProtImodExcludeViews generates new binary files,
-            # verify that file dimensions reflect the reduced stack size.
+        acq_TS_54 = DataSetRe4STATuto.testAcq54.value.clone()
+        acq_TS_54.setAccumDose(108.)
+        acq_TS_54.setAngleMin(-54)
+        acq_TS_54.setAngleMax(51)
+        testAcqObjDictReStacked[TS_54] = acq_TS_54
+
+        self.checkTiltSeries(
+            assignedTsSet,
+            expectedSetSize=self.expectedSetSize2,
+            expectedSRate=self.unbinnedSRate,
+            imported=True,
+            expectedDimensions=expectedDimsRestack2,
+            testAcqObj=testAcqObjDictReStacked,
+            anglesCount=restackedAnglesCount,
+            isHeterogeneousSet=True,
+            excludedViewsDict=testExcludedViews,
+            presentTsIds=[TS_03, TS_54])
