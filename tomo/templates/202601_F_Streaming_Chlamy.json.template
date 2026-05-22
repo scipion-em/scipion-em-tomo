@@ -1,5 +1,6 @@
 From tilt-series movies to tomograms of a fiducial-less sample (EMPIAR-118030).
 You'll need to download its dataset -> scipion3 testdata --download chlamy_visual_proteomics
+Scipion required plugins: aretomo, tomo, imod, motioncorr, tomo3d
 [
     {
         "object.className": "ProtAreTomoAlignRecon",
