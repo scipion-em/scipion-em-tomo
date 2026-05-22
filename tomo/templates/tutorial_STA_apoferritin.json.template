@@ -1,5 +1,6 @@
 tutorial - from movies to refined volume (SMALL): (EMPIAR-10491).
 You'll need to download this dataset -> scipion3 testdata --download tomo_apoferritin_tutorial
+Scipion required plugins: tomo, warp, imod, aretomo, sphire, reliontomo, xmipp3,
 [
     {
         "object.className": "ProtImportTsMovies",

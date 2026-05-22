@@ -1,5 +1,6 @@
 From tilt-series movies to tomograms of a sample with fiducials (EMPIAR-10164).
 You'll need to download its dataset -> scipion3 testdata --download empiar_10164_HIV_frames
+Scipion required plugins: aretomo, tomo, imod, motioncorr, tomo3d, fidder
 [
     {
         "object.className": "ProtComposeTS",
