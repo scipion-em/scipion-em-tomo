@@ -27,16 +27,14 @@
 Tests for tsId disambiguation when importing tilt-series from mdoc files
 with duplicate basenames across different subdirectories.
 """
-import os
-import unittest
-
+from pyworkflow.tests import BaseTest
 from tomo.protocols.protocol_ts_import import (
     _disambiguateTsIds,
     _sanitizeTsIdComponent,
 )
 
 
-class TestSanitizeTsIdComponent(unittest.TestCase):
+class TestSanitizeTsIdComponent(BaseTest):
     """Unit tests for _sanitizeTsIdComponent."""
 
     def test_no_special_chars(self):
@@ -58,7 +56,7 @@ class TestSanitizeTsIdComponent(unittest.TestCase):
         self.assertEqual(_sanitizeTsIdComponent('my-dir.2[a]'), 'my_dir2a')
 
 
-class TestDisambiguateTsIds(unittest.TestCase):
+class TestDisambiguateTsIds(BaseTest):
     """Unit tests for _disambiguateTsIds."""
 
     def test_no_duplicates_unchanged(self):
@@ -199,6 +197,3 @@ class TestDisambiguateTsIds(unittest.TestCase):
         self.assertIn('dir1_TS_001', result)
         self.assertIn('dir2_TS_001', result)
 
-
-if __name__ == '__main__':
-    unittest.main()
