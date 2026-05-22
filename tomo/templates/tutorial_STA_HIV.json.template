@@ -1,5 +1,6 @@
 tutorial - Subtomogram Averaging of HIV capsid protein (SMALL): (EMPIAR-1164).
 You'll need to download this dataset -> scipion3 testdata --download reliontomo_STA_HIV_smalldataset
+Scipion required plugins: tomo, motioncorr, imod, cistem, fidder, tomo3d, dynamo, reliontomo, relion, xmipp3,
 [
     {
         "object.className": "ProtImportTsMovies",

@@ -1,5 +1,6 @@
 tutorial - non-oriented picking ribosome: (EMPIAR-10064) with multiple pickers.
 You'll need to download its dataset -> scipion3 testdata --download nonOrientedPicking_tutorial
+Scipion required plugins: aretomo, xmipp3, tomo, emantomo, sphire, deepfinder, tomoviz, dynamo
 [
     {
         "object.className": "ProtImportTs",
