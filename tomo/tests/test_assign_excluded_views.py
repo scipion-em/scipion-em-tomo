@@ -48,6 +48,7 @@ from tomo.tests import (
     TS_01, TS_03, TS_43, TS_45, TS_54
 )
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
+
 with weakImport("imod"):
     from imod.protocols import ProtImodExcludeViews
     from imod.constants import OUTPUT_TILTSERIES_NAME
@@ -164,7 +165,7 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
     def _runAssignExcludedViews(self,
                                 sourceTsSet: SetOfTiltSeries,
                                 targetTsSet: SetOfTiltSeries,
-                                objLabel: str ='Assign excluded views') -> Optional[SetOfTiltSeries]:
+                                objLabel: str = 'Assign excluded views') -> Optional[SetOfTiltSeries]:
         print(magentaStr(f"\n==> Running assign excluded views: {objLabel}"))
         prot = self.newProtocol(
             ProtAssignExcludedViews,
@@ -307,7 +308,7 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
     # then physically restack with IMOD's ProtImodExcludeViews to remove disabled images.
     # ------------------------------------------------------------------
     def test_excludeViews_06(self):
-         # Restack using IMOD excludeviews
+        # Restack using IMOD excludeviews
         print(magentaStr("\n==> Restacking with IMOD:"))
         protRestack = self.newProtocol(
             ProtImodExcludeViews,
@@ -332,9 +333,6 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
         self.assertIsNotNone(assignedTsSet, "No output from assign-excluded-views step")
 
         # Check the results
-        testExcludedViews = copy.deepcopy(self.excludedViewsTs03Ts54)
-        for tsId in testExcludedViews.keys():
-            testExcludedViews[tsId] = []
         self.checkTiltSeries(
             assignedTsSet,
             expectedSetSize=self.expectedSetSize5,
@@ -344,7 +342,7 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
             testAcqObj=self.testAcqObjDict5,
             anglesCount=self.anglesCountDict5,
             isHeterogeneousSet=True,
-            excludedViewsDict=testExcludedViews,
+            excludedViewsDict=self.excludedViewsTs03Ts54,
             presentTsIds=[TS_01, TS_03, TS_43, TS_45, TS_54])
 
         # Test 6.2: assign excluded views
@@ -354,8 +352,11 @@ class TestAssignExcludedViews(TestBaseCentralizedLayer):
         self.assertIsNotNone(assignedTsSet, "No output from assign-excluded-views step")
 
         # Check the results
+        testExcludedViews = copy.deepcopy(self.excludedViewsTs03Ts54)
+        for tsId in testExcludedViews.keys():
+            testExcludedViews[tsId] = []
         testExcludedViews[TS_03] = [0]  # Because of re-stack there is a re-indexation and this is the only present
-        # Also the acquisition needs to be built adapted to the test because of the re-stack
+        # # Also the acquisition needs to be built adapted to the test because of the re-stack
         testAcqObjDictReStacked = {}
         acq_TS_03 = DataSetRe4STATuto.testAcq03.value.clone()
         acq_TS_03.setAccumDose(111.)

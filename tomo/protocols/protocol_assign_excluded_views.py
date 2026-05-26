@@ -133,7 +133,9 @@ class ProtAssignExcludedViews(EMProtocol):
                 acqOrder = tiTarget.getAcquisitionOrder()
                 if acqOrder in sourceAcqMap:
                     newTi.setEnabled(sourceAcqMap[acqOrder])
-                # If no matching acqOrder in source, preserve target's _enabled
+                else:
+                    # If no matching acqOrder in source, set to False (re-stacked case)
+                    newTi.setEnabled(False)
                 newTs.append(newTi)
         else:
             # Unmatched target TiltSeries: copy images unchanged
