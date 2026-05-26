@@ -1,5 +1,8 @@
-V3.11.6:
+V3.12.0:
  Users:
+  - New protocol added: assign excluded views to tilt-series.
+  - New feature: tilt-series disambiguation added when importing tilt-series with the
+    same basename but from different paths.
   - Fix: Fixing an error crating subsets.
   - Fix: Prevent duplicated object insertion.
   - Protocol assign transformation to TS: improve the streaming.

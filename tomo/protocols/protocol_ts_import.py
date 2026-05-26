@@ -28,7 +28,7 @@ import os
 import re
 from glob import glob
 from datetime import datetime
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from os.path import join, basename, exists
 from statistics import mean
 import numpy as np
@@ -45,11 +45,59 @@ from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import ProtImport
 from tomo.convert import getAnglesFromHeader, getAnglesFromMdoc, getAnglesAndDosesFromTlt
-from tomo.convert.mdoc import normalizeTSId, MDoc
+from tomo.convert.mdoc import normalizeTSId, MDoc, TS_PREFIX
 from tomo.objects import TomoAcquisition, SetOfTiltSeries, SetOfTiltSeriesM
 from .protocol_base import ProtTomoBase, ProtTomoImportFiles
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitizeTsIdComponent(text):
+    """Apply the same sanitization rules used by normalizeTSId to a text
+    fragment (e.g. a relative directory component) so it is safe for use
+    as part of a tsId."""
+    for specChar, okChar in [('-', '_'), ('.', ''), ('[', ''), (']', '')]:
+        text = text.replace(specChar, okChar)
+    while '__' in text:
+        text = text.replace('__', '_')
+    return text
+
+
+def _disambiguateTsIds(tsIdMdocPairs, fpath):
+    """Disambiguate duplicate tsId values using relative directory information.
+
+    Given a list of (tsId, mdocPath) pairs and the base files directory,
+    returns a list of tsId values (same length and order) where duplicates
+    have been disambiguated by prepending the sanitized relative directory
+    from *fpath* to the mdoc file.
+
+    Non-duplicate tsIds are returned unchanged to preserve backwards
+    compatibility.
+    """
+    counts = Counter(tsId for tsId, _ in tsIdMdocPairs)
+    duplicated = {tsId for tsId, c in counts.items() if c > 1}
+
+    if not duplicated:
+        return [tsId for tsId, _ in tsIdMdocPairs]
+
+    result = []
+    for tsId, mdocPath in tsIdMdocPairs:
+        if tsId in duplicated:
+            relDir = os.path.relpath(os.path.dirname(mdocPath), fpath)
+            if relDir and relDir != '.':
+                sanitizedDir = relDir.replace(os.sep, '_')
+                sanitizedDir = _sanitizeTsIdComponent(sanitizedDir)
+                newTsId = sanitizedDir + '_' + tsId
+                # Ensure the combined tsId does not start with a digit
+                if newTsId[0].isdigit():
+                    newTsId = TS_PREFIX + newTsId
+                result.append(newTsId)
+            else:
+                # Same directory — cannot disambiguate further
+                result.append(tsId)
+        else:
+            result.append(tsId)
+    return result
 
 
 class ProtImportTsBase(ProtTomoImportFiles):
@@ -604,25 +652,25 @@ class ProtImportTsBase(ProtTomoImportFiles):
               must be in the same directory.
             - The tilt series id will be the base name of the mdoc file,
               by default, so the mdocs must have different
-              base name. If another name is desired, the user can introduce
-              the name structure (see advanced parameter)
+              base name. If two mdoc files in different subdirectories
+              share the same base name, the relative directory path is
+              used to disambiguate their tsId values.
             """
         fpath = self.filesPath.get()
         mdocList = glob(join(fpath, self.filesPattern.get()))  # Get matching files by the introduced file pattern
         mdocList = self._excludeByWords(mdocList)  # Check for exclusion words
+        mdocList.sort()  # Ensure deterministic ordering
         hasDoseList = []
         if not mdocList:
             raise Exception(f'There are no mdoc files matching the pattern '
                             f'{join(fpath, self.filesPattern.get())}')
 
-        matchingFiles = OrderedDict()
-        self.acquisitions = OrderedDict()
-        self.sRates = OrderedDict()
-        self.accumDoses = OrderedDict()
-        self.incomingDose = OrderedDict()
         warningHeadMsg = 'The following mdoc files were skipped:\n'
         warningDetailedMsg = []
         skippedMdocs = 0
+
+        # First pass: collect all parsed mdoc data with their original tsIds
+        collectedData = []
 
         for mdoc in mdocList:
             # Note: voltage, magnification and sampling rate values are the
@@ -655,7 +703,6 @@ class ProtImportTsBase(ProtTomoImportFiles):
                 warningHeadMsg += '    %s\n' % mdoc
                 warningDetailedMsg.append(validationError)
                 skippedMdocs += 1
-                # validationErrors.append(validationError)
                 # Continue parsing the remaining mdoc files to
                 # provide a fully detailed error message
                 continue
@@ -679,12 +726,33 @@ class ProtImportTsBase(ProtTomoImportFiles):
             if self.isTomo5 and not self.tiltAxisAngle.get():
                 acquisition.setTiltAxisAngle(-1 * acquisition.getTiltAxisAngle() - 90)
 
-            # self._getTsIdFromMdocData(fileList)
-            matchingFiles[tsId] = fileOrderAngleList
-            self.acquisitions[tsId] = acquisition
-            self.sRates[tsId] = mdocObj.getSamplingRate()
-            self.accumDoses[tsId] = accumulatedDoseList
-            self.incomingDose[tsId] = incomingDoseList
+            collectedData.append({
+                'tsId': tsId,
+                'mdocPath': mdoc,
+                'fileOrderAngleList': fileOrderAngleList,
+                'acquisition': acquisition,
+                'sRate': mdocObj.getSamplingRate(),
+                'accumDoseList': accumulatedDoseList,
+                'incomingDoseList': incomingDoseList,
+            })
+
+        # Second pass: detect duplicate tsIds and disambiguate
+        tsIdMdocPairs = [(item['tsId'], item['mdocPath'])
+                         for item in collectedData]
+        disambiguatedIds = _disambiguateTsIds(tsIdMdocPairs, fpath)
+
+        matchingFiles = OrderedDict()
+        self.acquisitions = OrderedDict()
+        self.sRates = OrderedDict()
+        self.accumDoses = OrderedDict()
+        self.incomingDose = OrderedDict()
+
+        for newTsId, item in zip(disambiguatedIds, collectedData):
+            matchingFiles[newTsId] = item['fileOrderAngleList']
+            self.acquisitions[newTsId] = item['acquisition']
+            self.sRates[newTsId] = item['sRate']
+            self.accumDoses[newTsId] = item['accumDoseList']
+            self.incomingDose[newTsId] = item['incomingDoseList']
 
         if isValidation:
             if matchingFiles:
