@@ -423,6 +423,13 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 newTi = ti.clone()
                 tiList.append(newTi)
 
+        # Now we know the excluded views. Re-stack if requested
+        if doReStack:
+            presentAcqOrders = set([ti.getAcquisitionOrder() for ti in tiList if ti.isEnabled()])
+            inFileName = ts.getFirstItem().getFileName()
+            reStackedFn = self._getExtraPath(f'{ts.getTsId()}.mrcs')
+            ts.reStack(inFileName, reStackedFn, presentAcqOrders)
+
         with self._lock:
             minNoViewsAllowed = self.getAttribValue(MIN_VIEWS)
             # Successful TS
@@ -435,7 +442,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                 outTsSet.append(outTs)
 
                 if doReStack:
-                    self._populateRestackedTs(outTs, tiList, angleMin, angleMax, accumDose, initialDose)
+                    self._populateRestackedTs(outTs, tiList, reStackedFn, angleMin, angleMax, accumDose, initialDose)
                 else:
                     self._populateFinalTs(outTs, tiList)
 
@@ -578,6 +585,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _populateRestackedTs(
             outTs: TiltSeries,
             tiList: List[TiltImage],
+            reStackedFn: str,
             angleMin: float,
             angleMax: float,
             accumDose: float,
@@ -593,6 +601,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         # specific accum and initial dose values
         for tiOut in tiList:
             if tiOut.isEnabled():
+                tiOut.setFileName(reStackedFn)
                 tiAcq = tiOut.getAcquisition()
                 tiAcq.setAngleMin(angleMin)
                 tiAcq.setAngleMax(angleMax)
