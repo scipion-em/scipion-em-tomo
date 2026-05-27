@@ -713,9 +713,6 @@ class TiltSeries(TiltSeriesBase):
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
-        logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
-        if exists(outFileName):
-            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(inFileName):
             if presentAcqOrders:
                 # Load the file
