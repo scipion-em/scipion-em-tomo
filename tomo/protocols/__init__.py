@@ -44,6 +44,7 @@ from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 from .protocol_extract_coordinates import ProtTomoExtractCoords
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
+from .protocol_assign_excluded_views import ProtAssignExcludedViews
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_project_coordinates import ProtProjectCoordinates
