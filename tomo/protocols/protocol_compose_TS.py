@@ -485,9 +485,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             for ti in tiltImages:
                 ts.append(ti)
                 ts.write()
-                tsSet.update(ts)
-                tsSet.write()
-                self._store(tsSet)
+
+            tsSet.update(ts)
+            tsSet.write()
+            self._store(tsSet)
 
             for outputName in self._possibleOutputs.keys():
                 output = getattr(self, outputName, None)
