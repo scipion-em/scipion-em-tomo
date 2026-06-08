@@ -161,15 +161,16 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
         while True:
             try:
-                mdocList = self.findMdocs()
-                if not inputSet.isStreamOpen() and self.processedMdocs == set(mdocList):
+                mdocList = set(self.findMdocs())
+                if not inputSet.isStreamOpen() and self.processedMdocs == mdocList:
                     logger.info(cyanStr('Input set closed.'))
                     self._insertFunctionStep(self.closeOutputSetsStep,
                                              prerequisites=closeSetStepDeps,
                                              needsGPU=False)
                     break
 
-                self.listOfMics = [mic.clone() for mic in inputSet.iterItems() if mic.getObjId() not in self.processedIds]
+                self.listOfMics = [mic.clone() for mic in inputSet.iterItems()
+                                   if mic.getObjId() not in self.processedIds]
                 nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
                 if nonProcessedMdocs:
                     logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
@@ -489,11 +490,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tsSet.update(ts)
             tsSet.write()
             self._store(tsSet)
-
-            for outputName in self._possibleOutputs.keys():
-                output = getattr(self, outputName, None)
-                if isinstance(output, Set):
-                    output.close()
 
     def _genTomoAcquisition(self,
                             mdoc: MDoc,
