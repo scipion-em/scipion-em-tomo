@@ -159,47 +159,52 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         self.inMicsAcq = inputSet.getAcquisition()
 
         while True:
-            mdocList = self.findMdocs()          
-            if not inputSet.isStreamOpen() and self.processedMdocs == set(mdocList):
-                logger.info(cyanStr('Input set closed.'))
-                self._insertFunctionStep(self.closeOutputSetsStep,
-                                         prerequisites=closeSetStepDeps,
-                                         needsGPU=False)
-                break
+            try:
+                mdocList = self.findMdocs()
+                if not inputSet.isStreamOpen() and self.processedMdocs == set(mdocList):
+                    logger.info(cyanStr('Input set closed.'))
+                    self._insertFunctionStep(self.closeOutputSetsStep,
+                                             prerequisites=closeSetStepDeps,
+                                             needsGPU=False)
+                    break
 
-            self.listOfMics = [mic.clone() for mic in inputSet.iterItems() if mic.getObjId() not in self.processedIds]
-            nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
-            if nonProcessedMdocs:
-                logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
-            for mdocFn in nonProcessedMdocs:
-                matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = self._isMdocOk(mdocFn)
-                if failedTs or (not matchOk and not inputSet.isStreamOpen()):
-                    # If failedTs --> The tilt-series won't be considered anymore to generate the steps
-                    # If not matchOk and the input set is closed, that mdoc will be considered as processed
-                    # to avoid neverending executions in case of more mdocs than files are present in the
-                    # working directory
+                self.listOfMics = [mic.clone() for mic in inputSet.iterItems() if mic.getObjId() not in self.processedIds]
+                nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
+                if nonProcessedMdocs:
+                    logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
+                for mdocFn in nonProcessedMdocs:
+                    matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = self._isMdocOk(mdocFn)
+                    if failedTs or (not matchOk and not inputSet.isStreamOpen()):
+                        # If failedTs --> The tilt-series won't be considered anymore to generate the steps
+                        # If not matchOk and the input set is closed, that mdoc will be considered as processed
+                        # to avoid neverending executions in case of more mdocs than files are present in the
+                        # working directory
+                        self.processedMdocs.add(mdocFn)
+                        continue
+                    if not matchOk:
+                        # The tilt-series will not be discarded because there may be data
+                        # still pending to come
+                        continue
+                    cTsPid = self._insertFunctionStep(self.composeTsStep,
+                                                      mdoc,
+                                                      tiltMdSorted,
+                                                      micsSorted,
+                                                      prerequisites=[],
+                                                      needsGPU=False)
+                    closeSetStepDeps.append(cTsPid)
+                    logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
-                    continue
-                if not matchOk:
-                    # The tilt-series will not be discarded because there may be data
-                    # still pending to come
-                    continue
-                cTsPid = self._insertFunctionStep(self.composeTsStep,
-                                                  mdoc,
-                                                  tiltMdSorted,
-                                                  micsSorted,
-                                                  prerequisites=[],
-                                                  needsGPU=False)
-                closeSetStepDeps.append(cTsPid)
-                logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
-                self.processedMdocs.add(mdocFn)
 
-            time.sleep(10)
-            if inputSet.isStreamOpen():
-                with self._lock:
+                time.sleep(10)
+                if inputSet.isStreamOpen():
                     inputSet.loadAllProperties()  # refresh status for the streaming
 
-    @retry_on_sqlite_lock(log=logger)
+            except Exception as e:
+                logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}. '
+                                         f'Sleeping for 10 seconds...'))
+                time.sleep(10)
+                continue
+
     def composeTsStep(self,
                       mdoc: MDoc,
                       tiltMd: Tuple[TiltMetadata],
@@ -418,63 +423,71 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
         # COMPOSE THE TILT-SERIES ---------------------------------------------------------
         logger.info(cyanStr(f'{tsId} - composing the tilt series...'))
+        # Build objects outside the lock
+        acq = self._genTomoAcquisition(mdoc, tiltsMd)
+        ts = TiltSeries(tsId=tsId)
+        tiltImages = []
+        index = 1
+        minAngle = 999
+        maxAngle = -999
+        initialDose = 999
+        accumDose = -999
+        for tiltMd, mic in zip(tiltsMd, mics):
+            ti = TiltImage()
+            acqOrder = int(tiltMd.getAcqOrder())
+            tiltAngle = float(tiltMd.getTiltAngle())
+            ti.setTsId(tsId)
+            ti.setTiltAngle(tiltAngle)
+            ti.setIndex(index)
+            ti.setFileName(tsFn)
+            ti.setSamplingRate(self.sRate)
+            ti.setAcquisitionOrder(acqOrder)
+            ti.setOddEven([tsFnOdd, tsFnEven] if doEvenOdd else [])
+            micAcq = mic.getAcquisition()
+            tiAcq = acq.clone()
+            inDose = max(tiltMd.getIncomingDose(), micAcq.getDosePerFrame() * (acqOrder - 1))
+            cumDose = max(tiltMd.getAccumDose(), micAcq.getDosePerFrame() * acqOrder)
+            tiAcq.setDoseInitial(inDose)
+            tiAcq.setAccumDose(cumDose)
+            ti.setAcquisition(tiAcq)
+            tiltImages.append(ti)
+            self.processedIds.append(mic.getObjId())
+            index += 1
+            minAngle = min(tiltAngle, minAngle)
+            maxAngle = max(tiltAngle, maxAngle)
+            initialDose = min(inDose, initialDose)
+            accumDose = max(cumDose, accumDose)
+
+        tsAcq = acq.clone()
+        tsAcq.setDoseInitial(initialDose)
+        tsAcq.setAccumDose(accumDose)
+        tsAcq.setAngleMin(minAngle)
+        tsAcq.setAngleMax(maxAngle)
+
+        # Minimal lock scope: only DB writes
+        self.registerOutputs(ts, tsAcq, tiltImages)
+
+    @retry_on_sqlite_lock(log=logger)
+    def registerOutputs(self,
+                        ts: TiltSeries,
+                        tsAcq: TomoAcquisition,
+                        tiltImages: List[TiltImage]) -> None:
         with self._lock:
-            acq = self._genTomoAcquisition(mdoc, tiltsMd)
             tsSet = self._getOutputTsSet()
-            ts = TiltSeries(tsId=tsId)
-            tsSet.setAcquisition(acq)
+            tsSet.setAcquisition(tsAcq)
             tsSet.append(ts)
-
-            index = 1
-            minAngle = 999
-            maxAngle = -999
-            initialDose = 999
-            accumDose = -999
-            for tiltMd, mic in zip(tiltsMd, mics):
-                ti = TiltImage()
-                acqOrder = int(tiltMd.getAcqOrder())
-                tiltAngle = float(tiltMd.getTiltAngle())
-                ti.setTsId(tsId)
-                ti.setTiltAngle(tiltAngle)
-                ti.setIndex(index)
-                ti.setFileName(tsFn)
-                ti.setSamplingRate(self.sRate)
-                ti.setAcquisitionOrder(acqOrder)
-                ti.setOddEven([tsFnOdd, tsFnEven] if doEvenOdd else [])
-                # Acquisition
-                micAcq = mic.getAcquisition()
-                tiAcq = acq.clone()
-                # Initial and accumulated doses may be zero if the mdoc does not contain the data
-                # needed to calculate it.
-                inDose = max(tiltMd.getIncomingDose(), micAcq.getDosePerFrame() * (acqOrder - 1))
-                cumDose = max(tiltMd.getAccumDose(), micAcq.getDosePerFrame() * acqOrder)
-                tiAcq.setDoseInitial(inDose)
-                tiAcq.setAccumDose(cumDose)
-                ti.setAcquisition(tiAcq)
-                ts.append(ti)
-                self.processedIds.append(mic.getObjId())
-                index += 1
-                # Update the values needed for the acquisition of the tilt-series
-                minAngle = min(tiltAngle, minAngle)
-                maxAngle = max(tiltAngle, maxAngle)
-                initialDose = min(inDose, initialDose)
-                accumDose = max(cumDose, accumDose)
-
-            tsAcq = ts.getAcquisition()
-            tsAcq.setDoseInitial(initialDose)
-            tsAcq.setAccumDose(accumDose)
-            tsAcq.setAngleMin(minAngle)
-            tsAcq.setAngleMax(maxAngle)
             ts.setAcquisition(tsAcq)
-            # Data persistence
-            ts.write()
-            tsSet.update(ts)
-            tsSet.write()
-            self._store(tsSet)
-            for outputName in self._possibleOutputs.keys():
-                output = getattr(self, outputName, None)
-                if isinstance(output,Set):
-                    output.close()
+
+            for ti in tiltImages:
+                ts.append(ti)
+                ts.write()
+                tsSet.update(ts)
+                tsSet.write()
+                self._store(tsSet)
+                for outputName in self._possibleOutputs.keys():
+                    output = getattr(self, outputName, None)
+                    if isinstance(output, Set):
+                        output.close()
 
     def _genTomoAcquisition(self,
                             mdoc: MDoc,
