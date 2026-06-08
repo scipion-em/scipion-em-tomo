@@ -409,13 +409,6 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
-    def getFirstEnabledItem(self) -> typing.Union[TiltImage, None]:
-        for item in self.iterItems():
-            ti = item.clone()
-            if ti.isEnabled():
-                return item
-        raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
-
 def tiltSeriesToString(tiltSeries):
     s = []
 
@@ -686,6 +679,7 @@ class TiltSeries(TiltSeriesBase):
                 excludeViewsList.append(caster(ti.getIndex() + indexOffset))
         return excludeViewsList
 
+    @retry_on_sqlite_lock(log=logger)
     def getTsPresentAcqOrders(self) -> typing.Set[int]:
         """It generates a set containing the acquisition orders that correspond to the enabled tilt images."""
         return set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
@@ -972,6 +966,19 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
+    def getFirstEnabledItem(self, loadImgsInMemory: bool = False) -> typing.Union[TiltImage, None]:
+        if loadImgsInMemory:
+            tiList = self.loadTiltImgsInMemory()
+            for ti in tiList:
+                if ti.isEnabled():
+                    return ti
+        else:
+            for item in self.iterItems():
+                ti = item.clone()
+                if ti.isEnabled():
+                    return item
+        raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
+
     @retry_on_sqlite_lock(log=logger)
     def loadTiltImgsInMemory(self) -> typing.List[TiltImage]:
         """
@@ -1180,6 +1187,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
     def getTiltSeriesFromTsId(self, tsId):
         return self[{"_tsId": tsId}]
 
+    @retry_on_sqlite_lock(log=logger)
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(TiltSeries.TS_ID_FIELD)
@@ -1551,6 +1559,7 @@ class SetOfTomograms(data.SetOfVolumes):
         self._hasOddEven.set(item.hasHalfMaps())
         self.setCtfCorrected(item.ctfCorrected())
 
+    @retry_on_sqlite_lock(log=logger)
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(Tomogram.TS_ID_FIELD)
@@ -2051,6 +2060,7 @@ class SetOfCoordinates3D(data.EMSet):
             self.setBoxSize(item._boxSize)
         super().append(item)
 
+    @retry_on_sqlite_lock(log=logger)
     def getTSIds(self):
         """ Returns all the TS ID (tomoId) present in this set"""
         return self.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
@@ -3306,6 +3316,7 @@ class SetOfCTFTomoSeries(data.EMSet):
             ts = self._idDict.get(tsId, None)
         return ts
 
+    @retry_on_sqlite_lock(log=logger)
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
