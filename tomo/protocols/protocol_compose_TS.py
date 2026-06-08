@@ -489,10 +489,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tsSet.write()
                 self._store(tsSet)
 
-            # for outputName in self._possibleOutputs.keys():
-            #     output = getattr(self, outputName, None)
-            #     if isinstance(output, Set):
-            #         output.close()
+            for outputName in self._possibleOutputs.keys():
+                output = getattr(self, outputName, None)
+                if isinstance(output, Set):
+                    output.close()
 
     def _genTomoAcquisition(self,
                             mdoc: MDoc,
