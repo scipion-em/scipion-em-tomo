@@ -48,6 +48,7 @@ from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
 from pyworkflow.utils import removeBaseExt, cyanStr, yellowStr
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 
 logger = logging.getLogger(__name__)
 
@@ -970,6 +971,15 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
+
+    @retry_on_sqlite_lock(log=logger)
+    def loadTiltImgsInMemory(self) -> typing.List[TiltImage]:
+        """
+        Safely materializes the TiltImages from the database into memory.
+        Decorated to survive locked-database read attempts during HPC streaming.
+        """
+        # Consume the iterator immediately into a list inside this retriable block
+        return [ti.clone() for ti in self.iterItems()]
 
 
 class SetOfTiltSeriesBase(data.SetOfImages):
