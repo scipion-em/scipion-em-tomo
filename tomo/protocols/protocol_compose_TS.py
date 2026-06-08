@@ -26,6 +26,7 @@
 # *
 # **************************************************************************
 import logging
+import sqlite3
 import time
 import traceback
 from glob import glob
@@ -212,10 +213,13 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         try:
             self.generateOutTs(mdoc, tiltMd, mics)
         except Exception as e:
-            logger.error(redStr(f'tsId = {mdoc.getTsId()} - the output generation '
-                                f'failed with the exception {e}. '
-                                f'Skipping...'))
-            logger.error(traceback.format_exc())
+            if isinstance(e, sqlite3.OperationalError):
+                raise e
+            else:
+                logger.error(redStr(f'tsId = {mdoc.getTsId()} - the output generation '
+                                    f'failed with the exception {e}. '
+                                    f'Skipping...'))
+                logger.error(traceback.format_exc())
 
     def closeOutputSetsStep(self):
         self._closeOutputSet()
