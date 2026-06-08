@@ -484,8 +484,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
             for ti in tiltImages:
                 ts.append(ti)
-                ts.write()
 
+            ts.write()
             tsSet.update(ts)
             tsSet.write()
             self._store(tsSet)
