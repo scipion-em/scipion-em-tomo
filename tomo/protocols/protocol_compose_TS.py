@@ -26,11 +26,13 @@
 # *
 # **************************************************************************
 import logging
+import random
 import sqlite3
 import time
 import traceback
 from glob import glob
 from os.path import join, getmtime, exists
+from pathlib import Path
 from statistics import mean
 from typing import Union, List, Tuple, Optional, Counter
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
@@ -40,11 +42,13 @@ from pyworkflow import BETA
 from pyworkflow.object import Pointer, Set, Integer
 from pyworkflow.protocol import ProtStreamingBase, BooleanParam, LEVEL_ADVANCED, StringParam, \
     PathParam, PointerParam, IntParam, GE, LE, FloatParam
-from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr, magentaStr
+from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr, magentaStr, makePath
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
+from tomo.constants import STREAMING_DIR, READY_EXT
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
+from tomo.utils import sleepRandomly
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "tiltSeries"
@@ -155,6 +159,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
     # -------------------------- STEPS functions ------------------------------
     def stepsGeneratorStep(self):
         closeSetStepDeps = []
+        makePath(self._getExtraPath(STREAMING_DIR))
         inputSet = self.getInMics()
         self.sRate = inputSet.getSamplingRate()
         self.inMicsAcq = inputSet.getAcquisition()
@@ -197,14 +202,17 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
 
-                time.sleep(10)
+                    # Create a file that indicates the current tilt-series has been successfully processed
+                    if mdoc:
+                        Path(self._getExtraPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
+
+                sleepRandomly()
                 if inputSet.isStreamOpen():
                     inputSet.loadAllProperties()  # refresh status for the streaming
 
             except Exception as e:
-                logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}. '
-                                         f'Sleeping for 10 seconds...'))
-                time.sleep(10)
+                logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}.'))
+                sleepRandomly()
                 continue
 
     def composeTsStep(self,

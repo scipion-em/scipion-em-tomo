@@ -25,22 +25,24 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import glob
 import os
+import random
 import re
 import importlib
-from typing import List, Set
-
+from os.path import join, exists
+from typing import Set, Optional, List
+import time
 import numpy as np
 import math
 import logging
-logger = logging.getLogger(__name__)
-
 import pyworkflow.utils as pwutils
-
 import tomo.constants as const
+from pyworkflow.utils import yellowStr, getParentFolder, removeBaseExt
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
-    CTFTomoSeries, TiltImage, CTFTomo
+    CTFTomoSeries, CTFTomo
+
+logger = logging.getLogger(__name__)
 
 
 def existsPlugin(plugin):
@@ -443,3 +445,16 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
 
     logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
+
+def sleepRandomly(lowTimeRange: float = 4.0,
+                  highTimeRange: float = 10.0) -> None:
+    sleepingTime = random.uniform(lowTimeRange, highTimeRange)
+    logger.error(yellowStr(f'Sleeping for {sleepingTime} seconds...'))
+    time.sleep(sleepingTime)
+
+def getStreamingPath(obj) -> Optional[str]:
+    streamingPath = join(getParentFolder(obj._mapperPath.get()), const.STREAMING_DIR)
+    return streamingPath if exists(streamingPath) else None
+
+def getTsIdsFromDir(streamingDir: str) -> List[str]:
+    return [removeBaseExt(file) for file in glob.glob(join(streamingDir, f'*{const.READY_EXT}'))]

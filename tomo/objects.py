@@ -1188,9 +1188,19 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return self[{"_tsId": tsId}]
 
     @retry_on_sqlite_lock(log=logger)
-    def getTSIds(self):
+    def _getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(TiltSeries.TS_ID_FIELD)
+
+    def getTSIds(self) -> typing.Set[str]:
+        from tomo.utils import getStreamingPath, getTsIdsFromDir
+        streamingPath = getStreamingPath(self)
+        if streamingPath:
+            # Prevents multiple reading requests to the mapper
+            tsIds = getTsIdsFromDir(streamingPath)
+        else:
+            tsIds = self._getTSIds()
+        return set(tsIds)
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):

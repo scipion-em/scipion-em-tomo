@@ -85,3 +85,7 @@ TS_LABEL = '{TS}'
 
 # Folder name where IMOD generates the interpolated
 INTERPOLATED_FOLDER = 'interpolated'
+
+# -------------------------- Streaming variables -------------------------------
+STREAMING_DIR = 'streaming'
+READY_EXT = '.ready'
