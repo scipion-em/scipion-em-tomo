@@ -1196,9 +1196,11 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         from tomo.utils import getStreamingPath, getTsIdsFromDir
         streamingPath = getStreamingPath(self)
         if streamingPath:
+            logger.info(f'streaming path found -> {streamingPath}')
             # Prevents multiple reading requests to the mapper
             tsIds = getTsIdsFromDir(streamingPath)
         else:
+            logger.info('TsIds loaded from the mapper')
             tsIds = self._getTSIds()
         return set(tsIds)
 
