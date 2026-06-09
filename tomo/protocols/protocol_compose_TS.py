@@ -203,8 +203,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     self.processedMdocs.add(mdocFn)
 
                     # Create a file that indicates the current tilt-series has been successfully processed
-                    if mdoc:
-                        Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
+                    Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
 
                 sleepRandomly()
                 if inputSet.isStreamOpen():
