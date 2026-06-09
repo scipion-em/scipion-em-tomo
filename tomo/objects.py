@@ -2040,6 +2040,7 @@ class SetOfCoordinates3D(data.EMSet):
         if self._tomos is None:
             self._tomos = dict()
 
+    @retry_on_sqlite_lock(log=logger)
     def getPrecedentsInvolved(self):
         """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
         subsets are done."""
@@ -2307,6 +2308,7 @@ class SetOfSubTomogramsBase(data.SetOfVolumes):
         if self._tomos is None:
             self._tomos = dict()
 
+    @retry_on_sqlite_lock(log=logger)
     def getTomograms(self):
         """ Returns a list  with only the tomograms involved in the subtomograms. May differ when
         subsets are done."""
@@ -3166,12 +3168,27 @@ class CTFTomoSeries(data.EMSet):
         else:
             return None
 
-    def getFirstEnabledItem(self) -> typing.Union[CTFTomo, None]:
-        for item in self.iterItems():
-            ti = item.clone()
-            if ti.isEnabled():
-                return item
+    def getFirstEnabledItem(self, loadCtfsInMemory: bool = False) -> typing.Union[CTFTomo, None]:
+        if loadCtfsInMemory:
+            ctfList = self.loadCtfsInMemory()
+            for ctf in ctfList:
+                if ctf.isEnabled():
+                    return ctf
+        else:
+            for item in self.iterItems():
+                ctf = item.clone()
+                if ctf.isEnabled():
+                    return item
         raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current CTF.')
+
+    @retry_on_sqlite_lock(log=logger)
+    def loadCtfsInMemory(self) -> typing.List[CTFTomo]:
+        """
+        Safely materializes the CTFTomos from the database into memory.
+        Decorated to survive locked-database read attempts during HPC streaming.
+        """
+        # Consume the iterator immediately into a list inside this retriable block
+        return [ctf.clone() for ctf in self.iterItems()]
 
 
 class SetOfCTFTomoSeries(data.EMSet):
