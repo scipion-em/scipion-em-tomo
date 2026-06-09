@@ -1086,21 +1086,25 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return self._tsIds
 
     def append(self, image):
-        """ Add a image to the set. """
-        # If the sampling rate was set before, the same value
-        # will be set for each image added to the set
+        """ Add an image to the set. """
+        try:
+            mapper = self._getMapper()
+            # PASO 1: Forzamos el bloqueo inmediato ANTES de que self.isEmpty()
+            # realice ninguna lectura y despierte la transacción diferida implícita de Python.
+            if not mapper.db.connection.in_transaction:
+                mapper.db.cursor.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as e:
+            raise e
+
+        # PASO 2: Continuar con la lógica normal de Scipion de forma segura
         if self.getSamplingRate() or not image.getSamplingRate():
             image.setSamplingRate(self.getSamplingRate())
-        # Store the dimensions of the first image, just to
-        # avoid reading image files for further queries to dimensions
-        # only check this for first time append is called
+
+        # Ahora isEmpty() ejecutará su SELECT bajo la protección de BEGIN IMMEDIATE
         if self.isEmpty():
             self._setFirstDim(image)
 
         try:
-            mapper = self._getMapper()
-            # Force sqlite to block the writings and other processes
-            mapper.db.cursor.execute("BEGIN IMMEDIATE")
             data.EMSet.append(self, image)
         except sqlite3.OperationalError as e:
             raise e
