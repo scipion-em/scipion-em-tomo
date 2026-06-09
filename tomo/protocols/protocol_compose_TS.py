@@ -159,7 +159,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
     # -------------------------- STEPS functions ------------------------------
     def stepsGeneratorStep(self):
         closeSetStepDeps = []
-        makePath(self._getExtraPath(STREAMING_DIR))
+        makePath(self._getPath(STREAMING_DIR))
         inputSet = self.getInMics()
         self.sRate = inputSet.getSamplingRate()
         self.inMicsAcq = inputSet.getAcquisition()
@@ -204,7 +204,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
                     # Create a file that indicates the current tilt-series has been successfully processed
                     if mdoc:
-                        Path(self._getExtraPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
+                        Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
 
                 sleepRandomly()
                 if inputSet.isStreamOpen():

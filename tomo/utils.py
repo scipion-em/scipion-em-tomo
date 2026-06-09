@@ -448,9 +448,7 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
 
 def sleepRandomly(lowTimeRange: float = 4.0,
                   highTimeRange: float = 10.0) -> None:
-    sleepingTime = random.uniform(lowTimeRange, highTimeRange)
-    logger.error(yellowStr(f'Sleeping for {sleepingTime} seconds...'))
-    time.sleep(sleepingTime)
+    time.sleep(random.uniform(lowTimeRange, highTimeRange))
 
 def getStreamingPath(obj) -> Optional[str]:
     streamingPath = join(getParentFolder(obj._mapperPath.get()), const.STREAMING_DIR)
