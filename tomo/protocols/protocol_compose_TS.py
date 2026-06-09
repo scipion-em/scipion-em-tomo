@@ -202,9 +202,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
 
-                    # Create a file that indicates the current tilt-series has been successfully processed
-                    Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
-
                 sleepRandomly()
                 if inputSet.isStreamOpen():
                     inputSet.loadAllProperties()  # refresh status for the streaming
@@ -478,6 +475,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
         # Minimal lock scope: only DB writes
         self.registerOutputs(ts, tsAcq, tiltImages)
+
+        # Create a file that indicates the current tilt-series has been successfully processed
+        if mdoc:
+            Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
 
     @retry_on_sqlite_lock(log=logger)
     def registerOutputs(self,
