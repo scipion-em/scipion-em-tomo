@@ -30,6 +30,7 @@ import random
 import sqlite3
 import time
 import traceback
+import typing
 from glob import glob
 from os.path import join, getmtime, exists
 from pathlib import Path
@@ -48,7 +49,7 @@ from tomo.constants import STREAMING_DIR, READY_EXT
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
-from tomo.utils import sleepRandomly
+from tomo.utils import sleepRandomly, refreshStreaming
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "tiltSeries"
@@ -200,9 +201,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
 
-                sleepRandomly()
-                if inputSet.isStreamOpen():
-                    inputSet.loadAllProperties()  # refresh status for the streaming
+                refreshStreaming(inputSet)
 
             except Exception as e:
                 logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}.'))
@@ -323,6 +322,16 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             return errorMsg, None
         return '', mdoc
 
+    @retry_on_sqlite_lock(log=logger)
+    def fetchNewMics(self, objIds: typing.Set[int]) -> typing.List[Micrograph]:
+        """
+        Extract exclusively the new micrographs using native SQL.
+        By avoiding a general SELECT, it drastically  minimizes the locking time (SHARED lock).
+        """
+        whereClause = " OR ".join([f"id='{objId}'" for objId in objIds])
+        return [mic.clone() for mic in self.getInMics().iterItems(where=whereClause)]
+
+
     def matchTs(self, mdoc: Optional[MDoc]) \
             -> Tuple[bool, bool, Optional[Tuple[TiltMetadata]], Optional[Tuple[Micrograph]]]:
         """
@@ -343,8 +352,11 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         nTilts = len(tiltsMdList)
         inMicsSet = self.getInMics()
 
-        self.listOfMics = [mic.clone() for mic in self.getInMics().iterItems()
-                           if mic.getObjId() not in self.processedIds]
+        setSize = self.getInMics().getSize()
+        inSetIds = list(range(1, setSize + 1))
+        nonProcessedMicIds = set(inSetIds) - set(self.processedIds)
+        self.listOfMics = self.fetchNewMics(nonProcessedMicIds)
+
         micsBNamesDict = {removeBaseExt(mic.getMicName()): mic for mic in self.listOfMics}
         tiltsMdListFiltered = []
         micsFilteredList = []
