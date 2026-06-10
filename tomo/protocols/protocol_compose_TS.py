@@ -174,9 +174,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                                              needsGPU=False)
                     break
 
-
-                self.listOfMics = [mic.clone() for mic in inputSet.iterItems()
-                                   if mic.getObjId() not in self.processedIds]
                 nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]
                 if nonProcessedMdocs:
                     logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
@@ -346,6 +343,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         nTilts = len(tiltsMdList)
         inMicsSet = self.getInMics()
 
+        self.listOfMics = [mic.clone() for mic in self.getInMics().iterItems()
+                           if mic.getObjId() not in self.processedIds]
         micsBNamesDict = {removeBaseExt(mic.getMicName()): mic for mic in self.listOfMics}
         tiltsMdListFiltered = []
         micsFilteredList = []
