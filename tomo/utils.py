@@ -36,9 +36,12 @@ import time
 import numpy as np
 import math
 import logging
+
+import pwem
 import pyworkflow.utils as pwutils
 import tomo.constants as const
 from pyworkflow.utils import yellowStr, getParentFolder, removeBaseExt
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
     CTFTomoSeries, CTFTomo
 
@@ -375,12 +378,14 @@ def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
 def getNonInterpolatedTsFromRelations(sourceObj, prot):
     def stopSearchCallback(pObj):
         return type(pObj) == SetOfTiltSeries and pObj.hasAlignment()
+
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
 def getObjFromRelation(sourceObj, prot, targetObj):
     def stopSearchCallback(pObj):
         return type(pObj) == targetObj
+
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
@@ -446,13 +451,29 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
 
+
 def sleepRandomly(lowTimeRange: float = 4.0,
                   highTimeRange: float = 10.0) -> None:
     time.sleep(random.uniform(lowTimeRange, highTimeRange))
+
 
 def getStreamingPath(obj) -> Optional[str]:
     streamingPath = join(getParentFolder(obj._mapperPath.get()), const.STREAMING_DIR)
     return streamingPath if exists(streamingPath) else None
 
+
 def getTsIdsFromDir(streamingDir: str) -> List[str]:
     return [removeBaseExt(file) for file in glob.glob(join(streamingDir, f'*{const.READY_EXT}'))]
+
+
+@retry_on_sqlite_lock(log=logger)
+def _safeRefreshStreamStatus(inSet: pwem.objects.data.Set) -> None:
+    if inSet.isStreamOpen():
+        inSet.loadAllProperties()  # refresh status for the streaming
+
+
+def refreshStreaming(inSet: pwem.objects.data.Set,
+                     lowTimeRange: float = 4.0,
+                     highTimeRange: float = 10.0) -> None:
+    sleepRandomly(lowTimeRange, highTimeRange)
+    _safeRefreshStreamStatus(inSet)

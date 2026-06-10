@@ -174,6 +174,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                                              needsGPU=False)
                     break
 
+
                 self.listOfMics = [mic.clone() for mic in inputSet.iterItems()
                                    if mic.getObjId() not in self.processedIds]
                 nonProcessedMdocs = [mdoc for mdoc in mdocList if mdoc not in self.processedMdocs]

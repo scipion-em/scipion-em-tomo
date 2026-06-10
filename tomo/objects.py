@@ -410,6 +410,7 @@ class TiltSeriesBase(data.SetOfImages):
         self.setOrigin(origin)
         # x, y, z are floats in Angstroms
 
+
 def tiltSeriesToString(tiltSeries):
     s = []
 
@@ -487,18 +488,18 @@ class TiltSeries(TiltSeriesBase):
             rot = np.rad2deg(-rot)
 
             # Scale factor
-            factor = 1/binning
+            factor = 1 / binning
 
-            x,y,_ = transf.getShifts()
+            x, y, _ = transf.getShifts()
             # scale shifts
-            x=x*factor
-            y=y*factor
-            npImage = imgStk.getImage(ti.getIndex()-1)
+            x = x * factor
+            y = y * factor
+            npImage = imgStk.getImage(ti.getIndex() - 1)
 
             if binning != 0:
                 npImage = imgStk.scaleSlice(npImage, factor)
 
-            npImage = imgStk.transformSlice(npImage,(x,y), rot)
+            npImage = imgStk.transformSlice(npImage, (x, y), rot)
             output.append(npImage)
 
         output.write(outputFile)
@@ -568,7 +569,7 @@ class TiltSeries(TiltSeriesBase):
         """
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
-            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            tsExcludedIndices = self.getTsExcludedViewsIndices(presentAcqOrders)
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             self.reStack(inFileName, outFileName, presentAcqOrders)
         else:
@@ -596,7 +597,7 @@ class TiltSeries(TiltSeriesBase):
             xDim, yDim = yDim, xDim
         if self.hasExcludedViews() and not ignoreExcludedViews:
             presentAcqOrders = self.getTsPresentAcqOrders()
-            tsExcludedIndices =self.getTsExcludedViewsIndices(presentAcqOrders)
+            tsExcludedIndices = self.getTsExcludedViewsIndices(presentAcqOrders)
             logger.info(cyanStr(f'\t--> Excluded views detected ==> {tsExcludedIndices}.'))
             counter = 1
             for ti in self.iterItems(orderBy=self.INDEX):
@@ -685,7 +686,7 @@ class TiltSeries(TiltSeriesBase):
         """It generates a set containing the acquisition orders that correspond to the enabled tilt images."""
         return set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
 
-    def hasExcludedViews(self)  -> bool:
+    def hasExcludedViews(self) -> bool:
         return False if len(self.getTsPresentAcqOrders()) == len(self) else True
 
     def getTsExcludedViewsIndices(self, presentAcqOrders) -> typing.Set[int]:
@@ -1069,6 +1070,33 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         item._mapperPath.set('%s,%s' % (self.getFileName(), item.getTsId()))
         item.load()
 
+    @retry_on_sqlite_lock(log=logger)
+    def fetchNewTs(self,
+                   tsIds: typing.Union[typing.List[str], typing.Set[str]],
+                   forceSetLoadProps: bool = False)\
+            -> typing.Dict[str, TiltSeries]:
+        """
+        Extract exclusively the new Tilt-Series using native SQL.
+        By avoiding a general SELECT, it drastically  minimizes the locking time (SHARED lock).
+
+        :param tsIds: List of Tilt-Series IDs.
+        :param forceSetLoadProps: The set size may have changed. It can be checked by forcing
+        the set load (loadAllProperties()). But in streamified protocols, the set load may have
+        been executed outside before calling this method.
+        """
+        if forceSetLoadProps:
+            self.loadAllProperties()
+        # We ask the mapper ONLY for the items that match the requested tsIds, Making the
+        # query much lighter than executing a
+        # SELECT * FROM Objects WHERE parent_id = <SetOfTiltSeries_ID>,
+        # which loads all the project's Tilt-Series into memory.
+        whereClause = " OR ".join([f"_tsId='{tsId}'" for tsId in tsIds])
+        return {
+            ts.getTsId(): ts.clone()
+            for ts in self.iterItems(where=whereClause)
+            if ts.getSize() > 0
+        }
+
     def _getExistingTsIds(self):
         """Return cached tsIds already present in this set."""
         if self._tsIds is not None:
@@ -1089,18 +1117,26 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         """ Add an image to the set. """
         try:
             mapper = self._getMapper()
-            # PASO 1: Forzamos el bloqueo inmediato ANTES de que self.isEmpty()
-            # realice ninguna lectura y despierte la transacción diferida implícita de Python.
+            # STEP 1: We force an immediate lock BEFORE self.isEmpty()
+            # performs any read operation and triggers Python’s implicit deferred transaction.
             if not mapper.db.connection.in_transaction:
                 mapper.db.cursor.execute("BEGIN IMMEDIATE")
         except sqlite3.OperationalError as e:
             raise e
 
-        # PASO 2: Continuar con la lógica normal de Scipion de forma segura
+        # STEP 2: Continue with Scipion’s normal logic in a safe manner.
         if self.getSamplingRate() or not image.getSamplingRate():
             image.setSamplingRate(self.getSamplingRate())
 
-        # Ahora isEmpty() ejecutará su SELECT bajo la protección de BEGIN IMMEDIATE
+        # Copy the acquisition from the set to images
+        # only override image acquisition if setofImages acquisition
+        # is not none
+        if self.hasAcquisition():
+            # TODO: image acquisition should not be overwritten
+            if not image.hasAcquisition():
+                image.setAcquisition(self.getAcquisition())
+
+        # Now isEmpty() will execute its SELECT under the protection of BEGIN IMMEDIATE.
         if self.isEmpty():
             self._setFirstDim(image)
 
@@ -1532,10 +1568,10 @@ class Tomogram(data.Volume):
         :param decimals: (True) pass False if you want exact ratio
 
         """
-        binning = target_sr/self.getSamplingRate()
+        binning = target_sr / self.getSamplingRate()
         binning = round(binning, decimals)
-        if decimals==0:
-            binning=int(binning)
+        if decimals == 0:
+            binning = int(binning)
         return binning
 
 
@@ -2214,7 +2250,6 @@ class SubTomogram(data.Volume):
             return self._transform
 
 
-
 class SetOfSubTomogramsBase(data.SetOfVolumes):
     ITEM_TYPE = SubTomogram
     REP_TYPE = SubTomogram
@@ -2652,12 +2687,11 @@ class SetOfLandmarkModels(data.EMSet):
 
         """
 
-        binning = target_sr/self.getSetOfTiltSeries().getSamplingRate()
+        binning = target_sr / self.getSetOfTiltSeries().getSamplingRate()
         binning = round(binning, decimals)
-        if decimals==0:
-            binning=int(binning)
+        if decimals == 0:
+            binning = int(binning)
         return binning
-
 
 
 class MeshPoint(Coordinate3D):
@@ -3388,7 +3422,7 @@ class TiltSeriesCoordinate(data.EMObject):
         self._y = Float()
         self._z = Float()
         self._score = Float()
-        
+
         # Used to access to the corresponding tilt series from each coord (it's the tsId)
         self._tsId = String(kwargs.get('tsId', None))
 
@@ -3445,10 +3479,11 @@ class TiltSeriesCoordinate(data.EMObject):
 
     def getScore(self):
         return self._score.get()
-    
+
     def setScore(self, score):
         self._score.set(score)
-    
+
+
 class SetOfTiltSeriesCoordinates(data.EMSet):
     """ Encapsulate the logic of a set of tilt series coordinates.
     Each coordinate has a (x,y,z) position in scipion's convention.
