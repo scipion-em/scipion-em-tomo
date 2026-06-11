@@ -139,12 +139,15 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             self.refreshStreaming(inTsSetFrom)
             self.refreshStreaming(inTsSetTo)
 
-    def refreshStreaming(self, inSet: SetOfTiltSeries) -> None:
-        # Refresh status for the streaming
-        time.sleep(10)
-        if inSet.isStreamOpen():
-            with self._lock:
-                inSet.loadAllProperties()  # refresh status for the streaming
+    @staticmethod
+    def refreshStreaming(inSet: SetOfTiltSeries) -> None:
+        # Refresh status for the streaming. Delegate to the hardened, conservative
+        # tomo.utils.refreshStreaming (lock-safe, never fatal, only finalises on a
+        # definitive on-disk CLOSED read) instead of the previous fragile
+        # time.sleep + loadAllProperties pattern, which could crash this consumer
+        # on a transient SQLite lock.
+        from tomo.utils import refreshStreaming as _refreshStreaming
+        _refreshStreaming(inSet)
 
     # --------------------------- STEPS functions ----------------------------
     def assignTrMatStep(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
