@@ -31,6 +31,7 @@ import random
 import re
 import importlib
 from os.path import join, exists
+from pathlib import Path
 from typing import Set, Optional, List
 import time
 import numpy as np
@@ -40,8 +41,9 @@ import logging
 import pwem
 import pyworkflow.utils as pwutils
 import tomo.constants as const
-from pyworkflow.utils import yellowStr, getParentFolder, removeBaseExt
-from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
+from pyworkflow.protocol import Protocol
+from pyworkflow.utils import getParentFolder, removeBaseExt, makePath
+from pyworkflow.utils.retry_streaming import  refreshStreamState
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
     CTFTomoSeries, CTFTomo
 
@@ -451,7 +453,7 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
 
-
+# STREAMING ############################################################################################
 def sleepRandomly(lowTimeRange: float = 4.0,
                   highTimeRange: float = 10.0) -> None:
     time.sleep(random.uniform(lowTimeRange, highTimeRange))
@@ -466,10 +468,28 @@ def getTsIdsFromDir(streamingDir: str) -> List[str]:
     return [removeBaseExt(file) for file in glob.glob(join(streamingDir, f'*{const.READY_EXT}'))]
 
 
-@retry_on_sqlite_lock(log=logger)
 def _safeRefreshStreamStatus(inSet: pwem.objects.data.Set) -> None:
+    """Refresh a streaming input Set's cached state without ever crashing the
+    consumer on transient DB contention.
+
+    1. Best-effort reload of the heavyweight properties (size, etc.) on the
+       shared mapper, only while the stream is believed open. Any lock/busy
+       error is swallowed: the size is non-authoritative for new-item
+       detection (consumers rely on tsIds / fetchNewTs), so it must never
+       fail the protocol.
+    2. Authoritative, conservative refresh of the OPEN/CLOSED flag through an
+       independent read-only connection (:func:`refreshStreamState`). This
+       only downgrades to CLOSED on a definitive on-disk read, so a momentary
+       producer write lock cannot finalise the consumer prematurely.
+    """
     if inSet.isStreamOpen():
-        inSet.loadAllProperties()  # refresh status for the streaming
+        try:
+            inSet.loadAllProperties()
+        except Exception as e:
+            logger.debug("refreshStreaming: non-fatal loadAllProperties() "
+                         "failure, keeping cached props: %s" % e)
+    # Authoritative stream-state update (never raises, conservative on locks).
+    refreshStreamState(inSet)
 
 
 def refreshStreaming(inSet: pwem.objects.data.Set,
@@ -477,3 +497,19 @@ def refreshStreaming(inSet: pwem.objects.data.Set,
                      highTimeRange: float = 10.0) -> None:
     sleepRandomly(lowTimeRange, highTimeRange)
     _safeRefreshStreamStatus(inSet)
+
+
+def getStreamingDir(prot: Protocol) -> str:
+    return prot._getPath(const.STREAMING_DIR)
+
+
+def genStreamingDir(prot: Protocol) -> None:
+    makePath(getStreamingDir(prot))
+
+
+def getReadyFile(prot: Protocol, tsId: str) -> str:
+    return join(getStreamingDir(prot), f'{tsId}{const.READY_EXT}')
+
+
+def genReadyFile(prot: Protocol, tsId: str) -> None:
+    Path(getReadyFile(prot, tsId)).touch()
