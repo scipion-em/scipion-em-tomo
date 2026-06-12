@@ -1113,6 +1113,28 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
         return self._tsIds
 
+    def _releaseWriteLock(self):
+        """Roll back any open transaction on the set's mapper connection.
+
+        Used on a SQLite lock/busy error during append so the write-intent
+        (RESERVED) lock is released *between* retry attempts. Otherwise a failed
+        commit leaves the transaction active and, because ``append`` skips
+        ``BEGIN IMMEDIATE`` when ``in_transaction`` is already True, the producer
+        keeps holding the lock across the whole retry/backoff window — starving
+        concurrent readers (e.g. downstream consumers calling
+        ``loadTiltImgsInMemory``) on the SAME shared ``tiltseries.sqlite`` file
+        under journal_mode=DELETE. Rolling back is safe here: ``Set.append``
+        increments ``_size`` and ``_insertItem`` caches the tsId only *after* the
+        item write succeeds, so on a failure neither has been mutated yet and the
+        decorator's next attempt is a clean redo.
+        """
+        try:
+            conn = self._getMapper().db.connection
+            if conn.in_transaction:
+                conn.rollback()
+        except Exception:
+            pass
+
     def append(self, image):
         """ Add an image to the set. """
         try:
@@ -1122,6 +1144,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
             if not mapper.db.connection.in_transaction:
                 mapper.db.cursor.execute("BEGIN IMMEDIATE")
         except sqlite3.OperationalError as e:
+            self._releaseWriteLock()
             raise e
 
         # STEP 2: Continue with Scipion’s normal logic in a safe manner.
@@ -1143,6 +1166,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         try:
             data.EMSet.append(self, image)
         except sqlite3.OperationalError as e:
+            self._releaseWriteLock()
             raise e
 
     def _insertItem(self, item):
