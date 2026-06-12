@@ -1094,7 +1094,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return {
             ts.getTsId(): ts.clone()
             for ts in self.iterItems(where=whereClause)
-            if ts.getSize() > 0
+            # if ts.getSize() > 0
         }
 
     def _getExistingTsIds(self):
