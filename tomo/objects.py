@@ -1135,6 +1135,30 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         except Exception:
             pass
 
+    def rollbackFailedAppend(self, tsId: str = None):
+        """Roll back a failed multi-statement append/write and make the in-memory
+        state consistent for a clean retry.
+
+        ``_releaseWriteLock`` alone only covers a failure *inside* ``append``
+        (before the tsId is cached). A producer that writes a whole TS in several
+        statements — ``append`` (commit) → tilt-image appends → ``ts.write``
+        (commit) → ``update`` → ``set.write`` (commit) — can also hit a lock at a
+        *later* commit, after the tsId was already cached by ``_insertItem``. In
+        that case the decorator's retry would re-enter ``append`` and trip the
+        duplicate-tsId guard (``ValueError`` → the TS is silently skipped/lost).
+
+        This rolls back the open transaction (releasing the write lock between
+        retries, so concurrent consumers on the shared ``tiltseries.sqlite`` are
+        not starved under journal_mode=DELETE) AND drops ``tsId`` from the
+        in-memory cache so the next attempt re-inserts it cleanly. The item ids
+        already assigned are retained, so ``INSERT OR IGNORE`` makes the redo
+        idempotent at row level (the cached ``_size`` may transiently over-count,
+        which is cosmetic — consumers detect work via tsIds/.ready, not size).
+        """
+        self._releaseWriteLock()
+        if tsId is not None and self._tsIds is not None:
+            self._tsIds.discard(tsId)
+
     def append(self, image):
         """ Add an image to the set. """
         try:

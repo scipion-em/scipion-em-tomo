@@ -508,17 +508,25 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                         tiltImages: List[TiltImage]) -> None:
         with self._lock:
             tsSet = self._getOutputTsSet()
-            tsSet.setAcquisition(tsAcq)
-            tsSet.append(ts)
-            ts.setAcquisition(tsAcq)
+            try:
+                tsSet.setAcquisition(tsAcq)
+                tsSet.append(ts)
+                ts.setAcquisition(tsAcq)
 
-            for ti in tiltImages:
-                ts.append(ti)
+                for ti in tiltImages:
+                    ts.append(ti)
 
-            ts.write()
-            tsSet.update(ts)
-            tsSet.write()
-            self._store(tsSet)
+                ts.write()
+                tsSet.update(ts)
+                tsSet.write()
+                self._store(tsSet)
+            except sqlite3.OperationalError:
+                # Release the write lock and reset the in-memory append state so
+                # the @retry_on_sqlite_lock retry is a clean, non-hogging redo
+                # (covers the later commits — ts.write/tsSet.write — not just the
+                # append phase) and never trips the duplicate-tsId guard.
+                tsSet.rollbackFailedAppend(ts.getTsId())
+                raise
 
     def _genTomoAcquisition(self,
                             mdoc: MDoc,
