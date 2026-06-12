@@ -201,7 +201,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
 
-                refreshStreaming(inputSet)
+                # refreshSize=True: ProtComposeTS detects newly motion-corrected
+                # micrographs via getInMics().getSize(), so it needs the cached
+                # input size refreshed. (Downstream tsId/.ready consumers do not.)
+                refreshStreaming(inputSet, refreshSize=True)
 
             except Exception as e:
                 logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}.'))
@@ -492,7 +495,13 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         if mdoc:
             Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
 
-    @retry_on_sqlite_lock(log=logger)
+    # The producer's write competes with several concurrent consumers reading
+    # the same tiltseries.sqlite (journal_mode=DELETE => one writer vs many
+    # readers). Give this critical commit a more patient retry budget than the
+    # default so a transient burst of consumer reads cannot exhaust it and fail
+    # the whole compose protocol.
+    @retry_on_sqlite_lock(log=logger, max_attempts=30, initial_delay=0.5,
+                          backoff_factor=1.5, max_delay=15)
     def registerOutputs(self,
                         ts: TiltSeries,
                         tsAcq: TomoAcquisition,
