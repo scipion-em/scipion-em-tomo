@@ -1084,17 +1084,21 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         the set load (loadAllProperties()). But in streamified protocols, the set load may have
         been executed outside before calling this method.
         """
-        if forceSetLoadProps:
-            self.loadAllProperties()
-        # We ask the mapper ONLY for the items that match the requested tsIds, Making the
-        # query much lighter than executing a
-        # SELECT * FROM Objects WHERE parent_id = <SetOfTiltSeries_ID>,
-        # which loads all the project's Tilt-Series into memory.
-        whereClause = " OR ".join([f"_tsId='{tsId}'" for tsId in tsIds])
-        return {
-            ts.getTsId(): ts.clone()
-            for ts in self.iterItems(where=whereClause)
-        }
+        try:
+            if forceSetLoadProps:
+                self.loadAllProperties()
+            # We ask the mapper ONLY for the items that match the requested tsIds, Making the
+            # query much lighter than executing a
+            # SELECT * FROM Objects WHERE parent_id = <SetOfTiltSeries_ID>,
+            # which loads all the project's Tilt-Series into memory.
+            whereClause = " OR ".join([f"_tsId='{tsId}'" for tsId in tsIds])
+            return {
+                ts.getTsId(): ts.clone()
+                for ts in self.iterItems(where=whereClause)
+            }
+        except Exception as e:
+            logger.info(f'fetchNewTs failed with exception {e}. Skipping...')
+            return {}
 
     def _getExistingTsIds(self):
         """Return cached tsIds already present in this set."""
