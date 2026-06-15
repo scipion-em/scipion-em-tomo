@@ -1070,7 +1070,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         item._mapperPath.set('%s,%s' % (self.getFileName(), item.getTsId()))
         item.load()
 
-    @retry_on_sqlite_lock(log=logger)
+
     def fetchNewTs(self,
                    tsIds: typing.Union[typing.List[str], typing.Set[str]],
                    forceSetLoadProps: bool = False)\
@@ -1094,7 +1094,6 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return {
             ts.getTsId(): ts.clone()
             for ts in self.iterItems(where=whereClause)
-            # if ts.getSize() > 0
         }
 
     def _getExistingTsIds(self):

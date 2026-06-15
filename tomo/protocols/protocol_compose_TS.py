@@ -26,7 +26,6 @@
 # *
 # **************************************************************************
 import logging
-import random
 import sqlite3
 import time
 import traceback
@@ -35,7 +34,7 @@ from glob import glob
 from os.path import join, getmtime, exists
 from pathlib import Path
 from statistics import mean
-from typing import Union, List, Tuple, Optional, Counter
+from typing import List, Tuple, Optional
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
 from pwem.objects import SetOfMicrographs
 from pwem.protocols import EMProtocol
@@ -49,7 +48,7 @@ from tomo.constants import STREAMING_DIR, READY_EXT
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
-from tomo.utils import sleepRandomly, refreshStreaming, isStreamClosed, getStreamingPath
+from tomo.utils import sleepRandomly, isStreamClosed, getStreamingPath, genDoneFile
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "tiltSeries"
@@ -202,7 +201,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     closeSetStepDeps.append(cTsPid)
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
-                    
+
                     sleepRandomly()
 
                 # # refreshSize=True: ProtComposeTS detects newly motion-corrected
@@ -243,6 +242,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 raise Exception(f'Output {OUT_TS_SET} is empty. This may happen if there '
                                 f'was an error during the data registering. Please check the '
                                 f'Output Log > run.stdout and run.stderr')
+        genDoneFile(self)
 
     # --------------------------- UTILS functions -----------------------------
     def getInMicsPointer(self) -> Pointer:
