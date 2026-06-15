@@ -167,7 +167,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             try:
                 mdocList = set(self.findMdocs())
                 streamClosed = isStreamClosed(self)
-                if not streamClosed and self.processedMdocs == mdocList:
+                if streamClosed and self.processedMdocs == mdocList:
                     logger.info(cyanStr('Input set closed.'))
                     self._insertFunctionStep(self.closeOutputSetsStep,
                                              prerequisites=closeSetStepDeps,
