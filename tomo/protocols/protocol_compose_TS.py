@@ -186,10 +186,12 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                         # to avoid neverending executions in case of more mdocs than files are present in the
                         # working directory
                         self.processedMdocs.add(mdocFn)
+                        sleepRandomly()
                         continue
                     if not matchOk:
                         # The tilt-series will not be discarded because there may be data
                         # still pending to come
+                        sleepRandomly()
                         continue
                     cTsPid = self._insertFunctionStep(self.composeTsStep,
                                                       mdoc,
@@ -200,6 +202,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     closeSetStepDeps.append(cTsPid)
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
+                    
+                    sleepRandomly()
 
                 # # refreshSize=True: ProtComposeTS detects newly motion-corrected
                 # # micrographs via getInMics().getSize(), so it needs the cached
