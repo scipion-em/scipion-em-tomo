@@ -440,10 +440,12 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tsStackOdd.append(ImageReadersRegistry.open(oddEvenMics[0]))
                 tsStackEven.append(ImageReadersRegistry.open(oddEvenMics[1]))
 
+        tMount0 = time.time()
         ImageReadersRegistry.write(tsStack, tsFn, isStack=True)
         if oddEvenMics:
             ImageReadersRegistry.write(tsStackOdd, tsFnOdd, isStack=True)
             ImageReadersRegistry.write(tsStackEven, tsFnEven, isStack=True)
+        logger.info(cyanStr(f'{tsId} - timing: stack mount (I/O) = {time.time() - tMount0:.1f}s'))
 
         # COMPOSE THE TILT-SERIES ---------------------------------------------------------
         logger.info(cyanStr(f'{tsId} - composing the tilt series...'))
@@ -489,7 +491,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         tsAcq.setAngleMax(maxAngle)
 
         # Minimal lock scope: only DB writes
+        tReg0 = time.time()
         self.registerOutputs(ts, tsAcq, tiltImages)
+        logger.info(cyanStr(f'{tsId} - timing: registerOutputs total, incl. lock '
+                            f'retries = {time.time() - tReg0:.1f}s'))
 
         # Create a file that indicates the current tilt-series has been successfully processed
         if mdoc:
@@ -506,8 +511,11 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                         ts: TiltSeries,
                         tsAcq: TomoAcquisition,
                         tiltImages: List[TiltImage]) -> None:
+        tWait0 = time.time()
         with self._lock:
+            tLockWait = time.time() - tWait0
             tsSet = self._getOutputTsSet()
+            tDb0 = time.time()
             try:
                 tsSet.setAcquisition(tsAcq)
                 tsSet.append(ts)
@@ -520,6 +528,9 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tsSet.update(ts)
                 tsSet.write()
                 self._store(tsSet)
+                logger.info(cyanStr(
+                    f'{ts.getTsId()} - timing: in-process lock wait = {tLockWait:.1f}s, '
+                    f'SQLite write+commit = {time.time() - tDb0:.1f}s'))
             except sqlite3.OperationalError:
                 # Release the write lock and reset the in-memory append state so
                 # the @retry_on_sqlite_lock retry is a clean, non-hogging redo
