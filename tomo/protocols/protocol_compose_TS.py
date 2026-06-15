@@ -49,7 +49,7 @@ from tomo.constants import STREAMING_DIR, READY_EXT
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
-from tomo.utils import sleepRandomly, refreshStreaming
+from tomo.utils import sleepRandomly, refreshStreaming, isStreamClosed
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "tiltSeries"
@@ -168,7 +168,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         while True:
             try:
                 mdocList = set(self.findMdocs())
-                if not inputSet.isStreamOpen() and self.processedMdocs == mdocList:
+                streamClosed = isStreamClosed(self)
+                if not streamClosed and self.processedMdocs == mdocList:
                     logger.info(cyanStr('Input set closed.'))
                     self._insertFunctionStep(self.closeOutputSetsStep,
                                              prerequisites=closeSetStepDeps,
@@ -180,7 +181,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     logger.info(cyanStr(f'List of mdocs available to compose: {nonProcessedMdocs}'))
                 for mdocFn in nonProcessedMdocs:
                     matchOk, failedTs, mdoc, tiltMdSorted, micsSorted = self._isMdocOk(mdocFn)
-                    if failedTs or (not matchOk and not inputSet.isStreamOpen()):
+                    if failedTs or (not matchOk and streamClosed):
                         # If failedTs --> The tilt-series won't be considered anymore to generate the steps
                         # If not matchOk and the input set is closed, that mdoc will be considered as processed
                         # to avoid neverending executions in case of more mdocs than files are present in the
@@ -201,10 +202,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
 
-                # refreshSize=True: ProtComposeTS detects newly motion-corrected
-                # micrographs via getInMics().getSize(), so it needs the cached
-                # input size refreshed. (Downstream tsId/.ready consumers do not.)
-                refreshStreaming(inputSet, refreshSize=True)
+                # # refreshSize=True: ProtComposeTS detects newly motion-corrected
+                # # micrographs via getInMics().getSize(), so it needs the cached
+                # # input size refreshed. (Downstream tsId/.ready consumers do not.)
+                # refreshStreaming(inputSet, refreshSize=True)
 
             except Exception as e:
                 logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}.'))

@@ -535,3 +535,15 @@ def getReadyFile(prot: Protocol, tsId: str) -> str:
 
 def genReadyFile(prot: Protocol, tsId: str) -> None:
     Path(getReadyFile(prot, tsId)).touch()
+
+
+def getDoneFile(prot: Protocol) -> str:
+    return join(getStreamingDir(prot), const.PROTOCOL_DONE)
+
+
+def genDoneFile(prot: Protocol) -> None:
+    Path(getDoneFile(prot)).touch()
+
+
+def isStreamClosed(prot: Protocol) -> bool:
+    return exists(getDoneFile(prot))

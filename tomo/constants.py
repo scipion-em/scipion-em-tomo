@@ -89,3 +89,4 @@ INTERPOLATED_FOLDER = 'interpolated'
 # -------------------------- Streaming variables -------------------------------
 STREAMING_DIR = 'streaming'
 READY_EXT = '.ready'
+PROTOCOL_DONE = 'DONE'
