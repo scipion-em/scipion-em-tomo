@@ -48,7 +48,7 @@ from pwem.convert.transformations import euler_matrix
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Integer, Float, String, Pointer, Boolean, CsvList
-from pyworkflow.utils import removeBaseExt, cyanStr, yellowStr
+from pyworkflow.utils import removeBaseExt, cyanStr, yellowStr, magentaStr
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 
 logger = logging.getLogger(__name__)
@@ -1132,10 +1132,13 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         decorator's next attempt is a clean redo.
         """
         try:
+            logger.error(magentaStr('Executing _releaseWriteLock'))
             conn = self._getMapper().db.connection
             if conn.in_transaction:
+                logger.error(magentaStr('Executing conn.rollback()'))
                 conn.rollback()
-        except Exception:
+        except Exception as e:
+            logger.error(magentaStr(f'_releaseWriteLock failed with exception {e}'))
             pass
 
     def rollbackFailedAppend(self, tsId: str = None):
