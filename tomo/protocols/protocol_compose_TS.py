@@ -378,15 +378,16 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tiltsMdListFiltered.append(tiltMd)
                 micsFilteredList.append(micsBNamesDict[micNameFromMdoc])
 
+        streamClosed = isStreamClosed(self)
         nMicsMatched = len(tiltsMdListFiltered)
-        if nMicsMatched < nTilts and inMicsSet.isStreamOpen():
+        if nMicsMatched < nTilts and not streamClosed:
             logger.info(cyanStr(f"{mdocFn} -> {nTilts - nMicsMatched} micrographs are not yet available "
                                 f"to compose the TiltSeries. Waiting for the tilts to compose..."))
             logger.info(cyanStr(f'Tilts on the mdoc file: {nTilts}'))
             logger.info(cyanStr(f'Motion-corrected tilts found: {nMicsMatched}'))
             return False, False, None, None
 
-        if not inMicsSet.isStreamOpen():
+        if streamClosed:
             percentTiltsAvailable = int(100 * nMicsMatched / nTilts)
             percentTiltsReq = self.percentTiltsRequired.get()
             logger.info(cyanStr(f'Percent tilts available: {percentTiltsAvailable}'))
