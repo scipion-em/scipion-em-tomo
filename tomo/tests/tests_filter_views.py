@@ -27,7 +27,7 @@ import unittest
 from pwem import ALIGN_2D
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr, weakImport
-from tomo.objects import SetOfTiltSeries
+from tomo.objects import TiltImage
 from tomo.protocols import ProtImportTs, ProtExclViewFilter
 from tomo.protocols.protocol_ts_exclude_views_filter import (
     QualityFilterModes, IN_TS_SET, MIN_TILT, MAX_TILT, MAX_SX, MAX_SY,
@@ -154,6 +154,77 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
             result[ts.getTsId()] = excluded
         return result
 
+    # ------------------------------------------------------------------
+    # Acquisition reference builders
+    #
+    # The expected acquisition objects are derived from the dataset's
+    # characterised full-set acquisition (DataSet_FilterExcludedTs.tsAcqDict,
+    # now holding the corrected tsAcqPos8 values) and from the filter's
+    # documented behaviour -- never by reading back the values produced by the
+    # protocol under test.
+    # ------------------------------------------------------------------
+    @classmethod
+    def _genFullSetAcqDict(cls):
+        """Expected per-tilt-series acquisition for a non-re-stacked output.
+
+        A non-re-stacked filter only disables views (the protocol does
+        copyInfo, keeping the original acquisition), so the expected acquisition
+        equals the full-set acquisition characterised in the dataset
+        (DataSet_FilterExcludedTs.tsAcqDict), including the updated per-frame
+        dose values now stored for tsAcqPos6/tsAcqPos8.  Clones are returned so
+        callers may override fields (e.g. for the re-stacked case) without
+        mutating the shared dataset objects.
+
+        :return: dict {tsId: TomoAcquisition}.
+        """
+        return {tsId: acq.clone()
+                for tsId, acq in DataSet_FilterExcludedTs.tsAcqDict.value.items()}
+
+    @classmethod
+    def _genReStackedAcqDict(cls, inTsSet, excludedViewsDict):
+        """Expected per-tilt-series acquisition after re-stacking.
+
+        Re-stacking drops the excluded views and updates the acquisition
+        accordingly (see ProtExclViewFilter._populateRestackedTs): angleMin and
+        angleMax become the min/max tilt angle of the surviving views, accumDose
+        the maximum accumulated dose among them and doseInitial the minimum
+        initial dose.
+
+        The expectation is computed **independently from the protocol output**:
+        the surviving views are those NOT listed in ``excludedViewsDict`` -- the
+        deterministic exclusion sets that the non-re-stacked sibling tests assert
+        (i.e. the filter's documented behaviour) -- and their tilt angles and
+        doses are read from the *input* ground-truth set.  View indices follow
+        the tilt-angle order used by both the filter and ``excludedViewsDict``.
+
+        :param inTsSet: input SetOfTiltSeries fed to the filter protocol.
+        :param excludedViewsDict: {tsId: set/list of tilt-angle-sorted indices
+            expected to be excluded by the filter}.
+        :return: dict {tsId: TomoAcquisition}.
+        """
+        baseAcqDict = cls._genFullSetAcqDict()
+        acqDict = {}
+        for ts in inTsSet:
+            tsId = ts.getTsId()
+            excluded = set(excludedViewsDict[tsId])
+            tiltAngles = []
+            accumDoses = []
+            initialDoses = []
+            for ind, ti in enumerate(
+                    ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+                if ind not in excluded:
+                    tiAcq = ti.getAcquisition()
+                    tiltAngles.append(ti.getTiltAngle())
+                    accumDoses.append(tiAcq.getAccumDose())
+                    initialDoses.append(tiAcq.getDoseInitial())
+            acq = baseAcqDict[tsId]
+            acq.setAngleMin(min(tiltAngles))
+            acq.setAngleMax(max(tiltAngles))
+            acq.setAccumDose(max(accumDoses))
+            acq.setDoseInitial(min(initialDoses))
+            acqDict[tsId] = acq
+        return acqDict
+
 
 # ===========================================================================
 # SCENARIO 1 — Motion-corrected tilt-series (no alignment data)
@@ -168,6 +239,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     def setUpClass(cls):
         super().setUpClass()
         cls.importedTs = cls._runImportTs(motionCorrected=True)
+        cls.fullSetAcqDict = cls._genFullSetAcqDict()
 
     # ==================================================================
     # Single-criterion deterministic tests
@@ -184,6 +256,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict={
                 TS_POS6: {0, 1, 2, 3, 4, 5, 6},
                 TS_POS8: {0, 1, 2, 3, 4, 5, 6},
@@ -203,6 +276,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict={
                 TS_POS6: {0, 1, 2, 3, 4, 36, 37, 38, 39, 40},
                 TS_POS8: {0, 1, 2, 38, 39, 40},
@@ -229,6 +303,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict=evd,
         )
 
@@ -246,6 +321,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict=evd,
         )
 
@@ -263,6 +339,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict=evd,
         )
 
@@ -286,6 +363,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict=evd,
         )
 
@@ -304,6 +382,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict={
                 TS_POS6: {0, 1, 2, 3, 4, 5, 6, 36, 37, 38, 39, 40},
                 TS_POS8: {0, 1, 2, 3, 4, 5, 6, 38, 39, 40},
@@ -316,6 +395,12 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     def test_08_reStackTiltAngle(self):
         """Re-stack with tilt [-50, 50].  Both TS keep 34 views
         (41 - 7 excluded).  All output views are enabled."""
+        # Same views the tilt [-50, 50] filter excludes in the non-re-stacked
+        # sibling test_01 (tilt-angle-sorted indices 0-6, angles < -50).
+        restackExcludedViews = {
+            TS_POS6: {0, 1, 2, 3, 4, 5, 6},
+            TS_POS8: {0, 1, 2, 3, 4, 5, 6},
+        }
         outTs, _ = self._runFilter(
             self.importedTs, objLabel='restack tilt [-50,50]',
             **{MIN_TILT: -50.0, MAX_TILT: 50.0, DO_RESTACK: True})
@@ -325,12 +410,20 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=34,
+            testAcqObj=self._genReStackedAcqDict(
+                self.importedTs, restackExcludedViews),
             excludedViewsDict={TS_POS6: set(), TS_POS8: set()},
         )
 
     def test_09_reStackCombined(self):
         """Re-stack with tilt [-50, 50] + dose max=65.  Heterogeneous
         output: POS6 keeps 29, POS8 keeps 31 views."""
+        # Same views the tilt [-50, 50] + dose max=65 filter excludes in the
+        # non-re-stacked sibling test_07 (union of the tilt and dose criteria).
+        restackExcludedViews = {
+            TS_POS6: {0, 1, 2, 3, 4, 5, 6, 36, 37, 38, 39, 40},
+            TS_POS8: {0, 1, 2, 3, 4, 5, 6, 38, 39, 40},
+        }
         outTs, _ = self._runFilter(
             self.importedTs, objLabel='restack tilt+dose',
             **{MIN_TILT: -50.0, MAX_TILT: 50.0, MAX_DOSE: 65.0,
@@ -341,6 +434,8 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount={TS_POS6: 29, TS_POS8: 31},
+            testAcqObj=self._genReStackedAcqDict(
+                self.importedTs, restackExcludedViews),
             excludedViewsDict={TS_POS6: set(), TS_POS8: set()},
             isHeterogeneousSet=True,
         )
@@ -353,6 +448,15 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             self.importedTs, objLabel='restack step1',
             **{MIN_TILT: -50.0, MAX_TILT: 50.0, DO_RESTACK: True})
         self.assertIsNotNone(restacked)
+        # Step 1 re-stacks tilt [-50, 50] (excludes indices 0-6, as in test_08),
+        # so its acquisition is derived from the imported set + that exclusion.
+        # The second pass does not re-stack, so it carries that acquisition over.
+        step1ExcludedViews = {
+            TS_POS6: {0, 1, 2, 3, 4, 5, 6},
+            TS_POS8: {0, 1, 2, 3, 4, 5, 6},
+        }
+        reStackedAcqDict = self._genReStackedAcqDict(
+            self.importedTs, step1ExcludedViews)
         outTs, _ = self._runFilter(
             restacked, objLabel='restack->quality balanced',
             **{QUALITY_FILTER: QualityFilterModes.balanced.value})
@@ -363,6 +467,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             expectedSRate=self.expectedSRate,
             imported=True,
             anglesCount=34,
+            testAcqObj=reStackedAcqDict,
             excludedViewsDict=evd,
         )
 
@@ -383,6 +488,7 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
         super().setUpClass()
         cls.importedTs = cls._runImportTs(motionCorrected=False)
         cls.alignedTs = cls._runImportTM(cls.importedTs)
+        cls.fullSetAcqDict = cls._genFullSetAcqDict()
 
     def test_01_maxShift(self):
         """Max-shift filter at 20% of image dimension.
@@ -405,6 +511,7 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
             hasAlignment=True,
             alignment=ALIGN_2D,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict=evd,
         )
 
@@ -424,6 +531,7 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
             hasAlignment=True,
             alignment=ALIGN_2D,
             anglesCount=self.nTiltImages,
+            testAcqObj=self.fullSetAcqDict,
             excludedViewsDict={
                 TS_POS6: {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
                 TS_POS8: {0, 1, 2, 3, 22, 40},
@@ -433,6 +541,12 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
     def test_03_reStackFromAligned(self):
         """Re-stack with shift 5% + tilt [-60, 60].  Heterogeneous
         output: POS6 keeps 29 views, POS8 keeps 35."""
+        # Same views the shift 5% + tilt [-60, 60] filter excludes in the
+        # non-re-stacked sibling test_02 (union of the shift and tilt criteria).
+        restackExcludedViews = {
+            TS_POS6: {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+            TS_POS8: {0, 1, 2, 3, 22, 40},
+        }
         outTs, _ = self._runFilter(
             self.alignedTs, objLabel='restack shift+tilt',
             **{MAX_SX: 0.05, MAX_SY: 0.05,
@@ -445,6 +559,8 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
             hasAlignment=True,
             alignment=ALIGN_2D,
             anglesCount={TS_POS6: 29, TS_POS8: 35},
+            testAcqObj=self._genReStackedAcqDict(
+                self.alignedTs, restackExcludedViews),
             excludedViewsDict={TS_POS6: set(), TS_POS8: set()},
             isHeterogeneousSet=True,
         )

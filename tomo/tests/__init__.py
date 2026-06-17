@@ -496,14 +496,14 @@ testAcq = TomoAcquisition(voltage=voltage,
 tsAcqPos6 = testAcq.clone()
 tsAcqPos6.setAngleMin(-70.01)
 tsAcqPos6.setAngleMax(49.98)
-tsAcqPos6.setDosePerFrame(2.17)  # Check this, variable dose
+tsAcqPos6.setDosePerFrame(1.85)  # Check this, variable dose
 tsAcqPos6.setAccumDose(75.88)
 
 tsAcqPos8 = testAcq.clone()
-tsAcqPos6.setAngleMin(-70.)
-tsAcqPos6.setAngleMax(49.99)
-tsAcqPos6.setDosePerFrame(2.03)  # Check this, variable dose
-tsAcqPos6.setAccumDose(69.11)
+tsAcqPos8.setAngleMin(-70.)
+tsAcqPos8.setAngleMax(49.99)
+tsAcqPos8.setDosePerFrame(1.69)  # Check this, variable dose
+tsAcqPos8.setAccumDose(69.11)
 
 
 class DataSet_FilterExcludedTs(Enum):
