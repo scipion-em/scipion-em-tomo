@@ -26,6 +26,7 @@
 # *
 # **************************************************************************
 import glob
+import json
 import os
 import random
 import re
@@ -45,7 +46,7 @@ from pyworkflow.protocol import Protocol
 from pyworkflow.utils import getParentFolder, removeBaseExt, makePath
 from pyworkflow.utils.retry_streaming import  refreshStreamState
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
-    CTFTomoSeries, CTFTomo
+    CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition
 
 logger = logging.getLogger(__name__)
 
@@ -466,6 +467,128 @@ def getStreamingPath(obj) -> Optional[str]:
 
 def getTsIdsFromDir(streamingDir: str) -> List[str]:
     return [removeBaseExt(file) for file in glob.glob(join(streamingDir, f'*{const.READY_EXT}'))]
+
+
+# ---------------------------------------------------------------------------
+# Per-tilt-series metadata "sidecar" files
+#
+# A streaming producer (e.g. ProtComposeTS) writes one small JSON sidecar per
+# finished tilt-series next to its <tsId>.ready marker. Downstream consumers
+# rebuild the TiltSeries (and its TiltImages) fully in memory from the sidecar,
+# so they NEVER open the producer's live SQLite set. This removes the
+# cross-process SHARED-read vs producer-EXCLUSIVE-commit contention on the
+# single shared `tiltseries.sqlite` (the deadlock under journal_mode=DELETE on
+# NFS): the producer writes its DB freely; consumers read finished files only.
+#
+# The schema is explicit (not a generic getObjDict dump) so it is stable and
+# round-trippable: it captures exactly what ProtComposeTS produces for a freshly
+# composed, not-yet-aligned TiltSeries. Extend `_ACQ_FIELDS` / the per-image
+# fields if a producer needs to publish more.
+# ---------------------------------------------------------------------------
+TS_META_VERSION = 1
+# (getter, setter) names on TomoAcquisition that ProtComposeTS populates.
+_ACQ_FIELDS = (
+    'Voltage', 'Magnification', 'SphericalAberration', 'AmplitudeContrast',
+    'DosePerFrame', 'AngleMin', 'AngleMax', 'Step', 'AccumDose', 'TiltAxisAngle',
+)
+
+
+def getTsSidecarPath(streamingDir: str, tsId: str) -> str:
+    return join(streamingDir, f'{tsId}{const.TS_META_EXT}')
+
+
+def tsSidecarExists(streamingDir: str, tsId: str) -> bool:
+    return exists(getTsSidecarPath(streamingDir, tsId))
+
+
+def _acqToDict(acq: TomoAcquisition) -> dict:
+    if acq is None:
+        return {}
+    return {f: getattr(acq, 'get' + f)() for f in _ACQ_FIELDS}
+
+
+def _dictToAcq(d: dict) -> TomoAcquisition:
+    acq = TomoAcquisition()
+    for f in _ACQ_FIELDS:
+        if d.get(f) is not None:
+            getattr(acq, 'set' + f)(d[f])
+    return acq
+
+
+def writeTsSidecar(streamingDir: str, ts: TiltSeries,
+                   tiltImages: List[TiltImage]) -> None:
+    """Atomically write the metadata sidecar for a composed tilt-series.
+
+    Built entirely from the IN-MEMORY ``ts`` / ``tiltImages`` the producer
+    already holds in ``registerOutputs`` — it performs NO database read.
+    Written to a temp file and ``os.replace``-d into place so a consumer never
+    observes a half-written sidecar. Call this BEFORE touching ``<tsId>.ready``
+    so the marker only appears once the sidecar is complete.
+    """
+    sRate = ts.getSamplingRate()
+    data = {
+        'version': TS_META_VERSION,
+        'tsId': ts.getTsId(),
+        'samplingRate': sRate,
+        'acquisition': _acqToDict(ts.getAcquisition()),
+        'tiltImages': [],
+    }
+    for ti in tiltImages:
+        tiAcq = ti.getAcquisition()
+        data['tiltImages'].append({
+            'index': ti.getIndex(),
+            'fileName': ti.getFileName(),
+            'tiltAngle': ti.getTiltAngle(),
+            'acquisitionOrder': ti.getAcquisitionOrder(),
+            'samplingRate': ti.getSamplingRate(),
+            'enabled': ti.isEnabled(),
+            'doseInitial': tiAcq.getDoseInitial() if tiAcq else None,
+            'accumDose': tiAcq.getAccumDose() if tiAcq else None,
+            'oddEven': [ti.getOdd(), ti.getEven()] if ti.hasOddEven() else [],
+        })
+    path = getTsSidecarPath(streamingDir, ts.getTsId())
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f)
+    os.replace(tmp, path)  # atomic publish of the sidecar
+
+
+def readTsSidecar(streamingDir: str, tsId: str):
+    """Rebuild ``(TiltSeries, [TiltImage])`` fully in memory from the sidecar.
+
+    No SQLite access at all -> no lock contention with the producer. This is the
+    drop-in replacement for a consumer's ``fetchNewTs`` + ``loadTiltImgsInMemory``
+    on the producer's live set.
+    """
+    with open(getTsSidecarPath(streamingDir, tsId)) as f:
+        data = json.load(f)
+
+    sRate = data.get('samplingRate')
+    ts = TiltSeries(tsId=data['tsId'])
+    ts.setAcquisition(_dictToAcq(data.get('acquisition', {})))
+    if sRate is not None:
+        ts.setSamplingRate(sRate)
+
+    tiltImages = []
+    for d in data['tiltImages']:
+        ti = TiltImage()
+        ti.setTsId(data['tsId'])
+        ti.setIndex(d['index'])
+        ti.setFileName(d['fileName'])
+        ti.setTiltAngle(d['tiltAngle'])
+        ti.setAcquisitionOrder(d['acquisitionOrder'])
+        ti.setSamplingRate(d.get('samplingRate', sRate))
+        ti.setEnabled(d.get('enabled', True))
+        tiAcq = _dictToAcq(data.get('acquisition', {}))
+        if d.get('doseInitial') is not None:
+            tiAcq.setDoseInitial(d['doseInitial'])
+        if d.get('accumDose') is not None:
+            tiAcq.setAccumDose(d['accumDose'])
+        ti.setAcquisition(tiAcq)
+        if d.get('oddEven'):
+            ti.setOddEven(d['oddEven'])
+        tiltImages.append(ti)
+    return ts, tiltImages
 
 
 def _safeRefreshStreamStatus(inSet: pwem.objects.data.Set,

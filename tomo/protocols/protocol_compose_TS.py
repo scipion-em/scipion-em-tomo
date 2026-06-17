@@ -48,7 +48,7 @@ from tomo.constants import STREAMING_DIR, READY_EXT
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
-from tomo.utils import sleepRandomly, isStreamClosed, getStreamingPath, genDoneFile
+from tomo.utils import sleepRandomly, isStreamClosed, getStreamingPath, genDoneFile, writeTsSidecar
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "tiltSeries"
@@ -510,7 +510,16 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         logger.info(cyanStr(f'{tsId} - timing: registerOutputs total, incl. lock '
                             f'retries = {time.time() - tReg0:.1f}s'))
 
-        # Create a file that indicates the current tilt-series has been successfully processed
+        # Publish a metadata sidecar (built from the in-memory ts/tiltImages, no DB
+        # read) so downstream consumers rebuild this tilt-series in memory WITHOUT
+        # opening the producer's live tiltseries.sqlite. This decouples the
+        # producer's writes from the consumers' reads, removing the cross-process
+        # SQLite lock contention on the shared file under journal_mode=DELETE/NFS.
+        ts.setSamplingRate(self.sRate)
+        writeTsSidecar(self._getPath(STREAMING_DIR), ts, tiltImages)
+
+        # Create the .ready marker LAST: a consumer only ever sees it once both the
+        # DB rows and the (complete, atomically-renamed) sidecar are in place.
         if mdoc:
             Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
 
