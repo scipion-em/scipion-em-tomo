@@ -155,7 +155,7 @@ class ProtTomoExtractCoords(ProtTomoPicking):
             x, y, z = coord.getPosition(const.SCIPION)
             newCoord.setVolume(tomo)
             newCoord.setPosition(x * scaleCoords, y * scaleCoords, z * scaleCoords, const.SCIPION)
-
+            newCoord.setScore(coord.getScore())
             newCoord.setBoxSize(boxSize)
             transformation = self.checkMatrix(item)
             transformation[0, 3] *= scaleShifts
