@@ -87,9 +87,6 @@ TS_LABEL = '{TS}'
 INTERPOLATED_FOLDER = 'interpolated'
 
 # -------------------------- Streaming variables -------------------------------
-STREAMING_DIR = 'streaming'
-READY_EXT = '.ready'
-PROTOCOL_DONE = 'DONE'
 # Per-tilt-series metadata "sidecar" written by a streaming producer next to the
 # <tsId>.ready marker, so downstream consumers can rebuild the TiltSeries fully in
 # memory WITHOUT opening the producer's live SQLite set (avoids cross-process

@@ -590,82 +590,82 @@ def readTsSidecar(streamingDir: str, tsId: str):
     return ts, tiltImages
 
 
-def _safeRefreshStreamStatus(inSet: pwem.objects.data.Set,
-                             refreshSize: bool = False) -> None:
-    """Refresh a streaming input Set's cached state without ever crashing the
-    consumer on transient DB contention.
-
-    1. (Only when ``refreshSize=True``) Best-effort reload of the heavyweight
-       properties (size, etc.) on the shared mapper, while the stream is open.
-       Any lock/busy error is swallowed so it can never fail the protocol.
-    2. Authoritative, conservative refresh of the OPEN/CLOSED flag through an
-       independent read-only connection (:func:`refreshStreamState`). This only
-       downgrades to CLOSED on a definitive on-disk read, so a momentary
-       producer write lock cannot finalise the consumer prematurely.
-
-    Why ``refreshSize`` defaults to False
-    -------------------------------------
-    ``loadAllProperties()`` is only needed by protocols that detect new INPUT
-    items through the cached set *size* (currently only ``ProtComposeTS``, via
-    ``getInMics().getSize()``). Pure tsId/.ready-based consumers (imod, aretomo,
-    fidder, tomo3d, ...) do NOT use the size — they discover work via
-    ``getTSIds()`` (read from the filesystem ``.ready`` markers) and
-    ``fetchNewTs()``. Under ``journal_mode=DELETE`` every extra read of a
-    producer's *live* output set competes with that producer's commit
-    (EXCLUSIVE) lock; with several concurrent consumers polling the same file
-    this starves the producer until its bounded write-retries are exhausted and
-    it FAILS. Skipping the redundant full-properties read on every consumer
-    poll removes that pressure, while the lightweight single-row stream-state
-    probe still tells consumers when the producer has closed.
-    """
-    if refreshSize and inSet.isStreamOpen():
-        try:
-            inSet.loadAllProperties()
-        except Exception as e:
-            logger.debug("refreshStreaming: non-fatal loadAllProperties() "
-                         "failure, keeping cached props: %s" % e)
-    # Authoritative stream-state update (never raises, conservative on locks).
-    refreshStreamState(inSet)
-
-
-def refreshStreaming(inSet: pwem.objects.data.Set,
-                     lowTimeRange: float = 4.0,
-                     highTimeRange: float = 10.0,
-                     refreshSize: bool = False) -> None:
-    """Sleep a jittered interval, then refresh the streaming state of ``inSet``.
-
-    :param refreshSize: set True only for producers that detect new input items
-        from the cached set size (e.g. ProtComposeTS). Default False keeps the
-        per-poll read on a producer's live output minimal, avoiding writer
-        starvation under journal_mode=DELETE with multiple consumers.
-    """
-    sleepRandomly(lowTimeRange, highTimeRange)
-    _safeRefreshStreamStatus(inSet, refreshSize=refreshSize)
-
-
-def getStreamingDir(prot: Protocol) -> str:
-    return prot._getPath(const.STREAMING_DIR)
+# def _safeRefreshStreamStatus(inSet: pwem.objects.data.Set,
+#                              refreshSize: bool = False) -> None:
+#     """Refresh a streaming input Set's cached state without ever crashing the
+#     consumer on transient DB contention.
+#
+#     1. (Only when ``refreshSize=True``) Best-effort reload of the heavyweight
+#        properties (size, etc.) on the shared mapper, while the stream is open.
+#        Any lock/busy error is swallowed so it can never fail the protocol.
+#     2. Authoritative, conservative refresh of the OPEN/CLOSED flag through an
+#        independent read-only connection (:func:`refreshStreamState`). This only
+#        downgrades to CLOSED on a definitive on-disk read, so a momentary
+#        producer write lock cannot finalise the consumer prematurely.
+#
+#     Why ``refreshSize`` defaults to False
+#     -------------------------------------
+#     ``loadAllProperties()`` is only needed by protocols that detect new INPUT
+#     items through the cached set *size* (currently only ``ProtComposeTS``, via
+#     ``getInMics().getSize()``). Pure tsId/.ready-based consumers (imod, aretomo,
+#     fidder, tomo3d, ...) do NOT use the size — they discover work via
+#     ``getTSIds()`` (read from the filesystem ``.ready`` markers) and
+#     ``fetchNewTs()``. Under ``journal_mode=DELETE`` every extra read of a
+#     producer's *live* output set competes with that producer's commit
+#     (EXCLUSIVE) lock; with several concurrent consumers polling the same file
+#     this starves the producer until its bounded write-retries are exhausted and
+#     it FAILS. Skipping the redundant full-properties read on every consumer
+#     poll removes that pressure, while the lightweight single-row stream-state
+#     probe still tells consumers when the producer has closed.
+#     """
+#     if refreshSize and inSet.isStreamOpen():
+#         try:
+#             inSet.loadAllProperties()
+#         except Exception as e:
+#             logger.debug("refreshStreaming: non-fatal loadAllProperties() "
+#                          "failure, keeping cached props: %s" % e)
+#     # Authoritative stream-state update (never raises, conservative on locks).
+#     refreshStreamState(inSet)
+#
+#
+# def refreshStreaming(inSet: pwem.objects.data.Set,
+#                      lowTimeRange: float = 4.0,
+#                      highTimeRange: float = 10.0,
+#                      refreshSize: bool = False) -> None:
+#     """Sleep a jittered interval, then refresh the streaming state of ``inSet``.
+#
+#     :param refreshSize: set True only for producers that detect new input items
+#         from the cached set size (e.g. ProtComposeTS). Default False keeps the
+#         per-poll read on a producer's live output minimal, avoiding writer
+#         starvation under journal_mode=DELETE with multiple consumers.
+#     """
+#     sleepRandomly(lowTimeRange, highTimeRange)
+#     _safeRefreshStreamStatus(inSet, refreshSize=refreshSize)
 
 
-def genStreamingDir(prot: Protocol) -> None:
-    makePath(getStreamingDir(prot))
-
-
-def getReadyFile(prot: Protocol, tsId: str) -> str:
-    return join(getStreamingDir(prot), f'{tsId}{const.READY_EXT}')
-
-
-def genReadyFile(prot: Protocol, tsId: str) -> None:
-    Path(getReadyFile(prot, tsId)).touch()
-
-
-def getDoneFile(prot: Protocol) -> str:
-    return join(getStreamingDir(prot), const.PROTOCOL_DONE)
-
-
-def genDoneFile(prot: Protocol) -> None:
-    Path(getDoneFile(prot)).touch()
-
-
-def isStreamClosed(prot: Protocol) -> bool:
-    return exists(getDoneFile(prot))
+# def getStreamingDir(prot: Protocol) -> str:
+#     return prot._getPath(const.STREAMING_DIR)
+#
+#
+# def genStreamingDir(prot: Protocol) -> None:
+#     makePath(getStreamingDir(prot))
+#
+#
+# def getReadyFile(prot: Protocol, tsId: str) -> str:
+#     return join(getStreamingDir(prot), f'{tsId}{const.READY_EXT}')
+#
+#
+# def genReadyFile(prot: Protocol, tsId: str) -> None:
+#     Path(getReadyFile(prot, tsId)).touch()
+#
+#
+# def getDoneFile(prot: Protocol) -> str:
+#     return join(getStreamingDir(prot), const.PROTOCOL_DONE)
+#
+#
+# def genDoneFile(prot: Protocol) -> None:
+#     Path(getDoneFile(prot)).touch()
+#
+#
+# def isStreamClosed(prot: Protocol) -> bool:
+#     return exists(getDoneFile(prot))
