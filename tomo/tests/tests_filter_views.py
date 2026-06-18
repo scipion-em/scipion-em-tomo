@@ -23,11 +23,12 @@
 # *
 # **************************************************************************
 import unittest
+from typing import Dict, Optional, Set, Tuple
 
 from pwem import ALIGN_2D
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr, weakImport
-from tomo.objects import TiltImage
+from tomo.objects import TiltImage, SetOfTiltSeries
 from tomo.protocols import ProtImportTs, ProtExclViewFilter
 from tomo.protocols.protocol_ts_exclude_views_filter import (
     QualityFilterModes, IN_TS_SET, MIN_TILT, MAX_TILT, MAX_SX, MAX_SY,
@@ -70,7 +71,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
     nTiltImages = DataSet_FilterExcludedTs.dimsTsBin4.value[2]  # 41
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(FILTER_EXCLUDED_TS)
 
@@ -78,7 +79,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
     # Import helpers
     # ------------------------------------------------------------------
     @classmethod
-    def _runImportTs(cls, motionCorrected=True):
+    def _runImportTs(cls, motionCorrected: bool = True) -> Optional[SetOfTiltSeries]:
         if motionCorrected:
             filesPath = cls.ds.getFile(
                 DataSet_FilterExcludedTs.tsMotionCorrBin4Dir.value)
@@ -101,7 +102,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
         return getattr(prot, prot.OUTPUT_NAME, None)
 
     @classmethod
-    def _runImportTM(cls, inTsSet):
+    def _runImportTM(cls, inTsSet: SetOfTiltSeries) -> Optional[SetOfTiltSeries]:
         filesPath = cls.ds.getFile(
             DataSet_FilterExcludedTs.tsAliBin4Dir.value)
         print(magentaStr("\n==> Importing transformation matrices:"))
@@ -119,7 +120,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
     # Filter helper
     # ------------------------------------------------------------------
     @classmethod
-    def _runFilter(cls, inTsSet, objLabel='filter', **kwargs):
+    def _runFilter(cls, inTsSet: SetOfTiltSeries, objLabel: str = 'filter', **kwargs) -> Tuple[Optional[SetOfTiltSeries], Optional[SetOfTiltSeries]]:
         defaults = {
             MIN_TILT: -100.0, MAX_TILT: 100.0,
             MAX_SX: 0.0, MAX_SY: 0.0,
@@ -144,7 +145,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
     # Dynamic excluded-views extraction
     # ------------------------------------------------------------------
     @staticmethod
-    def _getExcludedViewsDict(outTsSet):
+    def _getExcludedViewsDict(outTsSet: SetOfTiltSeries) -> Dict[str, Set[int]]:
         result = {}
         for ts in outTsSet:
             excluded = set()
@@ -164,7 +165,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
     # protocol under test.
     # ------------------------------------------------------------------
     @classmethod
-    def _genFullSetAcqDict(cls):
+    def _genFullSetAcqDict(cls) -> dict:
         """Expected per-tilt-series acquisition for a non-re-stacked output.
 
         A non-re-stacked filter only disables views (the protocol does
@@ -181,7 +182,7 @@ class _TestExclViewFilterBase(TestBaseCentralizedLayer):
                 for tsId, acq in DataSet_FilterExcludedTs.tsAcqDict.value.items()}
 
     @classmethod
-    def _genReStackedAcqDict(cls, inTsSet, excludedViewsDict):
+    def _genReStackedAcqDict(cls, inTsSet: SetOfTiltSeries, excludedViewsDict: dict) -> dict:
         """Expected per-tilt-series acquisition after re-stacking.
 
         Re-stacking drops the excluded views and updates the acquisition
@@ -236,7 +237,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     importedTs = None
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         super().setUpClass()
         cls.importedTs = cls._runImportTs(motionCorrected=True)
         cls.fullSetAcqDict = cls._genFullSetAcqDict()
@@ -244,7 +245,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     # ==================================================================
     # Single-criterion deterministic tests
     # ==================================================================
-    def test_01_tiltAngle(self):
+    def test_01_tiltAngle(self) -> None:
         """Tilt angle filter [-50, 50].  Views at tilt-angle-sorted
         indices 0-6 (angles -70.01° to -52.01°) are excluded."""
         outTs, _ = self._runFilter(
@@ -263,7 +264,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             }
         )
 
-    def test_02_dose(self):
+    def test_02_dose(self) -> None:
         """Dose filter maxDose=65.  Late-acquired views with accumulated
         dose > 65 e/A^2 are excluded.  POS6 and POS8 differ because of
         different per-view doses in the mdoc."""
@@ -286,7 +287,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     # ==================================================================
     # Quality-filter mode tests (all four modes)
     # ==================================================================
-    def test_03_qualityConservative(self):
+    def test_03_qualityConservative(self) -> None:
         """Quality filter — conservative mode.  Dynamic extraction
         because quality results depend on image content analysis."""
         outTs, _ = self._runFilter(
@@ -307,7 +308,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             excludedViewsDict=evd,
         )
 
-    def test_04_qualityBalanced(self):
+    def test_04_qualityBalanced(self) -> None:
         """Quality filter — balanced mode (default)."""
         outTs, _ = self._runFilter(
             self.importedTs, objLabel='quality balanced',
@@ -325,7 +326,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             excludedViewsDict=evd,
         )
 
-    def test_05_qualityAggressive(self):
+    def test_05_qualityAggressive(self) -> None:
         """Quality filter — aggressive mode."""
         outTs, _ = self._runFilter(
             self.importedTs, objLabel='quality aggressive',
@@ -343,7 +344,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             excludedViewsDict=evd,
         )
 
-    def test_06_qualityCustom(self):
+    def test_06_qualityCustom(self) -> None:
         """Quality filter — custom mode with restrictive thresholds
         on all four quality components."""
         outTs, _ = self._runFilter(
@@ -370,7 +371,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     # ==================================================================
     # Combined criteria
     # ==================================================================
-    def test_07_combinedTiltDose(self):
+    def test_07_combinedTiltDose(self) -> None:
         """Combined tilt [-50, 50] + dose max=65.  The excluded set is
         the union of each criterion's exclusion set."""
         outTs, _ = self._runFilter(
@@ -392,7 +393,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
     # ==================================================================
     # Re-stack tests
     # ==================================================================
-    def test_08_reStackTiltAngle(self):
+    def test_08_reStackTiltAngle(self) -> None:
         """Re-stack with tilt [-50, 50].  Both TS keep 34 views
         (41 - 7 excluded).  All output views are enabled."""
         # Same views the tilt [-50, 50] filter excludes in the non-re-stacked
@@ -415,7 +416,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             excludedViewsDict={TS_POS6: set(), TS_POS8: set()},
         )
 
-    def test_09_reStackCombined(self):
+    def test_09_reStackCombined(self) -> None:
         """Re-stack with tilt [-50, 50] + dose max=65.  Heterogeneous
         output: POS6 keeps 29, POS8 keeps 31 views."""
         # Same views the tilt [-50, 50] + dose max=65 filter excludes in the
@@ -440,7 +441,7 @@ class TestExclViewFilterMC(_TestExclViewFilterBase):
             isHeterogeneousSet=True,
         )
 
-    def test_10_reStackedAsInput(self):
+    def test_10_reStackedAsInput(self) -> None:
         """Re-stacked TS as input to a second filter run.
         Step 1: re-stack with tilt [-50, 50] -> 34-view TS.
         Step 2: filter the 34-view TS with balanced quality."""
@@ -484,13 +485,13 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
     alignedTs = None
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         super().setUpClass()
         cls.importedTs = cls._runImportTs(motionCorrected=False)
         cls.alignedTs = cls._runImportTM(cls.importedTs)
         cls.fullSetAcqDict = cls._genFullSetAcqDict()
 
-    def test_01_maxShift(self):
+    def test_01_maxShift(self) -> None:
         """Max-shift filter at 20% of image dimension.
         POS6: views 0-6 have large alignment shifts (up to 2830 px).
         POS8: views 0-1 have large shifts (3160, 1850 px)."""
@@ -515,7 +516,7 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
             excludedViewsDict=evd,
         )
 
-    def test_02_combinedShiftTilt(self):
+    def test_02_combinedShiftTilt(self) -> None:
         """Combined shift 5% + tilt [-60, 60].  Deterministic indices.
         POS6: shift excludes 0-11 (dy up to 726 px at threshold 51.2).
         POS8: shift 0-1 + tilt 0-3 + shift idx 22 (-4 deg, dx=52.5)
@@ -538,7 +539,7 @@ class TestExclViewFilterAligned(_TestExclViewFilterBase):
             },
         )
 
-    def test_03_reStackFromAligned(self):
+    def test_03_reStackFromAligned(self) -> None:
         """Re-stack with shift 5% + tilt [-60, 60].  Heterogeneous
         output: POS6 keeps 29 views, POS8 keeps 35."""
         # Same views the shift 5% + tilt [-60, 60] filter excludes in the
