@@ -44,7 +44,6 @@ import pyworkflow.utils as pwutils
 import tomo.constants as const
 from pyworkflow.protocol import Protocol
 from pyworkflow.utils import getParentFolder, removeBaseExt, makePath
-from pyworkflow.utils.retry_streaming import  refreshStreamState
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
     CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition
 
