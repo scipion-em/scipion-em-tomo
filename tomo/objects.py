@@ -1132,16 +1132,14 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         decorator's next attempt is a clean redo.
         """
         try:
-            logger.error(magentaStr('Executing _releaseWriteLock'))
             conn = self._getMapper().db.connection
             if conn.in_transaction:
-                logger.error(magentaStr('Executing conn.rollback()'))
                 conn.rollback()
         except Exception as e:
-            logger.error(magentaStr(f'_releaseWriteLock failed with exception {e}'))
-            pass
+            logger.error(yellowStr(f'_releaseWriteLock failed with exception {e}'))
+            raise e
 
-    def rollbackFailedAppend(self, tsId: str = None):
+    def rollbackFailedAppend(self, tsId: str) -> None:
         """Roll back a failed multi-statement append/write and make the in-memory
         state consistent for a clean retry.
 
@@ -1162,7 +1160,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         which is cosmetic — consumers detect work via tsIds/.ready, not size).
         """
         self._releaseWriteLock()
-        if tsId is not None and self._tsIds is not None:
+        if self._tsIds is not None:
             self._tsIds.discard(tsId)
 
     def append(self, image):

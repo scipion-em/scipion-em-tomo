@@ -534,11 +534,8 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                         ts: TiltSeries,
                         tsAcq: TomoAcquisition,
                         tiltImages: List[TiltImage]) -> None:
-        tWait0 = time.time()
         with self._lock:
-            tLockWait = time.time() - tWait0
             tsSet = self._getOutputTsSet()
-            tDb0 = time.time()
             try:
                 tsSet.setAcquisition(tsAcq)
                 tsSet.append(ts)
@@ -551,16 +548,13 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tsSet.update(ts)
                 tsSet.write()
                 self._store(tsSet)
-                logger.info(cyanStr(
-                    f'{ts.getTsId()} - timing: in-process lock wait = {tLockWait:.1f}s, '
-                    f'SQLite write+commit = {time.time() - tDb0:.1f}s'))
-            except sqlite3.OperationalError:
+            except sqlite3.OperationalError as e:
                 # Release the write lock and reset the in-memory append state so
                 # the @retry_on_sqlite_lock retry is a clean, non-hogging redo
                 # (covers the later commits — ts.write/tsSet.write — not just the
                 # append phase) and never trips the duplicate-tsId guard.
                 tsSet.rollbackFailedAppend(ts.getTsId())
-                raise
+                raise e
 
     def _genTomoAcquisition(self,
                             mdoc: MDoc,
