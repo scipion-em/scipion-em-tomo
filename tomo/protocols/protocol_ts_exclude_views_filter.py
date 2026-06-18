@@ -617,7 +617,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
     def _genYamlReport(self):
         fileName = self._getExtraPath('exclude_tilt_series.yaml')
         try:
-            with open(fileName, 'w', encoding='utf-8') as file:
+            with open(fileName, 'w', encoding='utf-8'):
                 data_to_save = {k: asdict(v) for k, v in self.tiLabelDict.items()}
                 with open(fileName, 'w', encoding='utf-8') as f:
                     yaml.dump(data_to_save, f, default_flow_style=False, sort_keys=False)
@@ -815,7 +815,6 @@ class TiltImageQualityDetector:
     def analyze_image(self, tilt_angle: float) -> Dict[str, float]:
         """Return per-image metrics (protocol may append dark outlier fields)."""
         extreme_contrast = self.get_extreme_contrast_metrics()
-        # bright = self.get_robust_brightness_metrics()
         return {
             'entropy': self.get_entropy(),
             'edge_energy': self.get_edge_energy(),
