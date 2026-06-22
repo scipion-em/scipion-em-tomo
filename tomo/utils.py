@@ -32,18 +32,14 @@ import random
 import re
 import importlib
 from os.path import join, exists
-from pathlib import Path
 from typing import Set, Optional, List
 import time
 import numpy as np
 import math
 import logging
-
-import pwem
 import pyworkflow.utils as pwutils
 import tomo.constants as const
-from pyworkflow.protocol import Protocol
-from pyworkflow.utils import getParentFolder, removeBaseExt, makePath
+from pyworkflow.utils import getParentFolder, removeBaseExt
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
     CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition
 
@@ -457,15 +453,6 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
 def sleepRandomly(lowTimeRange: float = 4.0,
                   highTimeRange: float = 10.0) -> None:
     time.sleep(random.uniform(lowTimeRange, highTimeRange))
-
-
-def getStreamingPath(obj) -> Optional[str]:
-    streamingPath = join(getParentFolder(obj._mapperPath.get()), const.STREAMING_DIR)
-    return streamingPath if exists(streamingPath) else None
-
-
-def getTsIdsFromDir(streamingDir: str) -> List[str]:
-    return [removeBaseExt(file) for file in glob.glob(join(streamingDir, f'*{const.READY_EXT}'))]
 
 
 # ---------------------------------------------------------------------------

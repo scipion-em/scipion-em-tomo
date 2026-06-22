@@ -32,7 +32,6 @@ import traceback
 import typing
 from glob import glob
 from os.path import join, getmtime, exists
-from pathlib import Path
 from statistics import mean
 from typing import List, Tuple, Optional
 from pwem.emlib.image.image_readers import ImageStack, ImageReadersRegistry
@@ -44,11 +43,12 @@ from pyworkflow.protocol import ProtStreamingBase, BooleanParam, LEVEL_ADVANCED,
     PathParam, PointerParam, IntParam, GE, LE, FloatParam
 from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr, magentaStr, makePath
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
-from tomo.constants import STREAMING_DIR, READY_EXT
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
 from pwem.objects.data import Micrograph
-from tomo.utils import sleepRandomly, isStreamClosed, getStreamingPath, genDoneFile, writeTsSidecar
+from tomo.utils import sleepRandomly, writeTsSidecar
+from pwem import (genExecStatusDir, getExecStatusDir, appendStreamItem,
+                  closeStreamJournal, touchHeartbeat)
 
 logger = logging.getLogger(__name__)
 OUT_TS_SET = "tiltSeries"
@@ -158,15 +158,18 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
     # -------------------------- STEPS functions ------------------------------
     def stepsGeneratorStep(self):
         closeSetStepDeps = []
-        makePath(self._getPath(STREAMING_DIR))
+        genExecStatusDir(self)
         inputSet = self.getInMics()
         self.sRate = inputSet.getSamplingRate()
         self.inMicsAcq = inputSet.getAcquisition()
 
         while True:
             try:
+                # Refresh this protocol's liveness heartbeat each poll so its own
+                # downstream consumers can tell it is still alive.
+                touchHeartbeat(self)
                 mdocList = set(self.findMdocs())
-                streamClosed = isStreamClosed(self)
+                streamClosed = inputSet.isStreamClosed()
                 if streamClosed and self.processedMdocs == mdocList:
                     logger.info(cyanStr('Input set closed.'))
                     self._insertFunctionStep(self.closeOutputSetsStep,
@@ -242,7 +245,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 raise Exception(f'Output {OUT_TS_SET} is empty. This may happen if there '
                                 f'was an error during the data registering. Please check the '
                                 f'Output Log > run.stdout and run.stderr')
-        genDoneFile(self)
+        closeStreamJournal(self)
 
     # --------------------------- UTILS functions -----------------------------
     def getInMicsPointer(self) -> Pointer:
@@ -363,9 +366,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         nTilts = len(tiltsMdList)
         inMicsSet = self.getInMics()
 
-        streamingPath = getStreamingPath(inMicsSet)
-        if isinstance(streamingPath, str):
-            setSize = len(glob(join(streamingPath, f'*{READY_EXT}')))
+        # Count available micrographs from the producer's stream journal (a single
+        # sequential read) when streaming, else from the cached set size.
+        if exists(inMicsSet._getStatusDir()):
+            setSize = len(inMicsSet.getProcessedItems())
         else:
             setSize = self.getInMics().getSize()
 
@@ -382,7 +386,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 tiltsMdListFiltered.append(tiltMd)
                 micsFilteredList.append(micsBNamesDict[micNameFromMdoc])
 
-        streamClosed = isStreamClosed(self)
+        streamClosed = self.getInMics().isStreamClosed()
         nMicsMatched = len(tiltsMdListFiltered)
         if nMicsMatched < nTilts and not streamClosed:
             logger.info(cyanStr(f"{mdocFn} -> {nTilts - nMicsMatched} micrographs are not yet available "
@@ -516,12 +520,14 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         # producer's writes from the consumers' reads, removing the cross-process
         # SQLite lock contention on the shared file under journal_mode=DELETE/NFS.
         ts.setSamplingRate(self.sRate)
-        writeTsSidecar(self._getPath(STREAMING_DIR), ts, tiltImages)
+        writeTsSidecar(getExecStatusDir(self), ts, tiltImages)
 
-        # Create the .ready marker LAST: a consumer only ever sees it once both the
-        # DB rows and the (complete, atomically-renamed) sidecar are in place.
+        # Publish the tsId to the append-only stream journal LAST: a consumer only
+        # ever sees it once both the DB rows and the (complete, atomically-renamed)
+        # sidecar are in place. Consumers discover it via getProcessedItems() and
+        # rebuild the tilt-series from the sidecar without any producer-DB read.
         if mdoc:
-            Path(self._getPath(STREAMING_DIR, f'{mdoc.getTsId()}{READY_EXT}')).touch()
+            appendStreamItem(self, mdoc.getTsId())
 
     # The producer's write competes with several concurrent consumers reading
     # the same tiltseries.sqlite (journal_mode=DELETE => one writer vs many

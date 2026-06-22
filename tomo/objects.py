@@ -260,6 +260,43 @@ class TiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._interpolated = Boolean(False)
         self._ctfCorrected = Boolean(False)
+        # Streaming: when a consumer rebuilds this TiltSeries from a producer's
+        # JSON sidecar (no DB read), the TiltImages live here in memory and the
+        # read accessors below serve them instead of querying a (non-existent)
+        # mapper. Plain attribute -> never persisted by getObjDict().
+        self._inMemoryTiltImages = None
+
+    def setInMemoryTiltImages(self, tiltImages):
+        """ Attach the TiltImages rebuilt from a sidecar so this in-memory,
+        DB-less TiltSeries behaves like a populated one for the consumer's read
+        paths (iterItems / getFirstItem / loadTiltImgsInMemory / applyTransform). """
+        self._inMemoryTiltImages = list(tiltImages)
+        self._anglesCount.set(len(self._inMemoryTiltImages))
+        self._size.set(len(self._inMemoryTiltImages))
+
+    def hasInMemoryTiltImages(self) -> bool:
+        return self._inMemoryTiltImages is not None
+
+    def iterItems(self, orderBy='id', direction='ASC', where=None,
+                  limit=None, iterate=True, rowFilter=None):
+        # Serve the in-memory sidecar images when present (streaming consumer),
+        # so no producer-DB read happens. INDEX ordering is honored (the common
+        # case for tilt-series processing); other SQL clauses are not applicable
+        # to an in-memory list and are ignored.
+        if self._inMemoryTiltImages is not None:
+            items = self._inMemoryTiltImages
+            if orderBy in (self.INDEX, '_index'):
+                items = sorted(items, key=lambda ti: ti.getIndex())
+            return iter(items) if iterate else list(items)
+        return data.SetOfImages.iterItems(
+            self, orderBy=orderBy, direction=direction, where=where,
+            limit=limit, iterate=iterate, rowFilter=rowFilter)
+
+    def getFirstItem(self):
+        if self._inMemoryTiltImages is not None:
+            ordered = sorted(self._inMemoryTiltImages, key=lambda ti: ti.getIndex())
+            return ordered[0] if ordered else None
+        return data.SetOfImages.getFirstItem(self)
 
     def hasAcquisition(self):
         return self._acquisition is not None and self._acquisition.getMagnification() is not None
@@ -1085,6 +1122,30 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         been executed outside before calling this method.
         """
         try:
+            # Streaming (pwem-journal) mode: the producer publishes one JSON
+            # sidecar per finished tilt-series in its status dir. Rebuild each TS
+            # (and its TiltImages) fully in memory from the sidecar so the
+            # consumer never opens the producer's live SQLite set -- removing the
+            # SHARED-read vs EXCLUSIVE-commit contention on the shared DB.
+            statusDir = self._getStatusDir()
+            if exists(statusDir):
+                from tomo.utils import readTsSidecar
+                result = {}
+                for tsId in tsIds:
+                    # A single open per sidecar (no extra exists() stat): the
+                    # producer publishes the journal id only AFTER the sidecar is
+                    # atomically in place, so a journal-listed tsId's sidecar is
+                    # complete. The guard just tolerates a not-yet-present/partial
+                    # file without a redundant filesystem round-trip.
+                    try:
+                        ts, tiltImages = readTsSidecar(statusDir, tsId)
+                    except (FileNotFoundError, OSError, ValueError) as e:
+                        logger.info(f'Sidecar for {tsId} not readable yet ({e}). Skipping.')
+                        continue
+                    ts.setInMemoryTiltImages(tiltImages)
+                    result[tsId] = ts
+                return result
+
             if forceSetLoadProps:
                 self.loadAllProperties()
             # We ask the mapper ONLY for the items that match the requested tsIds, Making the
@@ -1306,16 +1367,15 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         return self.getUniqueValues(TiltSeries.TS_ID_FIELD)
 
     def getTSIds(self) -> typing.Set[str]:
-        from tomo.utils import getStreamingPath, getTsIdsFromDir
-        streamingPath = getStreamingPath(self)
-        if streamingPath:
-            logger.info(f'streaming path found -> {streamingPath}')
-            # Prevents multiple reading requests to the mapper
-            tsIds = getTsIdsFromDir(streamingPath)
-        else:
-            logger.info('TsIds loaded from the mapper')
-            tsIds = self._getTSIds()
-        return set(tsIds)
+        # In streaming (pwem-journal) mode, discover ready tsIds from the
+        # producer's append-only journal (a single sequential file read) instead
+        # of querying the producer's live SQLite set on every poll. Falls back to
+        # the mapper for a non-streamed (closed/static) set.
+        statusDir = self._getStatusDir()
+        if exists(statusDir):
+            return self.getProcessedItems()
+        logger.info('TsIds loaded from the mapper')
+        return set(self._getTSIds())
 
 
 class SetOfTiltSeries(SetOfTiltSeriesBase):
