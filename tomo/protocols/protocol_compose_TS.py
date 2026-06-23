@@ -214,6 +214,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
 
             except Exception as e:
                 logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}.'))
+                logger.error(traceback.format_exc())
                 sleepRandomly()
                 continue
 
