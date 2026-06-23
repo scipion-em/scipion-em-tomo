@@ -713,9 +713,6 @@ class TiltSeries(TiltSeriesBase):
         logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
         if exists(outFileName):
             logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
-        logger.info(cyanStr(f'tsId = {self.getTsId()} -> re-stacking with Scipion...'))
-        if exists(outFileName):
-            logger.info(cyanStr(f'reStack: file {outFileName} was skipped. It already exists'))
         if exists(inFileName):
             if presentAcqOrders:
                 # Load the file
@@ -992,6 +989,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._interpolated = Boolean(False)
         # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
         self._isHeterogeneous = Boolean(False)
+        self._tsIds = None
 
     def getAcquisition(self):
         return self._acquisition
@@ -1050,13 +1048,36 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         item._mapperPath.set('%s,%s' % (self.getFileName(), item.getTsId()))
         item.load()
 
+    def _getExistingTsIds(self):
+        """Return cached tsIds already present in this set."""
+        if self._tsIds is not None:
+            return self._tsIds
+
+        self._tsIds = set()
+
+        try:
+            for tsId in self.getTSIds():
+                if tsId is not None:
+                    self._tsIds.add(tsId)
+        except Exception:
+            logger.debug('The mapper has not yet been created')
+
+        return self._tsIds
+
     def _insertItem(self, item):
         """ Create the SetOfImages assigned to a class.
         If the file exists, it will load the Set.
         """
+        tsId = item.getTsId()
+        existingTsIds = self._getExistingTsIds()
+
+        if tsId in existingTsIds:
+            raise ValueError("Cannot insert TiltSeries. Duplicated TiltSeries with tsId = %s" % tsId)
+
         self._setItemMapperPath(item)
         data.EMSet._insertItem(self, item)
         item.write(properties=False)  # Set.write(self)
+        existingTsIds.add(tsId)
 
     def __getitem__(self, itemId):
         """ Set the mapper of the TiltSerie (item) to point to the right table. The one with its own tilt images. """
@@ -3139,20 +3160,27 @@ class SetOfCTFTomoSeries(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
         self._idDict = {}
+        self._ctfTsIds = None
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
         self.setSetOfTiltSeries(other.getSetOfTiltSeries(pointer=True))
 
-    def copyItems(self, other, itemSelectedCallback=None):
+    def copyItems(self, otherSet,
+                  updateItemCallback=None,
+                  itemDataIterator=None,
+                  copyDisabled=False,
+                  doClone=True,
+                  itemSelectedCallback=None,
+                  rowFilter=None,
+                  orderBy='id',
+                  direction='ASC'):
         """ Copy items (CTFTomoSeries and CTFTomo) from the other Set.
-         Params:
-            other:  SetOfCTFTomoSeries from where to copy elements.
-
-            itemSelectedCallback: Optional, callback receiving an item and
-                returning true if it has to be copied
         """
-        for i, ctfSerie in enumerate(other.iterItems()):
+        if itemSelectedCallback is None:
+            itemSelectedCallback = data.SetOfImages.isItemEnabled
+
+        for i, ctfSerie in enumerate(otherSet.iterItems(orderBy=orderBy, rowFilter=rowFilter)):
             if itemSelectedCallback(ctfSerie):
                 ctfSerieOut = ctfSerie.clone()
                 self.append(ctfSerieOut)
@@ -3193,13 +3221,34 @@ class SetOfCTFTomoSeries(data.EMSet):
         item._mapperPath.set('%s,id%s' % (self.getFileName(), item.getObjId()))
         item.load()
 
+    def _getExistingCtfTsIds(self):
+        """Return cached CTFTomoSeries tsIds already present in this set."""
+        if self._ctfTsIds is not None:
+            return self._ctfTsIds
+
+        self._ctfTsIds = set()
+
+        try:
+            for tsId in self.getTSIds():
+                if tsId is not None:
+                    self._ctfTsIds.add(tsId)
+        except Exception:
+            logger.debug('The mapper has not yet been created')
+
+        return self._ctfTsIds
+
     def _insertItem(self, item):
-        """ Create the SetOfImages assigned to a class.
-        If the file exists, it will load the Set.
-        """
+        """Insert one CTFTomoSeries only if its tsId is not already present."""
+        tsId = item.getTsId()
+        existingTsIds = self._getExistingCtfTsIds()
+
+        if tsId in existingTsIds:
+            raise ValueError("Cannot insert CTFTomoSeries. Duplicated CTFTomoSeries with tsId = %s" % tsId)
+
         self._setItemMapperPath(item)
         data.EMSet._insertItem(self, item)
-        item.write(properties=False)  # Set.write(self)
+        item.write(properties=False)
+        existingTsIds.add(tsId)
 
     def __getitem__(self, itemId):
         """ Setup the mapper classes before returning the item. """

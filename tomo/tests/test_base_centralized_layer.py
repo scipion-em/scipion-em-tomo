@@ -262,7 +262,7 @@ class TestBaseCentralizedLayer(BaseTest):
                     isExcludedView = True if ind in excludedViewsDict[tsId] else False
                 else:
                     isExcludedView = False
-                self.checkObjectEnabled(ti, isExcludedView, tsId, ind)
+                self.checkObjectEnabled(ti, isExcludedView, tsId, ind + 1)
                 # Odd/Even
                 if hasOddEven:
                     self.assertTrue(exists(ti.getEven()))
@@ -336,6 +336,56 @@ class TestBaseCentralizedLayer(BaseTest):
         self.assertTrue(np.allclose(testOrigin, origin, rtol=originTolAngst),
                         msg=f'Tilt-series {ts.getTsId()}: origin values [originX, originY, originZ] are different than '
                             f'the expected within tolerance {originTolAngst} Å.\n{testOrigin} != \n{origin}')
+
+    def checkTrMatrixShiftsScale(self,
+                                 inTsSet: SetOfTiltSeries,
+                                 outTsSet: SetOfTiltSeries,
+                                 tolShiftsScaling: float = 0.1) -> None:
+        """Verify that transformation matrix shifts were scaled by the sampling rate ratio.
+
+        :param inTsSet: input SetOfTiltSeries containing the original transformation matrices.
+        :param outTsSet: output SetOfTiltSeries whose transformation matrices are expected to contain the scaled shifts.
+        :param tolShiftsScaling: tolerance allowed when checking that the shifts in the transformation matrices
+        have been properly scaled between the input and output tilt-series sets.
+        """
+        self.assertTrue(inTsSet.hasAlignment() and outTsSet.hasAlignment(),
+                        msg='Both sets of tilt series must have alignment information to check the shifts scaling')
+        inSRate = inTsSet.getSamplingRate()
+        outSRate = outTsSet.getSamplingRate()
+        sRateRatio = outSRate / inSRate
+
+        inTsIds = set(inTsSet.getTSIds())
+        outTsIds = set(outTsSet.getTSIds())
+        commonTsIds = inTsIds & outTsIds
+        self.assertTrue(len(commonTsIds) > 0, msg='The introduced sets do not have common tsIds.')
+        inTsSetDict = {tsId: ts.clone() for ts in inTsSet.iterItems() if (tsId := ts.getTsId()) in commonTsIds}
+        outTsSetDict = {tsId: ts.clone() for ts in outTsSet.iterItems() if (tsId := ts.getTsId()) in commonTsIds}
+
+        for tsId in commonTsIds:
+            inTs = inTsSetDict[tsId]
+            outTs = outTsSetDict[tsId]
+            inTiDict = {ti.getAcquisitionOrder(): ti.clone() for ti in inTs}
+            outTiDict = {ti.getAcquisitionOrder(): ti.clone() for ti in outTs}
+            commonAcqOrders = set(inTiDict.keys()) & set(outTiDict.keys())
+
+            for acqOrder in commonAcqOrders:
+                outTi = outTiDict[acqOrder]
+                if outTi.isEnabled():
+                    inTi = inTiDict[outTi.getAcquisitionOrder()]
+                    inTiMatrix = inTi.getTransform().getMatrix()
+                    outTiMatrix = outTi.getTransform().getMatrix()
+                    self.assertAlmostEqual(
+                        outTiMatrix[0][2],
+                        inTiMatrix[0][2] / sRateRatio,
+                        delta=tolShiftsScaling,
+                        msg=f"X shift scaling incorrect for tsId={tsId}, "
+                            f"acqOrder={outTi.getAcquisitionOrder()}")
+                    self.assertAlmostEqual(
+                        outTiMatrix[1][2],
+                        inTiMatrix[1][2] / sRateRatio,
+                        delta=tolShiftsScaling,
+                        msg=f"Y shift scaling incorrect for tsId={tsId}, "
+                            f"acqOrder={outTi.getAcquisitionOrder()}")
 
     # TOMO ACQUISITION #################################################################################################
     def checkTomoAcquisition(self, testAcq: Union[TomoAcquisition, dict],
@@ -1123,9 +1173,9 @@ class TestBaseCentralizedLayer(BaseTest):
         enb = obj.isEnabled()
         objType = 'CTF' if type(obj) is CTFTomoSeries else 'Tilt image'
         if isExcludedView:
-            self.assertFalse(enb, msg='TsId = %s: %s %i was expected not to be Enabled' % (tsId, objType, ind))
+            self.assertFalse(enb, msg='TsId = %s: %s of index %i was expected not to be Enabled' % (tsId, objType, ind))
         else:
-            self.assertTrue(enb, msg='TsId = %s: %s %i was expected to be Enabled' % (tsId, objType, ind))
+            self.assertTrue(enb, msg='TsId = %s: %s of index %i was expected to be Enabled' % (tsId, objType, ind))
 
     def checkCtfTomo(self, ctf, isExcluded, expectPsdFile):
         defocusU = ctf.getDefocusU()

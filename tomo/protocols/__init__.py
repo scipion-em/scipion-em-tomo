@@ -33,6 +33,7 @@ from .protocol_import_ctf import ProtImportTsCTF
 from .protocol_invert_tilt_angles import ProtInvertTiltAngles
 from .protocol_tomo_apply_tomomask import ProtTomoApplyTomoMask
 from .protocol_ts_base import ProtTomoReconstruct
+from .protocol_ts_exclude_views_filter import ProtExclViewFilter
 from .protocol_ts_from_tomograms import ProtTsFromTomos
 from .protocol_ts_import import ProtImportTsBase, ProtImportTs, ProtImportTsMovies
 # from .protocol_ts_import_coordinates import ProtImportTiltSeriesCoordinates
@@ -43,6 +44,7 @@ from .protocol_import_subtomograms import ProtImportSubTomograms
 from .protocol_import_coordinates import ProtImportCoordinates3D
 from .protocol_extract_coordinates import ProtTomoExtractCoords
 from .protocol_assignTransformationTS import ProtAssignTransformationMatrixTiltSeries
+from .protocol_assign_excluded_views import ProtAssignExcludedViews
 from .protocol_split_evenodd_subtomos import ProtSplitEvenOddTomoSet
 from .protocol_particles_to_subtomograms import Prot2DParticlesToSubtomograms
 from .protocol_project_coordinates import ProtProjectCoordinates

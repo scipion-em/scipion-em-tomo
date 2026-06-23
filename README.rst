@@ -15,27 +15,26 @@ Protocols
 * **import tilt-series movies**: Protocol to import tilt series movies.
 * **import tomograms** : Protocol to import a set of tomograms to the project.
 * **import tomomasks (segmentations)**: Protocol to import a set of tomomasks (segmentations) to the project.
-* **import 3D coordinates from scipion** : Protocol to import a set of 3d coordinates from Scipion sqlite file.
-* **import set of coordinates 3D** : Protocol to import a set of coordinates 3D to the project.
-* **import subtomograms** : Protocol to import a set of tomograms to the project.
-* **2D particles to subtomograms** : Protocol to create a set of subtomograms from a selected 2D particles.
-* **2d coordinates to 3d coordinates** : Turns 2d coordinates into set of 3d coordinates. Works in coordination with 'tomograms to micrographs' protocol.
-* **Compose Tilt Serie** : Compose in streaming a set of tilt series based on a sets of micrographs and mdoc files. Three time parameters are abailable for the streaming behaviour: Time for next tilt, Time for next micrograph and Time for next Tilt Serie
-* **Tilt-series assign alignment** : Assign the transformation matrices from an input set of tilt-series to a target one.
-* **Tilt-series consensus alignment** : Perform a consensus of a set of alignments for the same tilt series. Returns the average alignment matrix of the consensus alignments and its standard deviation of shift and angle.
-* **Tilt-series convert coords3D** : Scipion protocol to convert a set of tilt-series coordinates 3d to a set of coordinates 3d associated to a set of tomograms.
-* **assign alignment** : Assign the alignment stored in a set of Subtomograms/Coordinates3D to another set. Both sets should have same pixel size (A/px). The Subtomograms/Coordinates3D with the alignment can also be a subset of a bigger set.
-* **assign tomograms to tomo masks (segmentations)** : This protocol assign tomograms to tomomasks (segmentations).
-* **assign tomos to subtomos** : This protocol assign tomograms to subtomograms that have been imported before without tomograms. Subtomograms should contain the name of the original tomogram in their own file name.
-* **average tilt-series movies** : Simple protocol to average TiltSeries movies as basic  motion correction. It is used mainly for testing purposes.
-* **consensus classes subtomo** : Compare several SetOfClassesSubTomograms. Return the intersection of the input classes.
-* **ctf validate** : Validate a set of CTF tomo series and separate into two sets (good and bad tomo series )
-* **extract 3D coordinates** : Extract the coordinates information from a set of subtomograms. This protocol is useful when we want to re-extract the subtomograms (maybe resulting from classification) with the original dimensions. It can be also handy to visualize the resulting subtomograms in their location on the tomograms.
-* **export 3D coordinates**: Export 3D subtomogram coordinates to be used outside Scipion.
-* **split even/odd tomos/subtomos** : Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
-* **tomograms to micrographs** : Turns tomograms into set of micrographs to apply SPA picking methods.
-* **apply tomomasks to tomograms** : Aplies a set of masks to a given set of tomograms. Some operations can be applied to the mask: invert, dilate and apply a gaussian filter.
+* **import 3D coordinates from scipion** : Protocol to import a set of 3D coordinates from a Scipion sqlite file.
+* **import coordinates 3D** : Protocol to import a set of coordinates 3D to the project.
+* **import subtomograms** : Protocol to import a set of subtomograms to the project.
+* **import tomo CTFs** : Protocol to import the CTF estimation of a set of tilt-series.
+* **Compose Tilt Series** : Compose in streaming a set of tilt series based on sets of micrographs and mdoc files. Three time parameters are available for the streaming behaviour: time for next tilt, time for next micrograph and time for next tilt series.
+* **correct tilt offset** : Correct the tilt angle offset of a tilt-series (particularly useful for lamellae) by adding a fixed offset to every tilt angle in the metadata.
 * **invert tilt angles** : Inverts the physical handedness of the introduced tilt-series by inverting the tilt angles in the metadata associated to each tilt-series.
+* **exclude views filter** : Filter a set of aligned tilt-series according to maximum allowed shift after alignment, accumulated dose range, tilt-angle range and minimum number of views.
+* **assign excluded views** : Transfer excluded-view annotations (the _enabled state) from a source set of tilt-series to a target one. Tilt-series are matched by tsId and images by acquisition order, so it is robust to re-stacking.
+* **Tilt-series assign alignment** : Assign the transformation matrices from an input set of tilt-series to a target one.
+* **tilt-series from tomograms** : Get the tilt-series that correspond to a given set of tomograms. Useful for fiducial-less samples, to discard data at tomogram level and keep further processing with the matching tilt-series.
+* **misalign tilt-series** : Introduce misalignment in the transformation matrix of a tilt-series (mainly for testing purposes).
+* **apply tomomasks to tomograms** : Applies a set of masks to a given set of tomograms. Some operations can be applied to the mask: invert, dilate and apply a gaussian filter.
+* **extract 3D coordinates** : Extract the coordinates information from a set of subtomograms. This protocol is useful when we want to re-extract the subtomograms (maybe resulting from classification) with the original dimensions. It can be also handy to visualize the resulting subtomograms in their location on the tomograms.
+* **project coordinates** : Project 3D coordinates into a set of landmarks.
+* **mask 3d coordinates** : Filter a set of 3D coordinates using a segmentation (tomomask), keeping or excluding the coordinates that fall within a given segmentation label.
+* **meshes from tomo mask** : Create meshes based on segmentations or voxel values (TomoMasks).
+* **2D particles to subtomograms** : Protocol to create a set of subtomograms from selected 2D particles.
+* **split even/odd tomos/subtomos** : Protocol to split a set of tomograms or subtomograms into even/odd sets by element id.
+* **export 3D coordinates**: Export 3D subtomogram coordinates to be used outside Scipion.
 
 
 **Latest plugin versions**

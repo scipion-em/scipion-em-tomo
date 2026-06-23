@@ -1,5 +1,6 @@
 tutorial - Subtomogram Averaging of Ribosomes of Chlamydomonas reinhardtii prepared using cryo-plasmaFIB milling (SMALL): (EMPIAR-10830).
 You'll need to download this dataset -> scipion3 testdata --download chlamy_data_tutorial
+Scipion required plugins: tomo, warp, xmipp3, imod, aretomo, cryocare, emantomo, reliontomo,
 [
     {
         "object.className": "ProtImportTsMovies",
