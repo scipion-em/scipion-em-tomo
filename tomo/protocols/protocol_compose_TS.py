@@ -45,7 +45,7 @@ from pyworkflow.utils import cyanStr, yellowStr, removeBaseExt, redStr, magentaS
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.convert.mdoc import MDoc, TiltMetadata
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage, TomoAcquisition
-from pwem.objects.data import Micrograph
+from pwem.objects.data import Micrograph, Acquisition
 from tomo.utils import sleepRandomly, writeTsSidecar
 from pwem import (genExecStatusDir, getExecStatusDir, appendStreamItem,
                   closeStreamJournal, touchHeartbeat)
@@ -68,7 +68,18 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         super().__init__(**args)
         self.time4NextTS_current = time.time()
         self.processedMdocs = set()
-        self.processedIds = []
+        # Incremental, in-memory micrograph cache (basename -> Micrograph), filled
+        # ONLY with the delta of newly-arrived micrographs each poll. Replaces the
+        # former per-mdoc full re-fetch + loadAllProperties() reload. Accessed only
+        # from the generator thread (_refreshAvailableMics / matchTs), so no lock
+        # is needed. _lastMicCount is the offset high-water mark on the producer's
+        # journal count.
+        self._micsByBaseName = {}
+        self._lastMicCount = 0
+        # Journal item ids already turned into cached mics via inline metadata
+        # (the no-DB-read path). Distinct from _lastMicCount, which is the objId
+        # high-water mark used only by the selectAll fallback.
+        self._seenMicItems = set()
         self.inMicsAcq = None
         self.sRate = None
 
@@ -168,6 +179,10 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                 # Refresh this protocol's liveness heartbeat each poll so its own
                 # downstream consumers can tell it is still alive.
                 touchHeartbeat(self)
+                # Pull only the newly-arrived micrographs into the in-memory cache
+                # once per poll (incremental, offset-based) so every matchTs() call
+                # this iteration reads from memory instead of re-querying the DB.
+                self._refreshAvailableMics()
                 mdocList = set(self.findMdocs())
                 streamClosed = inputSet.isStreamClosed()
                 if streamClosed and self.processedMdocs == mdocList:
@@ -204,13 +219,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
                     closeSetStepDeps.append(cTsPid)
                     logger.info(cyanStr(f"Steps created for mdoc file = {mdocFn}"))
                     self.processedMdocs.add(mdocFn)
-
                     sleepRandomly()
-
-                # # refreshSize=True: ProtComposeTS detects newly motion-corrected
-                # # micrographs via getInMics().getSize(), so it needs the cached
-                # # input size refreshed. (Downstream tsId/.ready consumers do not.)
-                # refreshStreaming(inputSet, refreshSize=True)
 
             except Exception as e:
                 logger.warning(yellowStr(f'stepsGeneratorStep failed with exception: {e}.'))
@@ -333,18 +342,78 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             return errorMsg, None
         return '', mdoc
 
+    def _refreshAvailableMics(self) -> None:
+        """ Incrementally pull ONLY the micrographs that arrived since the last
+        poll into the in-memory cache (basename -> Micrograph). Called once per
+        poll from the generator thread (no lock needed).
+
+        Preferred path (producer inlines metadata in its journal): rebuild each
+        new micrograph straight from the journal -- the single sequential read
+        already performed for discovery -- with NO producer-DB access at all.
+
+        Fallback path (producer publishes id-only journals, or a non-streamed /
+        closed set): offset-based incremental ``selectAll`` for just the new objId
+        range -- still no ``loadAllProperties()`` / full reload. Safe because the
+        producer appends a mic's journal id only AFTER committing its DB row.
+        """
+        inMicsSet = self.getInMics()
+        if exists(inMicsSet._getStatusDir()):
+            allItems = inMicsSet.getProcessedItems()
+            metaById = inMicsSet.getProcessedItemsMeta()
+            # Inline-meta path: use it only when EVERY ready item carries metadata
+            # (a consistent enriched producer); otherwise fall back to the DB.
+            if allItems and set(metaById) == allItems:
+                for itemId in allItems - self._seenMicItems:
+                    meta = metaById[itemId]
+                    self._micsByBaseName[meta['key']] = self._micFromMeta(meta)
+                    self._seenMicItems.add(itemId)
+                return
+            currentCount = len(allItems)
+        else:
+            currentCount = inMicsSet.getSize()
+        if currentCount <= self._lastMicCount:
+            return
+        newIds = set(range(self._lastMicCount + 1, currentCount + 1))
+        for mic in self.fetchNewMics(newIds):
+            self._micsByBaseName[removeBaseExt(mic.getMicName())] = mic
+        self._lastMicCount = currentCount
+
+    def _micFromMeta(self, meta: dict) -> Micrograph:
+        """ Rebuild a Micrograph fully in memory from the journal's inlined
+        metadata (no DB). Carries exactly what ProtComposeTS consumes: file name
+        (stack source), micName, sampling rate, dose-per-frame, and the optional
+        even/odd mic paths (under MC_EVEN_ODD_ATTRIBUTE, as the list generateOutTs
+        expects). """
+        mic = Micrograph()
+        mic.setFileName(meta['fileName'])
+        mic.setMicName(meta.get('micName') or meta['key'])
+        sRate = meta.get('samplingRate')
+        if sRate:
+            mic.setSamplingRate(sRate)
+        acq = Acquisition()
+        dose = meta.get('dosePerFrame')
+        if dose is not None:
+            acq.setDosePerFrame(dose)
+        mic.setAcquisition(acq)
+        evenOdd = meta.get('evenOdd')
+        if evenOdd:
+            setattr(mic, MC_EVEN_ODD_ATTRIBUTE, list(evenOdd))
+        return mic
+
     def fetchNewMics(self, objIds: typing.Set[int]) -> typing.List[Micrograph]:
         """
-        Extract exclusively the new micrographs using native SQL.
-        By avoiding a general SELECT, it drastically  minimizes the locking time (SHARED lock).
+        Extract exclusively the requested micrographs using a targeted SQL query.
+        Avoiding a general SELECT minimizes the locking time (SHARED lock), and no
+        loadAllProperties() / full-state reload is performed: the lightweight
+        ``id IN (...)`` query already sees rows committed by the producer.
         """
+        if not objIds:
+            return []
         try:
-            inSet = self.getInMics()
-            inSet.loadAllProperties()
             whereClause = " OR ".join([f"id='{objId}'" for objId in objIds])
             return [mic.clone() for mic in self.getInMics().iterItems(where=whereClause)]
         except Exception as e:
-            logger.debug("refreshStreaming: non-fatal loadAllProperties() failure: %s" % e)
+            logger.debug("fetchNewMics: non-fatal query failure: %s" % e)
             return []
 
     def matchTs(self, mdoc: Optional[MDoc]) \
@@ -365,19 +434,11 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         mdocFn = mdoc.getFileName()
         tiltsMdList = mdoc.getTiltsMetadata()
         nTilts = len(tiltsMdList)
-        inMicsSet = self.getInMics()
 
-        # Count available micrographs from the producer's stream journal (a single
-        # sequential read) when streaming, else from the cached set size.
-        if exists(inMicsSet._getStatusDir()):
-            setSize = len(inMicsSet.getProcessedItems())
-        else:
-            setSize = self.getInMics().getSize()
-
-        inSetIds = list(range(1, setSize + 1))
-        nonProcessedMicIds = set(inSetIds) - set(self.processedIds)
-        listOfMics = self.fetchNewMics(nonProcessedMicIds)
-        micsBNamesDict = {removeBaseExt(mic.getMicName()): mic for mic in listOfMics}
+        # Match against the in-memory micrograph cache, kept incrementally up to
+        # date by _refreshAvailableMics() once per poll. No per-mdoc DB re-fetch
+        # and no loadAllProperties() reload.
+        micsBNamesDict = self._micsByBaseName
 
         tiltsMdListFiltered = []
         micsFilteredList = []
@@ -496,7 +557,6 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tiAcq.setAccumDose(cumDose)
             ti.setAcquisition(tiAcq)
             tiltImages.append(ti)
-            self.processedIds.append(mic.getObjId())
             index += 1
             minAngle = min(tiltAngle, minAngle)
             maxAngle = max(tiltAngle, maxAngle)
