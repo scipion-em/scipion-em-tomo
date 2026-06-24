@@ -397,7 +397,14 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         mic.setAcquisition(acq)
         evenOdd = meta.get('evenOdd')
         if evenOdd:
-            setattr(mic, MC_EVEN_ODD_ATTRIBUTE, list(evenOdd))
+            # Must be a 2-element list of paths [odd, even]. Be robust to either a
+            # list/tuple or a comma-joined string (so a CSV string is NOT split
+            # into individual characters, which would make oddEvenMics[0] == 'R').
+            if isinstance(evenOdd, str):
+                evenOdd = evenOdd.split(',')
+            else:
+                evenOdd = list(evenOdd)
+            setattr(mic, MC_EVEN_ODD_ATTRIBUTE, evenOdd)
         return mic
 
     def fetchNewMics(self, objIds: typing.Set[int]) -> typing.List[Micrograph]:
