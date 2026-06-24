@@ -577,10 +577,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
         tsAcq.setAngleMax(maxAngle)
 
         # Minimal lock scope: only DB writes
-        tReg0 = time.time()
         self.registerOutputs(ts, tsAcq, tiltImages)
-        logger.info(cyanStr(f'{tsId} - timing: registerOutputs total, incl. lock '
-                            f'retries = {time.time() - tReg0:.1f}s'))
 
         # Publish a metadata sidecar (built from the in-memory ts/tiltImages, no DB
         # read) so downstream consumers rebuild this tilt-series in memory WITHOUT
