@@ -721,6 +721,12 @@ class TiltSeries(TiltSeriesBase):
     @retry_on_sqlite_lock(log=logger)
     def getTsPresentAcqOrders(self) -> typing.Set[int]:
         """It generates a set containing the acquisition orders that correspond to the enabled tilt images."""
+        # Sidecar (in-memory) mode: when this tilt-series was rebuilt from the
+        # producer's JSON sidecar (see SetOfTiltSeriesBase.fetchNewTs), derive the
+        # acquisition orders from the in-memory tilt images instead of the DB query
+        # (getUniqueValues goes straight to the mapper and would ignore them).
+        if self.hasInMemoryTiltImages():
+            return {ti.getAcquisitionOrder() for ti in self.iterItems() if ti.isEnabled()}
         return set(self.getUniqueValues(self.ACQ_ORDER_FIELD, where="enabled==True"))
 
     def hasExcludedViews(self) -> bool:
@@ -1006,6 +1012,14 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
     def getFirstEnabledItem(self, loadImgsInMemory: bool = False) -> typing.Union[TiltImage, None]:
+        # Sidecar (in-memory) mode: the tilt images were rebuilt from the
+        # producer's JSON sidecar (see SetOfTiltSeriesBase.fetchNewTs), so serve
+        # them directly without any DB read, regardless of loadImgsInMemory.
+        if self.hasInMemoryTiltImages():
+            for ti in self.iterItems(orderBy=self.INDEX):
+                if ti.isEnabled():
+                    return ti
+            raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
         if loadImgsInMemory:
             tiList = self.loadTiltImgsInMemory()
             for ti in tiList:
@@ -3191,6 +3205,11 @@ class CTFTomoSeries(data.EMSet):
         # CtfModels will always be used inside a SetOfTiltSeries
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
+        # Streaming: when this series is rebuilt from a producer's sidecar (no DB
+        # read), its CTFTomos live here in memory and the read accessors below
+        # serve them instead of querying a (non-existent) mapper. Plain attribute
+        # -> never persisted by getObjDict(). Mirrors TiltSeriesBase.
+        self._inMemoryCtfs = None
 
     def clone(self, ignoreAttrs=('_mapperPath', '_size')):
         clone = self.getClass()()
@@ -3351,7 +3370,37 @@ class CTFTomoSeries(data.EMSet):
         else:
             return None
 
+    def setInMemoryCtfs(self, ctfs):
+        """ Attach the CTFTomos rebuilt from a sidecar so this in-memory, DB-less
+        CTFTomoSeries behaves like a populated one for the read paths
+        (iterItems / getFirstEnabledItem / loadCtfsInMemory). Mirrors
+        TiltSeriesBase.setInMemoryTiltImages. """
+        self._inMemoryCtfs = list(ctfs)
+        self._size.set(len(self._inMemoryCtfs))
+
+    def hasInMemoryCtfs(self) -> bool:
+        return self._inMemoryCtfs is not None
+
+    def iterItems(self, orderBy='id', direction='ASC', where=None,
+                  limit=None, iterate=True, rowFilter=None):
+        # Serve the in-memory sidecar CTFs when present (streaming consumer), so
+        # no producer-DB read happens. SQL clauses are not applicable to an
+        # in-memory list and are ignored.
+        if self._inMemoryCtfs is not None:
+            items = list(self._inMemoryCtfs)
+            return iter(items) if iterate else items
+        return data.EMSet.iterItems(self, orderBy=orderBy, direction=direction,
+                                    where=where, limit=limit, iterate=iterate,
+                                    rowFilter=rowFilter)
+
     def getFirstEnabledItem(self, loadCtfsInMemory: bool = False) -> typing.Union[CTFTomo, None]:
+        # Sidecar (in-memory) mode: serve the rebuilt CTFTomos directly, no DB
+        # read, regardless of loadCtfsInMemory.
+        if self.hasInMemoryCtfs():
+            for ctf in self.iterItems():
+                if ctf.isEnabled():
+                    return ctf
+            raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current CTF.')
         if loadCtfsInMemory:
             ctfList = self.loadCtfsInMemory()
             for ctf in ctfList:
@@ -3520,6 +3569,58 @@ class SetOfCTFTomoSeries(data.EMSet):
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
+
+    def fetchNewCtfs(self,
+                     tsIds: typing.Union[typing.List[str], typing.Set[str]],
+                     forceSetLoadProps: bool = False)\
+            -> typing.Dict[str, "CTFTomoSeries"]:
+        """
+        Extract exclusively the requested CTFTomoSeries. CTF analog of
+        SetOfTiltSeriesBase.fetchNewTs (same level, signature and data flow).
+
+        :param tsIds: List/Set of Tilt-Series IDs.
+        :param forceSetLoadProps: Force a set reload (loadAllProperties()) before
+        the DB query; in streamified protocols the load is usually done outside.
+        """
+        try:
+            # Streaming (pwem-journal) mode: the producer publishes one JSON
+            # sidecar per finished CTFTomoSeries in its status dir. Rebuild each
+            # series (and its CTFTomos) fully in memory from the sidecar so the
+            # consumer never opens the producer's live SQLite set -- removing the
+            # SHARED-read vs EXCLUSIVE-commit contention on the shared DB.
+            statusDir = self._getStatusDir()
+            if exists(statusDir):
+                from tomo.utils import readCtfSidecar
+                result = {}
+                for tsId in tsIds:
+                    # A single open per sidecar (no extra exists() stat): the
+                    # producer publishes the journal id only AFTER the sidecar is
+                    # atomically in place, so a journal-listed tsId's sidecar is
+                    # complete. The guard tolerates a not-yet-present/partial file.
+                    try:
+                        cts, ctfTomos = readCtfSidecar(statusDir, tsId)
+                    except (FileNotFoundError, OSError, ValueError) as e:
+                        logger.info(f'CTF sidecar for {tsId} not readable yet ({e}). Skipping.')
+                        continue
+                    cts.setInMemoryCtfs(ctfTomos)
+                    result[tsId] = cts
+                return result
+
+            if forceSetLoadProps:
+                self.loadAllProperties()
+            # Targeted query for only the requested tsIds (light SHARED lock),
+            # instead of loading every CTFTomoSeries in the project. clone with
+            # ignoreAttrs=() keeps the item's _mapperPath (set by iterItems) so the
+            # returned series can still read its CTFTomos -- the faithful
+            # equivalent of fetchNewTs's clone (CTFTomoSeries.clone() drops it).
+            whereClause = " OR ".join([f"_tsId='{tsId}'" for tsId in tsIds])
+            return {
+                cts.getTsId(): cts.clone(ignoreAttrs=())
+                for cts in self.iterItems(where=whereClause)
+            }
+        except Exception as e:
+            logger.info(f'fetchNewCtfs failed with exception {e}. Skipping...')
+            return {}
 
 
 class TiltSeriesCoordinate(data.EMObject):

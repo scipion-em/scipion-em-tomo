@@ -92,3 +92,7 @@ INTERPOLATED_FOLDER = 'interpolated'
 # memory WITHOUT opening the producer's live SQLite set (avoids cross-process
 # read/write lock contention on the shared file under journal_mode=DELETE / NFS).
 TS_META_EXT = '.tsmeta.json'
+# Per-CTF-tomo-series metadata sidecar (CTF analog of TS_META_EXT): lets a
+# downstream consumer rebuild a CTFTomoSeries (and its CTFTomos) fully in memory
+# from a producer's published file, without opening the producer's live set DB.
+CTF_META_EXT = '.ctfmeta.json'

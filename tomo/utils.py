@@ -577,82 +577,91 @@ def readTsSidecar(streamingDir: str, tsId: str):
     return ts, tiltImages
 
 
-# def _safeRefreshStreamStatus(inSet: pwem.objects.data.Set,
-#                              refreshSize: bool = False) -> None:
-#     """Refresh a streaming input Set's cached state without ever crashing the
-#     consumer on transient DB contention.
-#
-#     1. (Only when ``refreshSize=True``) Best-effort reload of the heavyweight
-#        properties (size, etc.) on the shared mapper, while the stream is open.
-#        Any lock/busy error is swallowed so it can never fail the protocol.
-#     2. Authoritative, conservative refresh of the OPEN/CLOSED flag through an
-#        independent read-only connection (:func:`refreshStreamState`). This only
-#        downgrades to CLOSED on a definitive on-disk read, so a momentary
-#        producer write lock cannot finalise the consumer prematurely.
-#
-#     Why ``refreshSize`` defaults to False
-#     -------------------------------------
-#     ``loadAllProperties()`` is only needed by protocols that detect new INPUT
-#     items through the cached set *size* (currently only ``ProtComposeTS``, via
-#     ``getInMics().getSize()``). Pure tsId/.ready-based consumers (imod, aretomo,
-#     fidder, tomo3d, ...) do NOT use the size — they discover work via
-#     ``getTSIds()`` (read from the filesystem ``.ready`` markers) and
-#     ``fetchNewTs()``. Under ``journal_mode=DELETE`` every extra read of a
-#     producer's *live* output set competes with that producer's commit
-#     (EXCLUSIVE) lock; with several concurrent consumers polling the same file
-#     this starves the producer until its bounded write-retries are exhausted and
-#     it FAILS. Skipping the redundant full-properties read on every consumer
-#     poll removes that pressure, while the lightweight single-row stream-state
-#     probe still tells consumers when the producer has closed.
-#     """
-#     if refreshSize and inSet.isStreamOpen():
-#         try:
-#             inSet.loadAllProperties()
-#         except Exception as e:
-#             logger.debug("refreshStreaming: non-fatal loadAllProperties() "
-#                          "failure, keeping cached props: %s" % e)
-#     # Authoritative stream-state update (never raises, conservative on locks).
-#     refreshStreamState(inSet)
-#
-#
-# def refreshStreaming(inSet: pwem.objects.data.Set,
-#                      lowTimeRange: float = 4.0,
-#                      highTimeRange: float = 10.0,
-#                      refreshSize: bool = False) -> None:
-#     """Sleep a jittered interval, then refresh the streaming state of ``inSet``.
-#
-#     :param refreshSize: set True only for producers that detect new input items
-#         from the cached set size (e.g. ProtComposeTS). Default False keeps the
-#         per-poll read on a producer's live output minimal, avoiding writer
-#         starvation under journal_mode=DELETE with multiple consumers.
-#     """
-#     sleepRandomly(lowTimeRange, highTimeRange)
-#     _safeRefreshStreamStatus(inSet, refreshSize=refreshSize)
+# ---------------------------------------------------------------------------
+# Per-CTF-tomo-series metadata "sidecar" files (the CTF analog of the TS sidecar
+# above). A streaming producer publishes one JSON sidecar per finished
+# CTFTomoSeries; downstream consumers rebuild the CTFTomoSeries (and its CTFTomos)
+# fully in memory from it (see SetOfCTFTomoSeries.fetchNewCtfs), so they NEVER
+# open the producer's live SQLite set. Explicit, round-trippable schema (not a
+# generic getObjDict dump) capturing the standard per-tilt CTF estimation values.
+# ---------------------------------------------------------------------------
+CTF_META_VERSION = 1
 
 
-# def getStreamingDir(prot: Protocol) -> str:
-#     return prot._getPath(const.STREAMING_DIR)
-#
-#
-# def genStreamingDir(prot: Protocol) -> None:
-#     makePath(getStreamingDir(prot))
-#
-#
-# def getReadyFile(prot: Protocol, tsId: str) -> str:
-#     return join(getStreamingDir(prot), f'{tsId}{const.READY_EXT}')
-#
-#
-# def genReadyFile(prot: Protocol, tsId: str) -> None:
-#     Path(getReadyFile(prot, tsId)).touch()
-#
-#
-# def getDoneFile(prot: Protocol) -> str:
-#     return join(getStreamingDir(prot), const.PROTOCOL_DONE)
-#
-#
-# def genDoneFile(prot: Protocol) -> None:
-#     Path(getDoneFile(prot)).touch()
-#
-#
-# def isStreamClosed(prot: Protocol) -> bool:
-#     return exists(getDoneFile(prot))
+def getCtfSidecarPath(streamingDir: str, tsId: str) -> str:
+    return join(streamingDir, f'{tsId}{const.CTF_META_EXT}')
+
+
+def ctfSidecarExists(streamingDir: str, tsId: str) -> bool:
+    return exists(getCtfSidecarPath(streamingDir, tsId))
+
+
+def writeCtfSidecar(streamingDir: str, ctfTomoSeries: CTFTomoSeries,
+                    ctfTomos: List[CTFTomo]) -> None:
+    """Atomically write the metadata sidecar for a CTFTomoSeries.
+
+    Built entirely from the IN-MEMORY ``ctfTomoSeries`` / ``ctfTomos`` the
+    producer already holds — it performs NO database read. Written to a temp file
+    and ``os.replace``-d into place so a consumer never observes a half-written
+    sidecar. Call this BEFORE publishing the tsId to the stream journal so the
+    journal id only appears once the sidecar is complete. Mirrors writeTsSidecar.
+    """
+    # Note: the CTFTomoSeries-level defocus-deviation flags are deliberately not
+    # serialized: their getters/setters are stubs in the data model (no real
+    # state), so the sidecar only carries genuinely round-trippable data.
+    data = {
+        'version': CTF_META_VERSION,
+        'tsId': ctfTomoSeries.getTsId(),
+        'ctfTomos': [],
+    }
+    for ctf in ctfTomos:
+        data['ctfTomos'].append({
+            'index': ctf.getIndex(),
+            'acquisitionOrder': ctf.getAcquisitionOrder(),
+            'enabled': ctf.isEnabled(),
+            'defocusU': ctf.getDefocusU(),
+            'defocusV': ctf.getDefocusV(),
+            'defocusAngle': ctf.getDefocusAngle(),
+            'resolution': ctf.getResolution(),
+            'fitQuality': ctf.getFitQuality(),
+            'phaseShift': ctf.getPhaseShift() if ctf.hasPhaseShift() else None,
+        })
+    path = getCtfSidecarPath(streamingDir, ctfTomoSeries.getTsId())
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f)
+    os.replace(tmp, path)  # atomic publish of the sidecar
+
+
+def readCtfSidecar(streamingDir: str, tsId: str):
+    """Rebuild ``(CTFTomoSeries, [CTFTomo])`` fully in memory from the sidecar.
+
+    No SQLite access at all -> no lock contention with the producer. This is the
+    CTF analog of readTsSidecar and the building block of
+    SetOfCTFTomoSeries.fetchNewCtfs.
+    """
+    with open(getCtfSidecarPath(streamingDir, tsId)) as f:
+        data = json.load(f)
+
+    cts = CTFTomoSeries(tsId=data['tsId'])
+    cts.setTsId(data['tsId'])
+
+    ctfTomos = []
+    for d in data['ctfTomos']:
+        ctf = CTFTomo()
+        ctf.setIndex(d['index'])
+        ctf.setAcquisitionOrder(d['acquisitionOrder'])
+        ctf.setEnabled(d.get('enabled', True))
+        defU, defV, defAngle = d.get('defocusU'), d.get('defocusV'), d.get('defocusAngle')
+        if None not in (defU, defV, defAngle):
+            ctf.setStandardDefocus(defU, defV, defAngle)
+        if d.get('resolution') is not None:
+            ctf.setResolution(d['resolution'])
+        if d.get('fitQuality') is not None:
+            ctf.setFitQuality(d['fitQuality'])
+        if d.get('phaseShift') is not None:
+            ctf.setPhaseShift(d['phaseShift'])
+        ctfTomos.append(ctf)
+    return cts, ctfTomos
+
+
