@@ -1011,25 +1011,19 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
-    def getFirstEnabledItem(self, loadImgsInMemory: bool = False) -> typing.Union[TiltImage, None]:
-        # Sidecar (in-memory) mode: the tilt images were rebuilt from the
-        # producer's JSON sidecar (see SetOfTiltSeriesBase.fetchNewTs), so serve
-        # them directly without any DB read, regardless of loadImgsInMemory.
-        if self.hasInMemoryTiltImages():
-            for ti in self.iterItems(orderBy=self.INDEX):
-                if ti.isEnabled():
-                    return ti
-            raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
-        if loadImgsInMemory:
-            tiList = self.loadTiltImgsInMemory()
-            for ti in tiList:
-                if ti.isEnabled():
-                    return ti
-        else:
-            for item in self.iterItems():
-                ti = item.clone()
-                if ti.isEnabled():
-                    return item
+    @retry_on_sqlite_lock(log=logger)
+    def getFirstEnabledItem(self) -> typing.Union[TiltImage, None]:
+        """Return the first enabled tilt-image.
+
+        Iterates via iterItems(), which is served from the in-memory sidecar cache
+        when this tilt-series was rebuilt by SetOfTiltSeriesBase.fetchNewTs, or
+        from the DB otherwise. Memory caching is owned by the sidecar fetch phase,
+        not by this accessor (hence no loadImgsInMemory flag); the retry decorator
+        keeps the residual DB-iteration path lock-safe during HPC streaming.
+        """
+        for ti in self.iterItems():
+            if ti.isEnabled():
+                return ti
         raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
 
     @retry_on_sqlite_lock(log=logger)
@@ -3393,24 +3387,19 @@ class CTFTomoSeries(data.EMSet):
                                     where=where, limit=limit, iterate=iterate,
                                     rowFilter=rowFilter)
 
-    def getFirstEnabledItem(self, loadCtfsInMemory: bool = False) -> typing.Union[CTFTomo, None]:
-        # Sidecar (in-memory) mode: serve the rebuilt CTFTomos directly, no DB
-        # read, regardless of loadCtfsInMemory.
-        if self.hasInMemoryCtfs():
-            for ctf in self.iterItems():
-                if ctf.isEnabled():
-                    return ctf
-            raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current CTF.')
-        if loadCtfsInMemory:
-            ctfList = self.loadCtfsInMemory()
-            for ctf in ctfList:
-                if ctf.isEnabled():
-                    return ctf
-        else:
-            for item in self.iterItems():
-                ctf = item.clone()
-                if ctf.isEnabled():
-                    return item
+    @retry_on_sqlite_lock(log=logger)
+    def getFirstEnabledItem(self) -> typing.Union[CTFTomo, None]:
+        """Return the first enabled CTFTomo.
+
+        Iterates via iterItems(), which is served from the in-memory sidecar cache
+        when this series was rebuilt by SetOfCTFTomoSeries.fetchNewCtfs, or from
+        the DB otherwise. Memory caching is owned by the sidecar fetch phase, not
+        by this accessor (hence no loadCtfsInMemory flag); the retry decorator
+        keeps the residual DB-iteration path lock-safe during HPC streaming.
+        """
+        for ctf in self.iterItems():
+            if ctf.isEnabled():
+                return ctf
         raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current CTF.')
 
     @retry_on_sqlite_lock(log=logger)
