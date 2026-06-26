@@ -450,8 +450,18 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 # STREAMING ############################################################################################
-def sleepRandomly(lowTimeRange: float = 4.0,
-                  highTimeRange: float = 10.0) -> None:
+def sleepRandomly(lowTimeRange: float = 1.0,
+                  highTimeRange: float = 3.0) -> None:
+    """Throttle a streaming poll loop with a small random delay.
+
+    The delay (a) keeps the polling loop from CPU/metadata-server spinning and
+    (b) JITTERS the timing so multiple concurrent consumers do not synchronise
+    their journal/heartbeat reads. The default range was lowered from 4-10s to
+    1-3s for a more responsive stream: it keeps a non-zero spread (preserving the
+    de-synchronisation jitter) and a >=1s lower bound that stays at/above the
+    journal-read debounce window (Set._STREAM_JOURNAL_REFRESH_DEBOUNCE), so faster
+    polling does not thrash the cached journal snapshot.
+    """
     time.sleep(random.uniform(lowTimeRange, highTimeRange))
 
 
