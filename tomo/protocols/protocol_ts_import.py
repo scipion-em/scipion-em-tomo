@@ -327,7 +327,6 @@ class ProtImportTsBase(ProtTomoImportFiles):
         # Get files that matches the pattern via mdoc or not
         matchingFiles = self.getMatchingFiles()
 
-
         # Go through all of them
         for ts, tiltSeriesList in matchingFiles.items():
             try:
@@ -356,7 +355,7 @@ class ProtImportTsBase(ProtTomoImportFiles):
                 # Acquisition exists for both the tilt images and the tilt series, but some values will be different when
                 # referred to the whole TS than when referred to a tilt image (such as the accumDose). Angle max, angle mix,
                 # and step will be generated here as it will be the same for both the TS and the tilt images.
-                tiltAngles =  [float(tiData[2]) for tiData in tiltSeriesList]
+                tiltAngles = [float(tiData[2]) for tiData in tiltSeriesList]
                 accumDoseTs = 0
                 tiltAngles = sorted(tiltAngles)
                 tsAcq = tsObj.getAcquisition().clone()
@@ -541,8 +540,9 @@ class ProtImportTsBase(ProtTomoImportFiles):
                     if nImgs != nAngles:
                         badTsFiles.append(f'{basename(tsFile)} - {nImgs}')
                 if badTsFiles:
-                    errMsg.append(f'Some of the tilt-series introduced have a different number of images than the number '
-                                  f'of angles that corresponds to the introduced range [{nAngles}] --> {str(badTsFiles)}')
+                    errMsg.append(
+                        f'Some of the tilt-series introduced have a different number of images than the number '
+                        f'of angles that corresponds to the introduced range [{nAngles}] --> {str(badTsFiles)}')
 
         try:
             # The previous validation must be carried out before this point as the matching OrderedDict generated uses
@@ -1020,6 +1020,7 @@ class ProtImportTs(ProtImportTsBase):
 
     def createSet(self):
         return tomo.objects.SetOfTiltSeries.create(self.getPath(), prefix="TiltSeries")
+
     def setItemExtraAttributes(self, tsObj: tomo.objects.TiltSeries):
         """
         Sets ctf corrected parameter and interpolation status.
