@@ -48,6 +48,7 @@ IMPORT_FROM_TXT = 'txt'
 IMPORT_FROM_EMAN = 'eman'
 IMPORT_FROM_DYNAMO = 'dynamo'
 IMPORT_FROM_CBOX = 'cbox'
+IMPORT_FROM_STAR = 'star'
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -66,6 +67,8 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             importChoices.append(IMPORT_FROM_EMAN)
         if existsPlugin('dynamo'):
             importChoices.append(IMPORT_FROM_DYNAMO)
+        if existsPlugin('reliontomo'):
+            importChoices.append(IMPORT_FROM_STAR)
         return importChoices
 
     def _getDefaultChoice(self):
@@ -125,7 +128,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 fileName = removeBaseExt(coordFile)
                 if tomo is not None and tomoName == fileName:
                     # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]:
+                    if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX, IMPORT_FROM_STAR]:
                         def addCoordinate(coord, x, y, z):
                             coord.setVolume(tomo.clone())
 
@@ -205,6 +208,10 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
                             'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
                             'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
+        if not existsPlugin('reliontomo'):
+            warnings.append('Plugin *scipion-em-reliontomo* has not being installed. Please, install the Plugin to '
+                            'import Relion related formats (currently supported formats: ".star"). Otherwise, the protocol '
+                            'may have unexpected outputs if Relion star files are attempted to be imported.\n')
         if numberMatches < max(len(tomoFiles), len(coordFiles)):
             warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
                             "Association is performed in terms of the file name of the Tomograms and the coordinates. "
@@ -244,6 +251,8 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 return IMPORT_FROM_DYNAMO
             elif coordFile.endswith('.cbox'):
                 return IMPORT_FROM_CBOX
+            elif coordFile.endswith('.star') and existsPlugin('reliontomo'):
+                return IMPORT_FROM_STAR
         return -1
 
     def getImportClass(self):
@@ -266,6 +275,13 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
         elif importFrom == IMPORT_FROM_TXT:
             return TomoImport(self)
+
+        elif importFrom == IMPORT_FROM_STAR:
+            StarCoordImport = Domain.importFromPlugin('reliontomo.convert.convert50_tomo', 'StarCoordImport',
+                                                       errorMsg='Relion tomo is needed to import .star '
+                                                                'coordinate files',
+                                                       doRaise=True)
+            return StarCoordImport()
 
         else:
             self.importFilePath = ''
