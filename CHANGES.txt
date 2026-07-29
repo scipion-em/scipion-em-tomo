@@ -1,6 +1,9 @@
+V3.12.1: Fix indentation error in tilt angle filtering logic to avoid incorrect quality checks.
 V3.12.0:
  Users:
-  - New protocol added: assign excluded views to tilt-series.
+  - New protocols added:
+        1. Assign excluded views to tilt-series: exclusion metadata transfer between tilt-series.
+        2. Exclude views filter: automatic exclusion of viewss in a set of tilt series according to different criteria.
   - New feature: tilt-series disambiguation added when importing tilt-series with the
     same basename but from different paths.
   - Fix: Fixing an error crating subsets.
