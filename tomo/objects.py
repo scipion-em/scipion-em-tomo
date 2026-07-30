@@ -1018,7 +1018,13 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         not by this accessor (hence no loadImgsInMemory flag); the retry decorator
         keeps the residual DB-iteration path lock-safe during HPC streaming.
         """
-        for ti in self.iterItems():
+        # iterate=False fully drains the SELECT (fetchall) before we scan, so the
+        # SHARED read lock is released deterministically even though we return on
+        # the first enabled item -- a lazy generator abandoned by the early return
+        # would otherwise keep a tilt-image cursor mid-scan (blocking a producer's
+        # commit under journal_mode=DELETE). The in-memory sidecar path is a plain
+        # list and takes no lock.
+        for ti in self.iterItems(iterate=False):
             if ti.isEnabled():
                 return ti
         raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current tilt-series.')
