@@ -29,11 +29,17 @@
 import os
 import re
 import importlib
+from os.path import abspath
 from typing import List, Set
 
 import numpy as np
 import math
 import logging
+
+from pwem.emlib.image.image_readers import ImageReadersRegistry, MRCImageReader
+from pwem.objects import Volume
+from pyworkflow.utils import getExt, createLink
+
 logger = logging.getLogger(__name__)
 
 import pyworkflow.utils as pwutils
@@ -373,12 +379,14 @@ def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
 def getNonInterpolatedTsFromRelations(sourceObj, prot):
     def stopSearchCallback(pObj):
         return type(pObj) == SetOfTiltSeries and pObj.hasAlignment()
+
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
 def getObjFromRelation(sourceObj, prot, targetObj):
     def stopSearchCallback(pObj):
         return type(pObj) == targetObj
+
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
@@ -443,3 +451,14 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
 
     logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
+
+
+def _convertOrLinkToMRC(inVolume: Volume, outVolume: str) -> None:
+    """Converts a volume into a compatible MRC file or links it if already compatible"""
+    inFn = inVolume.getFileName()
+    # If compatible with gapstop. Attention!! Assuming is not a stack of mrc volumes!!
+    if getExt(inFn) == '.mrc':
+        createLink(abspath(inFn), outVolume)
+    else:
+        stack = ImageReadersRegistry.open(inFn)
+        MRCImageReader.write(stack, outVolume, samplingRate=inVolume.getSamplingRate())
