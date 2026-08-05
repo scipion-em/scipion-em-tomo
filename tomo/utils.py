@@ -453,12 +453,25 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 
-def _convertOrLinkToMRC(inVolume: Volume, outVolume: str) -> None:
-    """Converts a volume into a compatible MRC file or links it if already compatible"""
-    inFn = inVolume.getFileName()
-    # If compatible with gapstop. Attention!! Assuming is not a stack of mrc volumes!!
-    if getExt(inFn) == '.mrc':
-        createLink(abspath(inFn), outVolume)
+def convertOrLink(inFile: str,
+                  outFile: str,
+                  samplingRate: float,
+                  isStack: bool = False
+                  ) -> None:
+    """Converts a file into a decide format file or links if it is the same extension"""
+
+    if getExt(inFile) == getExt(outFile):
+        createLink(abspath(inFile), outFile)
     else:
-        stack = ImageReadersRegistry.open(inFn)
-        MRCImageReader.write(stack, outVolume, samplingRate=inVolume.getSamplingRate())
+        stack = ImageReadersRegistry.open(inFile)
+        ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+
+
+def invertContrast(inFile: str,
+                   outFile: str,
+                   samplingRate: float,
+                   isStack: bool = False
+                   ) -> None:
+    stack = ImageReadersRegistry.open(inFile)
+    stack.invert()
+    ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
