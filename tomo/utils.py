@@ -463,8 +463,8 @@ def convertOrLink(inFile: str,
     if getExt(inFile) == getExt(outFile):
         createLink(abspath(inFile), outFile)
     else:
-        stack = ImageReadersRegistry.open(inFile)
-        ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+        stack = ImageReadersRegistry.open(inFile) #.open reads inFIle extension to find the right reader
+        ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate) #.write reads the outFile extension to convert the file to the destination format
 
 
 def invertContrast(inFile: str,
