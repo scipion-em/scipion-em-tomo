@@ -327,6 +327,13 @@ class TiltSeriesBase(data.SetOfImages):
     def hasAlignment(self):
         return self._hasAlignment.get()
 
+    def setHasAlignment(self, value):
+        """ Set the alignment flag. Used e.g. when rebuilding a tilt-series in
+        memory from a streaming sidecar, where items are attached via
+        setInMemoryTiltImages instead of append (which is what normally sets
+        this flag from the tilt-image transforms). """
+        self._hasAlignment.set(value)
+
     def ctfCorrected(self):
         """ Returns true if ctf has been corrected"""
         return self._ctfCorrected.get()

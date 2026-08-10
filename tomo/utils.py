@@ -40,6 +40,7 @@ import logging
 import pyworkflow.utils as pwutils
 import tomo.constants as const
 from pyworkflow.utils import getParentFolder, removeBaseExt
+from pwem.objects import Transform
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
     CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition, LandmarkModel
 
@@ -481,7 +482,7 @@ def sleepRandomly(lowTimeRange: float = 1.0,
 # composed, not-yet-aligned TiltSeries. Extend `_ACQ_FIELDS` / the per-image
 # fields if a producer needs to publish more.
 # ---------------------------------------------------------------------------
-TS_META_VERSION = 1
+TS_META_VERSION = 2  # v2 adds per-tilt-image alignment transform + interpolated flag
 # (getter, setter) names on TomoAcquisition that ProtComposeTS populates.
 _ACQ_FIELDS = (
     'Voltage', 'Magnification', 'SphericalAberration', 'AmplitudeContrast',
@@ -526,6 +527,11 @@ def writeTsSidecar(streamingDir: str, ts: TiltSeries,
         'version': TS_META_VERSION,
         'tsId': ts.getTsId(),
         'samplingRate': sRate,
+        # Alignment/interpolation are needed by downstream consumers that align
+        # or track fiducials (e.g. ProtImodFiducialModel): without the per-tilt
+        # transforms below, the rebuilt TS would report hasAlignment()==False and
+        # no .xf prealignment would be written, breaking autofidseed/beadtrack.
+        'interpolated': ts.interpolated() if hasattr(ts, 'interpolated') else False,
         'acquisition': _acqToDict(ts.getAcquisition()),
         'tiltImages': [],
     }
@@ -541,6 +547,9 @@ def writeTsSidecar(streamingDir: str, ts: TiltSeries,
             'doseInitial': tiAcq.getDoseInitial() if tiAcq else None,
             'accumDose': tiAcq.getAccumDose() if tiAcq else None,
             'oddEven': [ti.getOdd(), ti.getEven()] if ti.hasOddEven() else [],
+            # Per-tilt 2D alignment matrix (list-of-lists) so a sidecar-rebuilt TS
+            # preserves hasAlignment() and genXfFile can regenerate the .xf.
+            'transform': ti.getTransform().getMatrix().tolist() if ti.hasTransform() else None,
         })
     path = getTsSidecarPath(streamingDir, ts.getTsId())
     tmp = path + '.tmp'
@@ -564,6 +573,8 @@ def readTsSidecar(streamingDir: str, tsId: str):
     ts.setAcquisition(_dictToAcq(data.get('acquisition', {})))
     if sRate is not None:
         ts.setSamplingRate(sRate)
+    if data.get('interpolated'):
+        ts.setInterpolated(True)
 
     tiltImages = []
     for d in data['tiltImages']:
@@ -583,7 +594,16 @@ def readTsSidecar(streamingDir: str, tsId: str):
         ti.setAcquisition(tiAcq)
         if d.get('oddEven'):
             ti.setOddEven(d['oddEven'])
+        # Restore the per-tilt alignment transform so the rebuilt TS is
+        # equivalent to the producer's DB one (hasAlignment + genXfFile work).
+        if d.get('transform') is not None:
+            ti.setTransform(Transform(matrix=np.array(d['transform'])))
         tiltImages.append(ti)
+
+    # Mirror TiltSeriesBase.append: the TS is aligned iff its tilt-images carry
+    # transforms. Set the flag explicitly because the consumer attaches items via
+    # setInMemoryTiltImages (not append, which is what normally sets it).
+    ts.setHasAlignment(any(ti.hasTransform() for ti in tiltImages))
     return ts, tiltImages
 
 
