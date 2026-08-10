@@ -41,7 +41,7 @@ import pyworkflow.utils as pwutils
 import tomo.constants as const
 from pyworkflow.utils import getParentFolder, removeBaseExt
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
-    CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition
+    CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition, LandmarkModel
 
 logger = logging.getLogger(__name__)
 
@@ -673,5 +673,80 @@ def readCtfSidecar(streamingDir: str, tsId: str):
             ctf.setPhaseShift(d['phaseShift'])
         ctfTomos.append(ctf)
     return cts, ctfTomos
+
+
+# ---------------------------------------------------------------------------
+# Per-landmark-model metadata "sidecar" files (the LandmarkModel analog of the
+# TS/CTF sidecars above). A streaming producer publishes one JSON sidecar per
+# finished LandmarkModel; a downstream consumer can rebuild the LandmarkModel
+# fully in memory from it WITHOUT opening the producer's live SetOfLandmarkModels
+# SQLite. The landmark coordinates themselves are NOT embedded here: they already
+# live in the referenced '.sfid' file on shared storage (written by
+# LandmarkModel.addLandmark) and are read from it lock-free on demand
+# (LandmarkModel.retrieveInfoTable). This sidecar carries only the round-trippable
+# object metadata needed to reconstruct the LandmarkModel wrapper.
+# ---------------------------------------------------------------------------
+LANDMARK_META_VERSION = 1
+
+
+def getLandmarkSidecarPath(streamingDir: str, tsId: str) -> str:
+    return join(streamingDir, f'{tsId}{const.LANDMARK_META_EXT}')
+
+
+def landmarkSidecarExists(streamingDir: str, tsId: str) -> bool:
+    return exists(getLandmarkSidecarPath(streamingDir, tsId))
+
+
+def writeLandmarkSidecar(streamingDir: str, landmarkModel: LandmarkModel) -> None:
+    """Atomically write the metadata sidecar for a LandmarkModel.
+
+    Built entirely from the IN-MEMORY ``landmarkModel`` the producer already
+    holds — it performs NO database read. Written to a temp file and
+    ``os.replace``-d into place so a consumer never observes a half-written
+    sidecar. Call this BEFORE publishing the tsId to the stream journal so the
+    journal id only appears once the sidecar is complete. Mirrors
+    writeTsSidecar / writeCtfSidecar.
+
+    The landmark rows are not serialized here (see module note above): they are
+    in the referenced ``fileName`` (.sfid) file.
+    """
+    data = {
+        'version': LANDMARK_META_VERSION,
+        'tsId': landmarkModel.getTsId(),
+        'fileName': landmarkModel.getFileName(),      # .sfid file with the landmark rows
+        'modelName': landmarkModel.getModelName(),    # .fid model file
+        'size': landmarkModel.getSize(),              # bead diameter (Å)
+        'count': landmarkModel.getCount(),            # number of chains/landmarks
+        'applyTSTransformation': landmarkModel.applyTSTransformation(),
+        'hasResidualInfo': landmarkModel.hasResidualInfo().get(),
+    }
+    path = getLandmarkSidecarPath(streamingDir, landmarkModel.getTsId())
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f)
+    os.replace(tmp, path)  # atomic publish of the sidecar
+
+
+def readLandmarkSidecar(streamingDir: str, tsId: str) -> LandmarkModel:
+    """Rebuild a ``LandmarkModel`` fully in memory from the sidecar.
+
+    No SQLite access at all -> no lock contention with the producer. This is the
+    LandmarkModel analog of readTsSidecar / readCtfSidecar. The associated
+    tilt-series pointer is intentionally left unset (it is not persisted on the
+    item, ``objDoStore=False``); a consumer associates it via the set's
+    ``completeLandmarkModel``.
+    """
+    with open(getLandmarkSidecarPath(streamingDir, tsId)) as f:
+        data = json.load(f)
+
+    lm = LandmarkModel(tsId=data['tsId'],
+                       fileName=data.get('fileName'),
+                       modelName=data.get('modelName'),
+                       size=data.get('size'),
+                       applyTSTransformation=data.get('applyTSTransformation', True),
+                       hasResidualInfo=data.get('hasResidualInfo', False))
+    lm.setTsId(data['tsId'])
+    lm.setCount(data.get('count', 0))
+    return lm
 
 

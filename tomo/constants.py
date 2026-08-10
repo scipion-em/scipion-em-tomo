@@ -96,3 +96,8 @@ TS_META_EXT = '.tsmeta.json'
 # downstream consumer rebuild a CTFTomoSeries (and its CTFTomos) fully in memory
 # from a producer's published file, without opening the producer's live set DB.
 CTF_META_EXT = '.ctfmeta.json'
+# Per-landmark-model metadata sidecar (LandmarkModel analog of TS_META_EXT): lets
+# a downstream consumer rebuild a LandmarkModel fully in memory from a producer's
+# published file, without opening the producer's live SetOfLandmarkModels DB. The
+# landmark coordinates live in the referenced .sfid file, not in this JSON.
+LANDMARK_META_EXT = '.lmmeta.json'
