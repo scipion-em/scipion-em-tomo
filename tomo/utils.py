@@ -25,23 +25,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 import json
 import os
 import random
 import re
 import importlib
 from os.path import join, exists
-from typing import Set, Optional, List
+from typing import Set, List, Union, Protocol, Any
 import time
 import numpy as np
 import math
 import logging
 import pyworkflow.utils as pwutils
 import tomo.constants as const
-from pyworkflow.utils import getParentFolder, removeBaseExt
 from pwem.objects import Transform
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SetOfTiltSeries, Coordinate3D, SubTomogram, TiltSeries, \
+from pyworkflow.utils import cyanStr
+from tomo.objects import SetOfTiltSeries, TiltSeries, \
     CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition, LandmarkModel
 
 logger = logging.getLogger(__name__)
@@ -336,23 +335,6 @@ def generatePointCloud(v, tomoDim):
     return pointCloud
 
 
-def isMatchingByTsId(set1, set2):
-    return True if getattr(set1.getFirstItem(), _getTsIdLabel(set1), None) and \
-                   getattr(set2.getFirstItem(), _getTsIdLabel(set2), None) else False
-
-
-def _getTsIdLabel(setObject):
-    """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
-    corresponding coordinate)"""
-    setType = type(setObject)
-    if setType == SetOfCoordinates3D:
-        return Coordinate3D.TOMO_ID_ATTR
-    elif setType == SetOfSubTomograms:
-        return SubTomogram.VOL_NAME_FIELD
-    else:
-        return TiltSeries.TS_ID_FIELD
-
-
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
     logger.debug("Retrieving relations for %s." % sourceObj)
     p = protocol.getProject()
@@ -449,6 +431,53 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
 
     logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
+
+
+# typing.Protocol declaring that inputs must implement .getTSIds()
+class HasGetTsIds(Protocol):
+
+    def getTSIds(self) -> Union[List[Any], Set[Any]]: ...
+
+
+def getTsIdsIntersection(
+        *emSets: HasGetTsIds,
+        validateIntersectAndDiff: bool = True,
+        allowEmptyIntersect: bool = False) -> Set[str]:
+    """Extracts TS IDs from N objects using .getTSIds() and computes their
+    intersection and generalized symmetric difference (union - intersection).
+    """
+    if not emSets:
+        return set()
+
+    # Extract IDs from each object via .getTsIds() and convert to set
+    sets = [set(obj.getTSIds()) for obj in emSets]
+
+    # Intersection: IDs present in ALL objects
+    intersection = set.intersection(*sets)
+
+    # Union: IDs present in AT LEAST ONE object
+    union = set.union(*sets)
+
+    # Union - Intersection
+    difference = union - intersection
+
+    # Do validation if required
+    if validateIntersectAndDiff:
+        _validateIntersectAndDiff(intersection, difference, allowEmptyIntersect=allowEmptyIntersect)
+
+    return intersection
+
+
+def _validateIntersectAndDiff(
+        tsIdsIntersec: Set[str],
+        tsIdsDiff: Set[str],
+        allowEmptyIntersect: bool = False) -> None:
+    if len(tsIdsIntersec) <= 0 and not allowEmptyIntersect:
+        raise Exception("There isn't any common tsIds among the EM sets introduced.")
+
+    if len(tsIdsDiff) > 0:
+        logger.info(cyanStr(f"TsIds not common in the introduced EM sets are: {tsIdsDiff}"))
+
 
 # STREAMING ############################################################################################
 def sleepRandomly(lowTimeRange: float = 1.0,
@@ -733,10 +762,10 @@ def writeLandmarkSidecar(streamingDir: str, landmarkModel: LandmarkModel) -> Non
     data = {
         'version': LANDMARK_META_VERSION,
         'tsId': landmarkModel.getTsId(),
-        'fileName': landmarkModel.getFileName(),      # .sfid file with the landmark rows
-        'modelName': landmarkModel.getModelName(),    # .fid model file
-        'size': landmarkModel.getSize(),              # bead diameter (Å)
-        'count': landmarkModel.getCount(),            # number of chains/landmarks
+        'fileName': landmarkModel.getFileName(),  # .sfid file with the landmark rows
+        'modelName': landmarkModel.getModelName(),  # .fid model file
+        'size': landmarkModel.getSize(),  # bead diameter (Å)
+        'count': landmarkModel.getCount(),  # number of chains/landmarks
         'applyTSTransformation': landmarkModel.applyTSTransformation(),
         'hasResidualInfo': landmarkModel.hasResidualInfo().get(),
     }
@@ -768,5 +797,3 @@ def readLandmarkSidecar(streamingDir: str, tsId: str) -> LandmarkModel:
     lm.setTsId(data['tsId'])
     lm.setCount(data.get('count', 0))
     return lm
-
-

@@ -59,7 +59,7 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
         """
         self._streamingInitialize()
         closeSetStepDeps = []
-        inTsSet = self._getStreamingInputTs()
+        inSet = self._getStreamingInputTs()
         genExecStatusDir(self)
         self._streamingReadingOutput()
         processedTsIds = self._getProcessedTsIds()
@@ -68,8 +68,8 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
             try:
                 # Discover ready tsIds from the producer's append-only journal
                 # (filesystem), not from its live SQLite set.
-                inTsIds = set(inTsSet.getTSIds())
-                if self._stopGeneratingSteps(inTsSet,
+                inTsIds = set(inSet.getTSIds())
+                if self._stopGeneratingSteps(inSet,
                                              inTsIds=inTsIds,
                                              tsIdReadList=processedTsIds,
                                              outputNames=self._getStreamingOutputNames(),
@@ -78,11 +78,14 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
 
                 nonProcessedTsIds = inTsIds - set(processedTsIds)
                 if nonProcessedTsIds:
-                    # Rebuild each new tilt-series in memory from the producer's
-                    # JSON sidecar (no producer-DB read).
-                    tsToProcessDict = inTsSet.fetchNewTs(nonProcessedTsIds)
-                    for tsId, ts in tsToProcessDict.items():
-                        self._insertCommonSteps(ts, closeSetStepDeps)
+                    # Rebuild each new item in memory from the producer's JSON
+                    # sidecar (no producer-DB read). fetchNewItems is the common
+                    # streaming interface implemented by every streamable tomo set
+                    # (SetOfTiltSeries, SetOfCTFTomoSeries, SetOfLandmarkModels),
+                    # so this loop is agnostic to the concrete input type.
+                    newItemsDict = inSet.fetchNewItems(nonProcessedTsIds)
+                    for tsId, item in newItemsDict.items():
+                        self._insertCommonSteps(item, closeSetStepDeps)
                         logger.info(cyanStr(f"Steps created for tsId = {tsId}"))
                         processedTsIds.append(tsId)
 

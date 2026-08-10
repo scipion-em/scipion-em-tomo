@@ -380,7 +380,6 @@ class TiltSeriesBase(data.SetOfImages):
         self._hasOddEven.set(tiltImage.hasOddEven())
 
     def clone(self, ignoreAttrs=()):
-        # TODO: check if ignoreAttrs not empty is required somewhere in the code. If not, this method can be removed
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         return clone
@@ -1126,12 +1125,17 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         item.load()
 
 
-    def fetchNewTs(self,
-                   tsIds: typing.Union[typing.List[str], typing.Set[str]],
-                   forceSetLoadProps: bool = False)\
+    def fetchNewItems(self,
+                      tsIds: typing.Union[typing.List[str], typing.Set[str]],
+                      forceSetLoadProps: bool = False)\
             -> typing.Dict[str, TiltSeries]:
         """
         Extract exclusively the new Tilt-Series using native SQL.
+
+        This is the SetOfTiltSeries implementation of the common streaming
+        ``fetchNewItems`` interface (see also SetOfCTFTomoSeries and
+        SetOfLandmarkModels) that ProtocolBaseStreamingTomo.stepsGeneratorStep
+        calls polymorphically to rebuild the newly-produced items in memory.
         By avoiding a general SELECT, it drastically  minimizes the locking time (SHARED lock).
 
         :param tsIds: List of Tilt-Series IDs.
@@ -1176,7 +1180,7 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 for ts in self.iterItems(where=whereClause)
             }
         except Exception as e:
-            logger.info(f'fetchNewTs failed with exception {e}. Skipping...')
+            logger.info(f'fetchNewItems failed with exception {e}. Skipping...')
             return {}
 
     def _getExistingTsIds(self):
@@ -2823,6 +2827,77 @@ class SetOfLandmarkModels(data.EMSet):
             binning = int(binning)
         return binning
 
+    def getTSIds(self) -> typing.Set[str]:
+        # In streaming (pwem-journal) mode, discover ready tsIds from the
+        # producer's append-only journal (a single sequential file read) instead
+        # of querying the producer's live SQLite set on every poll. Falls back to
+        # the mapper for a non-streamed (closed/static) set.
+        statusDir = self._getStatusDir()
+        if exists(statusDir):
+            return self.getProcessedItems()
+        logger.info('TsIds loaded from the mapper')
+        return set(self._getTSIds())
+
+    @retry_on_sqlite_lock(log=logger)
+    def _getTSIds(self):
+        """ Returns al the Tilt series ids involved in the set."""
+        return self.getSetOfTiltSeries().getUniqueValues(TiltSeries.TS_ID_FIELD)
+
+    def fetchNewItems(self,
+                      tsIds: typing.Union[typing.List[str], typing.Set[str]],
+                      forceSetLoadProps: bool = False)\
+            -> typing.Dict[str, "LandmarkModel"]:
+        """
+        Extract exclusively the requested LandmarkModels. LandmarkModel
+        implementation of the common streaming ``fetchNewItems`` interface (same
+        signature and data flow as SetOfTiltSeriesBase.fetchNewItems), so
+        ProtocolBaseStreamingTomo.stepsGeneratorStep can consume a
+        SetOfLandmarkModels input generically.
+
+        Unlike tilt-series/CTF series, a LandmarkModel is a leaf object: its
+        landmark rows live in the referenced '.sfid' file (read lock-free on
+        demand via retrieveInfoTable), so nothing extra is attached in memory.
+
+        :param tsIds: List/Set of Tilt-Series IDs.
+        :param forceSetLoadProps: Force a set reload (loadAllProperties()) before
+        the DB query; in streamified protocols the load is usually done outside.
+        """
+        try:
+            # Streaming (pwem-journal) mode: the producer publishes one JSON
+            # sidecar per finished LandmarkModel in its status dir. Rebuild each
+            # one fully in memory from the sidecar so the consumer never opens the
+            # producer's live SQLite set -- removing the SHARED-read vs
+            # EXCLUSIVE-commit contention on the shared DB.
+            statusDir = self._getStatusDir()
+            if exists(statusDir):
+                from tomo.utils import readLandmarkSidecar
+                result = {}
+                for tsId in tsIds:
+                    # A single open per sidecar: the producer publishes the
+                    # journal id only AFTER the sidecar is atomically in place, so
+                    # a journal-listed tsId's sidecar is complete. The guard
+                    # tolerates a not-yet-present/partial file.
+                    try:
+                        lm = readLandmarkSidecar(statusDir, tsId)
+                    except (FileNotFoundError, OSError, ValueError) as e:
+                        logger.info(f'Landmark sidecar for {tsId} not readable yet ({e}). Skipping.')
+                        continue
+                    result[tsId] = lm
+                return result
+
+            if forceSetLoadProps:
+                self.loadAllProperties()
+            # Targeted query for only the requested tsIds (light SHARED lock),
+            # instead of loading every LandmarkModel in the project.
+            whereClause = " OR ".join([f"_tsId='{tsId}'" for tsId in tsIds])
+            return {
+                lm.getTsId(): lm.clone()
+                for lm in self.iterItems(where=whereClause)
+            }
+        except Exception as e:
+            logger.info(f'fetchNewItems failed with exception {e}. Skipping...')
+            return {}
+
 
 class MeshPoint(Coordinate3D):
     """Mesh object: it stores the coordinates of the points (specified by the user) needed to define
@@ -3215,7 +3290,8 @@ class CTFTomoSeries(data.EMSet):
         # -> never persisted by getObjDict(). Mirrors TiltSeriesBase.
         self._inMemoryCtfs = None
 
-    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+    def clone(self, ignoreAttrs=()):
+        # TODO: check if ignoreAttrs not empty is required somewhere in the code. If not, this method can be removed
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         clone.setEnabled(self.isEnabled())
@@ -3569,13 +3645,14 @@ class SetOfCTFTomoSeries(data.EMSet):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
 
-    def fetchNewCtfs(self,
-                     tsIds: typing.Union[typing.List[str], typing.Set[str]],
-                     forceSetLoadProps: bool = False)\
+    def fetchNewItems(self,
+                      tsIds: typing.Union[typing.List[str], typing.Set[str]],
+                      forceSetLoadProps: bool = False)\
             -> typing.Dict[str, "CTFTomoSeries"]:
         """
-        Extract exclusively the requested CTFTomoSeries. CTF analog of
-        SetOfTiltSeriesBase.fetchNewTs (same level, signature and data flow).
+        Extract exclusively the requested CTFTomoSeries. CTF implementation of
+        the common streaming ``fetchNewItems`` interface (same signature and
+        data flow as SetOfTiltSeriesBase.fetchNewItems).
 
         :param tsIds: List/Set of Tilt-Series IDs.
         :param forceSetLoadProps: Force a set reload (loadAllProperties()) before
@@ -3618,7 +3695,7 @@ class SetOfCTFTomoSeries(data.EMSet):
                 for cts in self.iterItems(where=whereClause)
             }
         except Exception as e:
-            logger.info(f'fetchNewCtfs failed with exception {e}. Skipping...')
+            logger.info(f'fetchNewItems failed with exception {e}. Skipping...')
             return {}
 
 
