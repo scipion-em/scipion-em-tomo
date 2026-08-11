@@ -30,7 +30,7 @@ import os
 import re
 import importlib
 from os.path import abspath
-from typing import List, Set
+from typing import List, Set, Protocol, Union, Any
 
 import numpy as np
 import math
@@ -38,7 +38,7 @@ import logging
 
 from pwem.emlib.image.image_readers import ImageReadersRegistry, MRCImageReader
 from pwem.objects import Volume
-from pyworkflow.utils import getExt, createLink
+from pyworkflow.utils import getExt, createLink, cyanStr
 
 logger = logging.getLogger(__name__)
 
