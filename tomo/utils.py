@@ -453,25 +453,36 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 
-def convertOrLink(inFile: str,
-                  outFile: str,
-                  samplingRate: float,
-                  isStack: bool = False
-                  ) -> None:
-    """Converts a file into a decide format file or links if it is the same extension"""
+# typing.Protocol declaring that inputs must implement .getTSIds()
+class HasGetTsIds(Protocol):
 
-    if getExt(inFile) == getExt(outFile):
-        createLink(abspath(inFile), outFile)
-    else:
-        stack = ImageReadersRegistry.open(inFile) #.open reads inFIle extension to find the right reader
-        ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate) #.write reads the outFile extension to convert the file to the destination format
+    def getTSIds(self) -> Union[List[Any], Set[Any]]: ...
 
 
-def invertContrast(inFile: str,
-                   outFile: str,
-                   samplingRate: float,
-                   isStack: bool = False
-                   ) -> None:
-    stack = ImageReadersRegistry.open(inFile)
-    stack.invert()
-    ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+def getTsIdsIntersection(
+        *emSets: HasGetTsIds,
+        validateIntersectAndDiff: bool = True,
+        allowEmptyIntersect: bool = False) -> Set[str]:
+    """Extracts TS IDs from N objects using .getTSIds() and computes their
+    intersection and generalized symmetric difference (union - intersection).
+    """
+    if not emSets:
+        return set()
+
+    # Extract IDs from each object via .getTsIds() and convert to set
+    sets = [set(obj.getTSIds()) for obj in emSets]
+
+    # Intersection: IDs present in ALL objects
+    intersection = set.intersection(*sets)
+
+    # Union: IDs present in AT LEAST ONE object
+    union = set.union(*sets)
+
+    # Union - Intersection
+    difference = union - intersection
+
+    # Do validation if required
+    if validateIntersectAndDiff:
+        _validateIntersectAndDiff(intersection, difference, allowEmptyIntersect=allowEmptyIntersect)
+
+    return intersection
