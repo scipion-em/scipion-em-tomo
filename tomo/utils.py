@@ -30,7 +30,7 @@ import os
 import re
 import importlib
 from os.path import abspath
-from typing import List, Set, Protocol, Union, Any
+from typing import List, Set, Protocol, Union, Any, Sequence, Optional, Dict
 
 import numpy as np
 import math
@@ -497,3 +497,45 @@ def _validateIntersectAndDiff(
 
     if len(tsIdsDiff) > 0:
         logger.info(cyanStr(f"TsIds not common in the introduced EM sets are: {tsIdsDiff}"))
+
+
+# typing.Protocol for items returned by .iterItems()
+class CloneableWithTsId(Protocol):
+
+    def getTsId(self) -> Any: ...
+
+    def clone(self) -> Any: ...
+
+
+# typing.Protocol for input set objects (e.g., SetOfTomograms, SetOfTiltSeries,etc.)
+class HasIterItems(Protocol):
+
+    def iterItems(self) -> Sequence[CloneableWithTsId]: ...
+
+
+def getTsIdsDicts(
+        *set_objects: HasIterItems,
+        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str,Any]]:
+    """Generates a dictionary for each input set mapping ts_id -> item.clone()
+    filtered by ts_ids that exist in present_ts_ids if provided.
+    """
+
+    result_dicts = []
+    if present_ts_ids:
+        for set_obj in set_objects:
+            dictionary = {
+                item.getTsId(): item.clone()
+                for item in set_obj.iterItems()
+                if item.getTsId() in present_ts_ids
+            }
+            result_dicts.append(dictionary)
+
+    else:
+        for set_obj in set_objects:
+            dictionary = {
+                item.getTsId(): item.clone()
+                for item in set_obj.iterItems()
+            }
+            result_dicts.append(dictionary)
+
+    return result_dicts
