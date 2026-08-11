@@ -486,3 +486,14 @@ def getTsIdsIntersection(
         _validateIntersectAndDiff(intersection, difference, allowEmptyIntersect=allowEmptyIntersect)
 
     return intersection
+
+
+def _validateIntersectAndDiff(
+        tsIdsIntersec: Set[str],
+        tsIdsDiff: Set[str],
+        allowEmptyIntersect: bool = False) -> None:
+    if len(tsIdsIntersec) <= 0 and not allowEmptyIntersect:
+        raise Exception("There isn't any common tsIds among the EM sets introduced.")
+
+    if len(tsIdsDiff) > 0:
+        logger.info(cyanStr(f"TsIds not common in the introduced EM sets are: {tsIdsDiff}"))
