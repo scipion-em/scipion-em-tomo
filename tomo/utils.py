@@ -25,33 +25,21 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import json
 import os
-import random
 import re
 import importlib
 from os.path import abspath
-from typing import List, Set, Protocol, Union, Any, Sequence, Optional, Dict
-
-from os.path import join, exists
+from typing import Sequence, Optional, Dict
 from typing import Set, List, Union, Protocol, Any
-import time
 import numpy as np
 import math
 import logging
-
-from pwem.emlib.image.image_readers import ImageReadersRegistry, MRCImageReader
-from pwem.objects import Volume
-from pyworkflow.utils import getExt, createLink, cyanStr
-
-logger = logging.getLogger(__name__)
-
+from pwem.emlib.image.image_readers import ImageReadersRegistry
+from pyworkflow.utils import getExt, createLink
 import pyworkflow.utils as pwutils
 import tomo.constants as const
-from pwem.objects import Transform
 from pyworkflow.utils import cyanStr
-from tomo.objects import SetOfTiltSeries, TiltSeries, \
-    CTFTomoSeries, CTFTomo, TiltImage, TomoAcquisition, LandmarkModel
+from tomo.objects import SetOfTiltSeries, TiltSeries, CTFTomoSeries, CTFTomo
 
 logger = logging.getLogger(__name__)
 
