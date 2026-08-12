@@ -453,6 +453,40 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 
+def genDefocusFileFromScipion(inCtf: CTFTomoSeries,
+                              inTs: TiltSeries,
+                              defocusFilePath: str,
+                              onlyEnabled: bool = True) -> None:
+    logger.info(cyanStr("Defocus file generated from defocus attributes."))
+    presentAcqOrders = getCommonTsAndCtfElements(inTs, inCtf, onlyEnabled=onlyEnabled)
+    tiDict = {acqOrder: ti.clone() for ti in inTs.iterItems()
+              if (acqOrder := ti.getAcquisitionOrder()) in presentAcqOrders}
+    ctfDict = {acqOrder: ctfTomo.clone() for ctfTomo in inCtf.iterItems()
+               if (acqOrder := ctfTomo.getAcquisitionOrder()) in presentAcqOrders}
+
+    with open(defocusFilePath, 'w') as f:
+        lines = ["1\t0\t0.0\t0.0\t0.0\t3\n"]
+        ind = 1
+        for acqOrder in presentAcqOrders:
+            ti = tiDict[acqOrder]
+            ctfTomo = ctfDict[acqOrder]
+            tiltAngle = ti.getTiltAngle()
+            newLine = ("%d\t%d\t%.2f\t%.2f\t%.1f\t%.1f\t%.2f\n" % (
+                ind,
+                ind,
+                tiltAngle,
+                tiltAngle,
+                # CONVERT DEFOCUS VALUE TO NANOMETERS (IMOD CONVENTION)
+                ctfTomo.getDefocusU() / 10,
+                # CONVERT DEFOCUS VALUE TO NANOMETERS (IMOD CONVENTION)
+                ctfTomo.getDefocusV() / 10,
+                ctfTomo.getDefocusAngle()))
+
+            lines.append(newLine)
+            ind += 1
+        f.writelines(lines)
+
+
 def convertOrLink(inFile: str,
                   outFile: str,
                   samplingRate: float,
@@ -463,8 +497,9 @@ def convertOrLink(inFile: str,
     if getExt(inFile) == getExt(outFile):
         createLink(abspath(inFile), outFile)
     else:
-        stack = ImageReadersRegistry.open(inFile) #.open reads inFIle extension to find the right reader
-        ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate) #.write reads the outFile extension to convert the file to the destination format
+        stack = ImageReadersRegistry.open(inFile)  # .open reads inFIle extension to find the right reader
+        ImageReadersRegistry.write(stack, outFile, isStack=isStack,
+                                   samplingRate=samplingRate)  # .write reads the outFile extension to convert the file to the destination format
 
 
 def invertContrast(inFile: str,
@@ -475,6 +510,7 @@ def invertContrast(inFile: str,
     stack = ImageReadersRegistry.open(inFile)
     stack.invert()
     ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+
 
 # typing.Protocol declaring that inputs must implement .getTSIds()
 class HasGetTsIds(Protocol):
@@ -538,7 +574,7 @@ class HasIterItems(Protocol):
 
 def getTsIdsDicts(
         *set_objects: HasIterItems,
-        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str,Any]]:
+        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
     """Generates a dictionary for each input set mapping ts_id -> item.clone()
     filtered by ts_ids that exist in present_ts_ids if provided.
     """
