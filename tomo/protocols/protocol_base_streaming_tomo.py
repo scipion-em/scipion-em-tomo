@@ -59,33 +59,34 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
         """
         self._streamingInitialize()
         closeSetStepDeps = []
-        inSet = self._getStreamingInputTs()
+        inputSets = self._getStreamingInputSets()
         genExecStatusDir(self)
         self._streamingReadingOutput()
         processedTsIds = self._getProcessedTsIds()
 
         while True:
             try:
-                # Discover ready tsIds from the producer's append-only journal
-                # (filesystem), not from its live SQLite set.
-                inTsIds = set(inSet.getTSIds())
-                if self._stopGeneratingSteps(inSet,
-                                             inTsIds=inTsIds,
+                # Ready ids come from the producers' append-only journals (a file
+                # read, never the live SQLite set). For multi-input protocols this
+                # is the intersection across inputs, so an id is "ready" only once
+                # ALL of its inputs have published it.
+                readyTsIds = self._getReadyTsIds(inputSets)
+                if self._stopGeneratingSteps(inputSets,
+                                             inTsIds=readyTsIds,
                                              tsIdReadList=processedTsIds,
                                              outputNames=self._getStreamingOutputNames(),
                                              closeSetStepDeps=closeSetStepDeps):
                     break
 
-                nonProcessedTsIds = inTsIds - set(processedTsIds)
+                nonProcessedTsIds = readyTsIds - set(processedTsIds)
                 if nonProcessedTsIds:
-                    # Rebuild each new item in memory from the producer's JSON
-                    # sidecar (no producer-DB read). fetchNewItems is the common
-                    # streaming interface implemented by every streamable tomo set
-                    # (SetOfTiltSeries, SetOfCTFTomoSeries, SetOfLandmarkModels),
-                    # so this loop is agnostic to the concrete input type.
-                    newItemsDict = inSet.fetchNewItems(nonProcessedTsIds)
-                    for tsId, item in newItemsDict.items():
-                        self._insertCommonSteps(item, closeSetStepDeps)
+                    # Rebuild each new item in memory from the producer(s') JSON
+                    # sidecar(s) (no producer-DB read). _discoverReadyWork returns
+                    # {tsId: payload}; payload is the item itself for single-input
+                    # protocols and a per-protocol tuple/dict for multi-input ones.
+                    newWork = self._discoverReadyWork(nonProcessedTsIds, inputSets)
+                    for tsId, payload in newWork.items():
+                        self._insertCommonSteps(payload, closeSetStepDeps)
                         logger.info(cyanStr(f"Steps created for tsId = {tsId}"))
                         processedTsIds.append(tsId)
 
@@ -124,10 +125,27 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
         Default: no-op."""
         pass
 
-    def _getStreamingInputTs(self):
-        """Return the input SetOfTiltSeries being consumed (streaming producer)."""
-        raise NotImplementedError('_getStreamingInputTs must be implemented by %s'
+    def _getStreamingInputSets(self) -> List:
+        """Return the list of input sets to synchronise. Used both for the
+        ready-id intersection and for termination/heartbeat across all producers."""
+        raise NotImplementedError('_getStreamingInputSets must be implemented by %s'
                                   % self.getClassName())
+
+    def _getReadyTsIds(self, inputSets: List) -> Set[str]:
+        """Ids ready to process this cycle: the INTERSECTION of the tsIds each
+        input producer has published in its journal. For a single input this is
+        just that set's ids; for multiple inputs an id becomes ready only once
+        EVERY input has it, so paired work is never scheduled half-ready. Override
+        only if a protocol needs a different join (e.g. union)."""
+        return set.intersection(*(set(s.getTSIds()) for s in inputSets))
+
+    def _discoverReadyWork(self, tsIds: Set[str], inputSets: List) -> dict:
+        """Rebuild the ready items in memory (from sidecars, no producer-DB read)
+        and return ``{tsId: payload}``. Default (single input): the item itself,
+        via ``fetchNewItems``. Multi-input protocols override to fetch from each
+        input and join by tsId into a payload tuple/dict, skipping a tsId whose
+        partner is not materialisable yet (it is retried next cycle)."""
+        return inputSets[0].fetchNewItems(tsIds)
 
     def _getProcessedTsIds(self) -> List[str]:
         """Return the mutable list tracking the tsIds already processed. Must
@@ -149,46 +167,59 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
         names = self._getStreamingOutputNames()
         return names if isinstance(names, str) else names[0]
 
-    def _insertCommonSteps(self, ts, closeSetStepDeps: List[int]) -> None:
+    def _insertCommonSteps(self, *stepsInputs, closeSetStepDeps: List[int]) -> None:
         """Insert the per-tilt-series processing steps and append the id of the
-        final (output) step to ``closeSetStepDeps``. Implemented per protocol."""
+        final (output) step to ``closeSetStepDeps``. Implemented per protocol.
+
+        ``payload`` is whatever ``_discoverReadyWork`` produced for that tsId: the
+        single item for single-input protocols, or the joined tuple/dict for
+        multi-input ones (which unpack it, e.g. ``ts, ctf, orders = payload``)."""
         raise NotImplementedError('_insertCommonSteps must be implemented by %s'
                                   % self.getClassName())
 
     def _stopGeneratingSteps(self,
-                             inSet: Union[SetOfTiltSeries, SetOfTomograms, SetOfCTFTomoSeries],
+                             inSets: Union[List, SetOfTiltSeries, SetOfTomograms, SetOfCTFTomoSeries],
                              inTsIds: Set[str],
                              tsIdReadList: List[str],
                              outputNames: Union[List[str], str],
                              closeSetStepDeps: List[int]) -> bool:
+        # Accept either a single input set (legacy callers) or a list of input
+        # sets (multi-input protocols). Termination requires ALL inputs closed.
+        if not isinstance(inSets, (list, tuple)):
+            inSets = [inSets]
 
         closeInputSets = False
         # Refresh this protocol's heartbeat so its own consumers can tell it
         # is alive even during long gaps with no new tilt-series.
         touchHeartbeat(self)
 
-        if inSet.isStreamClosed() and Counter(tsIdReadList) == Counter(inTsIds):
-            logger.info(cyanStr('Input set closed.\n'))
+        allClosed = all(s.isStreamClosed() for s in inSets)
+        if allClosed and Counter(tsIdReadList) == Counter(inTsIds):
+            logger.info(cyanStr('Input set(s) closed.\n'))
             self._insertFunctionStep(self._closeStreamOutputsStep,
                                      outputNames,
                                      prerequisites=closeSetStepDeps,
                                      needsGPU=False)
             closeInputSets = True
 
-        # Producer-liveness: if the stream was never closed but the producer's
-        # heartbeat is stale, it likely died. Close gracefully with whatever
-        # was processed instead of looping forever.
-        if not inSet.isStreamClosed():
-            hbAge = inSet.getProducerHeartbeatAge()
-            if hbAge is not None and hbAge > STREAM_HEARTBEAT_TIMEOUT:
-                logger.error(redStr(
-                    f'Producer heartbeat stale ({hbAge:.0f}s) and stream not '
-                    f'closed; closing with partial outputs.'))
-                self._insertFunctionStep(self._closeStreamOutputsStep,
-                                         outputNames,
-                                         prerequisites=closeSetStepDeps,
-                                         needsGPU=False)
-                closeInputSets= True
+        # Producer-liveness: if some input stream was never closed but its
+        # producer's heartbeat is stale, it likely died. Close gracefully with
+        # whatever was processed instead of looping forever.
+        if not allClosed and not closeInputSets:
+            for s in inSets:
+                if s.isStreamClosed():
+                    continue
+                hbAge = s.getProducerHeartbeatAge()
+                if hbAge is not None and hbAge > STREAM_HEARTBEAT_TIMEOUT:
+                    logger.error(redStr(
+                        f'Producer heartbeat stale ({hbAge:.0f}s) and stream not '
+                        f'closed; closing with partial outputs.'))
+                    self._insertFunctionStep(self._closeStreamOutputsStep,
+                                             outputNames,
+                                             prerequisites=closeSetStepDeps,
+                                             needsGPU=False)
+                    closeInputSets = True
+                    break
 
         return closeInputSets
 
