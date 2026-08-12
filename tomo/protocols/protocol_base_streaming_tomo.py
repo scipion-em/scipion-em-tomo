@@ -148,10 +148,13 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
         return inputSets[0].fetchNewItems(tsIds)
 
     def _getProcessedTsIds(self) -> List[str]:
-        """Return the mutable list tracking the tsIds already processed. Must
-        return the SAME list object on every call (it is appended in place)."""
-        raise NotImplementedError('_getProcessedTsIds must be implemented by %s'
-                                  % self.getClassName())
+        """Mutable list tracking the tsIds already processed. It is seeded once by
+        ``_streamingReadingOutput`` (resume) and appended per scheduled tsId by the
+        loop, so it MUST return the SAME list object on every call. Base-owned by
+        default (a lazily-created per-run list); protocols need not override it."""
+        if not hasattr(self, '_streamProcessedTsIds'):
+            self._streamProcessedTsIds = []
+        return self._streamProcessedTsIds
 
     def _getStreamingOutputNames(self) -> Union[List[str], str]:
         """Return the output attribute name (str) or names (list) to
