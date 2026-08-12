@@ -2984,7 +2984,7 @@ class CTFTomoSeries(data.EMSet):
         # so, let's do not store the mapper path by default
         self._mapperPath.setStore(False)
 
-    def clone(self, ignoreAttrs=('_mapperPath', '_size')):
+    def clone(self, ignoreAttrs=()):
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         clone.setEnabled(self.isEnabled())
