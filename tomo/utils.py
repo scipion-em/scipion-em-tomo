@@ -453,6 +453,29 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 
+def convertOrLink(inFile: str,
+                  outFile: str,
+                  samplingRate: float,
+                  isStack: bool = False
+                  ) -> None:
+    """Converts a file into a decide format file or links if it is the same extension"""
+
+    if getExt(inFile) == getExt(outFile):
+        createLink(abspath(inFile), outFile)
+    else:
+        stack = ImageReadersRegistry.open(inFile) #.open reads inFIle extension to find the right reader
+        ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate) #.write reads the outFile extension to convert the file to the destination format
+
+
+def invertContrast(inFile: str,
+                   outFile: str,
+                   samplingRate: float,
+                   isStack: bool = False
+                   ) -> None:
+    stack = ImageReadersRegistry.open(inFile)
+    stack.invert()
+    ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+
 # typing.Protocol declaring that inputs must implement .getTSIds()
 class HasGetTsIds(Protocol):
 
