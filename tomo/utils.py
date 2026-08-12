@@ -30,12 +30,22 @@ import os
 import random
 import re
 import importlib
+from os.path import abspath
+from typing import List, Set, Protocol, Union, Any, Sequence, Optional, Dict
+
 from os.path import join, exists
 from typing import Set, List, Union, Protocol, Any
 import time
 import numpy as np
 import math
 import logging
+
+from pwem.emlib.image.image_readers import ImageReadersRegistry, MRCImageReader
+from pwem.objects import Volume
+from pyworkflow.utils import getExt, createLink, cyanStr
+
+logger = logging.getLogger(__name__)
+
 import pyworkflow.utils as pwutils
 import tomo.constants as const
 from pwem.objects import Transform
@@ -335,6 +345,23 @@ def generatePointCloud(v, tomoDim):
     return pointCloud
 
 
+def isMatchingByTsId(set1, set2):
+    return True if getattr(set1.getFirstItem(), _getTsIdLabel(set1), None) and \
+                   getattr(set2.getFirstItem(), _getTsIdLabel(set2), None) else False
+
+
+def _getTsIdLabel(setObject):
+    """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
+    corresponding coordinate)"""
+    setType = type(setObject)
+    if setType == SetOfCoordinates3D:
+        return Coordinate3D.TOMO_ID_ATTR
+    elif setType == SetOfSubTomograms:
+        return SubTomogram.VOL_NAME_FIELD
+    else:
+        return TiltSeries.TS_ID_FIELD
+
+
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
     logger.debug("Retrieving relations for %s." % sourceObj)
     p = protocol.getProject()
@@ -433,6 +460,65 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 
+def genDefocusFileFromScipion(inCtf: CTFTomoSeries,
+                              inTs: TiltSeries,
+                              defocusFilePath: str,
+                              onlyEnabled: bool = True) -> None:
+    logger.info(cyanStr("Defocus file generated from defocus attributes."))
+    presentAcqOrders = getCommonTsAndCtfElements(inTs, inCtf, onlyEnabled=onlyEnabled)
+    tiDict = {acqOrder: ti.clone() for ti in inTs.iterItems()
+              if (acqOrder := ti.getAcquisitionOrder()) in presentAcqOrders}
+    ctfDict = {acqOrder: ctfTomo.clone() for ctfTomo in inCtf.iterItems()
+               if (acqOrder := ctfTomo.getAcquisitionOrder()) in presentAcqOrders}
+
+    with open(defocusFilePath, 'w') as f:
+        lines = ["1\t0\t0.0\t0.0\t0.0\t3\n"]
+        ind = 1
+        for acqOrder in presentAcqOrders:
+            ti = tiDict[acqOrder]
+            ctfTomo = ctfDict[acqOrder]
+            tiltAngle = ti.getTiltAngle()
+            newLine = ("%d\t%d\t%.2f\t%.2f\t%.1f\t%.1f\t%.2f\n" % (
+                ind,
+                ind,
+                tiltAngle,
+                tiltAngle,
+                # CONVERT DEFOCUS VALUE TO NANOMETERS (IMOD CONVENTION)
+                ctfTomo.getDefocusU() / 10,
+                # CONVERT DEFOCUS VALUE TO NANOMETERS (IMOD CONVENTION)
+                ctfTomo.getDefocusV() / 10,
+                ctfTomo.getDefocusAngle()))
+
+            lines.append(newLine)
+            ind += 1
+        f.writelines(lines)
+
+
+def convertOrLink(inFile: str,
+                  outFile: str,
+                  samplingRate: float,
+                  isStack: bool = False
+                  ) -> None:
+    """Converts a file into a decide format file or links if it is the same extension"""
+
+    if getExt(inFile) == getExt(outFile):
+        createLink(abspath(inFile), outFile)
+    else:
+        stack = ImageReadersRegistry.open(inFile)  # .open reads inFIle extension to find the right reader
+        ImageReadersRegistry.write(stack, outFile, isStack=isStack,
+                                   samplingRate=samplingRate)  # .write reads the outFile extension to convert the file to the destination format
+
+
+def invertContrast(inFile: str,
+                   outFile: str,
+                   samplingRate: float,
+                   isStack: bool = False
+                   ) -> None:
+    stack = ImageReadersRegistry.open(inFile)
+    stack.invert()
+    ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+
+
 # typing.Protocol declaring that inputs must implement .getTSIds()
 class HasGetTsIds(Protocol):
 
@@ -479,321 +565,43 @@ def _validateIntersectAndDiff(
         logger.info(cyanStr(f"TsIds not common in the introduced EM sets are: {tsIdsDiff}"))
 
 
-# STREAMING ############################################################################################
-def sleepRandomly(lowTimeRange: float = 1.0,
-                  highTimeRange: float = 3.0) -> None:
-    """Throttle a streaming poll loop with a small random delay.
+# typing.Protocol for items returned by .iterItems()
+class CloneableWithTsId(Protocol):
 
-    The delay (a) keeps the polling loop from CPU/metadata-server spinning and
-    (b) JITTERS the timing so multiple concurrent consumers do not synchronise
-    their journal/heartbeat reads. The default range was lowered from 4-10s to
-    1-3s for a more responsive stream: it keeps a non-zero spread (preserving the
-    de-synchronisation jitter) and a >=1s lower bound that stays at/above the
-    journal-read debounce window (Set._STREAM_JOURNAL_REFRESH_DEBOUNCE), so faster
-    polling does not thrash the cached journal snapshot.
+    def getTsId(self) -> Any: ...
+
+    def clone(self) -> Any: ...
+
+
+# typing.Protocol for input set objects (e.g., SetOfTomograms, SetOfTiltSeries,etc.)
+class HasIterItems(Protocol):
+
+    def iterItems(self) -> Sequence[CloneableWithTsId]: ...
+
+
+def getTsIdsDicts(
+        *set_objects: HasIterItems,
+        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+    """Generates a dictionary for each input set mapping ts_id -> item.clone()
+    filtered by ts_ids that exist in present_ts_ids if provided.
     """
-    time.sleep(random.uniform(lowTimeRange, highTimeRange))
 
+    result_dicts = []
+    if present_ts_ids:
+        for set_obj in set_objects:
+            dictionary = {
+                item.getTsId(): item.clone()
+                for item in set_obj.iterItems()
+                if item.getTsId() in present_ts_ids
+            }
+            result_dicts.append(dictionary)
 
-# ---------------------------------------------------------------------------
-# Per-tilt-series metadata "sidecar" files
-#
-# A streaming producer (e.g. ProtComposeTS) writes one small JSON sidecar per
-# finished tilt-series next to its <tsId>.ready marker. Downstream consumers
-# rebuild the TiltSeries (and its TiltImages) fully in memory from the sidecar,
-# so they NEVER open the producer's live SQLite set. This removes the
-# cross-process SHARED-read vs producer-EXCLUSIVE-commit contention on the
-# single shared `tiltseries.sqlite` (the deadlock under journal_mode=DELETE on
-# NFS): the producer writes its DB freely; consumers read finished files only.
-#
-# The schema is explicit (not a generic getObjDict dump) so it is stable and
-# round-trippable: it captures exactly what ProtComposeTS produces for a freshly
-# composed, not-yet-aligned TiltSeries. Extend `_ACQ_FIELDS` / the per-image
-# fields if a producer needs to publish more.
-# ---------------------------------------------------------------------------
-TS_META_VERSION = 2  # v2 adds per-tilt-image alignment transform + interpolated flag
-# (getter, setter) names on TomoAcquisition that ProtComposeTS populates.
-_ACQ_FIELDS = (
-    'Voltage', 'Magnification', 'SphericalAberration', 'AmplitudeContrast',
-    'DosePerFrame', 'AngleMin', 'AngleMax', 'Step', 'AccumDose', 'TiltAxisAngle',
-)
+    else:
+        for set_obj in set_objects:
+            dictionary = {
+                item.getTsId(): item.clone()
+                for item in set_obj.iterItems()
+            }
+            result_dicts.append(dictionary)
 
-
-def getTsSidecarPath(streamingDir: str, tsId: str) -> str:
-    return join(streamingDir, f'{tsId}{const.TS_META_EXT}')
-
-
-def tsSidecarExists(streamingDir: str, tsId: str) -> bool:
-    return exists(getTsSidecarPath(streamingDir, tsId))
-
-
-def _acqToDict(acq: TomoAcquisition) -> dict:
-    if acq is None:
-        return {}
-    return {f: getattr(acq, 'get' + f)() for f in _ACQ_FIELDS}
-
-
-def _dictToAcq(d: dict) -> TomoAcquisition:
-    acq = TomoAcquisition()
-    for f in _ACQ_FIELDS:
-        if d.get(f) is not None:
-            getattr(acq, 'set' + f)(d[f])
-    return acq
-
-
-def writeTsSidecar(streamingDir: str, ts: TiltSeries,
-                   tiltImages: List[TiltImage]) -> None:
-    """Atomically write the metadata sidecar for a composed tilt-series.
-
-    Built entirely from the IN-MEMORY ``ts`` / ``tiltImages`` the producer
-    already holds in ``registerOutputs`` — it performs NO database read.
-    Written to a temp file and ``os.replace``-d into place so a consumer never
-    observes a half-written sidecar. Call this BEFORE touching ``<tsId>.ready``
-    so the marker only appears once the sidecar is complete.
-    """
-    sRate = ts.getSamplingRate()
-    data = {
-        'version': TS_META_VERSION,
-        'tsId': ts.getTsId(),
-        'samplingRate': sRate,
-        # Alignment/interpolation are needed by downstream consumers that align
-        # or track fiducials (e.g. ProtImodFiducialModel): without the per-tilt
-        # transforms below, the rebuilt TS would report hasAlignment()==False and
-        # no .xf prealignment would be written, breaking autofidseed/beadtrack.
-        'interpolated': ts.interpolated() if hasattr(ts, 'interpolated') else False,
-        'acquisition': _acqToDict(ts.getAcquisition()),
-        'tiltImages': [],
-    }
-    for ti in tiltImages:
-        tiAcq = ti.getAcquisition()
-        data['tiltImages'].append({
-            'index': ti.getIndex(),
-            'fileName': ti.getFileName(),
-            'tiltAngle': ti.getTiltAngle(),
-            'acquisitionOrder': ti.getAcquisitionOrder(),
-            'samplingRate': ti.getSamplingRate(),
-            'enabled': ti.isEnabled(),
-            'doseInitial': tiAcq.getDoseInitial() if tiAcq else None,
-            'accumDose': tiAcq.getAccumDose() if tiAcq else None,
-            'oddEven': [ti.getOdd(), ti.getEven()] if ti.hasOddEven() else [],
-            # Per-tilt 2D alignment matrix (list-of-lists) so a sidecar-rebuilt TS
-            # preserves hasAlignment() and genXfFile can regenerate the .xf.
-            'transform': ti.getTransform().getMatrix().tolist() if ti.hasTransform() else None,
-        })
-    path = getTsSidecarPath(streamingDir, ts.getTsId())
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f)
-    os.replace(tmp, path)  # atomic publish of the sidecar
-
-
-def readTsSidecar(streamingDir: str, tsId: str):
-    """Rebuild ``(TiltSeries, [TiltImage])`` fully in memory from the sidecar.
-
-    No SQLite access at all -> no lock contention with the producer. This is the
-    drop-in replacement for a consumer's ``fetchNewTs`` + ``loadTiltImgsInMemory``
-    on the producer's live set.
-    """
-    with open(getTsSidecarPath(streamingDir, tsId)) as f:
-        data = json.load(f)
-
-    sRate = data.get('samplingRate')
-    ts = TiltSeries(tsId=data['tsId'])
-    ts.setAcquisition(_dictToAcq(data.get('acquisition', {})))
-    if sRate is not None:
-        ts.setSamplingRate(sRate)
-    if data.get('interpolated'):
-        ts.setInterpolated(True)
-
-    tiltImages = []
-    for d in data['tiltImages']:
-        ti = TiltImage()
-        ti.setTsId(data['tsId'])
-        ti.setIndex(d['index'])
-        ti.setFileName(d['fileName'])
-        ti.setTiltAngle(d['tiltAngle'])
-        ti.setAcquisitionOrder(d['acquisitionOrder'])
-        ti.setSamplingRate(d.get('samplingRate', sRate))
-        ti.setEnabled(d.get('enabled', True))
-        tiAcq = _dictToAcq(data.get('acquisition', {}))
-        if d.get('doseInitial') is not None:
-            tiAcq.setDoseInitial(d['doseInitial'])
-        if d.get('accumDose') is not None:
-            tiAcq.setAccumDose(d['accumDose'])
-        ti.setAcquisition(tiAcq)
-        if d.get('oddEven'):
-            ti.setOddEven(d['oddEven'])
-        # Restore the per-tilt alignment transform so the rebuilt TS is
-        # equivalent to the producer's DB one (hasAlignment + genXfFile work).
-        if d.get('transform') is not None:
-            ti.setTransform(Transform(matrix=np.array(d['transform'])))
-        tiltImages.append(ti)
-
-    # Mirror TiltSeriesBase.append: the TS is aligned iff its tilt-images carry
-    # transforms. Set the flag explicitly because the consumer attaches items via
-    # setInMemoryTiltImages (not append, which is what normally sets it).
-    ts.setHasAlignment(any(ti.hasTransform() for ti in tiltImages))
-    return ts, tiltImages
-
-
-# ---------------------------------------------------------------------------
-# Per-CTF-tomo-series metadata "sidecar" files (the CTF analog of the TS sidecar
-# above). A streaming producer publishes one JSON sidecar per finished
-# CTFTomoSeries; downstream consumers rebuild the CTFTomoSeries (and its CTFTomos)
-# fully in memory from it (see SetOfCTFTomoSeries.fetchNewCtfs), so they NEVER
-# open the producer's live SQLite set. Explicit, round-trippable schema (not a
-# generic getObjDict dump) capturing the standard per-tilt CTF estimation values.
-# ---------------------------------------------------------------------------
-CTF_META_VERSION = 1
-
-
-def getCtfSidecarPath(streamingDir: str, tsId: str) -> str:
-    return join(streamingDir, f'{tsId}{const.CTF_META_EXT}')
-
-
-def ctfSidecarExists(streamingDir: str, tsId: str) -> bool:
-    return exists(getCtfSidecarPath(streamingDir, tsId))
-
-
-def writeCtfSidecar(streamingDir: str, ctfTomoSeries: CTFTomoSeries,
-                    ctfTomos: List[CTFTomo]) -> None:
-    """Atomically write the metadata sidecar for a CTFTomoSeries.
-
-    Built entirely from the IN-MEMORY ``ctfTomoSeries`` / ``ctfTomos`` the
-    producer already holds — it performs NO database read. Written to a temp file
-    and ``os.replace``-d into place so a consumer never observes a half-written
-    sidecar. Call this BEFORE publishing the tsId to the stream journal so the
-    journal id only appears once the sidecar is complete. Mirrors writeTsSidecar.
-    """
-    # Note: the CTFTomoSeries-level defocus-deviation flags are deliberately not
-    # serialized: their getters/setters are stubs in the data model (no real
-    # state), so the sidecar only carries genuinely round-trippable data.
-    data = {
-        'version': CTF_META_VERSION,
-        'tsId': ctfTomoSeries.getTsId(),
-        'ctfTomos': [],
-    }
-    for ctf in ctfTomos:
-        data['ctfTomos'].append({
-            'index': ctf.getIndex(),
-            'acquisitionOrder': ctf.getAcquisitionOrder(),
-            'enabled': ctf.isEnabled(),
-            'defocusU': ctf.getDefocusU(),
-            'defocusV': ctf.getDefocusV(),
-            'defocusAngle': ctf.getDefocusAngle(),
-            'resolution': ctf.getResolution(),
-            'fitQuality': ctf.getFitQuality(),
-            'phaseShift': ctf.getPhaseShift() if ctf.hasPhaseShift() else None,
-        })
-    path = getCtfSidecarPath(streamingDir, ctfTomoSeries.getTsId())
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f)
-    os.replace(tmp, path)  # atomic publish of the sidecar
-
-
-def readCtfSidecar(streamingDir: str, tsId: str):
-    """Rebuild ``(CTFTomoSeries, [CTFTomo])`` fully in memory from the sidecar.
-
-    No SQLite access at all -> no lock contention with the producer. This is the
-    CTF analog of readTsSidecar and the building block of
-    SetOfCTFTomoSeries.fetchNewCtfs.
-    """
-    with open(getCtfSidecarPath(streamingDir, tsId)) as f:
-        data = json.load(f)
-
-    cts = CTFTomoSeries(tsId=data['tsId'])
-    cts.setTsId(data['tsId'])
-
-    ctfTomos = []
-    for d in data['ctfTomos']:
-        ctf = CTFTomo()
-        ctf.setIndex(d['index'])
-        ctf.setAcquisitionOrder(d['acquisitionOrder'])
-        ctf.setEnabled(d.get('enabled', True))
-        defU, defV, defAngle = d.get('defocusU'), d.get('defocusV'), d.get('defocusAngle')
-        if None not in (defU, defV, defAngle):
-            ctf.setStandardDefocus(defU, defV, defAngle)
-        if d.get('resolution') is not None:
-            ctf.setResolution(d['resolution'])
-        if d.get('fitQuality') is not None:
-            ctf.setFitQuality(d['fitQuality'])
-        if d.get('phaseShift') is not None:
-            ctf.setPhaseShift(d['phaseShift'])
-        ctfTomos.append(ctf)
-    return cts, ctfTomos
-
-
-# ---------------------------------------------------------------------------
-# Per-landmark-model metadata "sidecar" files (the LandmarkModel analog of the
-# TS/CTF sidecars above). A streaming producer publishes one JSON sidecar per
-# finished LandmarkModel; a downstream consumer can rebuild the LandmarkModel
-# fully in memory from it WITHOUT opening the producer's live SetOfLandmarkModels
-# SQLite. The landmark coordinates themselves are NOT embedded here: they already
-# live in the referenced '.sfid' file on shared storage (written by
-# LandmarkModel.addLandmark) and are read from it lock-free on demand
-# (LandmarkModel.retrieveInfoTable). This sidecar carries only the round-trippable
-# object metadata needed to reconstruct the LandmarkModel wrapper.
-# ---------------------------------------------------------------------------
-LANDMARK_META_VERSION = 1
-
-
-def getLandmarkSidecarPath(streamingDir: str, tsId: str) -> str:
-    return join(streamingDir, f'{tsId}{const.LANDMARK_META_EXT}')
-
-
-def landmarkSidecarExists(streamingDir: str, tsId: str) -> bool:
-    return exists(getLandmarkSidecarPath(streamingDir, tsId))
-
-
-def writeLandmarkSidecar(streamingDir: str, landmarkModel: LandmarkModel) -> None:
-    """Atomically write the metadata sidecar for a LandmarkModel.
-
-    Built entirely from the IN-MEMORY ``landmarkModel`` the producer already
-    holds — it performs NO database read. Written to a temp file and
-    ``os.replace``-d into place so a consumer never observes a half-written
-    sidecar. Call this BEFORE publishing the tsId to the stream journal so the
-    journal id only appears once the sidecar is complete. Mirrors
-    writeTsSidecar / writeCtfSidecar.
-
-    The landmark rows are not serialized here (see module note above): they are
-    in the referenced ``fileName`` (.sfid) file.
-    """
-    data = {
-        'version': LANDMARK_META_VERSION,
-        'tsId': landmarkModel.getTsId(),
-        'fileName': landmarkModel.getFileName(),  # .sfid file with the landmark rows
-        'modelName': landmarkModel.getModelName(),  # .fid model file
-        'size': landmarkModel.getSize(),  # bead diameter (Å)
-        'count': landmarkModel.getCount(),  # number of chains/landmarks
-        'applyTSTransformation': landmarkModel.applyTSTransformation(),
-        'hasResidualInfo': landmarkModel.hasResidualInfo().get(),
-    }
-    path = getLandmarkSidecarPath(streamingDir, landmarkModel.getTsId())
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f)
-    os.replace(tmp, path)  # atomic publish of the sidecar
-
-
-def readLandmarkSidecar(streamingDir: str, tsId: str) -> LandmarkModel:
-    """Rebuild a ``LandmarkModel`` fully in memory from the sidecar.
-
-    No SQLite access at all -> no lock contention with the producer. This is the
-    LandmarkModel analog of readTsSidecar / readCtfSidecar. The associated
-    tilt-series pointer is intentionally left unset (it is not persisted on the
-    item, ``objDoStore=False``); a consumer associates it via the set's
-    ``completeLandmarkModel``.
-    """
-    with open(getLandmarkSidecarPath(streamingDir, tsId)) as f:
-        data = json.load(f)
-
-    lm = LandmarkModel(tsId=data['tsId'],
-                       fileName=data.get('fileName'),
-                       modelName=data.get('modelName'),
-                       size=data.get('size'),
-                       applyTSTransformation=data.get('applyTSTransformation', True),
-                       hasResidualInfo=data.get('hasResidualInfo', False))
-    lm.setTsId(data['tsId'])
-    lm.setCount(data.get('count', 0))
-    return lm
+    return result_dicts

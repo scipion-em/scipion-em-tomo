@@ -3291,7 +3291,6 @@ class CTFTomoSeries(data.EMSet):
         self._inMemoryCtfs = None
 
     def clone(self, ignoreAttrs=()):
-        # TODO: check if ignoreAttrs not empty is required somewhere in the code. If not, this method can be removed
         clone = self.getClass()()
         clone.copy(self, ignoreAttrs=ignoreAttrs)
         clone.setEnabled(self.isEnabled())
