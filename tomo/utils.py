@@ -345,23 +345,6 @@ def generatePointCloud(v, tomoDim):
     return pointCloud
 
 
-def isMatchingByTsId(set1, set2):
-    return True if getattr(set1.getFirstItem(), _getTsIdLabel(set1), None) and \
-                   getattr(set2.getFirstItem(), _getTsIdLabel(set2), None) else False
-
-
-def _getTsIdLabel(setObject):
-    """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
-    corresponding coordinate)"""
-    setType = type(setObject)
-    if setType == SetOfCoordinates3D:
-        return Coordinate3D.TOMO_ID_ATTR
-    elif setType == SetOfSubTomograms:
-        return SubTomogram.VOL_NAME_FIELD
-    else:
-        return TiltSeries.TS_ID_FIELD
-
-
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
     logger.debug("Retrieving relations for %s." % sourceObj)
     p = protocol.getProject()
