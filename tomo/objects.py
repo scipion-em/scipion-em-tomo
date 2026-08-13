@@ -1045,7 +1045,54 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         return [ti.clone() for ti in self.iterItems()]
 
 
-class SetOfTiltSeriesBase(data.SetOfImages):
+class _AppendRollbackMixin:
+    """Shared streaming-append rollback for output sets, so every set owns how
+    to undo a failed ``append`` instead of a protocol reaching into its internals.
+
+    Under journal_mode=DELETE a producer that hits ``database is locked`` mid
+    write must NOT keep the write transaction open across the
+    ``@retry_on_sqlite_lock`` backoff window: that keeps holding the RESERVED
+    lock and starves the very readers it is waiting for (a downstream streaming
+    consumer on the same shared sqlite). ``_releaseWriteLock`` rolls the
+    transaction back so the lock is released *between* retries, and
+    ``rollbackFailedAppend`` additionally drops the tsId from any duplicate-guard
+    cache (via the ``_discardCachedTsId`` hook) so the retry re-appends cleanly
+    instead of tripping the ``ValueError`` duplicate check.
+
+    The in-memory ``_size`` may transiently over-count after a rollback (append
+    increments it before the commit); this is cosmetic and self-heals on the
+    next ``load()`` (which resets ``_size`` from ``mapper.count()``), consistent
+    with how ``SetOfTiltSeries`` has always behaved.
+    """
+
+    def _releaseWriteLock(self):
+        """Roll back any open transaction on the set's mapper connection to
+        release the write-intent (RESERVED) lock between retry attempts."""
+        try:
+            conn = self._getMapper().db.connection
+            if conn.in_transaction:
+                conn.rollback()
+        except Exception as e:
+            logger.error(yellowStr(f'_releaseWriteLock failed with exception {e}'))
+            raise e
+
+    def rollbackFailedAppend(self, tsId: str) -> None:
+        """Roll back a failed multi-statement append/write and make the in-memory
+        state consistent for a clean retry: release the write lock and drop
+        ``tsId`` from the set's duplicate-guard cache (a no-op for leaf sets that
+        keep no such cache). The already-assigned item ids are retained so an
+        ``INSERT OR IGNORE``-based redo stays idempotent at row level."""
+        self._releaseWriteLock()
+        self._discardCachedTsId(tsId)
+
+    def _discardCachedTsId(self, tsId: str) -> None:
+        """Drop ``tsId`` from the set's duplicate-guard cache. Default no-op;
+        overridden by sets that keep such a cache (SetOfTiltSeriesBase._tsIds,
+        SetOfCTFTomoSeries._ctfTsIds)."""
+        pass
+
+
+class SetOfTiltSeriesBase(_AppendRollbackMixin, data.SetOfImages):
     EXPOSE_ITEMS = True
     USE_CREATE_COPY_FOR_SUBSET = True
     # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
@@ -1199,50 +1246,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 
         return self._tsIds
 
-    def _releaseWriteLock(self):
-        """Roll back any open transaction on the set's mapper connection.
-
-        Used on a SQLite lock/busy error during append so the write-intent
-        (RESERVED) lock is released *between* retry attempts. Otherwise a failed
-        commit leaves the transaction active and, because ``append`` skips
-        ``BEGIN IMMEDIATE`` when ``in_transaction`` is already True, the producer
-        keeps holding the lock across the whole retry/backoff window — starving
-        concurrent readers (e.g. downstream consumers calling
-        ``loadTiltImgsInMemory``) on the SAME shared ``tiltseries.sqlite`` file
-        under journal_mode=DELETE. Rolling back is safe here: ``Set.append``
-        increments ``_size`` and ``_insertItem`` caches the tsId only *after* the
-        item write succeeds, so on a failure neither has been mutated yet and the
-        decorator's next attempt is a clean redo.
-        """
-        try:
-            conn = self._getMapper().db.connection
-            if conn.in_transaction:
-                conn.rollback()
-        except Exception as e:
-            logger.error(yellowStr(f'_releaseWriteLock failed with exception {e}'))
-            raise e
-
-    def rollbackFailedAppend(self, tsId: str) -> None:
-        """Roll back a failed multi-statement append/write and make the in-memory
-        state consistent for a clean retry.
-
-        ``_releaseWriteLock`` alone only covers a failure *inside* ``append``
-        (before the tsId is cached). A producer that writes a whole TS in several
-        statements — ``append`` (commit) → tilt-image appends → ``ts.write``
-        (commit) → ``update`` → ``set.write`` (commit) — can also hit a lock at a
-        *later* commit, after the tsId was already cached by ``_insertItem``. In
-        that case the decorator's retry would re-enter ``append`` and trip the
-        duplicate-tsId guard (``ValueError`` → the TS is silently skipped/lost).
-
-        This rolls back the open transaction (releasing the write lock between
-        retries, so concurrent consumers on the shared ``tiltseries.sqlite`` are
-        not starved under journal_mode=DELETE) AND drops ``tsId`` from the
-        in-memory cache so the next attempt re-inserts it cleanly. The item ids
-        already assigned are retained, so ``INSERT OR IGNORE`` makes the redo
-        idempotent at row level (the cached ``_size`` may transiently over-count,
-        which is cosmetic — consumers detect work via tsIds/.ready, not size).
-        """
-        self._releaseWriteLock()
+    def _discardCachedTsId(self, tsId: str) -> None:
+        """Drop tsId from this set's duplicate-guard cache so a retried append
+        does not trip the ``_insertItem`` ValueError. See _AppendRollbackMixin."""
         if self._tsIds is not None:
             self._tsIds.discard(tsId)
 
@@ -1709,7 +1715,7 @@ class Tomogram(data.Volume):
         return binning
 
 
-class SetOfTomograms(data.SetOfVolumes):
+class SetOfTomograms(_AppendRollbackMixin, data.SetOfVolumes):
     ITEM_TYPE = Tomogram
     EXPOSE_ITEMS = False
     # Dimensions are not checked as heterogeneous sets of TS may be allowed to be combined (it's quite usual to
@@ -2749,7 +2755,7 @@ class LandmarkModel(data.EMObject):
                self.getTsId())
 
 
-class SetOfLandmarkModels(data.EMSet):
+class SetOfLandmarkModels(_AppendRollbackMixin, data.EMSet):
     """Represents a class that groups a set of landmark models."""
     ITEM_TYPE = LandmarkModel
 
@@ -3497,7 +3503,7 @@ class CTFTomoSeries(data.EMSet):
         return [ctf.clone() for ctf in self.iterItems()]
 
 
-class SetOfCTFTomoSeries(data.EMSet):
+class SetOfCTFTomoSeries(_AppendRollbackMixin, data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
     ITEM_TYPE = CTFTomoSeries
     USE_CREATE_COPY_FOR_SUBSET = True
@@ -3595,6 +3601,12 @@ class SetOfCTFTomoSeries(data.EMSet):
         data.EMSet._insertItem(self, item)
         item.write(properties=False)
         existingTsIds.add(tsId)
+
+    def _discardCachedTsId(self, tsId: str) -> None:
+        """Drop tsId from this set's duplicate-guard cache so a retried append
+        does not trip the ``_insertItem`` ValueError. See _AppendRollbackMixin."""
+        if self._ctfTsIds is not None:
+            self._ctfTsIds.discard(tsId)
 
     def __getitem__(self, itemId):
         """ Setup the mapper classes before returning the item. """

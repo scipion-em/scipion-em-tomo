@@ -170,6 +170,35 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
         names = self._getStreamingOutputNames()
         return names if isinstance(names, str) else names[0]
 
+    def _releaseOutputWriteLock(self, output, tsId: str = None) -> None:
+        """Release the write lock on a streaming output set after a SQLite lock
+        error, so a ``@retry_on_sqlite_lock`` retry is a clean, non-hogging redo.
+
+        Call this from the ``except sqlite3.OperationalError`` block of a
+        protocol's output-registration method, then re-raise the original error
+        so the decorator retries. Rolling back here means the producer does NOT
+        keep the write transaction open across the retry/backoff window --
+        otherwise it starves the very readers it is waiting for (a downstream
+        streaming consumer reading the shared sqlite under journal_mode=DELETE).
+
+        The rollback + duplicate-guard-cache reset lives on the set itself:
+        SetOfTiltSeriesBase / SetOfCTFTomoSeries / SetOfTomograms /
+        SetOfLandmarkModels all provide ``rollbackFailedAppend`` via the shared
+        ``_AppendRollbackMixin`` (each knows its own cache, if any). This wrapper
+        only guarantees it never raises -- it runs inside an except handler, so a
+        failure here must not mask the original lock error the caller re-raises
+        to drive the retry.
+
+        :param output: the output set being written.
+        :param tsId: tsId of the item whose append failed; used to clear any
+            per-tsId duplicate-guard cache. Optional for cache-less leaf sets.
+        """
+        try:
+            output.rollbackFailedAppend(tsId)
+        except Exception as e:
+            logger.error(yellowStr(f'_releaseOutputWriteLock failed for '
+                                   f'tsId={tsId}: {e}'))
+
     def _insertCommonSteps(self, *stepsInputs, closeSetStepDeps: List[int]) -> None:
         """Insert the per-tilt-series processing steps and append the id of the
         final (output) step to ``closeSetStepDeps``. Implemented per protocol.
