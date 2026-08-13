@@ -2622,6 +2622,7 @@ class SetOfClassesSubTomograms(data.SetOfClasses):
 
 class LandmarkModel(data.EMObject):
     """Represents the set of landmarks belonging to a specific tilt-series."""
+    TS_ID_FIELD = '_tsId'
 
     def __init__(self,
                  tsId=None,
