@@ -490,8 +490,8 @@ def invertContrast(inFile: str,
                    isStack: bool = False
                    ) -> None:
     stack = ImageReadersRegistry.open(inFile)
-    stack.invert()
-    ImageReadersRegistry.write(stack, outFile, isStack=isStack, samplingRate=samplingRate)
+    invStack = stack.invert()
+    ImageReadersRegistry.write(invStack, outFile, isStack=isStack, samplingRate=samplingRate)
 
 
 # typing.Protocol declaring that inputs must implement .getTSIds()
