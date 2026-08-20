@@ -29,11 +29,17 @@
 import os
 import re
 import importlib
-from typing import List, Set
+from os.path import abspath
+from typing import List, Set, Protocol, Union, Any, Sequence, Optional, Dict
 
 import numpy as np
 import math
 import logging
+
+from pwem.emlib.image.image_readers import ImageReadersRegistry, MRCImageReader
+from pwem.objects import Volume
+from pyworkflow.utils import getExt, createLink, cyanStr
+
 logger = logging.getLogger(__name__)
 
 import pyworkflow.utils as pwutils
@@ -373,12 +379,14 @@ def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
 def getNonInterpolatedTsFromRelations(sourceObj, prot):
     def stopSearchCallback(pObj):
         return type(pObj) == SetOfTiltSeries and pObj.hasAlignment()
+
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
 def getObjFromRelation(sourceObj, prot, targetObj):
     def stopSearchCallback(pObj):
         return type(pObj) == targetObj
+
     return _recoverObjFromRelations(sourceObj, prot, stopSearchCallback)
 
 
@@ -443,3 +451,150 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
 
     logger.debug(f'getCommonTsAndCtfElements: tsId = {ts.getTsId()}, matching used field is {msgStr}')
     return tsAcqOrderSet & ctfAcqOrderSet
+
+
+def genDefocusFileFromScipion(inCtf: CTFTomoSeries,
+                              inTs: TiltSeries,
+                              defocusFilePath: str,
+                              onlyEnabled: bool = True) -> None:
+    logger.info(cyanStr("Defocus file generated from defocus attributes."))
+    presentAcqOrders = getCommonTsAndCtfElements(inTs, inCtf, onlyEnabled=onlyEnabled)
+    tiDict = {acqOrder: ti.clone() for ti in inTs.iterItems()
+              if (acqOrder := ti.getAcquisitionOrder()) in presentAcqOrders}
+    ctfDict = {acqOrder: ctfTomo.clone() for ctfTomo in inCtf.iterItems()
+               if (acqOrder := ctfTomo.getAcquisitionOrder()) in presentAcqOrders}
+
+    with open(defocusFilePath, 'w') as f:
+        lines = ["1\t0\t0.0\t0.0\t0.0\t3\n"]
+        ind = 1
+        for acqOrder in presentAcqOrders:
+            ti = tiDict[acqOrder]
+            ctfTomo = ctfDict[acqOrder]
+            tiltAngle = ti.getTiltAngle()
+            newLine = ("%d\t%d\t%.2f\t%.2f\t%.1f\t%.1f\t%.2f\n" % (
+                ind,
+                ind,
+                tiltAngle,
+                tiltAngle,
+                # CONVERT DEFOCUS VALUE TO NANOMETERS (IMOD CONVENTION)
+                ctfTomo.getDefocusU() / 10,
+                # CONVERT DEFOCUS VALUE TO NANOMETERS (IMOD CONVENTION)
+                ctfTomo.getDefocusV() / 10,
+                ctfTomo.getDefocusAngle()))
+
+            lines.append(newLine)
+            ind += 1
+        f.writelines(lines)
+
+
+def convertOrLink(inFile: str,
+                  outFile: str,
+                  samplingRate: float,
+                  isStack: bool = False
+                  ) -> None:
+    """Converts a file into a decide format file or links if it is the same extension"""
+
+    if getExt(inFile) == getExt(outFile):
+        createLink(abspath(inFile), outFile)
+    else:
+        stack = ImageReadersRegistry.open(inFile)  # .open reads inFIle extension to find the right reader
+        ImageReadersRegistry.write(stack, outFile, isStack=isStack,
+                                   samplingRate=samplingRate)  # .write reads the outFile extension to convert the file to the destination format
+
+
+def invertContrast(inFile: str,
+                   outFile: str,
+                   samplingRate: float,
+                   isStack: bool = False
+                   ) -> None:
+    stack = ImageReadersRegistry.open(inFile)
+    invStack = stack.invert()
+    ImageReadersRegistry.write(invStack, outFile, isStack=isStack, samplingRate=samplingRate)
+
+
+# typing.Protocol declaring that inputs must implement .getTSIds()
+class HasGetTsIds(Protocol):
+
+    def getTSIds(self) -> Union[List[Any], Set[Any]]: ...
+
+
+def getTsIdsIntersection(
+        *emSets: HasGetTsIds,
+        validateIntersectAndDiff: bool = True,
+        allowEmptyIntersect: bool = False) -> Set[str]:
+    """Extracts TS IDs from N objects using .getTSIds() and computes their
+    intersection and generalized symmetric difference (union - intersection).
+    """
+    if not emSets:
+        return set()
+
+    # Extract IDs from each object via .getTsIds() and convert to set
+    sets = [set(obj.getTSIds()) for obj in emSets]
+
+    # Intersection: IDs present in ALL objects
+    intersection = set.intersection(*sets)
+
+    # Union: IDs present in AT LEAST ONE object
+    union = set.union(*sets)
+
+    # Union - Intersection
+    difference = union - intersection
+
+    # Do validation if required
+    if validateIntersectAndDiff:
+        _validateIntersectAndDiff(intersection, difference, allowEmptyIntersect=allowEmptyIntersect)
+
+    return intersection
+
+
+def _validateIntersectAndDiff(
+        tsIdsIntersec: Set[str],
+        tsIdsDiff: Set[str],
+        allowEmptyIntersect: bool = False) -> None:
+    if len(tsIdsIntersec) <= 0 and not allowEmptyIntersect:
+        raise Exception("There isn't any common tsIds among the EM sets introduced.")
+
+    if len(tsIdsDiff) > 0:
+        logger.info(cyanStr(f"TsIds not common in the introduced EM sets are: {tsIdsDiff}"))
+
+
+# typing.Protocol for items returned by .iterItems()
+class CloneableWithTsId(Protocol):
+
+    def getTsId(self) -> Any: ...
+
+    def clone(self) -> Any: ...
+
+
+# typing.Protocol for input set objects (e.g., SetOfTomograms, SetOfTiltSeries,etc.)
+class HasIterItems(Protocol):
+
+    def iterItems(self) -> Sequence[CloneableWithTsId]: ...
+
+
+def getTsIdsDicts(
+        *set_objects: HasIterItems,
+        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+    """Generates a dictionary for each input set mapping ts_id -> item.clone()
+    filtered by ts_ids that exist in present_ts_ids if provided.
+    """
+
+    result_dicts = []
+    if present_ts_ids:
+        for set_obj in set_objects:
+            dictionary = {
+                item.getTsId(): item.clone()
+                for item in set_obj.iterItems()
+                if item.getTsId() in present_ts_ids
+            }
+            result_dicts.append(dictionary)
+
+    else:
+        for set_obj in set_objects:
+            dictionary = {
+                item.getTsId(): item.clone()
+                for item in set_obj.iterItems()
+            }
+            result_dicts.append(dictionary)
+
+    return result_dicts
