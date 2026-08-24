@@ -621,7 +621,7 @@ def shape_validation(inFile1: str, inFile2: str) -> str:
     return res
 
 
-def check_sr_and_size(obj1, obj2, check_size: bool = False, tol: float = 1e-2) -> str:
+def check_sr_and_size(obj1, obj2, check_size: bool = True, tol: float = 1e-2) -> str:
     """Validate that two objects have matching sampling rates and,
     optionally, matching shapes."""
 
