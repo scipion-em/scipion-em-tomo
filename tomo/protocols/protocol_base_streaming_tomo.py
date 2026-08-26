@@ -86,7 +86,17 @@ class ProtocolBaseStreamingTomo(ProtStreamingBase):
                     # protocols and a per-protocol tuple/dict for multi-input ones.
                     newWork = self._discoverReadyWork(nonProcessedTsIds, inputSets)
                     for tsId, payload in newWork.items():
-                        self._insertCommonSteps(payload, closeSetStepDeps)
+                        # payload is the single item for single-input protocols, or
+                        # a tuple of items for multi-input ones (from an overridden
+                        # _discoverReadyWork). Normalize to a positional-args tuple
+                        # and pass closeSetStepDeps BY KEYWORD, matching the
+                        # `_insertCommonSteps(self, *stepsInputs, closeSetStepDeps)`
+                        # contract. Passing closeSetStepDeps positionally made it land
+                        # in *stepsInputs and left the keyword-only parameter unfilled
+                        # -> "TypeError: _insertCommonSteps() missing 1 required
+                        # keyword-only argument: 'closeSetStepDeps'".
+                        stepInputs = payload if isinstance(payload, tuple) else (payload,)
+                        self._insertCommonSteps(*stepInputs, closeSetStepDeps=closeSetStepDeps)
                         logger.info(cyanStr(f"Steps created for tsId = {tsId}"))
                         processedTsIds.append(tsId)
 
