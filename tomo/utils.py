@@ -574,7 +574,7 @@ class HasIterItems(Protocol):
 
 def getTsIdsDicts(
         *set_objects: HasIterItems,
-        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+        present_ts_ids: Optional[Set[str]] = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
     """Generates a dictionary for each input set mapping ts_id -> item.clone()
     filtered by ts_ids that exist in present_ts_ids if provided.
     """
@@ -597,7 +597,7 @@ def getTsIdsDicts(
             }
             result_dicts.append(dictionary)
 
-    return result_dicts
+    return result_dicts[0] if len(result_dicts) == 1 else result_dicts
 
 
 def shape_validation(inFile1: str, inFile2: str) -> str:
