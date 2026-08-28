@@ -54,7 +54,175 @@ class OutputMeshesFromSegmentation(Enum):
 
 class ProtMeshFromSegmentation(EMProtocol):
     """
-    Creates meshes based on segmentations or voxels values (TomoMasks).
+    Creates meshes from tomographic masks or segmentation volumes by converting selected voxels
+    into sparse 3D point clouds (meshes) associated with tomograms.
+
+    AI Generated:
+
+    Meshes from Tomo Mask (ProtMeshFromSegmentation) — User Manual
+        Overview
+
+        The Meshes from Tomo Mask protocol generates a set of 3D mesh points from
+        tomographic masks or segmentation volumes. Its main purpose is to convert
+        voxel-based structural information into sparse point representations that
+        can be used for visualization, annotation, or downstream spatial analyses.
+
+        In cryo-electron tomography workflows, this protocol is particularly useful
+        when a segmentation has already identified relevant regions—such as membranes,
+        filaments, vesicles, organelles, or molecular assemblies—and the user wishes
+        to represent these regions as a lighter geometric object rather than as a
+        dense volumetric mask.
+
+        For biological users, this protocol is especially valuable when exploring
+        spatial organization inside tomograms. Instead of preserving every voxel,
+        it samples representative points from selected regions while maintaining
+        their spatial correspondence with the original tomogram.
+
+        Inputs and General Workflow
+
+        The protocol requires a set of tomo masks and a corresponding set of
+        tomograms. Each mask is matched to its tomogram using the tilt-series
+        identifier (tsId). Only masks and tomograms sharing the same identifier
+        are processed together.
+
+        Internally, the protocol first prepares the input files. If the input data
+        are already in MRC format, files are linked directly. Otherwise, they are
+        converted into MRC format to ensure compatibility during processing.
+
+        After conversion, each tomogram is processed independently. The protocol
+        loads the associated mask, extracts the relevant voxels according to the
+        selected interpretation mode, applies optional morphological operations,
+        randomly samples points according to the requested density, and stores the
+        resulting coordinates as mesh points linked to the corresponding tomogram.
+
+        Segmentation Mode vs Smooth Mask Mode
+
+        A key conceptual choice is how the input mask should be interpreted.
+
+        When Smooth Mask is disabled, the protocol assumes that the input is a
+        segmentation volume composed of discrete integer labels. In this case,
+        every label except the selected background label is treated as a separate
+        segmented object. Mesh points are generated independently for each label.
+
+        This mode is particularly useful for biological segmentations where
+        different structures have been explicitly labeled, such as membranes,
+        vesicles, ribosomes, or filament classes.
+
+        When Smooth Mask is enabled, the protocol instead interprets the input
+        as a continuous-valued mask. Only voxels whose values fall between the
+        selected lower and upper thresholds are retained.
+
+        This mode is more appropriate for probabilistic segmentations, soft masks,
+        confidence maps, or any density-derived masks where the relevant region
+        is defined by voxel intensity rather than by discrete labels.
+
+        Threshold Selection in Smooth Masks
+
+        For smooth masks, the threshold range defines which voxels contribute
+        to the mesh.
+
+        Lower thresholds include more voxels and produce broader spatial coverage,
+        whereas tighter thresholds focus the mesh on the most confident or most
+        intense regions.
+
+        From a biological perspective, threshold selection can strongly affect
+        interpretation. A permissive threshold may include noisy peripheral voxels,
+        while an overly restrictive threshold may discard biologically meaningful
+        regions. In practice, thresholds should reflect the segmentation confidence
+        and the structural question being addressed.
+
+        Morphological Operations
+
+        Before mesh generation, the protocol optionally applies morphological
+        operations to refine the selected binary mask.
+
+        Dilation expands the selected regions by a user-defined number of pixels.
+        This can be useful when segmentations are slightly fragmented, too thin,
+        or when the biological object is expected to occupy a somewhat broader
+        region than the raw segmentation suggests.
+
+        Skeletonization reduces the selected region to a thin central backbone.
+        This is particularly useful for elongated biological structures such as
+        filaments, tubules, membrane traces, or other structures where the
+        central geometry is more informative than the full volume.
+
+        These operations are applied sequentially, in the same order in which
+        they appear in the protocol form.
+
+        Mesh Density and Point Sampling
+
+        After mask refinement, the protocol converts voxels into mesh points by
+        random subsampling.
+
+        The Density parameter controls the percentage of selected voxels that
+        will be converted into mesh points. A value of 100% keeps all selected
+        voxels, while lower values progressively reduce the number of points.
+
+        This parameter mainly controls representation sparsity.
+
+        For biological visualization, low densities often provide cleaner and
+        more interpretable views, especially in crowded tomograms. High densities
+        preserve more geometric detail but may become visually cluttered and
+        computationally heavier.
+
+        The sampling is random, meaning that repeated runs with identical
+        parameters may produce slightly different point distributions while
+        preserving the same global spatial pattern.
+
+        Output Generation
+
+        The output of the protocol is a SetOfMeshes object.
+
+        Each selected voxel becomes an individual mesh point. Every point is
+        associated with its original tomogram and stored in a mesh group.
+        Different segmented objects or independently processed mask regions
+        receive different group identifiers.
+
+        This grouping is particularly useful for downstream visualization tools,
+        where separate biological regions can be displayed independently while
+        preserving their common tomographic coordinate system.
+
+        Validation and Consistency Checks
+
+        Before execution, the protocol verifies that the sampling rates of the
+        input masks and tomograms are compatible within a small tolerance.
+
+        This check is biologically important because mesh points inherit their
+        spatial interpretation directly from the tomogram. If the sampling rates
+        differ significantly, the resulting meshes would no longer represent the
+        correct physical positions inside the volume.
+
+        The protocol also reports non-matching tilt-series identifiers. Only
+        tomograms and masks that share a common identifier are processed.
+
+        Practical Recommendations
+
+        For discrete biological segmentations, segmentation mode is generally
+        the most appropriate choice.
+
+        For soft masks, confidence maps, or density-derived masks, smooth mask
+        mode usually provides better control.
+
+        Skeletonization is often very useful for filamentous or tubular
+        structures, whereas dilation can help compensate for fragmented or
+        under-segmented regions.
+
+        In exploratory visualization, relatively low density values often
+        produce clearer results. For quantitative geometric inspection or when
+        preserving fine structural detail is important, higher densities may
+        be preferable.
+
+        Final Perspective
+
+        This protocol converts volumetric segmentations into lightweight spatial
+        geometric representations.
+
+        For cryo-electron tomography users, this is not simply a technical
+        transformation but a practical way to bridge segmentation and spatial
+        interpretation. By converting biologically relevant regions into sparse
+        meshes, the protocol facilitates visualization, geometric analysis, and
+        interpretation of structural organization inside complex tomographic
+        environments.
     """
     _label = 'meshes from tomo mask'
     _devStatus = BETA
