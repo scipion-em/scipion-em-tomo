@@ -337,6 +337,23 @@ def generatePointCloud(v, tomoDim):
     return pointCloud
 
 
+def isMatchingByTsId(set1, set2):
+    return True if getattr(set1.getFirstItem(), _getTsIdLabel(set1), None) and \
+                   getattr(set2.getFirstItem(), _getTsIdLabel(set2), None) else False
+
+
+def _getTsIdLabel(setObject):
+    """This attribute is named tsId in all the tomography objects excepting in coordinates or subtomograms (via the
+    corresponding coordinate)"""
+    setType = type(setObject)
+    if setType == SetOfCoordinates3D:
+        return Coordinate3D.TOMO_ID_ATTR
+    elif setType == SetOfSubTomograms:
+        return SubTomogram.VOL_NAME_FIELD
+    else:
+        return TiltSeries.TS_ID_FIELD
+
+
 def _recoverObjFromRelations(sourceObj, protocol, stopSearchCallback):
     logger.debug("Retrieving relations for %s." % sourceObj)
     p = protocol.getProject()
@@ -556,7 +573,7 @@ class HasIterItems(Protocol):
 
 def getTsIdsDicts(
         *set_objects: HasIterItems,
-        present_ts_ids: Optional[Set[str]] = None) -> List[Dict[str, Any]]:
+        present_ts_ids: Optional[Set[str]] = None) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
     """Generates a dictionary for each input set mapping ts_id -> item.clone()
     filtered by ts_ids that exist in present_ts_ids if provided.
     """
@@ -579,7 +596,46 @@ def getTsIdsDicts(
             }
             result_dicts.append(dictionary)
 
-    return result_dicts
+    return result_dicts[0] if len(result_dicts) == 1 else result_dicts
+
+
+def shape_validation(inFile1: str, inFile2: str) -> str:
+    """
+      Validate that two file paths have matching dimensions.
+
+      Obtains the appropriate reader from the ImageReadersRegistry, and compares
+      the dimensions of both images using a tolerance-based comparison
+      (np.allclose) to account for minor floating-point discrepancies. """
+
+    res = ''
+
+    reader1 = ImageReadersRegistry.getReader(inFile1)
+    reader2 = ImageReadersRegistry.getReader(inFile2)
+
+    dim1 = np.array(reader1.getDimensions(inFile1))
+    dim2 = np.array(reader2.getDimensions(inFile2))
+
+    if not np.allclose(dim1, dim2):
+        res = f'Dimensions do not match: {dim1} != {dim2}'
+    return res
+
+
+def check_sr_and_size(obj1, obj2, check_size: bool = True, tol: float = 1e-2) -> str:
+    """Validate that two objects have matching sampling rates and,
+    optionally, matching shapes."""
+
+    res = ''
+    sr1 = obj1.getSamplingRate()
+    sr2 = obj2.getSamplingRate()
+
+    if abs(sr1 - sr2) > tol:
+        res = f'Sampling Rate does not match: {sr1} != {sr2}. '
+
+    if check_size:
+        inFile1 = obj1.getFileName()
+        inFile2 = obj2.getFileName()
+        res += shape_validation(inFile1, inFile2)
+    return res
 
 
 # STREAMING ############################################################################################
