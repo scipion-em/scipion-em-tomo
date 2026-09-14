@@ -2675,11 +2675,18 @@ class CTFTomo(data.CTFModel):
     """ Represents a generic CTF model for a tilt-image. """
     ACQ_ORDER_FIELD = '_acqOrder'
     INDEX_FIELD = '_index'
+    TS_ID_FIELD = '_tsId'
 
-    def __init__(self, index=None, acqOrder=None, **kwargs):
+    def __init__(self,
+                 index: Optional[int] = None,
+                 acqOrder: Optional[int] = None,
+                 tsId: Optional[str] = None,
+                 **kwargs):
         super().__init__(**kwargs)
-        self._index = Integer(index)
-        self._acqOrder = Integer(acqOrder)
+        setattr(self, self.INDEX_FIELD, Integer(index))
+        setattr(self, self.ACQ_ORDER_FIELD, Integer(acqOrder))
+        setattr(self, self.TS_ID_FIELD, String(tsId))
+
 
     def copyInfo(self, other, copyId=False):
         """ Copy info is similar to clone, but is often used to tranfer data from other type of objects with same attributes"""
@@ -2722,6 +2729,15 @@ class CTFTomo(data.CTFModel):
 
         if copyId:
             self.copyObjId(other)
+
+    def getTsId(self) -> str:
+        """ Get unique TiltSeries ID, usually retrieved from the
+        file pattern provided by the user at the import time.
+        """
+        return getattr(self, self.TS_ID_FIELD, String()).get()
+
+    def setTsId(self, value: str) -> None:
+        setattr(self, self.TS_ID_FIELD, String(value))
 
     @staticmethod
     def ctfModelToCtfTomo(ctfModel):

@@ -2,6 +2,8 @@ V3.12.1:
  Users:
   - Fix indentation error in tilt angle filtering logic to avoid incorrect quality checks.
   - New utils function added for centralizing data intersection and validation.
+ Developers:
+  - Add attribute tsId to CTFTomo.
 V3.12.0:
  Users:
   - New protocols added:
