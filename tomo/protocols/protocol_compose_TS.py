@@ -408,6 +408,7 @@ class ProtComposeTS(EMProtocol, ProtStreamingBase):
             tsStack.append(ImageReadersRegistry.open(mic.getFileName()))
             if doEvenOdd and isinstance(oddEvenMics, list):
                 # Odd / even
+                oddEvenMics = getattr(mics, MC_EVEN_ODD_ATTRIBUTE)
                 tsStackOdd.append(ImageReadersRegistry.open(oddEvenMics[0]))
                 tsStackEven.append(ImageReadersRegistry.open(oddEvenMics[1]))
 
