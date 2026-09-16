@@ -29,7 +29,7 @@ import pwem
 from .constants import (NAPARI_ENV_ACTIVATION, NAPARI_ACTIVATION_CMD,
                         getNaparyEnvName, NAPARI_DEF_VER, V0_4_17, V0_4_19)
 
-__version__ = '3.12.0'
+__version__ = '3.12.1'
 _logo = "icon.png"
 _references = []
 

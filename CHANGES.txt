@@ -1,3 +1,8 @@
+V3.12.1: 
+ Users:
+  - New utils function added for centralizing data intersection and validation.
+  - Fix indentation error in tilt angle filtering logic to avoid incorrect quality checks.
+  - Fix the odd even stack mounting in protocol composeTS.
 V3.12.0:
  Users:
   - New protocols added:

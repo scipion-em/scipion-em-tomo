@@ -409,7 +409,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             metricsDict = tqd.analyze_image(tiltAngle)
             if darkDict:
                 metricsDict.update(darkDict.get(int(ti.getAcquisitionOrder()), {}))
-            self._filterByImgQuality(ti, metricsDict)
+                self._filterByImgQuality(ti, metricsDict)
 
             if ti.isEnabled():
                 angleMin = min(tiltAngle, angleMin)
