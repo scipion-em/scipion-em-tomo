@@ -1,4 +1,5 @@
-V3.12.1: 
+V3.12.2: replace the old streaming template by te updated version.
+V3.12.1:
  Users:
   - New utils function added for centralizing data intersection and validation.
   - Fix indentation error in tilt angle filtering logic to avoid incorrect quality checks.
