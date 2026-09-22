@@ -426,11 +426,19 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     CTFTomoSeries introduced (old versions, backwards compatibility). By default, it takes the common active elements,
     but it may take common elements no matter if they're enabled or not by setting the input onlyEnabled to False.
     """
-    # Attribute _acqOrder was recently added to CTFTomo, so it will be used to discriminate
-    ctfTomoSeries._getMapper()  # Avoid finding closed mappers when combining cached sets of sets (TS, CTF) and
-    # calls to getFirstItem(). The second closes the first and so on
-    firstCtfTomo = ctfTomoSeries.getFirstItem()
-    acqOrder = getattr(firstCtfTomo, CTFTomo.ACQ_ORDER_FIELD, None)
+    # Attribute _acqOrder was recently added to CTFTomo, so it will be used to discriminate.
+    # Fetch the first CTFTomo to detect that field. A streaming CTFTomoSeries rebuilt from a
+    # sidecar is fully in memory (setInMemoryCtfs) and has NO mapper, so _getMapper()/
+    # getFirstItem() would raise "Set.load: mapper path and prefix not set."; its iterItems()
+    # serves the in-memory items, so use that. For a DB-backed series keep forcing the mapper
+    # open before getFirstItem() to avoid closing a sibling cached set's mapper (when the TS and
+    # CTF cached sets are combined, getFirstItem() on one would otherwise close the other's).
+    if ctfTomoSeries.hasInMemoryCtfs():
+        firstCtfTomo = next(iter(ctfTomoSeries.iterItems()), None)
+    else:
+        ctfTomoSeries._getMapper()
+        firstCtfTomo = ctfTomoSeries.getFirstItem()
+    acqOrder = getattr(firstCtfTomo, CTFTomo.ACQ_ORDER_FIELD, None) if firstCtfTomo is not None else None
     if acqOrder:
         msgStr = 'acquisition order'
         if onlyEnabled:
