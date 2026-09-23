@@ -700,7 +700,7 @@ class TiltSeries(TiltSeriesBase):
                             outImgIndex: int):
         ih = ImageHandler()
         transformArray = np.array(trMatrix)
-        ih.applyTransform(inputFile=str(inImgIndex) + ':mrcs@' + imgFileName,
+        ih.applyTransform(inputFile=str(inImgIndex) + '@' + imgFileName + ':mrcs',
                           outputFile=str(outImgIndex) + '@' + outputFilePath,
                           transformMatrix=transformArray,
                           shape=(
@@ -3433,23 +3433,36 @@ class CTFTomoSeries(data.EMSet):
         if onlyEnabled and not ti.isEnabled():
             logger.debug('The introduced tilt-image is not enabled and working with onlyEnabled = True')
             return None
-        try:
-            # The method getItem raises an exception of type:
-            #   - sqlite3.OperationalError if the key is not found
-            #   - UnboundLocalError if the value is not found
-            ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
-        except UnboundLocalError:
-            return None
-        except OperationalError:
-            try:
-                ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
-                logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
-                               '(_acqOrder). The matching between the CTF and the tilt-image is carried out '
-                               'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
-            except (OperationalError, UnboundLocalError):
-                logger.warning(f'No CTF found in the current CTF series {self.getTsId()} that matches the '
-                               f'given tilt-image of tsId = {ti.getTsId()}.')
+        if self.hasInMemoryCtfs():
+            # Sidecar-rebuilt (streaming) series: no mapper, so the DB getItem()
+            # lookups below would raise "Set.load: mapper path and prefix not set."
+            # The in-memory CTFTomos always carry _acqOrder (see readCtfSidecar), so
+            # match by acquisition order -- the same primary key getItem() uses.
+            acqOrder = ti.getAcquisitionOrder()
+            ctfTomo = next((c for c in self._inMemoryCtfs
+                            if c.getAcquisitionOrder() == acqOrder), None)
+            if ctfTomo is None:
+                logger.warning(f'No CTF found in the current (in-memory) CTF series {self.getTsId()} '
+                               f'that matches the given tilt-image of tsId = {ti.getTsId()}.')
                 return None
+        else:
+            try:
+                # The method getItem raises an exception of type:
+                #   - sqlite3.OperationalError if the key is not found
+                #   - UnboundLocalError if the value is not found
+                ctfTomo = self.getItem(CTFTomo.ACQ_ORDER_FIELD, ti.getAcquisitionOrder())
+            except UnboundLocalError:
+                return None
+            except OperationalError:
+                try:
+                    ctfTomo = self.getItem(CTFTomo.INDEX_FIELD, ti.getIndex())
+                    logger.warning('WARNING! The current CTF series does not have the attribute "acquisition order" '
+                                   '(_acqOrder). The matching between the CTF and the tilt-image is carried out '
+                                   'using the index --> LESS RELIABLE. CHECK THE RESULTS CAREFULLY')
+                except (OperationalError, UnboundLocalError):
+                    logger.warning(f'No CTF found in the current CTF series {self.getTsId()} that matches the '
+                                   f'given tilt-image of tsId = {ti.getTsId()}.')
+                    return None
 
         if ctfTomo.isEnabled() or not onlyEnabled:
             return ctfTomo
