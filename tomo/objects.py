@@ -661,7 +661,7 @@ class TiltSeries(TiltSeriesBase):
                             outImgIndex: int):
         ih = ImageHandler()
         transformArray = np.array(trMatrix)
-        ih.applyTransform(inputFile=str(inImgIndex) + ':mrcs@' + imgFileName,
+        ih.applyTransform(inputFile=str(inImgIndex) + '@' + imgFileName + ':mrcs',
                           outputFile=str(outImgIndex) + '@' + outputFilePath,
                           transformMatrix=transformArray,
                           shape=(
