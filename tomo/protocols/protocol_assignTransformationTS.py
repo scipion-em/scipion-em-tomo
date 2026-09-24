@@ -25,10 +25,9 @@
 # *
 # **************************************************************************
 import logging
-import time
+import sqlite3
 import traceback
 import typing
-from collections import Counter
 from enum import Enum
 from typing import List, Union, Dict
 import numpy as np
@@ -36,10 +35,12 @@ from pwem.objects import Transform
 from pyworkflow import BETA
 from pwem.protocols import EMProtocol
 from pyworkflow.object import Pointer, Set
-from pyworkflow.protocol import STEPS_PARALLEL, ProtStreamingBase, PointerParam
+from pyworkflow.protocol import STEPS_PARALLEL, PointerParam
 from pyworkflow.utils import Message, cyanStr, redStr, yellowStr
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
+from tomo.protocols.protocol_base_streaming_tomo import ProtocolBaseStreamingTomo
+from tomo.utils import getTsIdsIntersection, getTsIdsDicts
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class outputObjects(Enum):
     tiltSeries = SetOfTiltSeries
 
 
-class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
+class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtocolBaseStreamingTomo):
     """
     Assign the transformation matrices from an input set of tilt-series to a target one.
     """
@@ -60,9 +61,12 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.tsFromDict = None
+        self.tsToDict = None
         self.tsIdsReadFrom = []
         self.tsIdsReadTo = []
         self.sRateRatio = None
+        self.failedItems = []
 
     @classmethod
     def worksInStreaming(cls):
@@ -88,102 +92,115 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
         form.addParallelSection(threads=3, mpi=0)
 
     # -------------------------- INSERT steps functions ---------------------
-    def stepsGeneratorStep(self) -> None:
-        closeSetStepDeps = []
-        outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
+    def _insertAllSteps(self) -> None:
         inTsSetFrom = self.getInTsSetFrom()
-        self.readingOutput(outTsSet)
         inTsSetTo = self.getInTsSetTo()
-        self.readingOutput(outTsSet, tsSetFrom=False)
         self.sRateRatio = inTsSetTo.getSamplingRate() / inTsSetFrom.getSamplingRate()
+        if inTsSetFrom.isStreamOpen() or inTsSetTo.isStreamOpen():
+            self._insertFunctionStep(self.stepsGeneratorStep,
+                                     prerequisites=[],
+                                     needsGPU=False)
+        else:
+            self._insertNonStreamingSteps()
 
-        while True:
-            with self._lock:
-                inTsIdsFrom = set(inTsSetFrom.getTSIds())
-                inTsIdsTo = set(inTsSetTo.getTSIds())
-                presentTsIds = inTsIdsFrom & inTsIdsTo
+    # Streaming Hooks ############################
+    def _getStreamingInputSets(self):
+        return [self.getInTsSetFrom(), self.getInTsSetTo()]
 
-            if ((not inTsSetFrom.isStreamOpen() and Counter(self.tsIdsReadFrom) == Counter(presentTsIds)) and
-                    (not inTsSetTo.isStreamOpen() and Counter(self.tsIdsReadTo) == Counter(presentTsIds))):
-                logger.info(cyanStr('Input set closed.\n'))
-                self._insertFunctionStep(self.closeOutputSetsStep,
-                                         prerequisites=closeSetStepDeps,
-                                         needsGPU=False)
-                break
+    def _discoverReadyWork(self, tsIds, inputSets):
+        # Rebuild the ready TSfrom and TSTo from their OWN producers' sidecars
+        # (no live-DB read) and join by tsId. A tsId whose CTF is not yet
+        # materialisable is skipped and retried next cycle.
+        tsFromDict = self.getInTsSetFrom().fetchNewItems(tsIds)
+        tsToDict = self.getInTsSetTo().fetchNewItems(tsIds)
+        work = {}
+        for tsId, tsFrom in tsFromDict.items():
+            tsTo = tsToDict.get(tsId)
+            if tsTo is None:
+                logger.info(yellowStr(f'tsId = {tsId} - no corresponding tsTo found yet, retrying...'))
+                continue
+            work[tsId] = (tsFrom, tsTo)
+        return work
+    # End of streaming hooks #####################
 
-            nonProcessedTsIdsFrom = inTsIdsFrom - set(self.tsIdsReadFrom)
-            nonProcessedTsIdsTo = inTsIdsTo - set(self.tsIdsReadTo)
-            tsFrom2ProcessDict = {tsId: ts.clone() for ts in inTsSetFrom.iterItems()
-                                  if (tsId := ts.getTsId()) in nonProcessedTsIdsFrom  # Only not processed tsIds (from)
-                                  and ts.getSize() > 0}  # Avoid processing empty TS
-            tsTo2ProcessDict = {tsId: ts.clone() for ts in inTsSetTo.iterItems()
-                                if (tsId := ts.getTsId()) in nonProcessedTsIdsTo  # Only not processed tsIds (to)
-                                and ts.getSize() > 0}  # Avoid processing empty TS
+    def _insertNonStreamingSteps(self):
+        self._initialize()
+        closeSetStepDeps = []
+        for tsId, tsFrom in self.tsFromDict.items():
+            tsTo = self.tsToDict[tsId]
+            self._insertCommonSteps(tsFrom, tsTo, closeSetStepDeps=closeSetStepDeps)
+        self._insertFunctionStep(self.closeOutputSetsStep,
+                                 prerequisites=closeSetStepDeps,
+                                 needsGPU=False)
 
-            for tsId, tsFrom in tsFrom2ProcessDict.items():
-                tsTo = tsTo2ProcessDict.get(tsId, None)
-                if not tsTo:
-                    logger.info(yellowStr(f'tsId = {tsId} - no corresponding tsTo to tsFrom was found...'))
-                    continue
-                pId = self._insertFunctionStep(self.assignTrMatStep,
-                                               tsId,
-                                               tsFrom,
-                                               tsTo,
-                                               prerequisites=[],
-                                               needsGPU=False)
-                closeSetStepDeps.append(pId)
-                logger.info(cyanStr(f"Steps created for tsId = {tsId}"))
-                self.tsIdsReadFrom.append(tsId)
-                self.tsIdsReadTo.append(tsId)
-
-            self.refreshStreaming(inTsSetFrom)
-            self.refreshStreaming(inTsSetTo)
-
-    @staticmethod
-    def refreshStreaming(inSet: SetOfTiltSeries) -> None:
-        # Refresh status for the streaming. Delegate to the hardened, conservative
-        # tomo.utils.refreshStreaming (lock-safe, never fatal, only finalises on a
-        # definitive on-disk CLOSED read) instead of the previous fragile
-        # time.sleep + loadAllProperties pattern, which could crash this consumer
-        # on a transient SQLite lock.
-        from tomo.utils import refreshStreaming as _refreshStreaming
-        _refreshStreaming(inSet)
+    def _insertCommonSteps(self, *stepsInputs, closeSetStepDeps: List[int]) -> None:
+        tsFrom, tsTo = stepsInputs
+        pId = self._insertFunctionStep(self.assignTrMatStep,
+                                       tsFrom,
+                                       tsTo,
+                                       prerequisites=[],
+                                       needsGPU=False)
+        closeSetStepDeps.append(pId)
 
     # --------------------------- STEPS functions ----------------------------
-    def assignTrMatStep(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
+    def _initialize(self):
+        inTsSetFrom = self.getInTsSetFrom()
+        inTsSetTo = self.getInTsSetTo()
+        commonTsIds = getTsIdsIntersection(inTsSetFrom, inTsSetTo)
+        self.tsFromDict, self.tsToDict = getTsIdsDicts(inTsSetFrom, inTsSetTo, present_ts_ids=commonTsIds)
+
+    def assignTrMatStep(self, tsFrom: TiltSeries, tsTo: TiltSeries):
+        tsId = tsFrom.getTsId()
         logger.info(cyanStr(f"tsId = {tsId} - assigning alignment..."))
         try:
-            self._registerOutput(tsId, tsFrom, tsTo)
-        except Exception as e:
-            logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
-            logger.error(traceback.format_exc())
-
-    @retry_on_sqlite_lock(log=logger)
-    def _registerOutput(self, tsId: str, tsFrom: TiltSeries, tsTo: TiltSeries):
-        with self._lock:
-            outTsSet = self.getOutTsSet()
             newTs = TiltSeries(tsId=tsId)
             newTs.copyInfo(tsTo)
+
             # The tilt axis angle may have been re-assigned, so it must be updated
             # to keep the coherence with the values of the transformation matrix assigned
             fromTsTAx = tsFrom.getAcquisition().getTiltAxisAngle()
             newTs.getAcquisition().setTiltAxisAngle(fromTsTAx)
-            outTsSet.append(newTs)
+            newTs.setDim(tsTo.getDim())
+            newTs.setAlignment2D()
 
             # Manage the possible previously excluded views or previous ts re-stacking
             matchingAcqOrders = self._getCommonAcqOrderInTsPair(tsFrom, tsTo)
             fromTsAcqDict = {ti.getAcquisitionOrder(): ti.clone() for ti in tsFrom}
 
+            newTiList = []
             for tiTo in tsTo.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
                 newTi = self._processTiltImage(tiTo, fromTsAcqDict, matchingAcqOrders)
-                newTs.append(newTi)
+                newTiList.append(newTi)
 
-            newTs.setDim(tsTo.getDim())
-            newTs.setAlignment2D()
-            newTs.write()
-            outTsSet.update(newTs)
-            outTsSet.write()
-            self._store()
+            self._registerOutput(newTs, newTiList)
+        except Exception as e:
+            logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
+            logger.error(traceback.format_exc())
+            self.failedItems.append(tsId)
+
+    @retry_on_sqlite_lock(log=logger)
+    def _registerOutput(self, newTs: TiltSeries, tiList: List[TiltImage]) -> None:
+        with self._lock:
+            try:
+                # Set of tilt-series
+                outTsSet = self.getOutTsSet()
+                # Tilt-series
+                outTsSet.append(newTs)
+                # Tilt-images
+                for newTi in tiList:
+                    newTs.append(newTi)
+                # Data persistance
+                newTs.write()
+                outTsSet.update(newTs)
+                outTsSet.write()
+                self._store(outTsSet)
+            except sqlite3.OperationalError as e:
+                # Release the write lock and reset the in-memory append state so
+                # the @retry_on_sqlite_lock retry is a clean, non-hogging redo
+                # (covers the later commits -- newTs.write/outTsSet.write -- not
+                # just the append phase) and never trips the duplicate-tsId guard.
+                self._releaseOutputWriteLock(outTsSet, newTs.getTsId())
+                raise e
 
     def _processTiltImage(self,
                           tiTo: TiltImage,
@@ -231,29 +248,13 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
     def getInTsSetTo(self, asPointer: bool = False) -> Union[Pointer, SetOfTiltSeries]:
         return self.setTMSetOfTiltSeries if asPointer else self.setTMSetOfTiltSeries.get()
 
-    def readingOutput(self,
-                      outSet: SetOfTiltSeries,
-                      tsSetFrom: bool = True) -> None:
-        if outSet:
-            if tsSetFrom:
-                tsIdList = self.tsIdsReadFrom
-                inObjStr = 'tsFrom'
-            else:
-                tsIdList = self.tsIdsReadTo
-                inObjStr = 'tsTo'
-            for item in outSet:
-                tsIdList.append(item.getTsId())
-            self.info(cyanStr(f'{inObjStr}: items processed {tsIdList}'))
-        else:
-            self.info(cyanStr('No items have been processed yet'))
-
     @staticmethod
     def _getCommonAcqOrderInTsPair(ts1: TiltSeries, ts2: TiltSeries) -> typing.Set[int]:
         tsAcqOrderSet1 = {ti.getAcquisitionOrder() for ti in ts1}
         tsAcqOrderSet2 = {ti.getAcquisitionOrder() for ti in ts2}
         return tsAcqOrderSet1 & tsAcqOrderSet2
 
-    def getOutTsSet(self):
+    def getOutTsSet(self) -> SetOfTiltSeries:
         outTsSet = getattr(self, self._possibleOutputs.tiltSeries.name, None)
         if outTsSet:
             outTsSet.enableAppend()
@@ -277,12 +278,6 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
             self._defineSourceRelation(self.getInTsSetFrom(asPointer=True), outTsSet)
             self._defineSourceRelation(self.getInTsSetTo(asPointer=True), outTsSet)
         return outTsSet
-
-    @staticmethod
-    def _getTsSize(ts: TiltSeries) -> int:
-        stackSize = ts.getSize()
-        metadataSize = len([enabled for ti in ts.iterItems() if (enabled := ti.isEnabled())])
-        return min(stackSize, metadataSize)
 
     def updateTiTrMatrix(self, ti: TiltImage) -> None:
         """ Scale the transform matrix shifts. """
@@ -314,4 +309,3 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtStreamingBase):
         else:
             summary.append("Outputs are not ready yet.")
         return summary
-
