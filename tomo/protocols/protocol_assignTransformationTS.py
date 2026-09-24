@@ -107,6 +107,9 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtocolBaseStreaming
     def _getStreamingInputSets(self):
         return [self.getInTsSetFrom(), self.getInTsSetTo()]
 
+    def _getStreamingOutputNames(self) -> str:
+        return self._possibleOutputs.tiltSeries.name
+
     def _discoverReadyWork(self, tsIds, inputSets):
         # Rebuild the ready TSfrom and TSTo from their OWN producers' sidecars
         # (no live-DB read) and join by tsId. A tsId whose CTF is not yet
