@@ -29,8 +29,10 @@ import sqlite3
 import traceback
 import typing
 from enum import Enum
+from os.path import exists
 from typing import List, Union, Dict
 import numpy as np
+from pwem import getExecStatusDir, appendStreamItem
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pwem.protocols import EMProtocol
@@ -40,7 +42,7 @@ from pyworkflow.utils import Message, cyanStr, redStr, yellowStr
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.objects import SetOfTiltSeries, TiltSeries, TiltImage
 from tomo.protocols.protocol_base_streaming_tomo import ProtocolBaseStreamingTomo
-from tomo.utils import getTsIdsIntersection, getTsIdsDicts
+from tomo.utils import getTsIdsIntersection, getTsIdsDicts, writeTsSidecar
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +178,17 @@ class ProtAssignTransformationMatrixTiltSeries(EMProtocol, ProtocolBaseStreaming
                 newTiList.append(newTi)
 
             self._registerOutput(newTs, newTiList)
+
+            # Streaming only: publish the per-TS metadata sidecar (built from the
+            # in-memory ts/tiltImages, no DB read) and the journal id. Without this,
+            # a downstream streaming consumer (e.g. ProtImodCtfCorrection) sees this
+            # producer's status dir -- created by the inherited stepsGeneratorStep --
+            # and reads readiness from its (otherwise empty) stream journal, so it
+            # never discovers any ready tsId and never generates per-item steps.
+            execStatusDir = getExecStatusDir(self)
+            if exists(execStatusDir):
+                writeTsSidecar(execStatusDir, newTs, newTiList)
+                appendStreamItem(self, tsId)
         except Exception as e:
             logger.error(redStr(f'tsId = {tsId} -> failed: {e}'))
             logger.error(traceback.format_exc())
