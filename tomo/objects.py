@@ -1231,14 +1231,22 @@ class SetOfTiltSeriesBase(_AppendRollbackMixin, data.SetOfImages):
             return {}
 
     def _getExistingTsIds(self):
-        """Return cached tsIds already present in this set."""
+        """Return cached tsIds already present in this set (the duplicate-insert
+        guard used by _insertItem).
+
+        Reads the set's OWN DB rows via _getTSIds(), NOT the streaming-aware
+        getTSIds(): the latter returns the stream journal in <runDir>/status when
+        present, which is the PRODUCER's shared readiness journal, not the rows this
+        set actually contains. Seeding the guard from the journal made a re-appended
+        tsId look absent (failed items are never journaled) and, conversely, could
+        make a not-yet-inserted tsId look present. The DB rows are authoritative."""
         if self._tsIds is not None:
             return self._tsIds
 
         self._tsIds = set()
 
         try:
-            for tsId in self.getTSIds():
+            for tsId in self._getTSIds():
                 if tsId is not None:
                     self._tsIds.add(tsId)
         except Exception:
