@@ -101,3 +101,8 @@ CTF_META_EXT = '.ctfmeta.json'
 # published file, without opening the producer's live SetOfLandmarkModels DB. The
 # landmark coordinates live in the referenced .sfid file, not in this JSON.
 LANDMARK_META_EXT = '.lmmeta.json'
+# Per-tomogram metadata sidecar (Tomogram analog of TS_META_EXT): lets a downstream
+# consumer (e.g. a streaming denoising protocol) rebuild a Tomogram fully in memory
+# from a producer's published file, without opening the producer's live
+# SetOfTomograms DB. The voxel data lives in the referenced .mrc file, not this JSON.
+TOMO_META_EXT = '.tomometa.json'

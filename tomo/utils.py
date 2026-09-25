@@ -43,7 +43,7 @@ from pyworkflow.utils import getExt, createLink
 import pyworkflow.utils as pwutils
 import tomo.constants as const
 from pyworkflow.utils import cyanStr
-from tomo.objects import SetOfTiltSeries, TiltSeries, CTFTomoSeries, CTFTomo, LandmarkModel, TomoAcquisition, TiltImage
+from tomo.objects import SetOfTiltSeries, TiltSeries, CTFTomoSeries, CTFTomo, LandmarkModel, TomoAcquisition, TiltImage, Tomogram
 
 logger = logging.getLogger(__name__)
 
@@ -964,3 +964,108 @@ def readLandmarkSidecar(streamingDir: str, tsId: str) -> LandmarkModel:
     lm.setTsId(data['tsId'])
     lm.setCount(data.get('count', 0))
     return lm
+
+
+# ---------------------------------------------------------------------------
+# Per-tomogram metadata "sidecar" files (the Tomogram analog of the TS/CTF/
+# LandmarkModel sidecars above). A streaming producer (e.g. a reconstruction
+# protocol) publishes one JSON sidecar per finished Tomogram; a downstream
+# consumer (e.g. a streaming denoising protocol) rebuilds the Tomogram fully in
+# memory from it WITHOUT opening the producer's live SetOfTomograms SQLite. The
+# voxel data itself is NOT embedded here: it already lives in the referenced .mrc
+# file on shared storage and is read from it lock-free on demand. This sidecar
+# carries only the round-trippable object metadata needed to reconstruct the
+# Tomogram wrapper. A Tomogram is a single object (a Volume), so -- like the
+# LandmarkModel sidecar -- there is no per-item list.
+# ---------------------------------------------------------------------------
+TOMO_META_VERSION = 1
+
+
+def getTomoSidecarPath(streamingDir: str, tsId: str) -> str:
+    return join(streamingDir, f'{tsId}{const.TOMO_META_EXT}')
+
+
+def tomoSidecarExists(streamingDir: str, tsId: str) -> bool:
+    return exists(getTomoSidecarPath(streamingDir, tsId))
+
+
+def writeTomoSidecar(streamingDir: str, tomogram: Tomogram) -> None:
+    """Atomically write the metadata sidecar for a Tomogram.
+
+    Built entirely from the IN-MEMORY ``tomogram`` the producer already holds — it
+    performs NO database read. Written to a temp file and ``os.replace``-d into
+    place so a consumer never observes a half-written sidecar. Call this BEFORE
+    publishing the tsId to the stream journal so the journal id only appears once
+    the sidecar is complete. Mirrors writeTsSidecar / writeCtfSidecar /
+    writeLandmarkSidecar.
+
+    The voxel data is not serialized here (see module note above): it is in the
+    referenced ``fileName`` (.mrc) file, plus the optional even/odd half maps.
+    """
+    acq = tomogram.getAcquisition()
+    data = {
+        'version': TOMO_META_VERSION,
+        'tsId': tomogram.getTsId(),
+        'index': tomogram.getIndex(),
+        'fileName': tomogram.getFileName(),         # .mrc volume with the voxel data
+        'samplingRate': tomogram.getSamplingRate(),
+        'ctfCorrected': tomogram.ctfCorrected(),
+        'acquisition': _acqToDict(acq) if acq is not None else {},
+        # Origin shift matrix (Angstroms) -- serialized only when a real origin was
+        # set, mirroring how the TS sidecar only stores a per-tilt transform when
+        # present (never force a default that would need to read the volume header).
+        'origin': (tomogram.getOrigin().getMatrix().tolist()
+                   if tomogram.hasOrigin() else None),
+        # Even/odd half maps (relevant to streaming denoising): stored as a list of
+        # file paths so setHalfMaps can restore them verbatim.
+        'halfMaps': _halfMapsToList(tomogram) if tomogram.hasHalfMaps() else [],
+    }
+    path = getTomoSidecarPath(streamingDir, tomogram.getTsId())
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f)
+    os.replace(tmp, path)  # atomic publish of the sidecar
+
+
+def readTomoSidecar(streamingDir: str, tsId: str) -> Tomogram:
+    """Rebuild a ``Tomogram`` fully in memory from the sidecar.
+
+    No SQLite access at all -> no lock contention with the producer. This is the
+    Tomogram analog of readTsSidecar / readCtfSidecar / readLandmarkSidecar.
+    """
+    with open(getTomoSidecarPath(streamingDir, tsId)) as f:
+        data = json.load(f)
+
+    tomo = Tomogram(tsId=data['tsId'])
+    tomo.setTsId(data['tsId'])
+    if data.get('fileName') is not None:
+        tomo.setFileName(data['fileName'])
+    if data.get('index') is not None:
+        tomo.setIndex(data['index'])
+    if data.get('samplingRate') is not None:
+        tomo.setSamplingRate(data['samplingRate'])
+    tomo.setCtfCorrected(bool(data.get('ctfCorrected', False)))
+
+    acqDict = data.get('acquisition') or {}
+    if acqDict:
+        tomo.setAcquisition(_dictToAcq(acqDict))
+
+    if data.get('origin') is not None:
+        tomo.setOrigin(Transform(matrix=np.array(data['origin'])))
+
+    halfMaps = data.get('halfMaps') or []
+    if halfMaps:
+        tomo.setHalfMaps(list(halfMaps))
+
+    return tomo
+
+
+def _halfMapsToList(tomogram: Tomogram) -> List[str]:
+    """Return the tomogram's even/odd half-map paths as a plain list of strings,
+    tolerating the CsvList being exposed as either a comma-string or a list."""
+    hm = tomogram.getHalfMaps()
+    if hm is None:
+        return []
+    if isinstance(hm, str):
+        return [p for p in hm.split(',') if p]
+    return [p for p in list(hm) if p]
