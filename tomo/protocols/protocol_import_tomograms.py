@@ -25,10 +25,12 @@
 # *
 # **************************************************************************
 import logging
+import re
 from os.path import abspath, basename, join
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
+from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.utils.path import createAbsLink, removeBaseExt, getExt
 import pyworkflow.protocol.params as params
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
@@ -37,6 +39,10 @@ from ..objects import Tomogram, SetOfTomograms
 
 logger = logging.getLogger(__name__)
 OUTPUT_NAME = 'Tomograms'
+HALF_WORDS = ['_' + variant + '.'
+              for word in ('even', 'evn', 'odd')
+              for variant in (word, word.capitalize(), word.upper())]
+HALF_RE = re.compile(r'^(?P<base>.+)_(?P<kind>even|evn|odd)$', re.IGNORECASE)
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -50,10 +56,15 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self.Tomograms = None
         self.ih = None
 
-
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
         ProtTomoImportFiles.addExclusionWordsParam(form)
+        form.addParam('importOddEven', params.BooleanParam,
+                      default=False,
+                      label='Import even/odd halves?',
+                      expertLevel = LEVEL_ADVANCED,
+                      help='No: the halves are not imported.\n'
+                           'Yes: the halves are linked to their tomogram and stored as half maps.')
 
         ProtTomoImportAcquisition._defineParams(self, form)
 
@@ -148,9 +159,10 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(), pattern))
             filePaths = [fileName[0] for fileName in self.iterFiles()]
             fileList = self._excludeByWords(filePaths)
+
             for fileName in fileList:
                 tsId = normalizeTSId(removeBaseExt(fileName))
-                self.addTomoToSet(fileName, tsId, tomo, tomoSet)
+                self.addTomoToSet(fileName, tsId, tomo, tomoSet)  ###############
 
         self._defineOutputs(**{OUTPUT_NAME: tomoSet})
 
@@ -190,9 +202,39 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         createAbsLink(abspath(fileName), abspath(newFileName))
         tomoObj.setAcquisition(self._extractAcquisitionParameters(fileName))
         tomoObj.cleanObjId()
-        tomoObj.setFileName(newFileName)
+        tomoObj.setFileName(
+            newFileName)  # in questo punto si scrivono le info dei path di even e odd per ciascun tomogramma
+        # l-idea sarebbe clonare la linea e usare un flag in relazione al fatto che l usuario voglia o meno even e odd
         tomoSet.append(tomoObj)
         tomoSet.update(tomoObj)
+
+    def _excludeByWords(self, files):
+        exclusionWordList = (self.exclusionWords.get() or '').split()
+        if not self.importOddEven.get():
+            exclusionWordList += HALF_WORDS
+
+        allowedFiles = []
+        for file in files:
+            if any(bannedWord in file for bannedWord in exclusionWordList):
+                logger.info("%s excluded. Contains any of %s" %
+                            (file, ' '.join(exclusionWordList)))
+                continue
+            allowedFiles.append(file)
+        return allowedFiles
+
+    def _groupHalves(self, filePaths):
+        mains, halves = {}, {} #two dicts, one for the full tomos and one for the halves
+        for path in filePaths:
+            stem = splitext(basename(path))[0] #delete the file path and the file extension
+            match = HALF_RE.match(stem)
+            if match:
+                kind = 'odd' if match.group('kind').lower() == 'odd' else 'even'
+                halves.setdefault(match.group('base'), {})[kind] = path
+            else:
+                mains[stem] = path
+        return [(mains[base], half['even'], half['odd'])
+                for base, half in halves.items()
+                if base in mains and 'even' in half and 'odd' in half]
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
