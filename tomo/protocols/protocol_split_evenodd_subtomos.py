@@ -34,7 +34,103 @@ from tomo.protocols import ProtTomoBase
 
 
 class ProtSplitEvenOddTomoSet(EMProtocol, ProtTomoBase):
-    """ Protocol to split set of tomograms or subtomograms in even/odd sets by element id.
+    """
+    Splits a set of tomograms or subtomograms into two independent subsets
+    according to the parity of each element identifier.
+
+    AI Generated:
+
+    Split Even/Odd Tomograms or Subtomograms (ProtSplitEvenOddTomoSet) — User Manual
+        Overview
+
+        The Split Even/Odd Tomograms or Subtomograms protocol divides an input
+        set into two separate subsets based on the object identifier of each
+        element. Items with even identifiers are placed in one output set,
+        while items with odd identifiers are placed in another.
+
+        In tomography workflows, this type of partition is commonly used when
+        preparing independent half-sets for validation, testing reproducibility,
+        or running parallel downstream analyses. The protocol does not modify
+        the tomograms or subtomograms themselves; it only reorganizes the input
+        data into two complementary groups.
+
+        Inputs and General Workflow
+
+        The protocol accepts as input either a set of tomograms or a set of
+        subtomograms.
+
+        During execution, the protocol first determines the nature of the input
+        object. If the input corresponds to tomograms, two new sets of
+        tomograms are created. If the input corresponds to subtomograms, two
+        new sets of subtomograms are created instead.
+
+        Both output sets inherit the metadata and general information from the
+        original input set, ensuring that acquisition parameters, sampling
+        information, and other relevant attributes remain consistent.
+
+        Splitting Criterion
+
+        The separation is based exclusively on the object identifier
+        (`objId`) of each element.
+
+        Elements whose identifier is divisible by two are assigned to the
+        *even* output set. Elements whose identifier is not divisible by two
+        are assigned to the *odd* output set.
+
+        This criterion guarantees a deterministic partition of the input set.
+        Running the protocol multiple times on the same input produces the same
+        split.
+
+        Biological Interpretation
+
+        From a biological perspective, this protocol does not perform any form
+        of structural classification, quality filtering, or data selection
+        based on image content. The split is purely technical.
+
+        For that reason, the resulting even and odd subsets should be
+        interpreted simply as two independent partitions of the same dataset.
+        They are particularly useful in workflows where one wishes to maintain
+        statistical independence between subsets, for example during
+        validation-oriented reconstruction procedures.
+
+        Outputs and Their Interpretation
+
+        After execution, the protocol generates two output sets:
+
+        - **outputset_even**: contains all elements with even object identifiers.
+        - **outputset_odd**: contains all elements with odd object identifiers.
+
+        The outputs preserve the same data type as the input. Therefore, if the
+        input is a set of tomograms, both outputs are tomogram sets. If the
+        input is a set of subtomograms, both outputs are subtomogram sets.
+
+        Source relations are also preserved, allowing downstream protocols to
+        trace both subsets back to the original dataset.
+
+        Practical Recommendations
+
+        This protocol is most useful when a simple and reproducible split of
+        the dataset is required.
+
+        Since the partition depends entirely on object identifiers, users
+        should keep in mind that the even/odd division does not guarantee
+        biological balance between subsets. If the input dataset was assembled
+        in a non-random order, one subset could accidentally contain a biased
+        representation of the data.
+
+        In routine practice, this protocol is best suited for technical
+        half-set generation rather than for biologically meaningful sampling.
+
+        Final Perspective
+
+        The Split Even/Odd Tomograms or Subtomograms protocol provides a fast,
+        deterministic, and lightweight way to divide tomography datasets into
+        two complementary subsets.
+
+        Although computationally simple, it can play an important practical
+        role in validation workflows, independent testing pipelines, and
+        downstream processing strategies where reproducible dataset partitioning
+        is required.
     """
     _label = 'split even/odd tomos/subtomos'
     _devStatus = BETA

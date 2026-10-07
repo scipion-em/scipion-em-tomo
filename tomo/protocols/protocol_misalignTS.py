@@ -42,10 +42,201 @@ INTERPOLATED_TS_NAME = "InterpolatedTiltSeries"
 
 class ProtTomoMisalignTiltSeries(EMProtocol, ProtTomoBase):
     """
-    Introduce misalignment in the transformation matrix of a tilt-series.
-    NOTE: The Interpolated tilt series in this case resembles a not aligned tilt series
-    or an aligned one in case you want to apply the inverse of the misalignment
-    transformation matrix.
+    Introduces controlled misalignment into the transformation matrices
+    of a tilt-series.
+
+    AI Generated:
+
+    Misalign Tilt-Series (ProtTomoMisalignTiltSeries) — User Manual
+        Overview
+
+        The Misalign Tilt-Series protocol introduces controlled geometric
+        perturbations into the alignment parameters of an input
+        tilt-series. Its main purpose is to simulate realistic alignment
+        errors by modifying the transformation matrix associated with
+        each tilt image.
+
+        In cryo-electron tomography workflows, this protocol is useful
+        for testing alignment robustness, benchmarking reconstruction
+        methods, and generating synthetic datasets that mimic imperfect
+        experimental acquisition conditions.
+
+        From a practical perspective, the protocol allows users to
+        simulate translational and angular errors resembling those
+        typically observed in real tilt-series before alignment
+        refinement.
+
+        Inputs and General Workflow
+
+        The protocol requires a SetOfTiltSeries as input.
+
+        For each tilt-series, the protocol iterates through every tilt
+        image and modifies its transformation matrix according to the
+        selected misalignment parameters.
+
+        The resulting output is a new tilt-series whose images preserve
+        the original image data but contain altered transformation
+        matrices.
+
+        Optionally, the protocol can also generate an interpolated
+        tilt-series by physically applying the misalignment
+        transformations to the image stack.
+
+        Misalignment Model
+
+        Misalignment can be introduced independently in three geometric
+        components:
+
+            - Shift along the X axis
+            - Shift along the Y axis
+            - Rotation angle
+
+        For each enabled component, the protocol computes a perturbation
+        according to the following general model:
+
+            d = constant
+                + incremental term
+                + sine-lobe component
+                + sine-cycle component
+                + random Gaussian noise
+
+        This formulation allows users to simulate different classes of
+        experimental imperfections.
+
+        Constant and Incremental Errors
+
+        The constant term introduces a fixed offset affecting all tilt
+        images equally.
+
+        The incremental term introduces a cumulative drift along the
+        tilt-series. This reproduces the type of progressive alignment
+        deviation often observed during long acquisitions.
+
+        Biologically and experimentally, these two components resemble
+        systematic alignment biases caused by stage drift, calibration
+        offsets, or accumulated tracking errors.
+
+        Oscillatory Errors
+
+        The sine-lobe component introduces a smooth half-cycle
+        deformation along the tilt-series.
+
+        The sine-cycle component introduces a full oscillatory behavior.
+
+        These two terms are especially useful for simulating structured
+        alignment deviations, such as mechanical instabilities or
+        reproducible acquisition distortions that vary with tilt angle.
+
+        The amplitude controls the magnitude of the effect, while the
+        phase parameter shifts its position along the image sequence.
+
+        Random Noise
+
+        Random Gaussian noise can also be added independently to shifts
+        and angle.
+
+        This simulates stochastic alignment uncertainty, resembling
+        residual errors after imperfect alignment refinement.
+
+        In practical benchmarking workflows, this component is useful
+        for generating more realistic synthetic perturbations rather
+        than purely deterministic distortions.
+
+        Transformation Matrix Modification
+
+        For each tilt image, the protocol reads the existing
+        transformation matrix. If none exists, an identity matrix is
+        assumed.
+
+        The selected perturbations are then applied directly to the
+        transformation matrix:
+
+            - X and Y errors modify the translation components.
+            - Angular errors modify the rotational components.
+
+        When angular perturbation is enabled, the protocol computes the
+        current angle from the existing matrix, adds the perturbation,
+        and reconstructs the rotation block accordingly.
+
+        Output Transformation Files
+
+        For each processed tilt-series, the protocol stores two
+        auxiliary transformation files:
+
+            TM_misalignment_<tsId>.xf
+
+                Contains only the incremental perturbation introduced
+                at each tilt image.
+
+            TM_final_<tsId>.xf
+
+                Contains the final transformation matrix after applying
+                the perturbation.
+
+        These files are particularly useful for debugging, benchmarking,
+        or validating the exact geometric perturbation applied to the
+        dataset.
+
+        Interpolated Tilt-Series
+
+        Optionally, the protocol can generate an interpolated
+        tilt-series.
+
+        In this case, the modified transformation matrices are
+        physically applied to the image stack, producing a new tilt
+        series whose pixel data reflects the induced misalignment.
+
+        This output resembles a raw, not-yet-aligned tilt-series.
+
+        Optionally, the inverse of the misalignment transformation can
+        be stored instead. This can be useful when testing alignment
+        recovery workflows or validating inverse transformation
+        strategies.
+
+        Outputs and Their Interpretation
+
+        The protocol may generate two outputs.
+
+        Misaligned Tilt-Series
+
+            A tilt-series with modified transformation matrices but
+            unchanged image data.
+
+        Interpolated Tilt-Series
+
+            A tilt-series where the geometric transformations have been
+            applied directly to the image stack.
+
+        From a methodological perspective, the first output is useful
+        when one wants to propagate alignment metadata, while the second
+        is useful when a physically distorted tilt-series is required.
+
+        Practical Recommendations
+
+        In most benchmarking scenarios, it is good practice to begin
+        with small translational and angular perturbations and
+        progressively increase their magnitude.
+
+        Large angular perturbations or strong cumulative drift can
+        quickly produce unrealistic acquisition geometries.
+
+        For biologically meaningful simulation, perturbation amplitudes
+        should remain consistent with the alignment uncertainties
+        expected in real tomography experiments.
+
+        The interpolated output should be visually inspected whenever
+        large perturbations are introduced, since extreme parameters may
+        generate unrealistic image distortions.
+
+        Final Perspective
+
+        For cryo-ET users, this protocol provides a practical framework
+        for simulating imperfect alignment conditions.
+
+        Although computationally simple, it is highly valuable for
+        testing robustness, validating alignment pipelines, and
+        generating controlled synthetic datasets for methodological
+        development.
     """
     _label = 'misalign tilt-series '
     _devStatus = BETA

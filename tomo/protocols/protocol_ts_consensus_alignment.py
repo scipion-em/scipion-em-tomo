@@ -42,8 +42,194 @@ from tomo.protocols import ProtTomoBase
 
 class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
     """
-    Perform a consensus of a set of alignments for the same tilt series. Returns the average alignment matrix of the
-    consensus alignments and its standard deviation of shift and angle.
+    Computes a consensus alignment across multiple sets of aligned tilt-series
+    representing the same specimens.
+
+    AI Generated:
+
+    Tilt-Series Consensus Alignment (ProtConsensusAlignmentTS) — User Manual
+        Overview
+
+        The Tilt-Series Consensus Alignment protocol compares several independently
+        aligned versions of the same tilt-series and evaluates whether their
+        alignment information is mutually consistent.
+
+        Its goal is to identify reliable alignments by comparing the geometric
+        transformations assigned to each tilt-image across multiple input
+        tilt-series. When agreement is found, the protocol generates a consensus
+        alignment. When agreement is not sufficiently supported, the protocol
+        preserves the tilt-series but flags it as lacking consensus.
+
+        From a cryo-electron tomography perspective, this protocol is especially
+        useful when alignments have been produced using different alignment
+        strategies, different software packages, or different preprocessing
+        conditions. Consensus evaluation helps determine whether the recovered
+        geometry is robust enough for downstream tomographic reconstruction or
+        subtomogram analysis.
+
+        Inputs and General Workflow
+
+        The protocol requires multiple input sets of tilt-series. Each input set
+        must contain aligned tilt-series sharing common tilt-series identifiers
+        (tsId). Only tilt-series present in all selected inputs are considered.
+
+        For each common tilt-series, the protocol extracts the transformation
+        matrix of every tilt-image from every input alignment. These matrices are
+        then compared under user-defined geometric tolerances.
+
+        The output inherits metadata from the first selected tilt-series set,
+        which therefore acts as the structural reference for output formatting
+        and metadata preservation.
+
+        Consensus Criteria
+
+        Consensus is evaluated using two biologically meaningful thresholds:
+
+        Shift tolerance (Å)
+            Defines the maximum acceptable translational difference between
+            alignments. Internally, this threshold is converted into pixels using
+            the sampling rate.
+
+        Angle tolerance (degrees)
+            Defines the maximum acceptable rotational discrepancy between
+            alignments.
+
+        These tolerances determine whether independently estimated alignments are
+        considered equivalent.
+
+        Tight tolerances make the protocol more conservative and are useful for
+        high-precision workflows. More permissive tolerances may be appropriate
+        when input alignments originate from heterogeneous preprocessing
+        pipelines or lower-quality datasets.
+
+        Local and Global Consensus Modes
+
+        The protocol provides two consensus strategies.
+
+        Global Consensus
+
+        In global mode, the protocol evaluates agreement at the tilt-series
+        level. Entire alignment trajectories are compared pairwise.
+
+        If one alignment disagrees with the rest beyond the defined tolerances,
+        it is iteratively discarded. Consensus is only accepted when the
+        remaining alignments agree as complete tilt-series.
+
+        This mode is stricter and biologically appropriate when the objective is
+        to validate the global consistency of the entire tilt-series geometry.
+
+        Local Consensus
+
+        In local mode, consensus is evaluated independently for each tilt-image.
+
+        Each projection is compared across all alignments. A given tilt-image may
+        reach consensus even if other images in the same tilt-series do not.
+
+        If consensus is achieved for a tilt-image, an average transformation is
+        computed. If no agreement is found for that specific image, the image is
+        retained but marked as disabled in the output.
+
+        This mode is particularly useful when some projections are unstable,
+        noisy, or affected by local alignment failures, while the rest of the
+        tilt-series remains reliable.
+
+        Consensus Matrix Comparison
+
+        For each pair of alignments, the protocol compares transformation
+        matrices after compensating for differences in sampling rate.
+
+        Matrix comparison evaluates:
+
+        - Rotational disagreement from the angular component of the
+          transformation matrix.
+        - Translational disagreement from X and Y shifts.
+
+        In both local and global modes, the protocol also estimates a correction
+        for systematic Y-shift offsets between alignments before computing the
+        residual disagreement.
+
+        This makes the comparison more robust when independent alignments differ
+        by small global offsets but remain geometrically equivalent.
+
+        Output Generation
+
+        Consensus Achieved
+
+        When consensus is achieved, the protocol generates an output set of
+        tilt-series with consensus alignment.
+
+        For each tilt-image:
+
+        - The consensus transformation matrix is stored.
+        - The angular standard deviation is recorded.
+        - The shift standard deviation is recorded.
+
+        These standard deviations provide a direct measure of alignment
+        reproducibility across independent inputs.
+
+        Low standard deviation indicates strong geometric agreement.
+        Higher values suggest uncertainty or local instability.
+
+        No Consensus Achieved
+
+        If consensus cannot be established for a given tilt-series, the protocol
+        produces a separate output set containing the same tilt-series without
+        consensus alignment information.
+
+        This allows users to keep track of problematic datasets without losing
+        their metadata or tilt-image ordering.
+
+        Biological Interpretation
+
+        Consensus alignment is particularly valuable when robust geometry is
+        critical for downstream analysis.
+
+        In cryo-ET workflows, misalignment directly affects:
+
+        - Tomogram reconstruction quality
+        - Resolution of subtomogram averages
+        - Reliability of particle localization
+        - Accuracy of structural interpretation
+
+        By comparing multiple independent alignment solutions, this protocol
+        provides an empirical estimate of alignment reliability rather than
+        relying on a single optimization result.
+
+        Practical Recommendations
+
+        For routine use:
+
+        - Use global consensus when validating fully converged alignments.
+        - Use local consensus when partial instability is expected.
+        - Start with moderate tolerances and tighten them for high-resolution
+          applications.
+
+        If many tilt-series fail consensus, this often suggests:
+
+        - Strong misalignment in one input set
+        - Sampling-rate inconsistencies
+        - Poor preprocessing quality
+        - Excessive geometric heterogeneity
+
+        Inspecting the output standard deviations can help identify whether the
+        disagreement is systematic or limited to specific projections.
+
+        Validation Rules
+
+        The protocol requires at least two input tilt-series sets.
+
+        Additionally, all input tilt-series must already contain transformation
+        matrices. If any selected set lacks alignment information, validation
+        fails before execution.
+
+        Final Perspective
+
+        Tilt-series consensus alignment is not merely an averaging operation.
+        It acts as a robustness estimator for alignment reproducibility.
+
+        In practical tomography workflows, this protocol helps determine whether
+        geometric alignment is sufficiently stable to support biologically
+        meaningful downstream reconstruction and interpretation.
     """
 
     _label = 'Tilt-series consensus alignment'

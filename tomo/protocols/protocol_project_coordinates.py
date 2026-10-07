@@ -44,7 +44,161 @@ class OutputProjectCoordinates(enum.Enum):
 
 class ProtProjectCoordinates(EMProtocol, ProtTomoBase):
     """
-    Project 3D coordinates into a set of landmarks.
+    Projects a set of 3D coordinates onto a tilt-series and converts them
+    into landmark models.
+
+    AI Generated:
+
+    Project Coordinates (ProtProjectCoordinates) — User Manual
+        Overview
+
+        The Project Coordinates protocol projects 3D coordinates onto the
+        images of a tilt-series and generates a set of landmark models.
+        Its main purpose is to transform volumetric coordinate information
+        into 2D landmark positions that are geometrically consistent with
+        each tilt image.
+
+        In cryo-electron tomography workflows, this protocol is especially
+        useful when 3D positions—such as particle centers, annotated
+        features, or reference points—must be mapped back onto the
+        original acquisition images. This enables direct visualization of
+        the projected positions and provides input for downstream
+        landmark-based processing.
+
+        Inputs and General Workflow
+
+        The protocol requires a set of 3D coordinates as the main input.
+        Optionally, the user may also provide a tilt-series. If the
+        tilt-series is not explicitly provided, the protocol attempts to
+        deduce it automatically from the coordinate metadata.
+
+        During execution, the protocol first retrieves the input
+        tilt-series and computes the sampling relationship between the
+        coordinate set and the tilt-series. This scaling step ensures
+        that the coordinates are expressed in the same spatial sampling
+        system as the tilt images.
+
+        For each tilt-series, the protocol creates one landmark model.
+        Then, every 3D coordinate belonging to that tilt-series is
+        projected onto every tilt image, producing a set of 2D landmark
+        positions across the angular series.
+
+        Coordinate Scaling and Centering
+
+        Since coordinates and tilt-series may have different sampling
+        rates, the protocol rescales each coordinate before projection.
+        This guarantees that the projected positions match the binning of
+        the tilt-series.
+
+        In addition, the projected 2D coordinates are shifted by the
+        image center offset. This is required because the geometric
+        projection is computed around the origin, whereas image
+        coordinates are expressed relative to the pixel grid.
+
+        From a practical perspective, this means that the final landmark
+        positions are directly usable in the coordinate system of the
+        tilt images.
+
+        Projection Geometry
+
+        The protocol applies a simple projection model based on the tilt
+        angle of each image.
+
+        For every tilt image, a projection matrix is generated from the
+        corresponding tilt angle. This matrix rotates the 3D coordinate
+        according to the acquisition geometry and projects it into 2D
+        image space.
+
+        Biologically, this reproduces the expected apparent position of a
+        3D object when observed under the viewing angle of each tilt
+        image.
+
+        Tilt-Image Transformations
+
+        If a tilt image contains an associated geometric transformation,
+        the protocol applies the inverse transformation after projection.
+
+        This is important because tilt images may already contain prior
+        alignment corrections. By applying the inverse transformation,
+        the projected landmarks remain consistent with the actual image
+        coordinates.
+
+        In practical tomography workflows, this allows landmarks to be
+        correctly placed even when the tilt-series has undergone previous
+        alignment or motion correction steps.
+
+        Landmark Construction
+
+        For each projected coordinate, the protocol adds one landmark per
+        tilt image.
+
+        Each landmark stores:
+            - the projected X coordinate,
+            - the projected Y coordinate,
+            - the tilt-image index,
+            - the chain identifier corresponding to the original 3D
+              coordinate.
+
+        As a result, every 3D coordinate becomes a landmark trajectory
+        across the tilt-series.
+
+        This structure is particularly useful for visualization,
+        refinement, or subsequent landmark-based alignment procedures.
+
+        Outputs and Their Interpretation
+
+        The main output of the protocol is a SetOfLandmarkModels.
+
+        One landmark model is created for each tilt-series. Each model
+        contains all projected landmark tracks corresponding to the 3D
+        coordinates associated with that series.
+
+        From a biological and experimental point of view, the output
+        allows users to verify whether reconstructed 3D positions are
+        geometrically consistent with the raw tilt images.
+
+        This can be especially useful for:
+            - validating particle localization,
+            - checking reconstruction consistency,
+            - preparing landmarks for downstream tomography processing.
+
+        Validation and Input Consistency
+
+        Before execution, the protocol verifies that a tilt-series can be
+        obtained.
+
+        If no tilt-series is explicitly provided and none can be deduced
+        from the coordinates, execution cannot proceed and the user is
+        asked to specify the tilt-series manually.
+
+        This validation step is essential because the projection geometry
+        depends entirely on the tilt-series acquisition parameters.
+
+        Practical Recommendations
+
+        In routine tomography workflows, this protocol is most reliable
+        when the input coordinates originate from the same tilt-series
+        that will be used for projection.
+
+        If coordinates come from data that has been resampled, rebinned,
+        or transformed independently, special care should be taken to
+        ensure that the sampling rates remain consistent.
+
+        It is often good practice to visually inspect the resulting
+        projected landmarks after execution. Incorrect scaling,
+        mismatched tilt-series, or inconsistent geometry usually become
+        immediately visible at this stage.
+
+        Final Perspective
+
+        For most cryo-ET users, this protocol provides a direct link
+        between reconstructed 3D information and the original tilt
+        images.
+
+        Although mathematically simple, this projection step is
+        biologically important because it enables validation of spatial
+        interpretations directly against the experimental acquisition
+        data.
     """
 
     _label = 'project coordinates'

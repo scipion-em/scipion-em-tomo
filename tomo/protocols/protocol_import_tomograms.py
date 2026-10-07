@@ -40,7 +40,214 @@ OUTPUT_NAME = 'Tomograms'
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
-    """Protocol to import a set of tomograms to the project"""
+    """
+    Import Tomograms (ProtImportTomograms) — User Manual
+
+    Overview
+
+    The Import Tomograms protocol imports reconstructed tomographic volumes into
+    Scipion and converts them into a native `SetOfTomograms`.
+
+    Its main purpose is to register tomographic volumes together with their spatial
+    origin, sampling information, and acquisition metadata so they can be used in
+    downstream cryo-electron tomography workflows.
+
+    For a biological user, this protocol is typically the starting point of a
+    tomographic analysis pipeline, since all subsequent particle picking,
+    subtomogram extraction, visualization, and averaging depend on a correct
+    tomogram spatial reference.
+
+    Inputs and General Workflow
+
+    The protocol requires one or more tomogram files as input.
+
+    These files are imported from a directory or from a filename pattern.
+
+    During execution, the protocol scans the input path, identifies matching files,
+    and creates a `SetOfTomograms` in the Scipion project.
+
+    Each imported tomogram receives:
+
+    - a tilt-series identifier (`tsId`),
+    - a sampling rate,
+    - an origin definition,
+    - acquisition metadata.
+
+    The protocol does not duplicate the original tomogram data. Instead, it creates
+    internal links to the source files.
+
+    This makes the import lightweight while preserving direct access to the original
+    reconstructed volumes.
+
+    File Matching Strategy
+
+    The protocol supports two file discovery modes.
+
+    Direct pattern matching:
+    - files are imported directly from the specified path and filename pattern.
+
+    Regular-expression matching:
+    - filenames are parsed through a regular expression and converted into
+      normalized tilt-series identifiers.
+
+    This flexibility is particularly useful in tomography facilities where
+    reconstructed tomograms may come from different reconstruction pipelines and
+    follow different naming conventions.
+
+    Sampling Rate and Spatial Interpretation
+
+    Every imported tomogram is assigned a sampling rate.
+
+    This sampling rate defines the voxel size in Angstroms per pixel and becomes
+    the spatial scale used by all downstream tomography protocols.
+
+    From a biological perspective, correct sampling rate assignment is essential
+    because all measurements, particle coordinates, and subtomogram extraction
+    boxes depend directly on it.
+
+    Acquisition Metadata
+
+    The protocol can also import tomography acquisition metadata.
+
+    Depending on the user configuration, acquisition information may be obtained:
+
+    - from the input files, or
+    - from manually defined acquisition parameters.
+
+    When acquisition parameters are assigned at import time, the resulting tomogram
+    set stores experimental metadata such as microscope conditions in a form that
+    remains available for downstream processing.
+
+    This is especially important in cryo-ET workflows where accurate acquisition
+    metadata may later influence reconstruction interpretation or subtomogram
+    analysis.
+
+    Origin of Coordinates
+
+    One of the most biologically important features of the protocol is the handling
+    of tomogram origin coordinates.
+
+    The spatial origin determines how all particle coordinates and extracted
+    subtomograms are interpreted inside the tomographic volume.
+
+    The protocol provides three possible origin strategies.
+
+    Default geometric center:
+    - if no manual origin is requested, the origin is placed at the geometric
+      center of the tomogram.
+
+    MRC header origin:
+    - if enabled, the protocol reads origin information directly from the MRC
+      header whenever the file is compatible.
+
+    Manual origin:
+    - the user may explicitly provide X, Y, and Z shifts in Angstroms.
+
+    This flexibility is biologically important because different reconstruction
+    software packages may define the tomogram origin differently.
+
+    A wrong origin may not affect visualization immediately, but it can strongly
+    impact downstream coordinate interpretation, particle extraction, symmetry
+    operations, and subtomogram averaging.
+
+    Origin Handling in Practice
+
+    When origin information is requested from the MRC header:
+
+    - the protocol reads the origin directly from the file metadata.
+
+    If the file is not compatible with MRC origin metadata:
+
+    - the protocol automatically falls back to the geometric center.
+
+    When a manual origin is introduced:
+
+    - the specified coordinates are converted into internal shifts.
+
+    If no explicit origin is provided:
+
+    - the protocol places the origin at the center of the tomogram volume.
+
+    This ensures that every imported tomogram always receives a valid spatial
+    reference frame.
+
+    Tomogram Registration
+
+    For each imported tomogram, the protocol performs several registration steps.
+
+    It assigns:
+
+    - the tomogram origin,
+    - the tilt-series identifier,
+    - acquisition metadata,
+    - the internal file reference.
+
+    The tomogram is then appended to the output set.
+
+    This produces a Scipion-native tomogram object that can immediately be used by
+    downstream tomography protocols.
+
+    Output Generation
+
+    The protocol generates a `SetOfTomograms`.
+
+    The output set contains:
+
+    - all successfully imported tomograms,
+    - a common sampling rate,
+    - optional acquisition metadata.
+
+    Each tomogram preserves its own identity and spatial reference.
+
+    This organization is especially important in experiments involving multiple
+    tomograms, where each reconstructed volume must remain individually traceable.
+
+    Validation of Input Consistency
+
+    Before execution, the protocol checks whether matching tomogram files can be
+    found.
+
+    Validation depends on the selected matching mode.
+
+    For direct pattern import:
+    - at least one matching file must exist.
+
+    For regular-expression import:
+    - at least one filename must satisfy the regular-expression matching rule.
+
+    If no files are found, the protocol stops before execution.
+
+    This prevents the creation of empty tomogram sets.
+
+    Practical Recommendations
+
+    In routine cryo-electron tomography workflows, this protocol should be used
+    with particular attention to spatial consistency.
+
+    A few practical considerations are especially important:
+
+    - Verify the sampling rate carefully before import.
+    - Use MRC-header origin only when the reconstruction software is known to
+      write correct origin metadata.
+    - For symmetry-sensitive downstream analyses, verify that the origin preserves
+      the expected geometric symmetry.
+    - When importing tomograms from multiple reconstruction pipelines, confirm that
+      tilt-series identifiers remain consistent.
+
+    In most biological applications, correct origin assignment is often more
+    important than the import itself.
+
+    Final Perspective
+
+    The Import Tomograms protocol is much more than a file-loading utility.
+
+    It defines the spatial and experimental reference frame on which the entire
+    tomographic workflow will depend.
+
+    In modern cryo-ET pipelines, correct tomogram import is a foundational step
+    because all downstream coordinate interpretation, particle extraction, and
+    biological analysis inherit the spatial assumptions established here.
+    """
     _outputClassName = 'SetOfTomograms'
     _label = 'import tomograms'
     _possibleOutputs = {OUTPUT_NAME: SetOfTomograms}

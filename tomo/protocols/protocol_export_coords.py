@@ -42,7 +42,184 @@ EXPORT_TO_CBOX = 'cbox'
 
 
 class ProtExportCoordinates3D(EMProtocol):
-    """ Export 3D subtomogram coordinates to be used outside Scipion. """
+    """
+    Export 3D Coordinates (ProtExportCoordinates3D) — User Manual
+
+    Overview
+
+    The Export 3D Coordinates protocol exports a set of subtomogram particle coordinates
+    from Scipion into external file formats that can be used by other cryo-electron
+    tomography software packages.
+
+    Its main purpose is to make 3D particle positions generated or refined inside Scipion
+    available for downstream processing, visualization, classification, or subtomogram
+    averaging in external tomography environments.
+
+    For a biological user, this protocol acts as an interoperability bridge. It allows
+    coordinates identified in one workflow to be reused in other specialized packages
+    without manual reformatting.
+
+    Inputs and General Workflow
+
+    The protocol requires a single input:
+
+    - A `SetOfCoordinates3D`, containing particle coordinates associated with one or
+      more tomograms.
+
+    During execution, the protocol first identifies the tomograms represented in the
+    coordinate set and then creates a clean export directory.
+
+    The coordinates are then written tomogram by tomogram into the selected output format.
+
+    This organization is biologically useful because subtomogram workflows are usually
+    performed independently for each tomogram, and maintaining that separation preserves
+    experimental traceability.
+
+    Export Formats
+
+    The protocol supports several export formats depending on which tomography plugins
+    are available in the current Scipion installation.
+
+    Always available:
+
+    - TXT format
+
+    Optionally available if corresponding plugins are installed:
+
+    - STAR format for Relion Tomography
+    - JSON format for EMAN Tomography
+    - TBL format for Dynamo
+    - CBOX format for SPHIRE
+
+    This dynamic behavior ensures that the export options reflect the actual software
+    environment available to the user.
+
+    TXT Export
+
+    In the simplest export mode, the protocol writes plain text coordinate files.
+
+    For each tomogram, a separate file is created containing one coordinate per line:
+
+    - X position
+    - Y position
+    - Z position
+
+    Coordinates are written using the bottom-left corner convention.
+
+    This format is useful for generic external analysis, quick inspection, scripting,
+    or importing into software that accepts simple coordinate lists.
+
+    STAR Export
+
+    When the Relion Tomography plugin is available, the protocol can export coordinates
+    into STAR format.
+
+    In this mode:
+
+    - all coordinates are written into a STAR file;
+    - tomogram identifiers are preserved;
+    - sampling rate information is also included.
+
+    This export is particularly useful when transferring particles from Scipion into
+    Relion-based subtomogram averaging workflows.
+
+    EMAN Export
+
+    When the EMAN tomography plugin is installed, the protocol exports coordinates into
+    JSON metadata files.
+
+    One JSON file is created for each tomogram.
+
+    This mode is especially useful for workflows involving particle picking,
+    subtomogram extraction, or visualization inside EMAN-based environments.
+
+    Dynamo Export
+
+    When the Dynamo plugin is available, the protocol exports coordinates in Dynamo
+    table (`.tbl`) format.
+
+    For each particle, the protocol writes:
+
+    - particle identifier,
+    - placeholder alignment parameters,
+    - particle position.
+
+    At present, alignment parameters are exported as default zero values.
+
+    This means the protocol mainly transfers positional information rather than
+    refined particle orientations.
+
+    From a practical perspective, this export is useful when coordinates need to be
+    imported into Dynamo for subsequent alignment or subtomogram averaging.
+
+    SPHIRE Export
+
+    When the SPHIRE plugin is installed, the protocol can export coordinates in
+    CBOX format.
+
+    This provides compatibility with SPHIRE tomography workflows and allows coordinate
+    transfer without additional manual conversion.
+
+    Coordinate Organization by Tomogram
+
+    One important internal feature of the protocol is that coordinates are processed
+    ordered by tomogram identifier.
+
+    Whenever the tomogram changes:
+
+    - the current output file is closed;
+    - a new tomogram-specific file is created.
+
+    This guarantees that exported coordinates remain naturally grouped according to
+    their source tomogram.
+
+    From a biological standpoint, this is essential because particles from different
+    tomograms often correspond to different specimens, acquisition conditions, or
+    biological states.
+
+    Output Management
+
+    All exported files are written into a dedicated `Export` directory created inside
+    the protocol working folder.
+
+    Before writing new results, any previous export directory is removed and recreated.
+
+    This ensures that:
+
+    - old files do not remain mixed with new results;
+    - the exported output reflects only the most recent execution.
+
+    After completion, the protocol summary reports the absolute path to the export
+    directory so the generated files can be easily located.
+
+    Practical Recommendations
+
+    In routine cryo-electron tomography workflows, this protocol is particularly useful
+    when particle coordinates need to be transferred between software environments.
+
+    A few practical considerations are important:
+
+    - Use TXT format for generic coordinate exchange or custom scripting.
+    - Use STAR format when preparing downstream processing in Relion Tomography.
+    - Use EMAN JSON export when continuing particle analysis in EMAN.
+    - Use Dynamo TBL export when coordinates will be refined or averaged in Dynamo.
+    - Use CBOX export for SPHIRE-compatible workflows.
+
+    Since coordinates are exported per tomogram, users should verify that tomogram
+    identifiers are consistent before exporting large coordinate sets.
+
+    Final Perspective
+
+    The Export 3D Coordinates protocol is a lightweight but highly practical utility
+    for tomography workflows.
+
+    Rather than modifying coordinates, it preserves particle spatial information and
+    makes it portable across multiple subtomogram analysis platforms.
+
+    In modern cryo-ET pipelines, this protocol plays an important interoperability role,
+    allowing coordinate information generated inside Scipion to remain useful throughout
+    the broader ecosystem of tomography software.
+    """
 
     _label = 'export 3D coordinates'
     _devStatus = NEW

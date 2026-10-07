@@ -40,7 +40,194 @@ from ..objects import SetOfCTFTomoSeries, CTFTomoSeries
 
 class ProtTsEstimateCTF(ProtTsProcess):
     """
-    Base class for estimating the CTF on TiltSeries
+    Estimates the Contrast Transfer Function (CTF) for each tilt image in a
+    tilt-series and stores the results as a SetOfCTFTomoSeries.
+
+    AI Generated:
+
+    Estimate CTF for Tilt-Series (ProtTsEstimateCTF) — User Manual
+        Overview
+
+        The ProtTsEstimateCTF protocol is a base class designed to estimate
+        the CTF of every tilt image contained in one or more tilt-series.
+        Instead of directly implementing a particular estimation algorithm,
+        this class defines the common workflow used by CTF estimation
+        protocols in tomography.
+
+        In cryo-electron tomography, CTF estimation is a fundamental
+        preprocessing step because each tilt image carries defocus
+        information that directly affects contrast interpretation,
+        phase correction, and all downstream reconstruction procedures.
+        Accurate CTF estimation is therefore essential before CTF
+        correction, subtomogram averaging, or high-resolution tomogram
+        reconstruction.
+
+        Inputs and General Workflow
+
+        The protocol accepts as input either:
+
+            - a SetOfTiltSeries
+            - a SetOfCTFTomoSeries
+
+        This design allows the protocol to work either from raw tilt-series
+        or from previously processed CTF-containing datasets while preserving
+        the original tilt-series reference.
+
+        The execution is image-based:
+
+            1. Each tilt image is extracted independently.
+            2. A temporary working directory is created.
+            3. The tilt image is converted to MRC format.
+            4. A subclass-specific CTF estimation algorithm is executed.
+            5. The resulting CTF model is attached to the tilt image.
+            6. Once all images from one tilt-series are processed,
+               the corresponding CTFTomoSeries object is generated.
+
+        This modular organization makes the protocol suitable both for
+        standard batch execution and for streaming-oriented processing.
+
+        Tilt Image Preparation
+
+        Before CTF estimation, each tilt image is converted into an
+        intermediate MRC file.
+
+        If a downsampling factor is provided, Fourier-space scaling is
+        applied before estimation. This can significantly reduce
+        computational cost during exploratory runs or when working with
+        large tilt-series.
+
+        If no downsampling is requested, the image is converted directly
+        into floating-point format.
+
+        Special handling is included for MRC input files so that the
+        internal image handler interprets them as tilt-series stacks
+        rather than single images.
+
+        For practical biological work, moderate downsampling is often
+        useful during testing, but final CTF estimation is typically
+        recommended at native sampling whenever high-resolution analysis
+        is expected.
+
+        CTF Estimation Logic
+
+        The actual estimation procedure is intentionally left undefined
+        at this level.
+
+        Subclasses must implement:
+
+            - _estimateCtf(...)
+            - getCtf(...)
+
+        This means the current class provides the processing framework,
+        while concrete implementations define how defocus values,
+        astigmatism, power spectra fitting, or other CTF parameters are
+        computed.
+
+        In practical terms, this base class standardizes the workflow so
+        that different CTF estimation engines can be integrated without
+        changing the protocol structure.
+
+        Global CTF Parameters
+
+        During initialization, the protocol builds a global dictionary
+        of acquisition and estimation parameters shared by all tilt images.
+
+        These include:
+
+            - accelerating voltage
+            - spherical aberration
+            - magnification
+            - amplitude contrast
+            - sampling rate
+            - scanned pixel size
+            - estimation window size
+            - low-resolution limit
+            - high-resolution limit
+            - minimum defocus
+            - maximum defocus
+
+        If downsampling is used, the effective sampling rate is updated
+        accordingly.
+
+        These parameters define the physical constraints of the estimation
+        and ensure consistency across all tilt images in the dataset.
+
+        Output Generation
+
+        Once all tilt images belonging to one tilt-series have been
+        processed, the protocol creates a CTFTomoSeries object.
+
+        Each output series:
+
+            - preserves the original tilt-series metadata
+            - keeps the original tsId
+            - stores one CTF model per tilt image
+            - maintains the original tilt-series linkage
+
+        The output is appended incrementally into a
+        SetOfCTFTomoSeries.
+
+        This incremental design is especially useful for long-running
+        tomography workflows because completed tilt-series can be saved
+        independently without waiting for the entire dataset to finish.
+
+        Streaming and Data Persistence
+
+        The output set is created in STREAM_OPEN mode while processing is
+        ongoing.
+
+        When all tilt-series are completed:
+
+            - the output set is closed
+            - the stream state becomes STREAM_CLOSED
+
+        This behavior makes the protocol compatible with larger automated
+        tomography pipelines.
+
+        Temporary working folders are removed automatically after each
+        tilt image unless debugging mode disables cleanup.
+
+        Practical Interpretation
+
+        From a tomography perspective, this protocol performs CTF
+        estimation independently for each projection image rather than
+        estimating a single model for the entire tilt-series.
+
+        This is biologically important because:
+
+            - defocus often varies with tilt angle
+            - image quality changes across the tilt-series
+            - accurate per-image estimation improves downstream correction
+
+        The generated CTF series can therefore be regarded as a
+        projection-by-projection characterization of microscope transfer
+        properties across the acquisition.
+
+        Summary Information
+
+        Once finished, the protocol reports:
+
+            - number of input tilt-series
+            - number of CTF series generated
+
+        If processing is still running, the summary indicates that the
+        output CTFs are not yet available.
+
+        Final Perspective
+
+        ProtTsEstimateCTF provides the generic tomography framework for
+        per-image CTF estimation across tilt-series.
+
+        Its main strength is not a specific estimation algorithm but the
+        standardized organization of:
+
+            - tilt image preparation
+            - per-image execution
+            - metadata preservation
+            - structured output generation
+
+        In practical cryo-ET workflows, it acts as the common backbone
+        upon which concrete CTF estimation methods are built.
     """
 
     # -------------------------- DEFINE param functions -----------------------

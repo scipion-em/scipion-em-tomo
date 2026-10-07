@@ -47,12 +47,249 @@ OUTPUT_TILT_SERIES_DW = 'TiltSeriesDW'
 
 class ProtTsCorrectMotion(ProtTsProcess):
     """
-    Base class for movie alignment protocols such as:
-    motioncorr, crosscorrelation and optical flow
+    Base protocol for tilt-series movie motion correction.
 
-    Alignment parameters are defined in common. For example,
-    the frames range used for alignment and final sum, the binning factor
-    or the cropping options (region of interest)
+    AI Generated:
+
+    Tilt-Series Motion Correction Base Protocol (ProtTsCorrectMotion) — User Manual
+        Overview
+
+        The ProtTsCorrectMotion protocol provides the common framework for
+        motion correction of tilt-series movies in cryo-electron tomography.
+
+        Its role is to transform raw movie stacks acquired at each tilt angle
+        into corrected tilt-images and then assemble them into aligned
+        tilt-series ready for downstream tomographic processing.
+
+        This class is a base implementation shared by several motion correction
+        strategies, such as frame alignment by cross-correlation, optical flow,
+        or external motion-correction engines.
+
+        Biologically, this step is essential because beam-induced motion during
+        exposure causes image blurring, loss of high-resolution signal, and
+        reduced consistency across the tilt-series. Correcting this motion
+        improves image sharpness and increases the reliability of subsequent
+        alignment and reconstruction.
+
+        Inputs and General Workflow
+
+        The protocol takes as input a set of tilt-series movies
+        (SetOfTiltSeriesM).
+
+        Each tilt-image is initially stored as a movie stack composed of
+        multiple frames acquired during a single exposure.
+
+        The general workflow is:
+
+        - Read input tilt-series movies.
+        - Optionally convert gain and dark references.
+        - Process each tilt-image movie independently.
+        - Generate one corrected tilt-image per movie.
+        - Reassemble corrected tilt-images into a final tilt-series stack.
+
+        Processing is performed independently per tilt-image and later merged
+        into coherent tilt-series ordered by tilt angle.
+
+        Alignment and Summation Frame Ranges
+
+        A central feature of this protocol is the ability to define which movie
+        frames contribute to motion estimation and which frames contribute to
+        the final summed image.
+
+        Frames to ALIGN
+            Defines the subset of movie frames used to estimate motion.
+
+        Frames to SUM
+            Defines the subset of frames summed after motion correction to
+            generate the final tilt-image.
+
+        In most practical cases both ranges are identical. However, using
+        different summation ranges may be useful when early or late frames are
+        affected by radiation damage, charging, or unstable drift.
+
+        Biologically, excluding highly damaged frames can improve image quality,
+        especially for high-dose acquisitions.
+
+        Binning and Cropping
+
+        The protocol supports two common preprocessing operations.
+
+        Binning factor
+            Reduces image size before processing.
+
+            Binning improves speed and can increase robustness in low-SNR
+            datasets, although excessive binning may reduce high-resolution
+            information.
+
+        Cropping
+            Defines a region of interest using crop offsets and crop
+            dimensions.
+
+            Cropping is particularly useful when large empty detector regions
+            or irrelevant borders would otherwise unnecessarily increase
+            computational cost.
+
+        Gain and Dark Correction
+
+        If gain and dark references are available in the input dataset, they
+        are automatically converted to temporary MRC files and made available
+        to the motion-correction engine.
+
+        These detector corrections are important because they remove fixed
+        detector artifacts before motion estimation, improving the stability of
+        alignment.
+
+        Per-Tilt Image Processing
+
+        Each tilt-image movie is processed independently.
+
+        For every movie, the protocol creates a temporary working directory and
+        delegates the actual correction procedure to the method
+        `_processTiltImageM()`.
+
+        This method is intentionally left abstract in the base class and must
+        be implemented by derived protocols.
+
+        A subclass is responsible for:
+
+        - Estimating motion across movie frames
+        - Producing the corrected tilt-image
+        - Optionally producing a dose-weighted version
+
+        Once processing finishes, the corrected output file is validated and
+        temporary intermediate files are removed unless debugging is enabled.
+
+        Tilt-Series Reconstruction
+
+        After all tilt-images belonging to a tilt-series are corrected, the
+        protocol assembles them into a single MRC stack.
+
+        Tilt-images are sorted by tilt angle before stacking to ensure
+        geometrically coherent tomographic ordering.
+
+        Internally, the protocol also preserves indexing consistency so that
+        downstream operations expecting ordered metadata (for example fiducial
+        alignment) remain valid.
+
+        Dose-Weighted Output
+
+        The base protocol optionally supports generation of dose-weighted
+        tilt-series.
+
+        If enabled by subclasses, an additional output tilt-series is created
+        where each corrected tilt-image is stored in a separate dose-weighted
+        stack.
+
+        Dose weighting is especially useful in cryo-ET because later frames
+        typically suffer stronger radiation damage. Applying dose weighting can
+        preserve more high-resolution information for reconstruction.
+
+        Even/Odd Frame Splitting
+
+        Some motion-correction implementations may support splitting the movie
+        into odd and even frame sums.
+
+        When enabled:
+
+        - One odd-frame tilt-series is generated
+        - One even-frame tilt-series is generated
+
+        These datasets are especially useful in denoising workflows,
+        self-supervised learning strategies, and validation procedures where
+        statistically independent image realizations are required.
+
+        Importantly, odd and even sums are generated using the same global
+        motion alignment estimated from the complete movie.
+
+        Output Objects
+
+        Depending on subclass capabilities and user options, the protocol may
+        generate:
+
+        Main corrected tilt-series
+            The standard motion-corrected output.
+
+        Dose-weighted tilt-series
+            An optional dose-weighted version.
+
+        Odd tilt-series
+            Optional output generated from odd movie frames.
+
+        Even tilt-series
+            Optional output generated from even movie frames.
+
+        All outputs preserve metadata from the original acquisition and update
+        sampling rate according to the selected binning factor.
+
+        Streaming and Incremental Output
+
+        The protocol is designed for streaming-compatible execution.
+
+        As tilt-series finish processing:
+
+        - New results are appended incrementally
+        - Output sets remain open during execution
+        - Final closure occurs only when all tilt-series are completed
+
+        This design makes the protocol suitable for facility-scale workflows
+        and automated cryo-ET pipelines.
+
+        Biological Interpretation
+
+        Motion correction is one of the earliest but most important quality
+        control steps in cryo-electron tomography.
+
+        Successful correction improves:
+
+        - Contrast of tilt projections
+        - Alignment consistency across the tilt-series
+        - Final tomogram quality
+        - Reliability of subtomogram averaging
+
+        Poor correction may propagate systematic blur and geometric
+        inconsistencies throughout the entire downstream workflow.
+
+        Practical Recommendations
+
+        For most routine cryo-ET workflows:
+
+        - Use all early stable frames for alignment
+        - Exclude highly damaged late frames if radiation damage is visible
+        - Use moderate binning for noisy or very large datasets
+        - Enable even/odd splitting when preparing denoising datasets
+
+        When processing very high-quality data for high-resolution analysis,
+        conservative binning and careful frame-range selection are usually
+        preferable.
+
+        Extensibility
+
+        ProtTsCorrectMotion is a framework rather than a complete algorithm.
+
+        Derived protocols only need to implement the movie-processing routine
+        while inheriting:
+
+        - Input handling
+        - Frame-range management
+        - Gain/dark preparation
+        - Output set construction
+        - Streaming support
+        - Optional dose-weighted outputs
+        - Optional odd/even outputs
+
+        This makes it the common infrastructure for multiple motion-correction
+        implementations within tomography workflows.
+
+        Final Perspective
+
+        In cryo-ET, motion correction is not simply image cleanup.
+
+        It is the step that determines how faithfully each projection
+        represents the specimen before all geometric reconstruction steps.
+
+        Accurate frame alignment at this stage strongly influences the final
+        interpretability of tomograms and the biological conclusions derived
+        from them.
     """
     _possibleOutputs = {'TiltSeries': SetOfTiltSeries,
                         OUTPUT_TILT_SERIES_DW: SetOfTiltSeries,

@@ -51,8 +51,230 @@ MC_EVEN_ODD_ATTRIBUTE = '_mcEvenOddMics'
 
 
 class ProtComposeTS(EMProtocol, ProtStreamingBase):
-    """ Compose in streaming a set of tilt series based on a set of micrographs and mdoc files.
-    A time parameter is available for the streaming behaviour: Time to next tilt
+    class ProtComposeTS(EMProtocol, ProtStreamingBase):
+    """
+    Compose Tilt Series (ProtComposeTS) — User Manual
+
+    Overview
+
+    The Compose Tilt Series protocol generates tilt series in streaming mode from two complementary
+    sources of information: a set of motion-corrected micrographs and their corresponding `.mdoc`
+    metadata files.
+
+    Its main purpose is to monitor an acquisition directory during tomography data collection and
+    automatically assemble each tilt series as soon as enough information becomes available. This
+    makes the protocol especially useful in cryo-electron tomography workflows where data arrive
+    progressively rather than all at once.
+
+    For a biological user, the protocol acts as an online assembler of tilt series. Instead of
+    waiting until the acquisition finishes, the protocol continuously checks whether each tilt
+    series can already be composed, which is particularly valuable in automated acquisition
+    environments.
+
+    Inputs and General Workflow
+
+    The protocol requires two principal inputs:
+
+    - A `SetOfMicrographs`, usually corresponding to motion-corrected tilt images.
+    - A directory containing `.mdoc` files, where each file describes one tilt series.
+
+    During execution, the protocol repeatedly scans the input directory searching for new `.mdoc`
+    files. For every candidate file, it verifies whether the corresponding micrographs already
+    exist and whether enough tilts are available to safely compose a tilt series.
+
+    This streaming behavior continues until:
+
+    - the input micrograph stream is closed, and
+    - all `.mdoc` files have been processed.
+
+    At that point, the protocol closes the output tilt-series set.
+
+    Streaming Logic
+
+    The protocol is specifically designed for streaming acquisition.
+
+    A configurable parameter (`time4NextTilt`) determines how long the protocol waits after the
+    last modification of an `.mdoc` file before considering that no additional tilts are expected.
+
+    This avoids prematurely composing incomplete tilt series during acquisition.
+
+    In practical terms:
+
+    - If an `.mdoc` file has been updated recently, the protocol assumes acquisition is still
+      ongoing and waits.
+    - If the file has not changed for longer than the specified timeout, it is considered stable
+      enough to evaluate.
+
+    This logic is particularly important in automated tomography acquisition, where tilt images
+    may arrive gradually over minutes.
+
+    Validation of Mdoc Files
+
+    Before a tilt series can be composed, the `.mdoc` file must pass several validation steps.
+
+    The protocol checks:
+
+    - Whether the file contains exclusion keywords defined by the user.
+    - Whether the `.mdoc` format can be read correctly.
+    - Whether the number of tilts is above the minimum allowed threshold.
+
+    Files failing any of these conditions are skipped.
+
+    This protects the workflow from incomplete metadata, acquisition artifacts, or unrelated `.mdoc`
+    files that may exist in the monitored directory.
+
+    Matching Micrographs to Metadata
+
+    The biological core of the protocol lies in matching the micrographs listed in the `.mdoc`
+    file with the motion-corrected micrographs already present in the input set.
+
+    For every tilt entry in the `.mdoc`, the protocol searches for a micrograph with the same base
+    filename.
+
+    Two different behaviors are possible:
+
+    During streaming acquisition:
+    - If some micrographs are still missing, the protocol simply waits for more data.
+
+    After the input stream closes:
+    - The protocol calculates the percentage of matched tilts.
+    - If this percentage is lower than the user-defined threshold (`percentTiltsRequired`),
+      the tilt series is discarded.
+    - Otherwise, the protocol proceeds even if some tilts are missing.
+
+    This is biologically useful because tomography acquisitions occasionally lose individual
+    tilts due to motion correction failures, camera problems, or interrupted acquisition.
+
+    Tilt Ordering and Consistency
+
+    Once matching succeeds, the tilt metadata and corresponding micrographs are sorted by tilt
+    angle.
+
+    This guarantees that the final tilt series follows a physically meaningful angular order,
+    which is essential for downstream tomographic reconstruction.
+
+    Output Generation
+
+    After successful validation and matching, the protocol generates the actual tilt-series stack.
+
+    For each matched micrograph:
+
+    - the image is appended to an image stack;
+    - if requested, odd/even stacks are also created.
+
+    The resulting stacks are written as `.mrcs` files.
+
+    This produces:
+
+    - a main tilt-series stack;
+    - optionally, odd and even stacks for downstream resolution estimation or validation.
+
+    Tilt-Series Composition
+
+    After stack creation, the protocol creates a formal `TiltSeries` object and populates it
+    tilt by tilt.
+
+    For every tilt image, the protocol stores:
+
+    - tilt angle,
+    - acquisition order,
+    - sampling rate,
+    - file location,
+    - odd/even references when available.
+
+    It also computes acquisition-related metadata such as:
+
+    - minimum and maximum tilt angles,
+    - initial dose,
+    - accumulated dose.
+
+    This information becomes part of the final tomography metadata and is critical for
+    downstream reconstruction and dose-aware processing.
+
+    Tilt Axis Handling
+
+    The protocol supports flexible handling of the tilt-axis angle.
+
+    Three cases are possible:
+
+    - A manually provided tilt-axis value overrides all metadata.
+    - If requested, the tilt-axis angle read from the `.mdoc` file is converted using the
+      Tomography 5 convention.
+    - Otherwise, the angle is read directly from the `.mdoc`.
+
+    This is particularly important because different acquisition software packages may define
+    the tilt-axis angle differently.
+
+    Acquisition Metadata
+
+    The protocol also generates a tomography acquisition object (`TomoAcquisition`) that
+    summarizes experimental conditions.
+
+    It combines information from:
+
+    - the input micrographs, and
+    - the `.mdoc` metadata.
+
+    The resulting acquisition contains:
+
+    - voltage,
+    - magnification,
+    - spherical aberration,
+    - amplitude contrast,
+    - dose per frame,
+    - angular range,
+    - angular step,
+    - accumulated dose,
+    - tilt-axis angle.
+
+    This ensures that the composed tilt series remains fully compatible with downstream
+    tomography workflows.
+
+    Output Management
+
+    The protocol maintains a streaming output set of tilt series.
+
+    If the output does not yet exist, it creates a new `SetOfTiltSeries`.
+
+    During execution:
+
+    - new tilt series are appended,
+    - metadata are written to disk,
+    - the output remains open while streaming continues.
+
+    When streaming finishes, the output set is closed.
+
+    Final validation ensures that:
+
+    - at least one tilt series was generated, and
+    - the resulting tilt series are not empty.
+
+    Practical Recommendations
+
+    In routine cryo-ET workflows, the protocol is most useful when:
+
+    - acquisition is running in streaming mode,
+    - `.mdoc` files and motion-corrected micrographs arrive progressively,
+    - early inspection of data quality is desirable.
+
+    A few practical considerations are important:
+
+    - Use a sufficiently large `time4NextTilt` to avoid prematurely finalizing an incomplete tilt series.
+    - Adjust `percentTiltsRequired` carefully if some tilts may be lost during acquisition.
+    - Use exclusion words when the monitored directory contains unrelated `.mdoc` files.
+    - Only enable odd/even composition if the input micrographs contain odd/even metadata.
+
+    Final Perspective
+
+    The Compose Tilt Series protocol is essentially an online bridge between acquisition and
+    tomographic reconstruction.
+
+    Rather than simply grouping images together, it continuously evaluates acquisition progress,
+    validates metadata consistency, and constructs biologically meaningful tilt series ready for
+    downstream cryo-electron tomography analysis.
+
+    In modern automated cryo-ET pipelines, this protocol provides an important early-processing
+    step that reduces latency between data acquisition and scientific interpretation.
     """
     _devStatus = BETA
     _label = 'Compose Tilt Series'

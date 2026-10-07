@@ -55,10 +55,209 @@ class ApplyTomoMaskFormParams(Enum):
 
 
 class ProtTomoApplyTomoMask(EMProtocol):
-    """This protocol applies a set of masks to a given set of tomograms. The protocol
-    will try to match the tomograms and the masks by tsId. Once the mask/s are applied.
-    Some operations can be applied to the mask: invert, dilate and apply a gaussian filter."""
+    """
+    Applies a set of tomographic masks to a set of tomograms by matching both inputs through
+    their tilt-series identifiers (tsId). Each tomogram is multiplied voxel-wise by its
+    corresponding mask, producing a new masked tomogram while preserving the original
+    tomographic metadata.
 
+    AI Generated:
+
+    Apply Tomo Masks to Tomograms (ProtTomoApplyTomoMask) — User Manual
+        Overview
+
+        The Apply Tomo Masks to Tomograms protocol applies one mask to each tomogram
+        in an input set. Matching between tomograms and masks is performed using the
+        tilt-series identifier (tsId), ensuring that every tomogram receives only the
+        mask that belongs to the same acquisition or reconstruction series.
+
+        In practical cryo-electron tomography workflows, masking is commonly used to
+        isolate biologically relevant regions, suppress surrounding solvent, remove
+        noisy peripheral densities, or focus downstream analyses such as segmentation,
+        subvolume extraction, or visualization.
+
+        For biological users, this protocol is especially useful when the tomograms
+        already contain reconstructed cellular or macromolecular information, but only
+        specific spatial regions should be preserved for further interpretation.
+
+        Inputs and Matching Strategy
+
+        The protocol requires two inputs:
+
+        - A set of tomograms.
+        - A single tomographic mask or a set of tomographic masks.
+
+        Matching is entirely based on tsId values. Only tomograms and masks sharing
+        the same tsId will be processed together.
+
+        If some tomograms or masks do not have a corresponding partner, they are not
+        processed. The protocol reports these non-matching identifiers so the user can
+        verify dataset consistency.
+
+        If no common tsId exists between both input sets, execution stops with an error.
+
+        This design is especially important in batch tomography workflows where many
+        tomograms are processed in parallel and preserving one-to-one correspondence
+        between reconstructions and masks is essential.
+
+        Mask Preprocessing
+
+        Before applying the mask, the protocol optionally allows several operations
+        that modify the mask itself.
+
+        Inversion
+
+        The mask can be inverted before application.
+
+        This is useful when the provided mask represents regions that should be
+        suppressed instead of preserved. After inversion, masked and unmasked
+        regions are exchanged.
+
+        Dilation
+
+        The mask can be expanded by a user-defined number of pixels in all directions.
+
+        From a biological perspective, dilation is useful when the original mask is
+        too conservative and may cut away peripheral structural information.
+        For example, membrane-associated densities, flexible domains, or low-contrast
+        boundaries often benefit from a small dilation.
+
+        Excessive dilation should be avoided because it may reintroduce noise or
+        irrelevant surrounding density.
+
+        Gaussian Smoothing
+
+        If the Gaussian sigma parameter is larger than zero, the mask is smoothed
+        before application.
+
+        Rather than producing a sharp binary edge, smoothing generates a gradual
+        transition between masked and unmasked regions. This is often biologically
+        advantageous because abrupt boundaries can create artificial discontinuities
+        that later affect filtering, segmentation, visualization, or mathematical
+        operations.
+
+        Small sigma values preserve sharper boundaries, while larger sigma values
+        create more diffuse transitions.
+
+        In practice, smoothing is often one of the most useful options when the goal
+        is to keep biologically meaningful densities while avoiding masking artifacts.
+
+        Validation Before Mask Application
+
+        Before multiplying a tomogram by its mask, the protocol performs per-tomogram
+        validation checks.
+
+        Sampling Rate Consistency
+
+        The voxel size of the tomogram and the mask must agree within a small tolerance.
+
+        This validation is essential because voxel-wise multiplication only makes
+        biological sense when both volumes represent the same physical sampling.
+        A mismatch in pixel size means that densities would not correspond spatially.
+
+        If the sampling rates differ beyond tolerance, the tomogram is skipped and
+        its tsId is stored as failed.
+
+        Dimension Consistency
+
+        The dimensions of the tomogram and mask must also be identical.
+
+        If dimensions differ, the protocol cannot apply voxel-wise multiplication.
+        Such tomograms are skipped and reported separately.
+
+        These validations are especially important in heterogeneous tomography projects
+        where masks may originate from different processing branches or intermediate
+        reconstruction stages.
+
+        Mask Application
+
+        Once validation succeeds, the protocol applies the mask by multiplying each
+        tomographic slice with the corresponding mask slice.
+
+        This operation is performed slice by slice through the entire 3D volume.
+
+        Biologically, the resulting tomogram preserves signal only in regions weighted
+        by the mask. Binary masks preserve selected voxels and suppress the rest,
+        while smoothed masks produce gradual attenuation.
+
+        The resulting masked tomogram is written as a new MRC volume while preserving
+        the sampling rate of the original tomogram.
+
+        Temporary Files and Memory Handling
+
+        When smoothing is enabled, the protocol creates temporary smoothed masks
+        inside the temporary working directory.
+
+        After the masked tomogram is generated, these temporary files are immediately
+        removed.
+
+        This behavior is particularly important in tomography workflows because
+        tomograms and masks are often very large volumes. Removing temporary files
+        avoids unnecessary disk consumption during parallel execution.
+
+        Parallel Execution Strategy
+
+        The protocol executes independently for each matched tsId.
+
+        For every tomogram-mask pair, the workflow follows three sequential stages:
+
+        1. Process the mask (optional dilation, smoothing, inversion).
+        2. Apply the mask to the tomogram.
+        3. Register the resulting masked tomogram in the output set.
+
+        Different tomograms can be processed independently, which makes the protocol
+        naturally suitable for parallel execution when large tomography datasets are used.
+
+        Outputs
+
+        The protocol produces a new set of tomograms called maskedTomograms.
+
+        For every successfully processed tomogram:
+
+        - The original tomographic metadata is preserved.
+        - The file location is updated to point to the newly generated masked volume.
+
+        Tomograms that fail validation are not included in the output set.
+
+        The protocol also stores warning information about:
+
+        - Non-matching tsIds between input tomograms and masks.
+        - Failed tsIds caused by sampling rate mismatch.
+        - Failed tsIds caused by dimension mismatch.
+
+        Practical Recommendations
+
+        In biological practice, this protocol is most useful when the user wants to
+        focus analysis on a known region of interest.
+
+        Typical examples include:
+
+        - Isolating a cellular compartment from a crowded tomogram.
+        - Preserving only membrane-proximal densities.
+        - Removing solvent or empty reconstruction regions.
+        - Preparing tomograms for segmentation, particle picking, or subvolume analysis.
+
+        When the mask is already biologically well defined, using no dilation and
+        little or no smoothing often provides the most faithful result.
+
+        When mask boundaries are uncertain or too sharp, a small dilation together
+        with moderate Gaussian smoothing often improves the continuity of biologically
+        meaningful densities.
+
+        Final Perspective
+
+        Applying tomographic masks is not merely a computational filtering step.
+        It is often a biologically meaningful operation that determines which parts
+        of the reconstructed volume remain visible and interpretable.
+
+        Careful control of mask matching, sampling consistency, and boundary smoothing
+        is essential to avoid introducing artifacts or losing relevant structural
+        information.
+
+        In most tomography workflows, this protocol serves as a reliable preparation
+        step before interpretation, segmentation, visualization, or downstream
+        quantitative analysis.
+    """
     _label = 'apply tomomasks to tomograms'
     _devStatus = BETA
     _possibleOutputs = ApplyTomoMaskOutputs
