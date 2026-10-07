@@ -26,6 +26,7 @@
 # **************************************************************************
 
 import os
+from glob import glob
 from os.path import basename
 
 from pyworkflow import BETA
@@ -39,6 +40,7 @@ from pyworkflow.utils import replaceBaseExt, removeBaseExt
 from ..objects import SetOfCoordinates3D
 from .protocol_base import ProtTomoImportFiles
 from ..convert import TomoImport, EmTableCoordImport
+from ..convert.mdoc import normalizeTSId, deNormalizeTSId
 from ..utils import existsPlugin
 
 import tomo.constants as const
@@ -48,6 +50,7 @@ IMPORT_FROM_TXT = 'txt'
 IMPORT_FROM_EMAN = 'eman'
 IMPORT_FROM_DYNAMO = 'dynamo'
 IMPORT_FROM_CBOX = 'cbox'
+IMPORT_FROM_STAR = 'star'
 
 
 class ProtImportCoordinates3D(ProtTomoImportFiles):
@@ -66,6 +69,8 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             importChoices.append(IMPORT_FROM_EMAN)
         if existsPlugin('dynamo'):
             importChoices.append(IMPORT_FROM_DYNAMO)
+        if existsPlugin('reliontomo'):
+            importChoices.append(IMPORT_FROM_STAR)
         return importChoices
 
     def _getDefaultChoice(self):
@@ -97,7 +102,12 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                       pointerClass='SetOfTomograms',
                       label='Input tomograms',
                       help='Select the tomograms to which the coordinates should be referred to.\n'
-                           'The file names of the tomogram and coordinate files must be the same.')
+                           'Coordinate files are matched to tomograms by tsId: a tomogram is associated '
+                           "with a coordinate file if the tomogram's tsId and the coordinate file's name "
+                           '(without extension) share a common substring in either direction (e.g. tomogram '
+                           'tsId "TS_1" matches a coordinate file named "TS_1__ribosome_coords.star"). If '
+                           'that is not enough to uniquely identify the tsId within the coordinate file '
+                           'names, use the Pattern field above with the {TS} placeholder instead.')
 
     def _insertAllSteps(self):
         self._initialize()
@@ -105,6 +115,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
+        self.initializeParsing()
         tomoSRate = self.importTomograms.get().getSamplingRate()
         coordsSRate = self.samplingRate.get()
         if coordsSRate:
@@ -119,25 +130,25 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         coordsSet.setBoxSize(self.boxSize.get() * self.scaleFactor)
 
         ci = self.getImportClass()
+        matches = self._matchCoordFilesToTomograms()
         for tomo in importTomograms.iterItems():
-            tomoName = removeBaseExt(tomo.getFileName())
-            for coordFile, fileId in self.iterFiles():
-                fileName = removeBaseExt(coordFile)
-                if tomo is not None and tomoName == fileName:
-                    # Parse the coordinates in the given format for this micrograph
-                    if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX]:
-                        def addCoordinate(coord, x, y, z):
-                            coord.setVolume(tomo.clone())
+            coordFile = matches.get(tomo.getTsId())
+            if coordFile is None:
+                continue
+            # Parse the coordinates in the given format for this tomogram
+            if self.getImportFrom() in [IMPORT_FROM_EMAN, IMPORT_FROM_TXT, IMPORT_FROM_CBOX, IMPORT_FROM_STAR]:
+                def addCoordinate(coord, x, y, z):
+                    coord.setVolume(tomo.clone())
 
-                            x = x * self.scaleFactor
-                            y = y * self.scaleFactor
-                            z = z * self.scaleFactor
+                    x = x * self.scaleFactor
+                    y = y * self.scaleFactor
+                    z = z * self.scaleFactor
 
-                            coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
-                            coordsSet.append(coord)
-                        ci.importCoordinates3D(coordFile, addCoordinate)
-                    elif self.getImportFrom() == IMPORT_FROM_DYNAMO:
-                        ci(coordFile, coordsSet, tomo.clone(), scaleFactor=self.scaleFactor)
+                    coord.setPosition(x, y, z, const.BOTTOM_LEFT_CORNER)
+                    coordsSet.append(coord)
+                ci.importCoordinates3D(coordFile, addCoordinate)
+            elif self.getImportFrom() == IMPORT_FROM_DYNAMO:
+                ci(coordFile, coordsSet, tomo.clone(), scaleFactor=self.scaleFactor)
 
         args = {self.OUTPUT_PREFIX: coordsSet}
         self._defineOutputs(**args)
@@ -178,25 +189,28 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
 
     def _validate(self):
         errors = []
+        self.initializeParsing()
+        if not self.regEx:
+            try:
+                next(self.iterFiles())
+            except StopIteration:
+                errors.append('No files matching the pattern %s were found.' % self.getPattern())
+                return errors
         try:
-            next(self.iterFiles())
-        except StopIteration:
-            errors.append('No files matching the pattern %s were found.' % self.getPattern())
-        else:
-            tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-            coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-            numberMatches = len(set(tomoFiles) & set(coordFiles))
-            if numberMatches == 0:
-                errors.append("Cannot relate tomogram and coordinate files. In order to stablish a "
-                              "relation, the filename of the corresponding tomogram and coordinate "
-                              "files must be equal.")
+            matches = self._matchCoordFilesToTomograms()
+        except Exception as e:
+            errors.append(str(e))
+            return errors
+        if not matches:
+            errors.append("Cannot relate tomogram and coordinate files. Association is attempted by "
+                          "checking whether the tomogram's tsId and the coordinate file's name (without "
+                          "extension) share a common substring; if that isn't enough, provide a Pattern "
+                          "using the {TS} placeholder to identify the tsId within the coordinate file names.")
         return errors
 
     def _warnings(self):
         warnings = []
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.importTomograms.get().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file, _ in self.iterFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
+        self.initializeParsing()
         if not existsPlugin('emantomo'):
             warnings.append('Plugin *scipion-em-emantomo* has not being installed. Please, install the Plugin to '
                             'import Eman related formats (currently supported formats: ".json"). Otherwise, the protocol '
@@ -205,25 +219,37 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
             warnings.append('Plugin *scipion-em-dynamo* has not being installed. Please, install the Plugin to '
                             'import Dynamo related formats (currently supported formats: ".tbl"). Otherwise, the protocol '
                             'may have unexpected outputs if Dynamo files are attempted to be imported.\n')
-        if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Couldn't find a correspondence between all cordinate and tomogram files. "
-                            "Association is performed in terms of the file name of the Tomograms and the coordinates. "
-                            "(without the extension). For example, if a Tomogram file is named Tomo_1.mrc, the coordinate "
-                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                            "- '.txt', '.tbl', '.json').\n")
-            mismatches_coords = set(coordFiles).difference(tomoFiles)
+        if not existsPlugin('reliontomo'):
+            warnings.append('Plugin *scipion-em-reliontomo* has not being installed. Please, install the Plugin to '
+                            'import Relion related formats (currently supported formats: ".star"). Otherwise, the protocol '
+                            'may have unexpected outputs if Relion star files are attempted to be imported.\n')
+
+        try:
+            matches = self._matchCoordFilesToTomograms()
+        except Exception:
+            # Ambiguous matches are already reported as a validation error; skip the coverage warning here.
+            return warnings
+
+        tsIds = [tomo.getTsId() for tomo in self.importTomograms.get()]
+        coordFiles = self._listCoordFiles()
+        if len(matches) < max(len(tsIds), len(coordFiles)):
+            warnings.append("Couldn't find a correspondence between all coordinate and tomogram files. "
+                            "Association is performed by matching the tomogram's tsId against the coordinate "
+                            "file's name (without extension), in either direction as a substring. If that isn't "
+                            "enough, provide a Pattern using the {TS} placeholder to identify the tsId within "
+                            "the coordinate file names.\n")
+            matchedCoordFiles = set(matches.values())
+            mismatches_coords = [f for f in coordFiles if f not in matchedCoordFiles]
             if mismatches_coords:
-                warnings.append("The following coordinate files will not be associated to any Tomogram "
-                                "(name without extension):")
+                warnings.append("The following coordinate files will not be associated to any Tomogram:")
                 for file in mismatches_coords:
                     warnings.append("\t%s" % file)
                 warnings.append("\n")
-            mismatches_tomos = set(tomoFiles).difference(coordFiles)
+            mismatches_tomos = [tsId for tsId in tsIds if tsId not in matches]
             if mismatches_tomos:
-                warnings.append("The following Tomogram files will not be associated to any coordinates "
-                                "(name without extension):")
-                for file in mismatches_tomos:
-                    warnings.append("\t%s" % file)
+                warnings.append("The following Tomograms (tsId) will not be associated to any coordinates:")
+                for tsId in mismatches_tomos:
+                    warnings.append("\t%s" % tsId)
                 warnings.append("\n")
         return warnings
 
@@ -235,7 +261,7 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         return importFrom
 
     def getFormat(self):
-        for coordFile, _ in self.iterFiles():
+        for coordFile in self._listCoordFiles():
             if coordFile.endswith('.txt'):
                 return IMPORT_FROM_TXT
             elif coordFile.endswith('.json') and existsPlugin('emantomo'):
@@ -244,6 +270,8 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
                 return IMPORT_FROM_DYNAMO
             elif coordFile.endswith('.cbox'):
                 return IMPORT_FROM_CBOX
+            elif coordFile.endswith('.star') and existsPlugin('reliontomo'):
+                return IMPORT_FROM_STAR
         return -1
 
     def getImportClass(self):
@@ -267,6 +295,68 @@ class ProtImportCoordinates3D(ProtTomoImportFiles):
         elif importFrom == IMPORT_FROM_TXT:
             return TomoImport(self)
 
+        elif importFrom == IMPORT_FROM_STAR:
+            StarCoordImport = Domain.importFromPlugin('reliontomo.convert.convert50_tomo', 'StarCoordImport',
+                                                       errorMsg='Relion tomo is needed to import .star '
+                                                                'coordinate files',
+                                                       doRaise=True)
+            return StarCoordImport()
+
         else:
             self.importFilePath = ''
             return None
+
+    def _listCoordFiles(self):
+        """ Return the raw list of coordinate file paths matched by the Pattern, whichever mode is active. """
+        if self.regEx:
+            return self._excludeByWords(glob(self.globPattern))
+        return [f for f, _ in self.iterFiles()]
+
+    def _matchCoordFilesToTomograms(self):
+        """ Associates each coordinate file matched by the Pattern with the tsId of the tomogram it
+        belongs to. Returns a dict {tsId: coordFile}. Tomograms/files with no match are simply omitted
+        (reported by _warnings). Raises an Exception if a coordinate file or tomogram would match
+        ambiguously (more than one candidate on either side). """
+        tsIds = [tomo.getTsId() for tomo in self.importTomograms.get()]
+
+        if self.regEx:
+            tsIdToFiles = {}
+            for f in self._listCoordFiles():
+                matchRes = self.regEx.match(f)
+                if matchRes is not None:
+                    tsId = normalizeTSId(matchRes.group('TS'))
+                    tsIdToFiles.setdefault(tsId, []).append(f)
+            duplicated = {tsId: files for tsId, files in tsIdToFiles.items() if len(files) > 1}
+            if duplicated:
+                raise Exception(
+                    "Ambiguous match applying the Pattern: more than one file matches the same tsId:\n" +
+                    "\n".join("  %s: %s" % (tsId, ", ".join(files)) for tsId, files in duplicated.items()))
+            return {tsId: files[0] for tsId, files in tsIdToFiles.items() if tsId in tsIds}
+
+        coordFiles = self._listCoordFiles()
+        coordFileMatchCount = {f: 0 for f in coordFiles}
+        matches = {}
+        for tsId in tsIds:
+            altTsId = deNormalizeTSId(tsId)
+            candidates = [f for f in coordFiles if self._namesOverlap(tsId, removeBaseExt(f)) or
+                         (altTsId != tsId and self._namesOverlap(altTsId, removeBaseExt(f)))]
+            if len(candidates) > 1:
+                raise Exception(
+                    "Ambiguous match: tomogram with tsId %s matches more than one coordinate file: %s. "
+                    "Use a Pattern with the {TS} placeholder to disambiguate." % (tsId, ", ".join(candidates)))
+            if candidates:
+                coordFile = candidates[0]
+                coordFileMatchCount[coordFile] += 1
+                matches[tsId] = coordFile
+
+        ambiguousCoordFiles = [f for f, count in coordFileMatchCount.items() if count > 1]
+        if ambiguousCoordFiles:
+            raise Exception(
+                "Ambiguous match: the following coordinate file(s) match more than one tomogram: %s. "
+                "Use a Pattern with the {TS} placeholder to disambiguate." % ", ".join(ambiguousCoordFiles))
+
+        return matches
+
+    @staticmethod
+    def _namesOverlap(a, b):
+        return a in b or b in a
