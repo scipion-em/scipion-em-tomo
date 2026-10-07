@@ -26,7 +26,7 @@
 # **************************************************************************
 import logging
 import re
-from os.path import abspath, basename, join
+from os.path import abspath, basename, join, splitext
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
