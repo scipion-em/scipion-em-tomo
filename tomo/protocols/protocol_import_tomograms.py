@@ -42,7 +42,7 @@ OUTPUT_NAME = 'Tomograms'
 HALF_WORDS = ['_' + variant + '.'
               for word in ('even', 'evn', 'odd')
               for variant in (word, word.capitalize(), word.upper())]
-HALF_RE = re.compile(r'^(?P<base>.+)_(?P<kind>even|evn|odd)$', re.IGNORECASE)
+HALF_SUFFIXES = {'even': 'even', 'evn': 'even', 'odd': 'odd'}
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -202,8 +202,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         createAbsLink(abspath(fileName), abspath(newFileName))
         tomoObj.setAcquisition(self._extractAcquisitionParameters(fileName))
         tomoObj.cleanObjId()
-        tomoObj.setFileName(
-            newFileName)  # in questo punto si scrivono le info dei path di even e odd per ciascun tomogramma
+        tomoObj.setFileName(newFileName)  # in questo punto si scrivono le info dei path di even e odd per ciascun tomogramma
         # l-idea sarebbe clonare la linea e usare un flag in relazione al fatto che l usuario voglia o meno even e odd
         tomoSet.append(tomoObj)
         tomoSet.update(tomoObj)
@@ -222,19 +221,36 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             allowedFiles.append(file)
         return allowedFiles
 
+    @staticmethod
+    def _splitHalf(stem):
+        """Return (base, kind) if stem ends with _even/_evn/_odd, else None."""
+        base, sep, suffix = stem.rpartition('_')
+        kind = HALF_SUFFIXES.get(suffix.lower())
+        if sep and base and kind:
+            return base, kind
+        return None
+
     def _groupHalves(self, filePaths):
-        mains, halves = {}, {} #two dicts, one for the full tomos and one for the halves
+        """Split a file stem into base name and half kind.
+
+            :param stem: file name without directory and extension, e.g. ``TS_01_even``.
+            :return: ``(base, kind)`` with kind ``'even'`` or ``'odd'`` if the stem ends
+                with ``_even``, ``_evn`` or ``_odd`` (case-insensitive), else ``None``.
+            """
+        mains, halves = {}, {}  # one dict for the full tomos, one for the halves
         for path in filePaths:
-            stem = splitext(basename(path))[0] #delete the file path and the file extension
-            match = HALF_RE.match(stem)
-            if match:
-                kind = 'odd' if match.group('kind').lower() == 'odd' else 'even'
-                halves.setdefault(match.group('base'), {})[kind] = path
+            stem = splitext(basename(path))[0]  # drop the directory and the extension
+            split = self._splitHalf(stem)
+            if split:
+                base, kind = split
+                halves.setdefault(base, {})[kind] = path #for each tomo, a dict 'halves' containing both even and odd paths is created
             else:
                 mains[stem] = path
-        return [(mains[base], half['even'], half['odd'])
-                for base, half in halves.items()
-                if base in mains and 'even' in half and 'odd' in half]
+        result = []
+        for base, half in halves.items():
+            if base in mains and 'even' in half and 'odd' in half:
+                result.append((mains[base], half['even'], half['odd']))
+        return result
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
