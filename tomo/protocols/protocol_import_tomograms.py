@@ -160,7 +160,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             filePaths = [fileName[0] for fileName in self.iterFiles()]
             fileList = self._excludeByWords(filePaths)
 
-            if self.importHalves.get():
+            if self.importOddEven.get():
                 halvesByTsId = self._groupHalves(fileList)
             else:
                 halvesByTsId = {}
@@ -280,6 +280,8 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             if base in mains and 'even' in half and 'odd' in half:
                 tsId = normalizeTSId(base)
                 result[tsId] = [mains[base], half['even'], half['odd']] #one single dict with n-elements = number of tilt-series with the complete set (full,even,odd)
+            else:
+                logger.warning(f"{base}: incomplete full/even/odd set, half maps will not be linked.")
         return result
 
     # --------------------------- INFO functions ------------------------------
