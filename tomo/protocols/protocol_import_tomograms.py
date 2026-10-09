@@ -160,9 +160,14 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             filePaths = [fileName[0] for fileName in self.iterFiles()]
             fileList = self._excludeByWords(filePaths)
 
+            if self.importHalves.get():
+                halvesByTsId = self._groupHalves(fileList)
+            else:
+                halvesByTsId = {}
+
             for fileName in fileList:
                 tsId = normalizeTSId(removeBaseExt(fileName))
-                self.addTomoToSet(fileName, tsId, tomo, tomoSet)  ###############
+                self.addTomoToSet(fileName, tsId, tomo, tomoSet, halvesByTsId)  ###############
 
         self._defineOutputs(**{OUTPUT_NAME: tomoSet})
 
@@ -180,7 +185,18 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def getTomoNewFileName(self, tsId, ext):
         return self._getExtraPath(f'{tsId}{ext}')
 
-    def addTomoToSet(self, fileName: str, tsId: str, tomoObj: Tomogram, tomoSet: SetOfTomograms) -> None:
+    def addTomoToSet(self, fileName: str, tsId: str, tomoObj: Tomogram, tomoSet: SetOfTomograms, halvesByTsId: dict = None) -> None:
+
+        if halvesByTsId is None:
+            halvesByTsId = {}
+
+        # if one tomo has 3 files (full,even,odd) only the full tomo must be added to the set
+        split = self._splitHalf(tsId)
+        if split is not None:
+            base = split[0]
+            if base in halvesByTsId:
+                return
+
         origin = Transform()
         if self.setOrigCoord.get():
             if self.fromMrcHeader.get():
@@ -200,10 +216,23 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoObj.setTsId(tsId)
         newFileName = self.getTomoNewFileName(tsId, getExt(fileName))
         createAbsLink(abspath(fileName), abspath(newFileName))
+
+        halfMaps = []
+        if tsId in halvesByTsId:
+            fullFn, evenFn, oddFn = halvesByTsId[tsId]
+
+            # link halves
+            newEven = self.getTomoNewFileName(tsId + '_even', getExt(evenFn))
+            newOdd = self.getTomoNewFileName(tsId + '_odd', getExt(oddFn))
+            createAbsLink(abspath(evenFn), abspath(newEven))
+            createAbsLink(abspath(oddFn), abspath(newOdd))
+
+            halfMaps = [newEven, newOdd]
+        tomoObj.setHalfMaps(halfMaps)
+
         tomoObj.setAcquisition(self._extractAcquisitionParameters(fileName))
         tomoObj.cleanObjId()
-        tomoObj.setFileName(newFileName)  # in questo punto si scrivono le info dei path di even e odd per ciascun tomogramma
-        # l-idea sarebbe clonare la linea e usare un flag in relazione al fatto che l usuario voglia o meno even e odd
+        tomoObj.setFileName(newFileName)
         tomoSet.append(tomoObj)
         tomoSet.update(tomoObj)
 
@@ -249,7 +278,8 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         result = []
         for base, half in halves.items():
             if base in mains and 'even' in half and 'odd' in half:
-                result.append((mains[base], half['even'], half['odd']))
+                tsId = normalizeTSId(base)
+                result[tsId] = [mains[base], half['even'], half['odd']] #one single dict with n-elements = number of tilt-series with the complete set (full,even,odd)
         return result
 
     # --------------------------- INFO functions ------------------------------
