@@ -126,7 +126,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.importTomogramsStep)
-        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
+
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
