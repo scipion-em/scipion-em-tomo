@@ -126,7 +126,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.importTomogramsStep)
-        #insert a closing step, if no tomogram is imported->error
+        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
@@ -171,6 +171,12 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 self.addTomoToSet(fileName, tsId, tomo, tomoSet, halvesByTsId)  ###############
 
         self._defineOutputs(**{OUTPUT_NAME: tomoSet})
+
+        if len(tomoSet) == 0:
+            raise Exception('No tomograms were imported. Check the output log for more details.')
+
+
+
 
     # --------------------------- UTILS functions ------------------------------
     def _getOrigCoord(self):
