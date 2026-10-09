@@ -275,7 +275,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
                 halves.setdefault(base, {})[kind] = path #for each tomo, a dict 'halves' containing both even and odd paths is created
             else:
                 mains[stem] = path
-        result = []
+        result = {}
         for base, half in halves.items():
             if base in mains and 'even' in half and 'odd' in half:
                 tsId = normalizeTSId(base)
