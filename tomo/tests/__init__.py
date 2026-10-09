@@ -145,6 +145,7 @@ class DataSetEmd10491_Odd_Even(Enum):
     pattern = '*.mrc'
     mdocPattern = '*.mdoc'
     aliFilesPattern = '*.xf'
+    gainFile = 'gain_ref.mrc'
     # Data
     nTiltSeries = 2
     nAngles = 41
