@@ -126,6 +126,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.importTomogramsStep)
+        #insert a closing step, if no tomogram is imported->error
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
@@ -243,7 +244,8 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
 
         allowedFiles = []
         for file in files:
-            if any(bannedWord in file for bannedWord in exclusionWordList):
+            fileName = basename(file)   # only the name of the file must be excluded
+            if any(bannedWord in fileName for bannedWord in exclusionWordList):
                 logger.info("%s excluded. Contains any of %s" %
                             (file, ' '.join(exclusionWordList)))
                 continue
