@@ -155,6 +155,7 @@ class DataSetEmd10491_Odd_Even(Enum):
     acq = testAcq
     apixUnbinned = 0.7894
 
+
 DataSet(name=EMPIAR_10491_ODD_EVEN, folder=EMPIAR_10491_ODD_EVEN,
         files={el.name: el.value for el in DataSetEmd10491_Odd_Even})
 
@@ -275,6 +276,7 @@ class DataSetRe4STATuto(Enum):
 
     # Tomomasks: only made for TS_03 and TS_54
     tomoMasksPath = 'tomoMasks'
+    tomoMasksPattern = '*.mrc'
 
     # Coordinates
     coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
