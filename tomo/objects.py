@@ -26,6 +26,7 @@
 # **************************************************************************
 import logging
 import typing
+from enum import IntEnum
 from os.path import exists, dirname, join
 from sqlite3 import OperationalError
 from typing import Optional
@@ -3151,6 +3152,11 @@ class CTFTomoSeries(data.EMSet):
         raise Exception(f'tsId = {self.getTsId()} - No enabled items were found in the current CTF.')
 
 
+class CtfHandedness(IntEnum):
+    positive = 1
+    negative = -1
+
+
 class SetOfCTFTomoSeries(data.EMSet):
     """ Represents a set of CTF model series belonging to the same set of tilt-series. """
     ITEM_TYPE = CTFTomoSeries
@@ -3161,6 +3167,7 @@ class SetOfCTFTomoSeries(data.EMSet):
         self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
         self._idDict = {}
         self._ctfTsIds = None
+        self._handedness = Integer()  # +1 or -1 for increasing or decreasing with Z axis
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
@@ -3296,6 +3303,16 @@ class SetOfCTFTomoSeries(data.EMSet):
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
+
+    def setHandedness(self, val: int) -> None:
+        ph = CtfHandedness.positive.value
+        nh = CtfHandedness.negative.value
+        if val not in (ph, nh):
+            raise ValueError(f"Handedness must be strictly {ph} or {nh}. Received: {val}")
+        self._handedness.set(val)
+
+    def getHandedness(self) -> int:
+        return self._handedness.get()
 
 
 class TiltSeriesCoordinate(data.EMObject):
