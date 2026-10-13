@@ -106,6 +106,60 @@ class DataSetEmd10439(Enum):
 DataSet(name=EMD_10439, folder=EMD_10439, files={el.name: el.value for el in DataSetEmd10439})
 
 ########################################################################################################################
+EMPIAR_10491_ODD_EVEN = 'empiar_10491_with_odd_even'
+
+# NOTE: Homogeneous, same value for both tilt-series in Acquisition, num of angles, etc.
+
+TS_1 = 'TS_1'
+TS_32 = 'TS_32'
+
+# Acquisition
+voltage = 300
+sphericalAb = 2.7
+amplitudeContrast = 0.1
+magnification = 50000
+tiltAxisAngle = - 93.5
+tiltStep = 2
+initialDose = 0
+dosePerTiltImg = 2.64
+testAcq = TomoAcquisition(voltage=voltage,
+                          sphericalAberration=sphericalAb,
+                          amplitudeContrast=amplitudeContrast,
+                          magnification=magnification,
+                          doseInitial=initialDose,
+                          tiltAxisAngle=tiltAxisAngle,
+                          dosePerFrame=dosePerTiltImg,
+                          angleMin=40,
+                          angleMax=40,
+                          accumDose=108.24,
+                          step=tiltStep)
+
+
+class DataSetEmd10491_Odd_Even(Enum):
+    # Directories
+    tsDir = 'tilt_series'
+    tsAliDir = 'ts_alignments'
+    tomoDir = 'tomograms'
+    ctfDir = 'CTFs'
+    # Files
+    pattern = '*.mrc'
+    mdocPattern = '*.mdoc'
+    aliFilesPattern = '*.xf'
+    ctfFilesPattern = '*.defocus'
+    gainFile = 'gain_ref.mrc'
+    # Data
+    nTiltSeries = 2
+    nAngles = 41
+    tsDims = [5760, 4092, 41]
+    tomoDims = [1024, 1440, 300]
+    acq = testAcq
+    apixUnbinned = 0.7894
+
+
+DataSet(name=EMPIAR_10491_ODD_EVEN, folder=EMPIAR_10491_ODD_EVEN,
+        files={el.name: el.value for el in DataSetEmd10491_Odd_Even})
+
+########################################################################################################################
 RE4_STA_TUTO = 'relion40_sta_tutorial_data'
 
 TS_01 = 'TS_01'
@@ -256,6 +310,13 @@ class DataSetRe4STATuto(Enum):
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
     maskHivBin8 = 'maskHivBin8.mrc'
     referenceHivBin8 = 'referenceHivBin8.mrc'
+
+    # For pytom testing
+    tomogramsBin8Path = 'tomograms_bin8'
+    # Tomomasks: only made for TS_03 and TS_54
+    tomoMasksPath = 'tomoMasks_bin8'
+    tomoMasksPattern = '*.mrc'
+
 
     @classmethod
     def genTestTsDicts(cls,
@@ -527,6 +588,6 @@ class DataSet_FilterExcludedTs(Enum):
     nTs = 2
     dimsTsBin4 = [1024, 1024, 41]
 
+
 DataSet(name=FILTER_EXCLUDED_TS, folder=FILTER_EXCLUDED_TS,
         files={el.name: el.value for el in DataSet_FilterExcludedTs})
-
