@@ -274,10 +274,6 @@ class DataSetRe4STATuto(Enum):
     tomoDimsThk280 = [928, 928, 280]
     tomoDimsThk340 = [928, 928, 340]
 
-    # Tomomasks: only made for TS_03 and TS_54
-    tomoMasksPath = 'tomoMasks'
-    tomoMasksPattern = '*.mrc'
-
     # Coordinates
     coordsStarSubset = 'input/coords_subset_ts03_ts54.star'
     nCoordsFromTs03 = 99
@@ -314,6 +310,13 @@ class DataSetRe4STATuto(Enum):
     tomogramsNoFidPath = 'tomograms_no_fiducials_bin8'
     maskHivBin8 = 'maskHivBin8.mrc'
     referenceHivBin8 = 'referenceHivBin8.mrc'
+
+    # For pytom testing
+    tomogramsBin8Path = 'tomograms_bin8'
+    # Tomomasks: only made for TS_03 and TS_54
+    tomoMasksPath = 'tomoMasks_bin8'
+    tomoMasksPattern = '*.mrc'
+
 
     @classmethod
     def genTestTsDicts(cls,
