@@ -742,6 +742,7 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
         self._runTestImportCtfEv(*args)
 
 
+EXCLUDED_WORDS = 'TS_32'
 class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
     """Check the import of tomograms together with their odd/even halves"""
 
@@ -769,19 +770,15 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
         tomoSet = self._runImportOddEvenTomos(importOddEven=True)
         # Only the full tomograms must be in the set, not the halves
         self.checkTomos(tomoSet)
-        # self.assertEqual(tomoSet.getSize(), 2)
-        # for tomo in tomoSet:
-        #     halves=tomo.getHalfMaps(asList=True)
-        #     self.assertEqual(len(halves), 2, f'{tomo.getTsId()} should have 2 half maps')
-        # for halfFile in halves:
-        #     self.assertTrue(os.path.exists(halfFile), f'{halfFile} does not exist')
+
+    def testImportWithOddEven_ExcludedWords(self):
+        tomoSet = self._runImportOddEvenTomos(importOddEven=True, exclusionWords=EXCLUDED_WORDS)
+        self.checkTomos(tomoSet)
 
     def testImportWithoutOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=False)
         self.checkTomos(tomoSet, hasOddEven=False)
-        # self.assertEqual(tomoSet.getSize(), 2)
-        # for tomo in tomoSet:
-        #     self.assertFalse(tomo.hasHalfMaps(), f'{tomo.getTsId()} should not have half maps')
+
 
     def checkTomos(self, tomoSet: SetOfTomograms, expectedSize: int = 2, hasOddEven: bool = True) -> None:
         acq = DataSetEmd10491_Odd_Even.acq.value
