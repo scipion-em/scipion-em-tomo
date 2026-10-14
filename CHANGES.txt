@@ -1,4 +1,5 @@
-V3.12.3: fix bung in TiltSeries applyTransform for .mrcs files.
+V3.12.4: expand test datasets.
+V3.12.3: fix bug in TiltSeries applyTransform for .mrcs files.
 V3.12.2: replace the old streaming template by te updated version.
 V3.12.1:
  Users:
