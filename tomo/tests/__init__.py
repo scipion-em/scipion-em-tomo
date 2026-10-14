@@ -147,6 +147,7 @@ class DataSetEmd10491_Odd_Even(Enum):
     aliFilesPattern = '*.xf'
     ctfFilesPattern = '*.defocus'
     gainFile = 'gain_ref.mrc'
+    tsPattern = '*.mrcs'
     # Data
     nTiltSeries = 2
     nAngles = 41
