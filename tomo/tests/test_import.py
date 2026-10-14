@@ -753,8 +753,8 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
         print(magentaStr(f"\n==> Importing tomograms with even and odd halves: "))
 
         protImportOddEvenTomos = self.newProtocol(ProtImportTomograms,
-                filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.name),
-                filesPattern=DataSetEmd10491_Odd_Even.pattern.values,
+                filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.value),
+                filesPattern=DataSetEmd10491_Odd_Even.pattern.value,
                 samplingRate=self.samplingRate,
                 importOddEven=importOddEven)
 
