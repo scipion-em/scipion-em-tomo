@@ -773,7 +773,7 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
 
     def testImportWithOddEven_ExcludedWords(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=True, exclusionWords=EXCLUDED_WORDS)
-        self.checkTomos(tomoSet)
+        self.checkTomos(tomoSet,expectedSize=1)
 
     def testImportWithoutOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=False)
