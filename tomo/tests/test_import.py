@@ -34,7 +34,8 @@ from pyworkflow.utils import magentaStr, createLink
 from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 from tomo.protocols.protocol_ts_import import MDoc, ProtImportTs
-from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto, EMD_10439, DataSetEmd10439
+from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto, EMD_10439, DataSetEmd10439, EMPIAR_10491_ODD_EVEN, \
+    DataSetEmd10491_Odd_Even
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
@@ -643,12 +644,12 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                       filesPath: str,
                       filesPattern: str,
                       importFrom: int,
-                      fromLabel: str = '',) -> SetOfCTFTomoSeries:
+                      fromLabel: str = '', ) -> SetOfCTFTomoSeries:
         prot = self.newProtocol(ProtImportTsCTF,
-                               importFrom=importFrom, #ImportChoice.ARETOMO.value,
-                               filesPath=filesPath,
-                               filesPattern=filesPattern,
-                               inputSetOfTiltSeries=inTsSet)
+                                importFrom=importFrom,  # ImportChoice.ARETOMO.value,
+                                filesPath=filesPath,
+                                filesPattern=filesPattern,
+                                inputSetOfTiltSeries=inTsSet)
         prot.setObjLabel(f'import ctf from {fromLabel}')
         self.launchProtocol(prot)
         return getattr(prot, prot._possibleOutputs.CTFs.name, None)
@@ -737,4 +738,29 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
     def test_import_ctf_imod_eV(self):
         args = self._getImodInputs()
         self._runTestImportCtfEv(*args)
+
+
+class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
+    """Check the import of tomograms together with their odd/even halves"""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(EMPIAR_10491_ODD_EVEN)
+
+    def _runImportOddEvenTomos(self, importOddEven:bool):
+        print(magentaStr(f"\n==> Importing tomograms with even and odd halves: "))
+
+        protImportOddEvenTomos = self.newProtocol(ProtImportTomograms,
+                filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.values),
+                filesPattern=DataSetEmd10491_Odd_Even.pattern.values,
+                importOddEven=importOddEven)
+                                                  #sampling rate)
+        protImportOddEvenTomos.setObjLabel(f'import tomos, odd/even = {importOddEven}')
+        self.launchProtocol(protImportOddEvenTomos)
+        return getattr(protImportOddEvenTomos,OUTPUT_NAME)
+
+
+
+
 
