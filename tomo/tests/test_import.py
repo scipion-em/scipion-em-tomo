@@ -743,6 +743,8 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
 
 
 EXCLUDED_WORDS = 'TS_32'
+
+
 class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
     """Check the import of tomograms together with their odd/even halves"""
 
@@ -773,12 +775,11 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
 
     def testImportWithOddEven_ExcludedWords(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=True, exclusionWords=EXCLUDED_WORDS)
-        self.checkTomos(tomoSet,expectedSize=1)
+        self.checkTomos(tomoSet, expectedSize=1)
 
     def testImportWithoutOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=False)
         self.checkTomos(tomoSet, hasOddEven=False)
-
 
     def checkTomos(self, tomoSet: SetOfTomograms, expectedSize: int = 2, hasOddEven: bool = True) -> None:
         acq = DataSetEmd10491_Odd_Even.acq.value
