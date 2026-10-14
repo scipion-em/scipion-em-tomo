@@ -25,10 +25,12 @@
 # *
 # **************************************************************************
 import logging
-from os.path import abspath, basename, join
+import re
+from os.path import abspath, basename, join, splitext
 from pwem.convert.headers import Ccp4Header
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
+from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.utils.path import createAbsLink, removeBaseExt, getExt
 import pyworkflow.protocol.params as params
 from .protocol_base import ProtTomoImportFiles, ProtTomoImportAcquisition
@@ -37,6 +39,10 @@ from ..objects import Tomogram, SetOfTomograms
 
 logger = logging.getLogger(__name__)
 OUTPUT_NAME = 'Tomograms'
+HALF_WORDS = ['_' + variant + '.'
+              for word in ('even', 'evn', 'odd')
+              for variant in (word, word.capitalize(), word.upper())]
+HALF_SUFFIXES = {'even': 'even', 'evn': 'even', 'odd': 'odd'}
 
 
 class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
@@ -50,10 +56,15 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self.Tomograms = None
         self.ih = None
 
-
     def _defineParams(self, form):
         ProtTomoImportFiles._defineParams(self, form)
         ProtTomoImportFiles.addExclusionWordsParam(form)
+        form.addParam('importOddEven', params.BooleanParam,
+                      default=False,
+                      label='Import even/odd halves?',
+                      expertLevel = LEVEL_ADVANCED,
+                      help='No: the halves are not imported.\n'
+                           'Yes: the halves are linked to their tomogram and stored as half maps.')
 
         ProtTomoImportAcquisition._defineParams(self, form)
 
@@ -116,6 +127,7 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         self._initialize()
         self._insertFunctionStep(self.importTomogramsStep)
 
+
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         self.ih = ImageHandler()
@@ -148,11 +160,23 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
             logger.info("Using direct pattern: '%s'" % join(self.filesPath.get().strip(), pattern))
             filePaths = [fileName[0] for fileName in self.iterFiles()]
             fileList = self._excludeByWords(filePaths)
+
+            if self.importOddEven.get():
+                halvesByTsId = self._groupHalves(fileList)
+            else:
+                halvesByTsId = {}
+
             for fileName in fileList:
                 tsId = normalizeTSId(removeBaseExt(fileName))
-                self.addTomoToSet(fileName, tsId, tomo, tomoSet)
+                self.addTomoToSet(fileName, tsId, tomo, tomoSet, halvesByTsId)  ###############
 
         self._defineOutputs(**{OUTPUT_NAME: tomoSet})
+
+        if len(tomoSet) == 0:
+            raise Exception('No tomograms were imported. Check the output log for more details.')
+
+
+
 
     # --------------------------- UTILS functions ------------------------------
     def _getOrigCoord(self):
@@ -168,7 +192,18 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
     def getTomoNewFileName(self, tsId, ext):
         return self._getExtraPath(f'{tsId}{ext}')
 
-    def addTomoToSet(self, fileName: str, tsId: str, tomoObj: Tomogram, tomoSet: SetOfTomograms) -> None:
+    def addTomoToSet(self, fileName: str, tsId: str, tomoObj: Tomogram, tomoSet: SetOfTomograms, halvesByTsId: dict = None) -> None:
+
+        if halvesByTsId is None:
+            halvesByTsId = {}
+
+        # if one tomo has 3 files (full,even,odd) only the full tomo must be added to the set
+        split = self._splitHalf(tsId)
+        if split is not None:
+            base = split[0]
+            if base in halvesByTsId:
+                return
+
         origin = Transform()
         if self.setOrigCoord.get():
             if self.fromMrcHeader.get():
@@ -188,11 +223,74 @@ class ProtImportTomograms(ProtTomoImportFiles, ProtTomoImportAcquisition):
         tomoObj.setTsId(tsId)
         newFileName = self.getTomoNewFileName(tsId, getExt(fileName))
         createAbsLink(abspath(fileName), abspath(newFileName))
+
+        halfMaps = []
+        if tsId in halvesByTsId:
+            fullFn, evenFn, oddFn = halvesByTsId[tsId]
+
+            # link halves
+            newEven = self.getTomoNewFileName(tsId + '_even', getExt(evenFn))
+            newOdd = self.getTomoNewFileName(tsId + '_odd', getExt(oddFn))
+            createAbsLink(abspath(evenFn), abspath(newEven))
+            createAbsLink(abspath(oddFn), abspath(newOdd))
+
+            halfMaps = [newEven, newOdd]
+        tomoObj.setHalfMaps(halfMaps)
+
         tomoObj.setAcquisition(self._extractAcquisitionParameters(fileName))
         tomoObj.cleanObjId()
         tomoObj.setFileName(newFileName)
         tomoSet.append(tomoObj)
         tomoSet.update(tomoObj)
+
+    def _excludeByWords(self, files):
+        exclusionWordList = (self.exclusionWords.get() or '').split()
+        if not self.importOddEven.get():
+            exclusionWordList += HALF_WORDS
+
+        allowedFiles = []
+        for file in files:
+            fileName = basename(file)   # only the name of the file must be excluded
+            if any(bannedWord in fileName for bannedWord in exclusionWordList):
+                logger.info("%s excluded. Contains any of %s" %
+                            (file, ' '.join(exclusionWordList)))
+                continue
+            allowedFiles.append(file)
+        return allowedFiles
+
+    @staticmethod
+    def _splitHalf(stem):
+        """Return (base, kind) if stem ends with _even/_evn/_odd, else None."""
+        base, sep, suffix = stem.rpartition('_')
+        kind = HALF_SUFFIXES.get(suffix.lower())
+        if sep and base and kind:
+            return base, kind
+        return None
+
+    def _groupHalves(self, filePaths):
+        """Split a file stem into base name and half kind.
+
+            :param stem: file name without directory and extension, e.g. ``TS_01_even``.
+            :return: ``(base, kind)`` with kind ``'even'`` or ``'odd'`` if the stem ends
+                with ``_even``, ``_evn`` or ``_odd`` (case-insensitive), else ``None``.
+            """
+        mains, halves = {}, {}  # one dict for the full tomos, one for the halves
+        for path in filePaths:
+            stem = splitext(basename(path))[0]  # drop the directory and the extension
+            split = self._splitHalf(stem)
+            if split:
+                base, kind = split
+                halves.setdefault(base, {})[kind] = path #for each tomo, a dict 'halves' containing both even and odd paths is created
+            else:
+                mains[stem] = path
+        result = {}
+        for base, half in halves.items():
+            if base in mains and 'even' in half and 'odd' in half:
+                tsId = normalizeTSId(base)
+                result[tsId] = [mains[base], half['even'], half['odd']] #one single dict with n-elements = number of tilt-series with the complete set (full,even,odd)
+            else:
+                logger.warning(f"{base}: incomplete full/even/odd set, half maps will not be linked.")
+        return result
 
     # --------------------------- INFO functions ------------------------------
     def _hasOutput(self):
