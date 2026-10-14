@@ -136,6 +136,8 @@ testAcq = TomoAcquisition(voltage=voltage,
 
 
 class DataSetEmd10491_Odd_Even(Enum):
+    """Composed by 2 full, odd and even tilt-series and tomograms: TS_1 and TS_32. Contains also
+    the CTF estimation and ts alignment, both in IMOD format."""
     # Directories
     tsDir = 'tilt_series'
     tsAliDir = 'ts_alignments'
@@ -162,6 +164,29 @@ DataSet(name=EMPIAR_10491_ODD_EVEN, folder=EMPIAR_10491_ODD_EVEN,
         files={el.name: el.value for el in DataSetEmd10491_Odd_Even})
 
 ########################################################################################################################
+EMPIAR_10491 = 'empiar_10491'
+
+# NOTE: Homogeneous, same value for both tilt-series in Acquisition, num of angles, etc.
+
+class DataSetEmpiar10491(Enum):
+    """Composed by the angular stacks of two tilt-series movies: TS_1 and TS_32."""
+    # Files and directories
+    mdocDir = 'mdoc_frames'
+    tsMDir = 'mdoc_frames'
+    tsMPattern = '*.tif'
+    gainFile = 'gain_ref.mrc'  # Must be y-flipped
+    # Data
+    numTs = 2
+    unbinnedApix = 0.7894
+    dosePerTi = 2.64
+    acq = testAcq
+    nAngles = 41
+    tsDims = [5760, 4092, 41]
+
+DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={el.name: el.value for el in DataSetEmpiar10491})
+
+########################################################################################################################
+
 RE4_STA_TUTO = 'relion40_sta_tutorial_data'
 
 TS_01 = 'TS_01'
@@ -319,7 +344,6 @@ class DataSetRe4STATuto(Enum):
     tomoMasksPath = 'tomoMasks_bin8'
     tomoMasksPattern = '*.mrc'
 
-
     @classmethod
     def genTestTsDicts(cls,
                        tsIdList: Tuple = (TS_01, TS_03, TS_43, TS_45, TS_54),
@@ -431,10 +455,6 @@ class DataSetRe5STA(Enum):  # Extends the enumeration DataSetRe4STATuto
 
 
 DataSet(name=RE5_STA, folder=RE5_STA, files={el.name: el.value for el in DataSetRe5STA})
-
-########################################################################################################################
-EMPIAR_10491 = 'empiar_10491'
-DataSet(name=EMPIAR_10491, folder=EMPIAR_10491, files={})
 
 ########################################################################################################################
 RE_STA_TUTO_MOVIES = 'relion_sta_tutorial_movies'
