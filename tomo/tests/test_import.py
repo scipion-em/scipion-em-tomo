@@ -25,9 +25,11 @@
 # **************************************************************************
 import os
 from os.path import join, exists, abspath
-from typing import List
+from typing import List, Optional
 
 import numpy as np
+
+from pyworkflow import exceptions
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink
@@ -40,7 +42,7 @@ from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
-from ..objects import SetOfCTFTomoSeries, SetOfTiltSeries
+from ..objects import SetOfCTFTomoSeries, SetOfTiltSeries, SetOfTomograms
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
@@ -749,40 +751,45 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
         cls.ds = DataSet.getDataSet(EMPIAR_10491_ODD_EVEN)
         cls.samplingRate = 3.16
 
-    def _runImportOddEvenTomos(self, importOddEven:bool):
+    def _runImportOddEvenTomos(self, importOddEven: bool, exclusionWords: str = '') -> Optional[SetOfTomograms]:
         print(magentaStr(f"\n==> Importing tomograms, odd/even {importOddEven}: "))
 
         protImportOddEvenTomos = self.newProtocol(ProtImportTomograms,
-                filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.value),
-                filesPattern=DataSetEmd10491_Odd_Even.pattern.value,
-                samplingRate=self.samplingRate,
-                importOddEven=importOddEven)
+                                                  filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.value),
+                                                  filesPattern=DataSetEmd10491_Odd_Even.pattern.value,
+                                                  samplingRate=self.samplingRate,
+                                                  importOddEven=importOddEven,
+                                                  exclusionWords=exclusionWords)
 
         protImportOddEvenTomos.setObjLabel(f'import tomos, odd/even = {importOddEven}')
         self.launchProtocol(protImportOddEvenTomos)
-        return getattr(protImportOddEvenTomos,OUTPUT_NAME,None)
+        return getattr(protImportOddEvenTomos, OUTPUT_NAME, None)
 
     def testImportWithOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=True)
         # Only the full tomograms must be in the set, not the halves
-        self.assertEqual(tomoSet.getSize(), 2)
-        for tomo in tomoSet:
-            halves=tomo.getHalfMaps(asList=True)
-            self.assertEqual(len(halves), 2, f'{tomo.getTsId()} should have 2 half maps')
-        for halfFile in halves:
-            self.assertTrue(os.path.exists(halfFile), f'{halfFile} does not exist')
+        self.checkTomos(tomoSet)
+        # self.assertEqual(tomoSet.getSize(), 2)
+        # for tomo in tomoSet:
+        #     halves=tomo.getHalfMaps(asList=True)
+        #     self.assertEqual(len(halves), 2, f'{tomo.getTsId()} should have 2 half maps')
+        # for halfFile in halves:
+        #     self.assertTrue(os.path.exists(halfFile), f'{halfFile} does not exist')
 
     def testImportWithoutOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=False)
-        self.assertEqual(tomoSet.getSize(), 2)
-        for tomo in tomoSet:
-            self.assertFalse(tomo.hasHalfMaps(), f'{tomo.getTsId()} should not have half maps')
+        self.checkTomos(tomoSet, hasOddEven=False)
+        # self.assertEqual(tomoSet.getSize(), 2)
+        # for tomo in tomoSet:
+        #     self.assertFalse(tomo.hasHalfMaps(), f'{tomo.getTsId()} should not have half maps')
 
-
-
-
-
-
-
-
-
+    def checkTomos(self, tomoSet: SetOfTomograms, expectedSize: int = 2, hasOddEven: bool = True) -> None:
+        acq = DataSetEmd10491_Odd_Even.acq.value
+        self.checkTomograms(tomoSet,
+                            expectedSetSize=expectedSize,
+                            expectedSRate=self.samplingRate,
+                            expectedDimensions=DataSetEmd10491_Odd_Even.tomoDims.value,
+                            hasOddEven=hasOddEven,
+                            hasHalves=hasOddEven,
+                            testSetAcqObj=acq,
+                            testAcqObj=acq)
