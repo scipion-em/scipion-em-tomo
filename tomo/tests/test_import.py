@@ -747,18 +747,38 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(EMPIAR_10491_ODD_EVEN)
+        cls.samplingRate = 3.16
 
     def _runImportOddEvenTomos(self, importOddEven:bool):
         print(magentaStr(f"\n==> Importing tomograms with even and odd halves: "))
 
         protImportOddEvenTomos = self.newProtocol(ProtImportTomograms,
-                filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.values),
+                filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.name),
                 filesPattern=DataSetEmd10491_Odd_Even.pattern.values,
+                samplingRate=self.samplingRate,
                 importOddEven=importOddEven)
-                                                  #sampling rate)
+
         protImportOddEvenTomos.setObjLabel(f'import tomos, odd/even = {importOddEven}')
         self.launchProtocol(protImportOddEvenTomos)
-        return getattr(protImportOddEvenTomos,OUTPUT_NAME)
+        return getattr(protImportOddEvenTomos,OUTPUT_NAME,None)
+
+    def TestImportWithOddEven(self):
+        tomoSet = self._runImportOddEvenTomos(importOddEven=True)
+        # Only the full tomograms must be in the set, not the halves
+        self.assertEqual(tomoSet.getSize(), 2)
+        for tomo in tomoSet:
+            halves=tomo.getHalfMaps(asList=True)
+            self.assertEqual(len(halves), 2, f'{tomo.getTsId()} should have 2 half maps')
+
+    def TestImportWithoutOddEven(self, importEven:bool):
+        tomoSet = self._runImportOddEvenTomos(importOddEven=False)
+        self.assertEqual(tomoSet.getSize(), 2)
+        for tomo in tomoSet:
+            self.assertFalse(tomo.hasHalfMaps(), f'{tomo.getTsId()} should not have half maps')
+
+
+
+
 
 
 
