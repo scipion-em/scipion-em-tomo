@@ -750,7 +750,7 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
         cls.samplingRate = 3.16
 
     def _runImportOddEvenTomos(self, importOddEven:bool):
-        print(magentaStr(f"\n==> Importing tomograms with even and odd halves: "))
+        print(magentaStr(f"\n==> Importing tomograms, odd/even {importOddEven}: "))
 
         protImportOddEvenTomos = self.newProtocol(ProtImportTomograms,
                 filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.value),
@@ -769,6 +769,8 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
         for tomo in tomoSet:
             halves=tomo.getHalfMaps(asList=True)
             self.assertEqual(len(halves), 2, f'{tomo.getTsId()} should have 2 half maps')
+        for halfFile in halves:
+            self.assertTrue(os.path.exists(halfFile), f'{halfFile} does not exist')
 
     def testImportWithoutOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=False)
