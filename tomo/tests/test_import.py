@@ -770,7 +770,7 @@ class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
             halves=tomo.getHalfMaps(asList=True)
             self.assertEqual(len(halves), 2, f'{tomo.getTsId()} should have 2 half maps')
 
-    def testImportWithoutOddEven(self, importEven:bool):
+    def testImportWithoutOddEven(self):
         tomoSet = self._runImportOddEvenTomos(importOddEven=False)
         self.assertEqual(tomoSet.getSize(), 2)
         for tomo in tomoSet:
