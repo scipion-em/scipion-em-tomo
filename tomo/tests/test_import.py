@@ -25,21 +25,24 @@
 # **************************************************************************
 import os
 from os.path import join, exists, abspath
-from typing import List
+from typing import List, Optional
 
 import numpy as np
+
+from pyworkflow import exceptions
 from tomo.convert import getOrderFromList
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.utils import magentaStr, createLink
 from pyworkflow.object import Pointer
 from pwem.protocols import ProtSplitSet, ProtSetFilter, ProtSetEditor
 from tomo.protocols.protocol_ts_import import MDoc, ProtImportTs
-from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto, EMD_10439, DataSetEmd10439
+from . import DataSet, RE4_STA_TUTO, DataSetRe4STATuto, EMD_10439, DataSetEmd10439, EMPIAR_10491_ODD_EVEN, \
+    DataSetEmd10491_Odd_Even
 from .test_base_centralized_layer import TestBaseCentralizedLayer
 from ..constants import BOTTOM_LEFT_CORNER, TOP_LEFT_CORNER, ERR_COORDS_FROM_SQLITE_NO_MATCH, ERR_NO_TOMOMASKS_GEN, \
     ERR_NON_MATCHING_TOMOS, SCIPION
 import tomo.protocols
-from ..objects import SetOfCTFTomoSeries, SetOfTiltSeries
+from ..objects import SetOfCTFTomoSeries, SetOfTiltSeries, SetOfTomograms
 from ..protocols import ProtImportTomograms, ProtImportTomomasks
 from ..protocols.protocol_import_coordinates import IMPORT_FROM_AUTO, ProtImportCoordinates3D
 from ..protocols.protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion, outputObjs
@@ -643,12 +646,12 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
                       filesPath: str,
                       filesPattern: str,
                       importFrom: int,
-                      fromLabel: str = '',) -> SetOfCTFTomoSeries:
+                      fromLabel: str = '', ) -> SetOfCTFTomoSeries:
         prot = self.newProtocol(ProtImportTsCTF,
-                               importFrom=importFrom, #ImportChoice.ARETOMO.value,
-                               filesPath=filesPath,
-                               filesPattern=filesPattern,
-                               inputSetOfTiltSeries=inTsSet)
+                                importFrom=importFrom,  # ImportChoice.ARETOMO.value,
+                                filesPath=filesPath,
+                                filesPattern=filesPattern,
+                                inputSetOfTiltSeries=inTsSet)
         prot.setObjLabel(f'import ctf from {fromLabel}')
         self.launchProtocol(prot)
         return getattr(prot, prot._possibleOutputs.CTFs.name, None)
@@ -738,3 +741,53 @@ class TestImportTomoCtf(TestBaseCentralizedLayer):
         args = self._getImodInputs()
         self._runTestImportCtfEv(*args)
 
+
+EXCLUDED_WORDS = 'TS_32'
+
+
+class TestImportTomogramsOddEven(TestBaseCentralizedLayer):
+    """Check the import of tomograms together with their odd/even halves"""
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(EMPIAR_10491_ODD_EVEN)
+        cls.samplingRate = 3.16
+
+    def _runImportOddEvenTomos(self, importOddEven: bool, exclusionWords: str = '') -> Optional[SetOfTomograms]:
+        print(magentaStr(f"\n==> Importing tomograms, odd/even {importOddEven}: "))
+
+        protImportOddEvenTomos = self.newProtocol(ProtImportTomograms,
+                                                  filesPath=self.ds.getFile(DataSetEmd10491_Odd_Even.tomoDir.value),
+                                                  filesPattern=DataSetEmd10491_Odd_Even.pattern.value,
+                                                  samplingRate=self.samplingRate,
+                                                  importOddEven=importOddEven,
+                                                  exclusionWords=exclusionWords)
+
+        protImportOddEvenTomos.setObjLabel(f'import tomos, odd/even = {importOddEven}')
+        self.launchProtocol(protImportOddEvenTomos)
+        return getattr(protImportOddEvenTomos, OUTPUT_NAME, None)
+
+    def testImportWithOddEven(self):
+        tomoSet = self._runImportOddEvenTomos(importOddEven=True)
+        # Only the full tomograms must be in the set, not the halves
+        self.checkTomos(tomoSet)
+
+    def testImportWithOddEven_ExcludedWords(self):
+        tomoSet = self._runImportOddEvenTomos(importOddEven=True, exclusionWords=EXCLUDED_WORDS)
+        self.checkTomos(tomoSet, expectedSize=1)
+
+    def testImportWithoutOddEven(self):
+        tomoSet = self._runImportOddEvenTomos(importOddEven=False)
+        self.checkTomos(tomoSet, hasOddEven=False)
+
+    def checkTomos(self, tomoSet: SetOfTomograms, expectedSize: int = 2, hasOddEven: bool = True) -> None:
+        acq = DataSetEmd10491_Odd_Even.acq.value
+        self.checkTomograms(tomoSet,
+                            expectedSetSize=expectedSize,
+                            expectedSRate=self.samplingRate,
+                            expectedDimensions=DataSetEmd10491_Odd_Even.tomoDims.value,
+                            hasOddEven=hasOddEven,
+                            hasHalves=hasOddEven,
+                            testSetAcqObj=acq,
+                            testAcqObj=acq)
