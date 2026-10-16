@@ -571,7 +571,7 @@ Scipion required plugins: tomo, warp, xmipp3, imod, aretomo, cryocare, emantomo,
         "rmedge": false,
         "rmgold": false,
         "hostName": "localhost",
-        "numberOfThreads": 3
+        "numberOfThreads": 1
     },
     {
         "object.className": "ProtRelionDeNovoInitialModel",
