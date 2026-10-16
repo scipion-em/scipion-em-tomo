@@ -906,7 +906,9 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
-    def setHandedness(self, val: int) -> None:
+    def setHandedness(self, val: Optional[int]) -> None:
+        if val is None:
+            return
         ph = CtfHandedness.positive.value
         nh = CtfHandedness.negative.value
         if val not in (ph, nh):
@@ -1136,7 +1138,9 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
 
         return s
 
-    def setHandedness(self, val: int) -> None:
+    def setHandedness(self, val: Optional[int]) -> None:
+        if val is None:
+            return
         ph = CtfHandedness.positive.value
         nh = CtfHandedness.negative.value
         if val not in (ph, nh):
