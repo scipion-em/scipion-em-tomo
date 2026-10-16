@@ -12,7 +12,7 @@ Scipion required plugins: tomo, motioncorr, imod, cistem, fidder, tomo3d, dynamo
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "%(SCIPION_TESTS)s/reliontomo_STA_HIV_smalldataset/",
+        "filesPath": "~Path of the tilt-series movies|%(SCIPION_TESTS)s/reliontomo_STA_HIV_smalldataset/|2|filesPath~",
         "filesPattern": "*.mdoc",
         "isTomo5": false,
         "exclusionWords": null,
