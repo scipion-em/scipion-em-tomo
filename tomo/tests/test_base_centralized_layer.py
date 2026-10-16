@@ -141,7 +141,8 @@ class TestBaseCentralizedLayer(BaseTest):
                         originTolAngst: float = 0.1,
                         checkHeaderApix: bool = True,
                         sRateAngsPixTol: float = 0.015,
-                        presentTsIds: List[str] = None) -> None:
+                        presentTsIds: List[str] = None,
+                        defocusHandedness: Optional[int] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -188,6 +189,7 @@ class TestBaseCentralizedLayer(BaseTest):
         the header of the original binary file.
         :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
         :param presentTsIds: list with the expected TsIds.
+        :param defocusHandedness: ctf handedness. If specified, the admitted values are 1 or -1.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # CHECK THE SET ------------------------------------------------------------------------------------------------
@@ -211,6 +213,8 @@ class TestBaseCentralizedLayer(BaseTest):
         if presentTsIds:
             self.assertEqual(sorted(inTsSet.getTSIds()), sorted(presentTsIds))
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
+        if defocusHandedness:
+            self.checkDefocusHandedness(inTsSet, defocusHandedness)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
@@ -251,6 +255,9 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(ts.getAlignment(), alignment)
             # Interpolated
             self.assertEqual(ts.interpolated(), isInterpolated)
+            # Defocus handedness
+            if defocusHandedness:
+                self.checkDefocusHandedness(ts, defocusHandedness)
             print(cyanStr('---> Done!'))
 
             # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
@@ -277,6 +284,12 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
                 self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
+
+    def checkDefocusHandedness(self, inObj: Union[SetOfTiltSeries, TiltSeries], testHandVal: int) -> None:
+        handVal = inObj.getHandedness()
+        if handVal not in [-1, 1]:
+            raise Exception("handedness should be either 1 or -1")
+        self.assertEqual(handVal, testHandVal)
 
     def checkAnglesCount(self,
                          inSet: Union[SetOfTiltSeries, TiltSeries, SetOfTiltSeriesM, TiltSeriesM],
@@ -461,10 +474,6 @@ class TestBaseCentralizedLayer(BaseTest):
         """
         self.assertSetSize(inCtfSet, expectedSetSize)
         self.assertEqual(inCtfSet.getStreamState(), streamState)
-        if handedness:
-            if handedness not in [-1, 1]:
-                raise Exception("handedness should be either 1 or -1")
-            self.assertEqual(inCtfSet.getHandedness(), handedness)
         expectPsdFile = False
         for ctf in inCtfSet:
             tsId = ctf.getTsId()

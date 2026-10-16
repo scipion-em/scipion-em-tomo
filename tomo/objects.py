@@ -446,6 +446,10 @@ def tiltSeriesToString(tiltSeries):
 class TiltSeries(TiltSeriesBase):
     ITEM_TYPE = TiltImage
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._handedness = Integer()  # +1 or -1 for defocus increasing or decreasing with Z axis
+
     def __str__(self):
 
         s = super().__str__()
@@ -454,73 +458,6 @@ class TiltSeries(TiltSeriesBase):
         s += tiltSeriesToString(self)
 
         return s
-
-    def getInterpolated(self, setId, binning, folder=None):
-        """ Returns the path to the interpolated file for this tilt series.
-        If exists, it will re-use it, otherwise it will create it.
-            :param setId: objId of the set this tilt series belong to
-            :param binning: binning at which you want he interpolated file
-            :param tmpFolder: folder for the interpolated file"""
-
-        if not self.hasAlignment():
-            return self.__getTsFileName()
-        else:
-            if folder is None:
-                folder = os.path.dirname(self.__getTsFileName())
-            path = self.getInterpolatedFileName(setId, binning, folder)
-            if not os.path.exists(path):
-                self.applyTransformPy(path, binning)
-            return path
-
-    def applyTransformPy(self, outputFile, binning):
-        """ Apply the transformation matrix to the tilt series using python. Use for now for visualization purposes until
-        quality is verified to be enough for processing.
-
-        :param outputFile: output file for the interpolated image
-        :param binning: times smaller you want the output"""
-
-        orig = self.__getTsFileName()
-
-        imgStk = ImageReadersRegistry.open(orig)
-
-        output = ImageStack()
-
-        for ti in self.iterItems():
-
-            transf = ti.getTransform()
-
-            _, _, rot = transf.getEulerAngles()
-            rot = np.rad2deg(-rot)
-
-            # Scale factor
-            factor = 1/binning
-
-            x,y,_ = transf.getShifts()
-            # scale shifts
-            x=x*factor
-            y=y*factor
-            npImage = imgStk.getImage(ti.getIndex()-1)
-
-            if binning != 0:
-                npImage = imgStk.scaleSlice(npImage, factor)
-
-            npImage = imgStk.transformSlice(npImage,(x,y), rot)
-            output.append(npImage)
-
-        output.write(outputFile)
-
-    def getInterpolatedFileName(self, setId, binning, tmpFolder):
-        """ Returns the interpolated filename for the tilt series
-        at the binning passed and in the tmp folder
-
-            :param setId: objId of the set this tilt series belong to
-            :param binning: binning at which you want he interpolated file
-            :param tmpFolder: folder for the interpolated file
-
-        """
-
-        ext = path.getExt(self.__getTsFileName())
-        return os.path.join(tmpFolder, f"ts_{setId}_{self.getTsId()}_bin{binning}{ext}")
 
     def __getTsFileName(self, even: typing.Union[bool, None] = None) -> str:
         """Get one of the tilt-series possible file names: the main tilt-series, the even or the odd.
@@ -969,6 +906,15 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
 
+    def setHandedness(self, val: int) -> None:
+        ph = CtfHandedness.positive.value
+        nh = CtfHandedness.negative.value
+        if val not in (ph, nh):
+            raise ValueError(f"Handedness must be strictly {ph} or {nh}. Received: {val}")
+        self._handedness.set(val)
+
+    def getHandedness(self) -> int:
+        return self._handedness.get()
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True
@@ -988,8 +934,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._hasOddEven = Boolean(False)
         self._ctfCorrected = Boolean(False)
         self._interpolated = Boolean(False)
-        # Used to check if a set is composed of elements with different dimensions, suche as the number of tilt-images
-        self._isHeterogeneous = Boolean(False)
+        self._isHeterogeneous = Boolean(False)  # Used to check if a set is composed of elements with different
+        # dimensions, suche as the number of tilt-images
         self._tsIds = None
 
     def getAcquisition(self):
@@ -1176,6 +1122,10 @@ class SetOfTiltSeriesBase(data.SetOfImages):
 class SetOfTiltSeries(SetOfTiltSeriesBase):
     ITEM_TYPE = TiltSeries
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._handedness = Integer()  # +1 or -1 for defocus increasing or decreasing with Z axis
+
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 
@@ -1185,6 +1135,16 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         s += tiltSeriesToString(self)
 
         return s
+
+    def setHandedness(self, val: int) -> None:
+        ph = CtfHandedness.positive.value
+        nh = CtfHandedness.negative.value
+        if val not in (ph, nh):
+            raise ValueError(f"Handedness must be strictly {ph} or {nh}. Received: {val}")
+        self._handedness.set(val)
+
+    def getHandedness(self) -> int:
+        return self._handedness.get()
 
 
 class TiltImageM(data.Movie, TiltImageBase):
@@ -3167,7 +3127,6 @@ class SetOfCTFTomoSeries(data.EMSet):
         self._setOfTiltSeriesPointer = Pointer(kwargs.get('tiltSeriesPointer', None))
         self._idDict = {}
         self._ctfTsIds = None
-        self._handedness = Integer()  # +1 or -1 for increasing or decreasing with Z axis
 
     def copyInfo(self, other):
         data.EMSet.copyInfo(self, other)
@@ -3303,16 +3262,6 @@ class SetOfCTFTomoSeries(data.EMSet):
     def getTSIds(self):
         """ Returns al the Tilt series ids involved in the set."""
         return self.getUniqueValues(CTFTomoSeries.TS_ID_FIELD)
-
-    def setHandedness(self, val: int) -> None:
-        ph = CtfHandedness.positive.value
-        nh = CtfHandedness.negative.value
-        if val not in (ph, nh):
-            raise ValueError(f"Handedness must be strictly {ph} or {nh}. Received: {val}")
-        self._handedness.set(val)
-
-    def getHandedness(self) -> int:
-        return self._handedness.get()
 
 
 class TiltSeriesCoordinate(data.EMObject):
