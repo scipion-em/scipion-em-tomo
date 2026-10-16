@@ -155,7 +155,7 @@ class DataSetEmd10491_Odd_Even(Enum):
     tomoDims = [1024, 1440, 300]
     acq = testAcq
     apixUnbinned = 0.7894
-    exclusionWordsOddEven = '_even _odd'
+
 
 
 
