@@ -141,6 +141,7 @@ class DataSetEmd10491_Odd_Even(Enum):
     tsAliDir = 'ts_alignments'
     tomoDir = 'tomograms'
     ctfDir = 'CTFs'
+    masksDir = 'masks'
     # Files
     pattern = '*.mrc'
     mdocPattern = '*.mdoc'
