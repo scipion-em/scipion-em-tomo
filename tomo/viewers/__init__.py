@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from .viewers_data import (TomoDataViewer as AATomoDataViewer, TSMotionCorrectionViewer,
+from .viewers_data import (TomoDataViewer as AATomoDataViewer,
                            CtfEstimationTomoViewer as ACTFEstimationTomoViewer)
 from .viewer_split_evenodd import SplitEvenOddViewer
 # from tomo.viewers.deprecated.viewer_ctf_tomo_consensus import CtfConsensusTomoViewer

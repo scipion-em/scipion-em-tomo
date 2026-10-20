@@ -132,7 +132,6 @@ class ProtTsProcess(EMProtocol, ProtTomoBase):
         outputSet.setStreamState(outputSet.STREAM_OPEN)
 
         if self._createOutput:
-            outputSet.updateDim()
             self._defineOutputs(**{self._getOutputName(): outputSet})
             self._defineSourceRelation(self._getInputTsPointer(), outputSet)
             self._createOutput = False

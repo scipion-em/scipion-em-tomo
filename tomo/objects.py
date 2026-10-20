@@ -1084,7 +1084,9 @@ class SetOfTiltSeriesBase(data.SetOfImages):
                 self.update(tsOut)
 
     def update(self, item: TiltSeriesBase):
-        if not self._firstDim.isEmpty():
+        if len(self) == 1:
+            self.setIsHeterogeneousSet(False)
+        elif not self._firstDim.isEmpty():
             currentSetNAngles = self.getAnglesCount()
             addedTsNAngles = item.getSize()
             if currentSetNAngles != addedTsNAngles and not self.isHeterogeneousSet():
@@ -1098,16 +1100,8 @@ class SetOfTiltSeriesBase(data.SetOfImages):
         self._interpolated.set(item.interpolated())
         self._ctfCorrected.set(item.ctfCorrected())
         self._hasOddEven.set(item.hasOddEven())
-
+        self._acquisition.setAccumDose(item.getAcquisition().getAccumDose())
         super().update(item)
-
-    def updateDim(self):
-        """ Update dimensions of this set base on the first element. """
-
-        logger.warning("TO DEVELOPERS: update is called always before this. This call to updateDim could be removed.")
-
-        # firstItem = self.getFirstItem()
-        # self.update(firstItem)
 
     def getScannedPixelSize(self):
         mag = self._acquisition.getMagnification()

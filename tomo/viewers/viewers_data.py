@@ -36,7 +36,6 @@ from pyworkflow.protocol import LabelParam
 from .views import ClassesSubTomogramsView
 from ..convert.convert import setOfMeshes2Files
 import tomo.objects
-from tomo.protocols import ProtTsCorrectMotion
 
 SERIES_EVEN = "TiltSeriesEven"
 SERIES_ODD = "TiltSeriesOdd"
@@ -99,67 +98,6 @@ class TomoDataViewer(pwviewer.Viewer):
             TomogramsDialog(self._tkRoot, True, provider=tomoProvider, path=path, lockGui=False)
 
         return views
-
-
-class TSMotionCorrectionViewer(pwviewer.ProtocolViewer):
-    """ Wrapper to visualize outputs of tilt series motion correction protocols
-    """
-    _label = 'Tilt series motion correction viewer'
-    _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [ProtTsCorrectMotion]
-
-    def _defineParams(self, form):
-        form.addSection(label='Visualization of tilt series')
-        form.addParam('displayFullTiltSeries', LabelParam,
-                      label='Display full frame aligned tilt series',
-                      help='Shows full frames aligned set of tilt series')
-        if self.hasDWSet():
-            form.addParam('displayFullTiltSeriesDW', LabelParam,
-                          label='Display full frame aligned tilt series (dose-weighted)',
-                          help='Shows full frames aligned set of tilt series')
-        if self.hasOddEvenSet():
-            form.addParam('displayEvenTiltSeries', LabelParam,
-                          label='Display even frames aligned tilt series',
-                          help='Shows even frames aligned set of tilt series')
-
-            form.addParam('displayOddTiltSeries', LabelParam,
-                          label='Display odd frames aligned tilt series',
-                          help='Shows even frames aligned set of tilt series')
-
-    def getOutputSet(self, attrName):
-        return getattr(self.protocol, attrName)
-
-    def hasDWSet(self):
-        return self.getOutputSet(SERIES_DW) is not None
-
-    def hasOddEvenSet(self):
-        return self.getOutputSet(SERIES_ODD) is not None
-
-    def _displayEvenTiltSeries(self, param=None):
-        return self._visualize(self.getOutputSet(SERIES_EVEN))
-
-    def _displayOddTiltSeries(self, param=None):
-        return self._visualize(self.getOutputSet(SERIES_ODD))
-
-    def _displayFullTiltSeries(self, param=None):
-        return self._visualize(self.protocol.TiltSeries)
-
-    def _displayFullTiltSeriesDW(self, param=None):
-        return self._visualize(self.getOutputSet(SERIES_DW))
-
-    def _getVisualizeDict(self):
-        return {
-            'displayFullTiltSeries': self._displayFullTiltSeries,
-            'displayFullTiltSeriesDW': self._displayFullTiltSeriesDW,
-            'displayEvenTiltSeries': self._displayEvenTiltSeries,
-            'displayOddTiltSeries': self._displayOddTiltSeries,
-        }
-
-    def _visualize(self, setOfTiltSeries, **kwargs):
-        from .views_tkinter_tree import TomoObjectDialogView
-        setTsView = TomoObjectDialogView(self.getTkRoot(), self.protocol, setOfTiltSeries)
-
-        return [setTsView]
 
 
 class CtfEstimationTomoViewer(pwviewer.Viewer):

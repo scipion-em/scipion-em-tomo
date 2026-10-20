@@ -156,7 +156,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 newTs.write()
 
                 self.outputAliConsensusSoTS.update(newTs)
-                self.outputAliConsensusSoTS.updateDim()
                 self.outputAliConsensusSoTS.write()
 
             # No consensus achieved (return tilt-series with no alignment information)
@@ -179,7 +178,6 @@ class ProtConsensusAlignmentTS(EMProtocol, ProtTomoBase):
                 newTs.write()
 
                 self.outputNoAliConsensusSoTS.update(newTs)
-                self.outputNoAliConsensusSoTS.updateDim()
                 self.outputNoAliConsensusSoTS.write()
 
         self._store()
