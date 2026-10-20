@@ -129,7 +129,7 @@ testAcq = TomoAcquisition(voltage=voltage,
                           doseInitial=initialDose,
                           tiltAxisAngle=tiltAxisAngle,
                           dosePerFrame=dosePerTiltImg,
-                          angleMin=40,
+                          angleMin=-40,
                           angleMax=40,
                           accumDose=108.24,
                           step=tiltStep)
