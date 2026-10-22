@@ -143,6 +143,7 @@ class DataSetEmd10491_Odd_Even(Enum):
     tsAliDir = 'ts_alignments'
     tomoDir = 'tomograms'
     ctfDir = 'CTFs'
+    masksDir = 'masks'
     # Files
     pattern = '*.mrc'
     mdocPattern = '*.mdoc'
@@ -157,7 +158,9 @@ class DataSetEmd10491_Odd_Even(Enum):
     tomoDims = [1024, 1440, 300]
     acq = testAcq
     apixUnbinned = 0.7894
-    exclusionWordsTs32 = 'TS_32'
+
+
+
 
 
 DataSet(name=EMPIAR_10491_ODD_EVEN, folder=EMPIAR_10491_ODD_EVEN,
