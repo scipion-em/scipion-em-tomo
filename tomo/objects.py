@@ -448,7 +448,6 @@ class TiltSeries(TiltSeriesBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._handedness = Integer()  # +1 or -1 for defocus increasing or decreasing with Z axis
 
     def __str__(self):
 
@@ -905,18 +904,6 @@ $if (-e ./savework) ./savework'.format(pathi, pathi, binned, pathi, thickness,
         # Create a .xf file
         transformFilePath = folderName + '/%s.xf' % self.getTsId()
         self.writeXfFile(transformFilePath, delimiter=kwargs.get('delimiter', '\t'), factor=kwargs.get('factor', 1))
-
-    def setHandedness(self, val: Optional[int]) -> None:
-        if val is None:
-            return
-        ph = CtfHandedness.positive.value
-        nh = CtfHandedness.negative.value
-        if val not in (ph, nh):
-            raise ValueError(f"Handedness must be strictly {ph} or {nh}. Received: {val}")
-        self._handedness.set(val)
-
-    def getHandedness(self) -> int:
-        return self._handedness.get()
 
 class SetOfTiltSeriesBase(data.SetOfImages):
     EXPOSE_ITEMS = True

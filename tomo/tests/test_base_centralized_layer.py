@@ -255,9 +255,6 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertEqual(ts.getAlignment(), alignment)
             # Interpolated
             self.assertEqual(ts.interpolated(), isInterpolated)
-            # Defocus handedness
-            if defocusHandedness:
-                self.checkDefocusHandedness(ts, defocusHandedness)
             print(cyanStr('---> Done!'))
 
             # CHECK THE TILT IMAGES ------------------------------------------------------------------------------------
