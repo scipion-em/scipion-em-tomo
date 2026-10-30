@@ -27,6 +27,7 @@
 
 from .protocol_base import ProtTomoBase, ProtTomoPicking, ProtTomoSubtomogramAveraging
 from .protocol_correct_tilt_offset import ProtCorrectTiltOffset
+from .protocol_ctf_defocus_outliers import ProtCtfDefocusOutliers
 from .protocol_import_coordinates_from_scipion import ProtImportCoordinates3DFromScipion
 from .protocol_import_tomomasks import ProtImportTomomasks
 from .protocol_import_ctf import ProtImportTsCTF
@@ -55,5 +56,6 @@ from .protocol_compose_TS import ProtComposeTS
 from .protocol_misalignTS import ProtTomoMisalignTiltSeries
 from .protocol_mask_coordinates import ProtMaskCoordinates
 from .protocol_export_coords import ProtExportCoordinates3D
+
 
 
