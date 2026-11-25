@@ -8,6 +8,7 @@ V3.12.5:
   - Add method getPresentAcqOrdersTsAndCtf to tomo utils as a replacement of getCommonTsAndCtfElements.
     The new one does not load explicitly a mapper and deprecates index-based matching in favor of
     acquisition-order-based matching.
+  - Fix bug in ts excluded views filter.
 V3.12.4: expand test datasets.
 V3.12.3: fix bug in TiltSeries applyTransform for .mrcs files.
 V3.12.2: replace the old streaming template by te updated version.
