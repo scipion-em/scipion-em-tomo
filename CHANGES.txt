@@ -1,7 +1,10 @@
 V3.12.5:
  Users:
   - Protocol import tomograms now allow to import the odd / even halves.
-V3.12.5: update templates.
+  - Update templates.
+  - Add CTF handedness attribute to both SetOfTiltSeries and TiltSeries classes.
+ Developers:
+  - Expand the TCL for CTF handedness checking.
 V3.12.4: expand test datasets.
 V3.12.3: fix bug in TiltSeries applyTransform for .mrcs files.
 V3.12.2: replace the old streaming template by te updated version.

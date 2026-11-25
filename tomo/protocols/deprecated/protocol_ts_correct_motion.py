@@ -35,8 +35,8 @@ from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 from pwem.emlib.image import ImageHandler
 
-from ..objects import TiltSeries, TiltImage, SetOfTiltSeries
-from .protocol_ts_base import ProtTsProcess
+from tomo.objects import TiltSeries, TiltImage, SetOfTiltSeries
+from tomo.protocols.protocol_ts_base import ProtTsProcess
 
 OUTPUT_TILT_SERIES_ODD = 'TiltSeriesOdd'
 OUTPUT_TILT_SERIES_EVEN = 'TiltSeriesEven'
@@ -341,10 +341,8 @@ class ProtTsCorrectMotion(ProtTsProcess):
             self.TiltSeriesDW.setStreamState(Set.STREAM_OPEN)
 
         if self._createOutput:
-            outputSet.updateDim()
             outputs = {self._getOutputName(): outputSet}
             if self._createOutputWeightedTS():
-                self.TiltSeriesDW.updateDim()
                 outputs.update({OUTPUT_TILT_SERIES_DW: self.TiltSeriesDW})
 
             if self._doSplitEvenOdd():
@@ -522,31 +520,3 @@ class ProtTsCorrectMotion(ProtTsProcess):
 
     def _createOutputWeightedTS(self):
         return False
-
-
-# class ProtTsAverage(ProtTsCorrectMotion):
-#     """
-#     Simple protocol to average TiltSeries movies as basic
-#     motion correction. It is used mainly for testing purposes.
-#     """
-#     _label = 'average tilt-series movies'
-#     _devStatus = pw.BETA
-#
-#     def _processTiltImageM(self, workingFolder, tiltImageM, *args):
-#         """ Simple add all frames and divide by its number. """
-#         ih = ImageHandler()
-#         sumImg = ih.createImage()
-#         img = ih.createImage()
-#
-#         n = tiltImageM.getNumberOfFrames()
-#         fn = tiltImageM.getFileName()
-#
-#         sumImg.read((1, fn))
-#
-#         for frame in range(2, n + 1):
-#             img.read((frame, fn))
-#             sumImg.inplaceAdd(img)
-#
-#         # sumImg.inplaceDivide(float(n))
-#         outputFn = self._getOutputTiltImagePaths(tiltImageM)[0]
-#         sumImg.write(outputFn)

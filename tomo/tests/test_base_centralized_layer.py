@@ -36,7 +36,7 @@ from pyworkflow.utils import cyanStr
 from tomo.constants import TR_SCIPION, SCIPION
 from tomo.objects import SetOfSubTomograms, SetOfCoordinates3D, Coordinate3D, Tomogram, CTFTomoSeries, SetOfTiltSeries, \
     TomoAcquisition, SetOfTiltSeriesM, TiltSeries, TiltImage, SetOfTomograms, SetOfTomoMasks, TiltSeriesM, SetOfMeshes, \
-    TomoMask, SubTomogram, AverageSubTomogram
+    TomoMask, SubTomogram, AverageSubTomogram, SetOfCTFTomoSeries
 
 
 class TestBaseCentralizedLayer(BaseTest):
@@ -63,10 +63,11 @@ class TestBaseCentralizedLayer(BaseTest):
 
         print("Checking properties are persisted")
 
-        self.assertTrue(inSet.hasProperty("self"),f"Set {inSet.getFileName()} does not have 'self' in properties table. Probably properties are not persisted.")
+        self.assertTrue(inSet.hasProperty("self"),
+                        f"Set {inSet.getFileName()} does not have 'self' in properties table. Probably properties are not persisted.")
 
     # TILT SERIES ######################################################################################################
-    def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM,  expectedSetSize: int, expectedSRate: float,
+    def checkTiltSeriesM(self, inTsMSet: SetOfTiltSeriesM, expectedSetSize: int, expectedSRate: float,
                          expectedDimensions: List[int] = None,
                          testAcqObj: TomoAcquisition = None,
                          anglesCount: Union[dict, int] = None,
@@ -140,7 +141,8 @@ class TestBaseCentralizedLayer(BaseTest):
                         originTolAngst: float = 0.1,
                         checkHeaderApix: bool = True,
                         sRateAngsPixTol: float = 0.015,
-                        presentTsIds: List[str] = None) -> None:
+                        presentTsIds: List[str] = None,
+                        defocusHandedness: Optional[int] = None) -> None:
         """
         :param inTsSet: SetOfTiltSeries.
         :param expectedSetSize: expected set site to check.
@@ -187,6 +189,7 @@ class TestBaseCentralizedLayer(BaseTest):
         the header of the original binary file.
         :param sRateAngsPixTol: tolerance, in angtroms/pixel, of the sampling rate.
         :param presentTsIds: list with the expected TsIds.
+        :param defocusHandedness: ctf handedness. If specified, the admitted values are 1 or -1.
         """
         # TODO: check if attribute hasCtfCorrected makes sense here or if it's inherited from SPA and then does not.
         # CHECK THE SET ------------------------------------------------------------------------------------------------
@@ -210,6 +213,8 @@ class TestBaseCentralizedLayer(BaseTest):
         if presentTsIds:
             self.assertEqual(sorted(inTsSet.getTSIds()), sorted(presentTsIds))
         self.assertEqual(inTsSet.ctfCorrected(), hasCtfCorrected)
+        if defocusHandedness:
+            self.checkDefocusHandedness(inTsSet, defocusHandedness)
 
         # CHECK THE TILT SERIES ----------------------------------------------------------------------------------------
         for ts in inTsSet:
@@ -276,6 +281,12 @@ class TestBaseCentralizedLayer(BaseTest):
                 self.assertTrue(exists(ti.getFileName()))
                 # Sampling rate
                 self.assertAlmostEqual(ti.getSamplingRate(), expectedSRate, delta=sRateAngsPixTol)
+
+    def checkDefocusHandedness(self, inObj: Union[SetOfTiltSeries, TiltSeries], testHandVal: int) -> None:
+        handVal = inObj.getHandedness()
+        if handVal not in [-1, 1]:
+            raise Exception("handedness should be either 1 or -1")
+        self.assertEqual(handVal, testHandVal)
 
     def checkAnglesCount(self,
                          inSet: Union[SetOfTiltSeries, TiltSeries, SetOfTiltSeriesM, TiltSeriesM],
@@ -438,7 +449,13 @@ class TestBaseCentralizedLayer(BaseTest):
             self.assertAlmostEqual(testAcq.getAccumDose(), currentAcq.getAccumDose(), delta=0.01)
 
     # CTF ##############################################################################################################
-    def checkCTFs(self, inCtfSet, expectedSetSize=-1, expectedPsdFile=None, excludedViewsDict=None, streamState=2):
+    def checkCTFs(self,
+                  inCtfSet: SetOfCTFTomoSeries,
+                  expectedSetSize: int = -1,
+                  expectedPsdFile: bool = False,
+                  excludedViewsDict: Optional[dict] = None,
+                  streamState: int = 2,
+                  handedness: Optional[int] = None) -> None:
         """
         :param inCtfSet: A SetOfCtfTomoSeries.
         :param expectedSetSize: expected set site to check.
@@ -450,6 +467,7 @@ class TestBaseCentralizedLayer(BaseTest):
         set to False and the expected values for defocusU, defocusV, and DefocusAngle will be -999, -1,
         and -999, correspondingly, as what's done by the CTFModel method called setWrongDefocus.
         :param streamState: expected stream state, being 2 (default) a stream that is closed.
+        :param handedness: ctf handedness. If specified, the admitted values are 1 or -1.
         """
         self.assertSetSize(inCtfSet, expectedSetSize)
         self.assertEqual(inCtfSet.getStreamState(), streamState)
@@ -573,7 +591,7 @@ class TestBaseCentralizedLayer(BaseTest):
             print(cyanStr('---> Done!'))
 
     def _checkTomoDims(self,
-                       tomo = Tomogram,
+                       tomo=Tomogram,
                        expectedDimensions: Union[List[int], dict] = None,
                        checkSizeMsg: Optional[str] = None) -> None:
         if expectedDimensions:
@@ -653,7 +671,7 @@ class TestBaseCentralizedLayer(BaseTest):
     def checkCoordinates(self,
                          outCoords: Union[SetOfCoordinates3D, SetOfMeshes],
                          expectedSetSize: int = -1,
-                         expectedBoxSize: int =-1,
+                         expectedBoxSize: int = -1,
                          expectedSRate: float = -1.0,
                          orientedParticles: bool = False,
                          setSizeTolPercent: float = 0.0,
