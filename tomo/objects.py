@@ -690,7 +690,7 @@ class TiltSeries(TiltSeriesBase):
         :param presentAcqOrders: set containing the present acq orders in both the given TS and CTFTomoSeries. Used to
         filter the tilt angles that will be written in the tlt file generated. The parameter excludedViews is ignored
         if presentAcqOrders is provided, as the excluded views info may have been used to generate the presentAcqOrders
-        (see tomo > utils > getCommonTsAndCtfElements)
+        (see tomo > utils > getPresentAcqOrdersTsAndCtf)
         :param includeDose: boolean used to indicate if the tlt file created must contain an additional column with
         the dose or not (default).
         """

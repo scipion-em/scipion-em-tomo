@@ -393,7 +393,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         finalNoImgs = 0
         tiList = []
         # Tilt-images
-        for i, ti in enumerate(ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)):
+        for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD):
             tiltAngle = ti.getTiltAngle()
             self._genTiDict(ti)
             # Filter by tilt angle
@@ -404,7 +404,9 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
             # Filter by dose
             self._filterByDose(ti)
             # Filter by quality
-            tiData = imgStack.getImage(i)
+            # Read the view by its index in the stack, not by its position in tilt order (the stack
+            # may be stored in another order, e.g. the acquisition one)
+            tiData = imgStack.getImage(ti.getIndex() - 1)
             tqd = TiltImageQualityDetector(tiData)
             metricsDict = tqd.analyze_image(tiltAngle)
             if darkDict:
@@ -597,11 +599,15 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         acq.setAccumDose(accumDose)
         acq.setDoseInitial(initialDose)
         outTs.setAcquisition(acq)
+        # TiltSeries.reStack writes the kept views in the order of their index in the input stack, so
+        # their index in the re-stacked file is their rank in that order
+        keptIndices = sorted(tiOut.getIndex() for tiOut in tiList if tiOut.isEnabled())
+        newIndexDict = {oldIndex: newIndex for newIndex, oldIndex in enumerate(keptIndices, start=1)}
         # Update the acquisition minAngle and maxAngle values of each tilt-image acq while preserving their
         # specific accum and initial dose values
         for tiOut in tiList:
             if tiOut.isEnabled():
-                tiOut.setFileName(reStackedFn)
+                tiOut.setLocation(newIndexDict[tiOut.getIndex()], reStackedFn)
                 tiAcq = tiOut.getAcquisition()
                 tiAcq.setAngleMin(angleMin)
                 tiAcq.setAngleMax(angleMax)
@@ -694,7 +700,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
                             eps: float = 1e-8) -> Dict[int, Dict[str, float]]:
         """Compute per-image dark outlier scores for a tilt-series.
 
-        Assumption: the stack is sorted by tilt angle from min to max.
+        The views are analysed in tilt-angle order, and each one is read by its index in the stack.
         Strategy: robust global model log(brightness) vs log(cos(|tilt|)) + local neighborhood check.
 
         Main idea: An image is considered dark if it is much darker than expected for its angle
@@ -703,7 +709,8 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         Returns a dict keyed by acquisitionOrder with fields: is_dark, dark_z, local_ratio, brightness, p05/p50/p95.
         """
         window = self.darkWindowVal
-        ti_by_angle = list(ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD))
+        # Clone: the iterator reuses the same object for every item
+        ti_by_angle = [ti.clone() for ti in ts.iterItems(orderBy=TiltImage.TILT_ANGLE_FIELD)]
         n = len(ti_by_angle)
         angles = np.asarray([float(ti.getTiltAngle()) for ti in ti_by_angle], dtype=float)
 
@@ -715,7 +722,7 @@ class ProtExclViewFilter(EMProtocol, ProtStreamingBase):
         p95 = np.zeros(n, dtype=float)
 
         for k, ti in enumerate(ti_by_angle):
-            img = imgStack.getImage(k)
+            img = imgStack.getImage(ti.getIndex() - 1)
             bm = self._robust_brightness(img, eps=eps)
             brightness[k] = max(float(bm['brightness']), eps)
             p05[k], p50[k], p95[k] = bm['p05'], bm['p50'], bm['p95']
