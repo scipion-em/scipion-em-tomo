@@ -1109,6 +1109,15 @@ class SetOfTiltSeries(SetOfTiltSeriesBase):
         super().__init__(**kwargs)
         self._handedness = Integer()  # +1 or -1 for defocus increasing or decreasing with Z axis
 
+    def copyInfo(self, other):
+        """ Copy the set information, including the defocus handedness, so it is kept
+        by the protocols that build their output set of tilt-series from the input one
+        (e.g. alignment). The source may be a set without handedness, such as a
+        SetOfTiltSeriesM; then the current value is kept."""
+        super().copyInfo(other)
+        if hasattr(other, '_handedness'):
+            self.copyAttributes(other, '_handedness')
+
     def _dimStr(self):
         """ Return the string representing the dimensions. """
 

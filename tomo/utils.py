@@ -453,12 +453,33 @@ def getCommonTsAndCtfElements(ts: TiltSeries, ctfTomoSeries: CTFTomoSeries, only
     return tsAcqOrderSet & ctfAcqOrderSet
 
 
+def getPresentAcqOrdersTsAndCtf(ts: TiltSeries, ctfSeries: CTFTomoSeries) -> List[int]:
+    """ Return the acquisition orders of views that are enabled in both
+    the TiltSeries and the CTFTomoSeries.
+
+    :param ts: TiltSeries object
+    :param ctfSeries: CTFTomoSeries object
+    :return: set of int with the common enabled acquisition orders
+    """
+    enabledCtfAcqOrders = {
+        ctf.getAcquisitionOrder()
+        for ctf in ctfSeries.iterItems()
+        if ctf.isEnabled()
+    }
+
+    return sorted(
+        tiAcqOrder
+        for ti in ts.iterItems()
+        if ti.isEnabled() and (tiAcqOrder := ti.getAcquisitionOrder()) in enabledCtfAcqOrders
+    )
+
+
 def genDefocusFileFromScipion(inCtf: CTFTomoSeries,
                               inTs: TiltSeries,
                               defocusFilePath: str,
                               onlyEnabled: bool = True) -> None:
     logger.info(cyanStr("Defocus file generated from defocus attributes."))
-    presentAcqOrders = getCommonTsAndCtfElements(inTs, inCtf, onlyEnabled=onlyEnabled)
+    presentAcqOrders = getPresentAcqOrdersTsAndCtf(inTs, inCtf)
     tiDict = {acqOrder: ti.clone() for ti in inTs.iterItems()
               if (acqOrder := ti.getAcquisitionOrder()) in presentAcqOrders}
     ctfDict = {acqOrder: ctfTomo.clone() for ctfTomo in inCtf.iterItems()

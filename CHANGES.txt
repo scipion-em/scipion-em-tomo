@@ -5,6 +5,9 @@ V3.12.5:
   - Add CTF handedness attribute to both SetOfTiltSeries and TiltSeries classes.
  Developers:
   - Expand the TCL for CTF handedness checking.
+  - Add method getPresentAcqOrdersTsAndCtf to tomo utils as a replacement of getCommonTsAndCtfElements.
+    The new one does not load explicitly a mapper and deprecates index-based matching in favor of
+    acquisition-order-based matching.
 V3.12.4: expand test datasets.
 V3.12.3: fix bug in TiltSeries applyTransform for .mrcs files.
 V3.12.2: replace the old streaming template by te updated version.
